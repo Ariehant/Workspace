@@ -1,16 +1,18 @@
 import {
+  createPage,
   getAncestorIds,
   getPage,
   getPageTitleText,
   isInTrash,
+  listPages,
   restorePage,
   setPageTitle,
   type PageId,
 } from '@workspace/core';
-import { PageEditor, type Editor } from '@workspace/editor';
+import { PageEditor, type Editor, type EditorServices, type PageRef } from '@workspace/editor';
 import { Button, IconButton } from '@workspace/ui';
 import { ChevronsRight } from 'lucide-react';
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type * as Y from 'yjs';
 import { useApp } from './context';
 import { useDoc } from './hooks';
@@ -26,9 +28,21 @@ export function PageView({ pageId, sidebarOpen, onOpenSidebar, onNavigate }: Pag
   const { client, workspace } = useApp();
   const pageDoc = useDoc(client, pageId);
   const editorRef = useRef<Editor | null>(null);
+  // Enter in the title focuses the body; if the body's editor is still loading,
+  // focus it as soon as it is ready.
+  const focusBodyWhenReady = useRef(false);
   const onEditor = useCallback((editor: Editor | null) => {
     editorRef.current = editor;
+    if (editor && focusBodyWhenReady.current) {
+      focusBodyWhenReady.current = false;
+      editor.commands.focus('start');
+    }
   }, []);
+  const focusBody = useCallback(() => {
+    if (editorRef.current) editorRef.current.commands.focus('start');
+    else focusBodyWhenReady.current = true;
+  }, []);
+  const services = useEditorServices(workspace, pageId, onNavigate);
 
   const page = getPage(workspace, pageId);
   if (!page) return null;
@@ -78,15 +92,10 @@ export function PageView({ pageId, sidebarOpen, onOpenSidebar, onNavigate }: Pag
       <div className="flex-1 overflow-y-auto" data-testid="page-scroll">
         <article className="mx-auto w-full max-w-[900px] px-24 pt-20 max-md:px-6">
           {page.icon && <div className="mb-2 text-[64px] leading-none">{page.icon}</div>}
-          <TitleInput
-            key={pageId}
-            workspace={workspace}
-            pageId={pageId}
-            onEnter={() => editorRef.current?.commands.focus('start')}
-          />
+          <TitleInput key={pageId} workspace={workspace} pageId={pageId} onEnter={focusBody} />
           <div className="mt-2">
             {pageDoc ? (
-              <PageEditor key={pageId} doc={pageDoc} onEditor={onEditor} />
+              <PageEditor key={pageId} doc={pageDoc} services={services} onEditor={onEditor} />
             ) : (
               <div className="h-6" aria-busy="true" />
             )}
@@ -139,4 +148,38 @@ function TitleInput({ workspace, pageId, onEnter }: TitleInputProps) {
       className="w-full resize-none bg-transparent text-[40px] leading-tight font-bold text-fg outline-none placeholder:text-faint [field-sizing:content]"
     />
   );
+}
+
+/** What the editor needs from the workspace: page lookups, navigation, sub-pages. */
+function useEditorServices(
+  workspace: Y.Doc,
+  pageId: PageId,
+  navigate: (id: PageId) => void,
+): EditorServices {
+  return useMemo(() => {
+    const ref = (id: PageId): PageRef | null => {
+      const page = getPage(workspace, id);
+      return page
+        ? { id, title: page.title, icon: page.icon, inTrash: isInTrash(workspace, id) }
+        : null;
+    };
+    return {
+      pageId,
+      getPage: ref,
+      listPages: () =>
+        listPages(workspace)
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .map((page) => ref(page.id)!),
+      getBreadcrumb: () =>
+        [...getAncestorIds(workspace, pageId).reverse(), pageId]
+          .map(ref)
+          .filter((page) => page !== null),
+      navigate,
+      createSubpage: () => createPage(workspace, { parentId: pageId }),
+      subscribe: (listener) => {
+        workspace.on('update', listener);
+        return () => workspace.off('update', listener);
+      },
+    };
+  }, [workspace, pageId, navigate]);
 }

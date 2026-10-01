@@ -1,6 +1,6 @@
 # Phase 1: Editor MVP and navigation
 
-**Status:** M1 done. M2–M6 to do.
+**Status:** M1 and M2 done. M3–M6 to do.
 
 ## Context
 
@@ -71,7 +71,7 @@ Setters follow the `setPageIcon` pattern, and the page index gains whichever col
 - Selection bubble menu: bold, italic, underline, strike, code, link and "Turn into". Text/background color moves to M4 and inline equation to M2.
 - Placeholder per block type ("Heading 1", "Type '/' for commands", "To-do").
 
-### M2: text, list and layout blocks
+### M2: text, list and layout blocks ✅
 
 - Text and headings: text, H1–H3, toggle headings H1–H3.
 - Lists: bulleted, numbered, to-do (`@tiptap/extension-list` TaskList).
@@ -82,6 +82,13 @@ Setters follow the `setPageIcon` pattern, and the page index gains whichever col
 - Columns: a custom `columnList`/`column` pair. Dropping a block on the left or right edge of another creates columns, and widths are resizable.
 - Table of contents (`@tiptap/extension-table-of-contents`), breadcrumb, and "Link to page" (a custom node holding a pageId that renders the live title and icon from the workspace doc).
 - Markdown input rules for all of the above, including `[]` for a to-do, `>` and a space for a toggle, `"` for a quote, `---` for a divider and `$$` for an equation.
+
+**M2 notes:**
+
+- **Toggle state isn't saved in the document.** Open/closed is per window, like Notion, where each person folds toggles for themselves. TipTap's persisted mode also replaced every attribute on click, which would reset block IDs.
+- **Inline equations use `$$x$$`,** which is both TipTap's and Notion's syntax. `$$` followed by a space on an empty line starts a block equation.
+- **Highlight.js "common" languages and KaTeX are bundled eagerly.** The renderer bundle is about 1.5 MB, and lazy-loading moves to polish.
+- **Columns:** dropping a block inside the left or right 15% of another block puts them side by side. Dropping in the gutter left of the text, where the drag handle is, still reorders. Drag the gap between columns to resize them.
 
 ### M3: media and files
 

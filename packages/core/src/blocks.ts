@@ -28,12 +28,10 @@ function deltaText(text: Y.XmlText): string {
 }
 
 function readElement(element: Y.XmlElement): Block {
-  const block: Block = {
-    type: element.nodeName,
-    props: element.getAttributes(),
-    text: '',
-    children: [],
-  };
+  const props = element.getAttributes();
+  // Equations keep their TeX source in an attribute; index it as their text.
+  const text = typeof props.latex === 'string' ? props.latex : '';
+  const block: Block = { type: element.nodeName, props, text, children: [] };
   for (const child of element.toArray()) {
     if (child instanceof Y.XmlText) block.text += deltaText(child);
     else if (child instanceof Y.XmlElement) block.children.push(readElement(child));

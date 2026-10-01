@@ -48,7 +48,12 @@ export const test = base.extend<{ dataDir: string; launch: () => Promise<Launche
         env: { ...process.env, WORKSPACE_DATA_DIR: dataDir },
       });
       apps.push(app);
+      // Surface renderer exceptions in the test output instead of failing silently.
+      app.on('window', (page) =>
+        page.on('pageerror', (error) => console.error(`[renderer] ${error.stack ?? error}`)),
+      );
       const window = await app.firstWindow();
+      window.on('pageerror', (error) => console.error(`[renderer] ${error.stack ?? error}`));
       await window.getByRole('tree', { name: 'Pages' }).waitFor();
       return { app, window };
     });

@@ -2,9 +2,19 @@ import type { Editor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import { useEditorState } from '@tiptap/react';
 import { cn } from '@workspace/ui';
-import { Bold, ChevronDown, Code, Italic, Link2, Strikethrough, Underline } from 'lucide-react';
+import {
+  Bold,
+  ChevronDown,
+  Code,
+  Italic,
+  Link2,
+  Radical,
+  Strikethrough,
+  Underline,
+} from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { BLOCKS, activeBlock } from './blocks/registry';
+import { CONVERTIBLE_BLOCKS, activeBlock } from './blocks/registry';
+import { insertInlineEquation } from './nodes/math';
 
 const MARKS = [
   {
@@ -130,6 +140,9 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
             <Link2 size={16} />
           </ToolbarButton>
           <span className="mx-0.5 h-5 w-px bg-line" />
+          <ToolbarButton label="Create equation" onClick={() => insertInlineEquation(editor)}>
+            <Radical size={16} />
+          </ToolbarButton>
           {MARKS.map(({ mark, label, icon: Icon, toggle }) => (
             <ToolbarButton
               key={mark}
@@ -144,14 +157,14 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
 
         {panel === 'turnInto' && (
           <div role="menu" aria-label="Turn into" className="border-t border-line p-1">
-            {BLOCKS.filter((b) => b.convertible).map((block) => (
+            {CONVERTIBLE_BLOCKS.map((block) => (
               <button
                 key={block.id}
                 type="button"
                 role="menuitem"
                 onMouseDown={keepFocus}
                 onClick={() => {
-                  block.apply(editor.chain().focus()).run();
+                  block.apply(editor.chain().focus(), {}).run();
                   setPanel('none');
                 }}
                 className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-hover"

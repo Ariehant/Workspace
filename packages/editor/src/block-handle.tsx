@@ -19,7 +19,7 @@ import {
   duplicateBlockAt,
   insertBelowWithSlash,
 } from './blocks/commands';
-import { BLOCKS } from './blocks/registry';
+import { CONVERTIBLE_BLOCKS } from './blocks/registry';
 
 interface Target {
   node: PMNode;
@@ -42,8 +42,10 @@ export function BlockHandle({ editor, pageId }: BlockHandleProps) {
 
   const setOpen = (open: boolean) => {
     setMenuOpen(open);
-    if (open) editor.commands.lockDragHandle();
-    else editor.commands.unlockDragHandle();
+    // Keep the handle on this block while its menu is open. (The React DragHandle
+    // registers only the plugin, which reads this meta; the lock*/unlock* commands
+    // belong to the separate DragHandle extension.)
+    editor.commands.setMeta('lockDragHandle', open);
   };
 
   /** Run a menu action on the block the menu was opened for. */
@@ -97,7 +99,7 @@ export function BlockHandle({ editor, pageId }: BlockHandleProps) {
             <MenuSub>
               <MenuSubTrigger icon={<Repeat2 size={14} />}>Turn into</MenuSubTrigger>
               <MenuSubContent>
-                {BLOCKS.filter((b) => b.convertible).map((block) => (
+                {CONVERTIBLE_BLOCKS.map((block) => (
                   <MenuItem
                     key={block.id}
                     icon={<block.icon size={14} />}

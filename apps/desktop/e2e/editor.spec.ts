@@ -27,7 +27,10 @@ test('slash menu filters blocks and turns an empty block into the choice', async
   await window.keyboard.type('/');
   await expect(slashMenu(window).getByRole('option').first()).toHaveText(/Text/);
   await window.keyboard.type('h2');
-  await expect(slashMenu(window).getByRole('option')).toHaveCount(1);
+  await expect(slashMenu(window).getByRole('option')).toHaveText([
+    /^Heading 2/,
+    /^Toggle heading 2/,
+  ]);
   await window.keyboard.press('Enter');
   await window.keyboard.type('Section');
   await expect(editor(window).locator('h2')).toHaveText('Section');
@@ -43,7 +46,7 @@ test('slash menu filters blocks and turns an empty block into the choice', async
   await window.keyboard.press('Enter');
   await window.keyboard.type('/');
   await window.keyboard.press('ArrowDown');
-  await expect(slashMenu(window).getByRole('option', { selected: true })).toHaveText(/Heading 1/);
+  await expect(slashMenu(window).getByRole('option', { selected: true })).toHaveText(/^Page/);
   await window.keyboard.type('zzz');
   await expect(slashMenu(window)).toContainText('No results');
   await window.keyboard.press('Escape');
@@ -96,7 +99,7 @@ test('block handle: duplicate, turn into, delete and add below', async ({ launch
   await hoverBlock(window, 'Alpha');
   await window.getByRole('button', { name: 'Drag to move, click to open menu' }).click();
   await window.getByRole('menuitem', { name: 'Turn into' }).click();
-  await window.getByRole('menuitem', { name: 'Heading 1' }).click();
+  await window.getByRole('menuitem', { name: 'Heading 1', exact: true }).click();
   await expect(editor(window).locator('h1')).toHaveText('Alpha');
 
   await hoverBlock(window, 'Alpha');
@@ -134,7 +137,7 @@ test('selection toolbar formats text, links it and turns the block into a headin
   await window.keyboard.press('Shift+Home');
   await expect(toolbar).toBeVisible();
   await toolbar.getByRole('button', { name: 'Turn into' }).click();
-  await toolbar.getByRole('menuitem', { name: 'Heading 3' }).click();
+  await toolbar.getByRole('menuitem', { name: 'Heading 3', exact: true }).click();
   await expect(editor(window).locator('h3')).toHaveText('Make this bold');
 });
 
@@ -150,7 +153,13 @@ test('dragging the handle reorders blocks', async ({ launch }) => {
 
   await hoverBlock(window, 'Three');
   const grip = window.getByRole('button', { name: 'Drag to move, click to open menu' });
-  await grip.dragTo(blocks(window).nth(0), { targetPosition: { x: 30, y: 2 } });
+  // Drop with the pointer left of the text, where it stays while dragging the handle.
+  const gripBox = (await grip.boundingBox())!;
+  const target = (await blocks(window).nth(0).boundingBox())!;
+  await window.mouse.move(gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(target.x - 8, target.y + 2, { steps: 8 });
+  await window.mouse.up();
   await expect(blocks(window)).toHaveText(['Three', 'One', 'Two']);
 });
 

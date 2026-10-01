@@ -1,18 +1,29 @@
-import type { Editor, JSONContent, Range } from '@tiptap/core';
+import type { Command, Editor, JSONContent, Range } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import type { BlockDefinition } from './registry';
 
 /**
- * Slash-menu behaviour, as in Notion: remove the typed `/query`, then turn the
- * current block into `block` if it is now empty, or insert a new `block` below it.
+ * Slash-menu behaviour, as in Notion: remove the typed `/query`; if the block still
+ * has text, continue in a new empty block below it; then turn that empty block into
+ * `block`. Inline items (inline equation) are inserted at the cursor instead.
  */
-export function insertBlockFromSlash(editor: Editor, range: Range, block: BlockDefinition): void {
+export async function insertBlockFromSlash(
+  editor: Editor,
+  range: Range,
+  block: BlockDefinition,
+): Promise<void> {
   editor.chain().focus().deleteRange(range).run();
+
+  const args = block.prepare ? await block.prepare(editor) : {};
+  if (!args || editor.isDestroyed) {
+    editor.commands.focus();
+    return;
+  }
 
   const { $from } = editor.state.selection;
   const empty = $from.parent.isTextblock && $from.parent.content.size === 0;
-  if (!empty && block.convertible) {
+  if (!empty && block.group !== 'inline') {
     const after = $from.after($from.depth);
     editor
       .chain()
@@ -23,7 +34,25 @@ export function insertBlockFromSlash(editor: Editor, range: Range, block: BlockD
       })
       .run();
   }
-  block.apply(editor.chain().focus()).run();
+  block.apply(editor.chain().focus(), args).run();
+  block.after?.(editor, args);
+}
+
+/** Command: replace the textblock at the cursor with `content`, then place the cursor after it. */
+export function replaceCurrentBlock(content: JSONContent): Command {
+  return ({ state, tr, dispatch }) => {
+    const { $from } = state.selection;
+    if ($from.depth < 1) return false;
+    const node = state.schema.nodeFromJSON(content);
+    if (dispatch) {
+      const start = $from.before($from.depth);
+      tr.replaceWith(start, $from.after($from.depth), node);
+      const after = start + node.nodeSize;
+      if (after >= tr.doc.content.size) tr.insert(after, state.schema.nodes.paragraph!.create());
+      tr.setSelection(TextSelection.near(tr.doc.resolve(after + 1)));
+    }
+    return true;
+  };
 }
 
 /** Put the cursor inside the block at `pos` (as reported by the drag handle). */
@@ -38,7 +67,7 @@ export function selectBlockAt(editor: Editor, pos: number) {
 }
 
 export function convertBlockAt(editor: Editor, pos: number, block: BlockDefinition): void {
-  block.apply(selectBlockAt(editor, pos)).run();
+  block.apply(selectBlockAt(editor, pos), {}).run();
 }
 
 export function deleteBlockAt(editor: Editor, pos: number, node: PMNode): void {

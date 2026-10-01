@@ -5,14 +5,17 @@ import { BLOCK_GROUP_LABELS, type BlockDefinition } from '../blocks/registry';
 export interface SlashMenuListProps {
   items: BlockDefinition[];
   command(item: BlockDefinition): void;
+  /** Show group headings (only for the unfiltered list). */
+  grouped: boolean;
 }
 
 export interface SlashMenuListHandle {
-  onKeyDown(event: KeyboardEvent): boolean;
+  /** `current` are the newest results, which may be newer than the rendered ones. */
+  onKeyDown(event: KeyboardEvent, current: BlockDefinition[]): boolean;
 }
 
 export const SlashMenuList = forwardRef<SlashMenuListHandle, SlashMenuListProps>(
-  function SlashMenuList({ items, command }, ref) {
+  function SlashMenuList({ items, command, grouped }, ref) {
     const [selected, setSelected] = useState(0);
     const [prevItems, setPrevItems] = useState(items);
     const listRef = useRef<HTMLDivElement>(null);
@@ -30,18 +33,20 @@ export const SlashMenuList = forwardRef<SlashMenuListHandle, SlashMenuListProps>
     }, [selected]);
 
     useImperativeHandle(ref, () => ({
-      onKeyDown(event) {
-        if (items.length === 0) return false;
+      onKeyDown(event, current) {
+        if (current.length === 0) return false;
+        // Results changed since the last render: the highlight is back on the first.
+        const index = current === items ? selected : 0;
         if (event.key === 'ArrowDown') {
-          setSelected((i) => (i + 1) % items.length);
+          setSelected((index + 1) % current.length);
           return true;
         }
         if (event.key === 'ArrowUp') {
-          setSelected((i) => (i + items.length - 1) % items.length);
+          setSelected((index + current.length - 1) % current.length);
           return true;
         }
         if (event.key === 'Enter' || event.key === 'Tab') {
-          const item = items[selected];
+          const item = current[index];
           if (item) command(item);
           return true;
         }
@@ -58,7 +63,7 @@ export const SlashMenuList = forwardRef<SlashMenuListHandle, SlashMenuListProps>
       >
         {items.length === 0 && <div className="px-2 py-1.5 text-muted">No results</div>}
         {items.map((item, index) => {
-          const showGroup = index === 0 || items[index - 1]!.group !== item.group;
+          const showGroup = grouped && (index === 0 || items[index - 1]!.group !== item.group);
           const Icon = item.icon;
           return (
             <div key={item.id}>

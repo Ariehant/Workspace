@@ -48,6 +48,14 @@ describe('blocks', () => {
     expect(readBlocks(doc)[0]?.props.id).toBe('block-1');
   });
 
+  it('indexes the TeX source of equations', () => {
+    const doc = new Y.Doc();
+    const math = new Y.XmlElement('blockMath');
+    math.setAttribute('latex', 'E = mc^2');
+    getPageContent(doc).insert(0, [math, paragraph('after')]);
+    expect(pageText(doc)).toBe('E = mc^2\nafter');
+  });
+
   it('ignores formatting when extracting text', () => {
     const doc = new Y.Doc();
     const p = new Y.XmlElement('paragraph');

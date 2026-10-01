@@ -1,3 +1,4 @@
+@import 'katex/dist/katex.min.css';
 /* Block typography for page content. Spacing follows Notion's rhythm. */
 .ws-prose {
   outline: none;
@@ -6,6 +7,10 @@
   caret-color: var(--ws-fg);
   padding-bottom: 30vh;
   word-break: break-word;
+  /* A gutter left of the text that still belongs to the editor, so dropping a
+     dragged block there (where the drag handle is) reorders it. */
+  margin-left: -72px;
+  padding-left: 72px;
 }
 
 .ws-prose > * + * {
@@ -115,6 +120,17 @@
   pointer-events: none;
 }
 
+/* Placeholders that depend on where the empty block is. */
+.ws-prose li > p.is-empty::before {
+  content: 'List';
+}
+.ws-prose li[data-checked] p.is-empty::before {
+  content: 'To-do';
+}
+.ws-prose blockquote p.is-empty::before {
+  content: 'Empty quote';
+}
+
 /* Floating UI (slash menu, selection toolbar) sits above page content. */
 .ws-floating {
   position: absolute;
@@ -143,4 +159,356 @@
 }
 .ProseMirror-hideselection *::selection {
   background: transparent;
+}
+
+/* --- M2 blocks ------------------------------------------------------------------- */
+
+:root {
+  --ws-callout-bg: rgb(241, 241, 239);
+  --ws-code-bg: rgb(247, 246, 243);
+  --ws-table-border: rgb(233, 233, 231);
+  --ws-table-header: rgb(247, 246, 243);
+}
+[data-theme='dark'] {
+  --ws-callout-bg: rgb(37, 37, 37);
+  --ws-code-bg: rgb(32, 32, 32);
+  --ws-table-border: rgb(47, 47, 47);
+  --ws-table-header: rgb(32, 32, 32);
+}
+
+/* To-do list */
+.ws-prose ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+.ws-prose ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.ws-prose ul[data-type='taskList'] li > label {
+  flex: none;
+  display: flex;
+  height: 1.5em;
+  margin-top: 3px;
+  align-items: center;
+  user-select: none;
+}
+.ws-prose ul[data-type='taskList'] li > label input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ws-accent);
+  cursor: pointer;
+}
+.ws-prose ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+.ws-prose ul[data-type='taskList'] li[data-checked='true'] > div > p {
+  color: var(--ws-faint);
+  text-decoration: line-through;
+}
+
+/* Toggle list and toggle headings */
+.ws-prose .ws-toggle {
+  display: flex;
+  gap: 2px;
+}
+.ws-prose .ws-toggle > button {
+  flex: none;
+  width: 24px;
+  height: 1.5em;
+  margin-top: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ws-fg);
+  cursor: pointer;
+}
+.ws-prose .ws-toggle > button:hover {
+  background: var(--ws-hover);
+}
+.ws-prose .ws-toggle > button::before {
+  content: '';
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform 120ms;
+}
+.ws-prose .ws-toggle.is-open > button::before {
+  transform: rotate(90deg);
+}
+.ws-prose .ws-toggle > div {
+  flex: 1;
+  min-width: 0;
+}
+.ws-prose .ws-toggle summary {
+  display: block;
+  list-style: none;
+  padding: 3px 2px;
+  min-height: 1.5em;
+}
+.ws-prose .ws-toggle summary[data-level] {
+  font-weight: 600;
+  line-height: 1.3;
+}
+.ws-prose .ws-toggle:has(> div > summary[data-level='1']) > button {
+  height: 2.4em;
+}
+.ws-prose .ws-toggle summary[data-level='1'] {
+  font-size: 1.875em;
+}
+.ws-prose .ws-toggle summary[data-level='2'] {
+  font-size: 1.5em;
+}
+.ws-prose .ws-toggle summary[data-level='3'] {
+  font-size: 1.25em;
+}
+.ws-prose .ws-toggle [data-type='detailsContent'][hidden] {
+  display: none;
+}
+.ws-prose .ws-toggle [data-type='detailsContent'] > :first-child:last-child.is-empty::before {
+  content: 'Empty toggle. Click or drop blocks inside.';
+}
+
+/* Callout */
+.ws-prose .ws-callout {
+  display: flex;
+  gap: 8px;
+  padding: 16px 16px 16px 12px;
+  margin: 4px 0;
+  border-radius: 4px;
+  background: var(--ws-callout-bg);
+}
+.ws-callout-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  font-size: 1.2em;
+  line-height: 24px;
+  text-align: center;
+}
+.ws-callout-icon:hover:not(:disabled) {
+  background: var(--ws-hover);
+}
+.ws-callout-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Code block */
+.ws-prose .ws-code-block {
+  position: relative;
+  margin: 4px 0;
+  border-radius: 4px;
+  background: var(--ws-code-bg);
+}
+.ws-prose .ws-code-block pre {
+  margin: 0;
+  background: none;
+  padding: 34px 16px 20px 24px;
+}
+.ws-prose .ws-code-block[data-wrap] pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ws-code-toolbar {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.ws-code-block:hover .ws-code-toolbar,
+.ws-code-toolbar:focus-within {
+  opacity: 1;
+}
+.ws-code-language {
+  height: 24px;
+  border-radius: 4px;
+  padding: 0 4px;
+  color: var(--ws-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.ws-code-language:hover {
+  background: var(--ws-hover);
+}
+.ws-code-button {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--ws-muted);
+}
+.ws-code-button:hover {
+  background: var(--ws-hover);
+}
+
+/* Syntax colors (highlight.js classes), tuned for both themes. */
+.ws-prose .hljs-comment,
+.ws-prose .hljs-quote {
+  color: #708090;
+}
+.ws-prose .hljs-keyword,
+.ws-prose .hljs-selector-tag,
+.ws-prose .hljs-literal,
+.ws-prose .hljs-type {
+  color: #07a;
+}
+.ws-prose .hljs-string,
+.ws-prose .hljs-attr,
+.ws-prose .hljs-regexp {
+  color: #690;
+}
+.ws-prose .hljs-number,
+.ws-prose .hljs-built_in,
+.ws-prose .hljs-symbol {
+  color: #905;
+}
+.ws-prose .hljs-title,
+.ws-prose .hljs-function .hljs-title,
+.ws-prose .hljs-section {
+  color: #dd4a68;
+}
+.ws-prose .hljs-meta,
+.ws-prose .hljs-variable,
+.ws-prose .hljs-template-variable {
+  color: #e90;
+}
+[data-theme='dark'] .ws-prose .hljs-keyword,
+[data-theme='dark'] .ws-prose .hljs-selector-tag,
+[data-theme='dark'] .ws-prose .hljs-literal,
+[data-theme='dark'] .ws-prose .hljs-type {
+  color: #569cd6;
+}
+[data-theme='dark'] .ws-prose .hljs-string,
+[data-theme='dark'] .ws-prose .hljs-attr,
+[data-theme='dark'] .ws-prose .hljs-regexp {
+  color: #ce9178;
+}
+[data-theme='dark'] .ws-prose .hljs-number,
+[data-theme='dark'] .ws-prose .hljs-built_in,
+[data-theme='dark'] .ws-prose .hljs-symbol {
+  color: #b5cea8;
+}
+[data-theme='dark'] .ws-prose .hljs-title,
+[data-theme='dark'] .ws-prose .hljs-function .hljs-title,
+[data-theme='dark'] .ws-prose .hljs-section {
+  color: #dcdcaa;
+}
+
+/* Equations */
+.ws-prose [data-type='block-math'] {
+  padding: 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+  text-align: center;
+  cursor: pointer;
+  overflow-x: auto;
+}
+.ws-prose [data-type='block-math']:hover,
+.ws-prose [data-type='inline-math']:hover {
+  background: var(--ws-hover);
+}
+.ws-prose [data-type='inline-math'] {
+  border-radius: 3px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.ws-prose [data-type='block-math'][data-latex='']::before {
+  content: 'Add a TeX equation';
+  color: var(--ws-faint);
+}
+.ws-prose [data-type='inline-math'][data-latex='']::before {
+  content: 'New equation';
+  color: var(--ws-faint);
+}
+
+/* Simple table */
+.ws-prose .tableWrapper {
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.ws-prose table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.ws-prose table td,
+.ws-prose table th {
+  position: relative;
+  min-width: 80px;
+  padding: 6px 8px;
+  border: 1px solid var(--ws-table-border);
+  vertical-align: top;
+  text-align: left;
+}
+.ws-prose table th {
+  font-weight: 600;
+  background: var(--ws-table-header);
+}
+.ws-prose table td > p,
+.ws-prose table th > p {
+  padding: 0;
+}
+.ws-prose table .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ws-selection);
+  pointer-events: none;
+}
+.ws-prose table .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background: var(--ws-accent);
+  pointer-events: none;
+}
+.ws-prose.resize-cursor {
+  cursor: col-resize;
+}
+
+/* Columns */
+.ws-prose .ws-columns {
+  display: flex;
+  gap: 46px;
+  margin: 2px 0;
+}
+.ws-prose .ws-column {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Hit area in the gap after each column (except the last) for resizing. */
+.ws-prose .ws-column:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -27px;
+  width: 8px;
+  border-radius: 4px;
+  cursor: col-resize;
+}
+.ws-prose .ws-column:not(:last-child):hover::after {
+  background: var(--ws-border);
+}
+
+/* Link to page, breadcrumb, table of contents */
+.ws-prose .ws-page-link {
+  color: inherit;
 }

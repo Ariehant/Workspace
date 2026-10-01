@@ -2,7 +2,7 @@ import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { Extension } from '@tiptap/core';
 import { PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
-import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
+import Suggestion, { exitSuggestion, type SuggestionProps } from '@tiptap/suggestion';
 import { insertBlockFromSlash } from '../blocks/commands';
 import { searchBlocks, type BlockDefinition } from '../blocks/registry';
 import {
@@ -25,12 +25,17 @@ export const SlashCommand = Extension.create({
         editor: this.editor,
         pluginKey: slashMenuKey,
         char: '/',
+        // Notion matches multi-word queries ("/2 col", "/link to page").
+        allowSpaces: true,
         allow: ({ editor }) => !editor.isActive('codeBlock'),
         items: ({ query }) => searchBlocks(query),
-        command: ({ editor, range, props }) => insertBlockFromSlash(editor, range, props),
+        command: ({ editor, range, props }) => void insertBlockFromSlash(editor, range, props),
         render: () => {
           let renderer: ReactRenderer<SlashMenuListHandle, SlashMenuListProps> | null = null;
           let element: HTMLDivElement | null = null;
+          // Keys are handled against the newest results, which React may not have
+          // rendered yet when someone types "/table" and presses Enter quickly.
+          let latest: Props | null = null;
 
           const place = (props: Props) => {
             const rect = props.clientRect?.();
@@ -45,9 +50,10 @@ export const SlashCommand = Extension.create({
 
           return {
             onStart(props: Props) {
+              latest = props;
               renderer = new ReactRenderer(SlashMenuList, {
                 editor: props.editor,
-                props: { items: props.items, command: props.command },
+                props: { items: props.items, command: props.command, grouped: !props.query },
               });
               element = document.createElement('div');
               element.className = 'ws-floating';
@@ -57,7 +63,17 @@ export const SlashCommand = Extension.create({
               place(props);
             },
             onUpdate(props: Props) {
-              renderer?.updateProps({ items: props.items, command: props.command });
+              latest = props;
+              // Like Notion, give up once the query clearly isn't a block name.
+              if (props.items.length === 0 && /\s\S*\s$|.{24,}/.test(props.query)) {
+                exitSuggestion(props.editor.view, slashMenuKey);
+                return;
+              }
+              renderer?.updateProps({
+                items: props.items,
+                command: props.command,
+                grouped: !props.query,
+              });
               place(props);
             },
             onKeyDown({ event }) {
@@ -65,7 +81,7 @@ export const SlashCommand = Extension.create({
                 element?.remove();
                 return false;
               }
-              return renderer?.ref?.onKeyDown(event) ?? false;
+              return (latest && renderer?.ref?.onKeyDown(event, latest.items)) ?? false;
             },
             onExit() {
               element?.remove();

@@ -11,13 +11,17 @@ complete. Phase 1 (editor and navigation) is in progress; see [docs/PHASE1.md](d
 - Desktop app (Electron) with a page tree in the sidebar: create, nest, select, move to trash and
   restore pages.
 - Rich-text page editor (TipTap/ProseMirror):
-  - `/` opens a filterable block menu (text, headings, lists, quote, divider, code).
-  - Markdown shortcuts: `#`, `-`, `1.`, `>`, ` ``` `, `---`.
+  - `/` opens a filterable block menu: text, headings, to-do, bulleted/numbered and toggle lists,
+    toggle headings, quote, divider, callout, table, code (syntax highlighting, language picker),
+    block and inline equations (KaTeX), table of contents, breadcrumb, columns, link to page and
+    new sub-page.
+  - Markdown shortcuts: `#`, `-`, `1.`, `[]`, `>` (toggle), `"` (quote), ` ``` `, `---`, `$$`,
+    `$$x$$` (inline equation).
   - Hover a block for `+` (add below) and `⋮⋮` (drag to move; click for turn into, duplicate,
-    copy link, delete).
-  - Selecting text shows a toolbar for bold, italic, underline, strikethrough, code, links and
-    turn into. Ctrl+click opens a link.
-  - Every block has a stable id, ready for block links, comments and sync later.
+    copy link, delete). Drop a block on another block's left or right edge to make columns.
+  - Selecting text shows a toolbar for bold, italic, underline, strikethrough, code, links,
+    equations and turn into. Ctrl+click opens a link.
+- Every block has a stable id, ready for block links, comments and sync later.
 - Everything is saved locally as you type and survives restarts, including the last open page and
   which sidebar items are expanded.
 - Several windows on the same workspace stay in sync live (File → New Window, `Ctrl+Shift+N`).

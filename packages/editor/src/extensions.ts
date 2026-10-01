@@ -1,4 +1,4 @@
-import { Extension, type Editor } from '@tiptap/core';
+import { Extension } from '@tiptap/core';
 import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration';
 import NodeRange from '@tiptap/extension-node-range';
 import UniqueID from '@tiptap/extension-unique-id';
@@ -8,6 +8,16 @@ import { Plugin } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { PAGE_CONTENT_FIELD } from '@workspace/core';
 import type * as Y from 'yjs';
+import { Callout } from './nodes/callout';
+import { CodeBlock } from './nodes/code-block';
+import { Column, ColumnList } from './nodes/columns';
+import { mathExtensions } from './nodes/math';
+import { Breadcrumb, PageLink, TableOfContents } from './nodes/page-blocks';
+import { Quote } from './nodes/quote';
+import { Table } from './nodes/table';
+import { TodoItem, TodoList } from './nodes/todo';
+import { ToggleExtensions } from './nodes/toggle';
+import { uiBridgeExtension, type UiBridgeHandle } from './services';
 import { SlashCommand } from './slash-menu/slash-command';
 
 /** Node types that are blocks and get a stable `id` attribute. */
@@ -17,9 +27,20 @@ export const BLOCK_NODE_TYPES = [
   'bulletList',
   'orderedList',
   'listItem',
+  'taskList',
+  'taskItem',
   'blockquote',
   'codeBlock',
   'horizontalRule',
+  'details',
+  'callout',
+  'blockMath',
+  'table',
+  'columnList',
+  'column',
+  'pageLink',
+  'breadcrumb',
+  'tableOfContents',
 ];
 
 /** Ctrl/Cmd+click opens a link (plain clicks just place the cursor while editing). */
@@ -42,29 +63,41 @@ const OpenLinkOnModClick = Extension.create({
   },
 });
 
-function placeholderFor({
-  editor,
-  node,
-  pos,
-}: {
-  editor: Editor;
-  node: PMNode;
-  pos: number;
-}): string {
+/**
+ * Placeholder text by node type. (Text that depends on the parent, such as "List"
+ * inside a list item, is set in editor.css: decorations are built for the new
+ * document before `editor.state` updates, so positions can't be resolved here.)
+ */
+function placeholderFor({ node }: { node: PMNode }): string {
   if (node.type.name === 'heading') return `Heading ${node.attrs.level as number}`;
-  const parent = editor.state.doc.resolve(pos).parent.type.name;
-  if (parent === 'listItem') return 'List';
-  if (parent === 'blockquote') return 'Empty quote';
+  if (node.type.name === 'detailsSummary') {
+    return node.attrs.level ? `Toggle heading ${node.attrs.level as number}` : 'Toggle';
+  }
   return "Write, or press '/' for commands…";
 }
 
-export function pageExtensions(doc: Y.Doc) {
+export function pageExtensions(doc: Y.Doc, bridge: UiBridgeHandle) {
   return [
     StarterKit.configure({
       undoRedo: false, // Yjs provides per-user undo through Collaboration.
+      blockquote: false, // replaced by Quote (Notion's `"` shortcut)
+      codeBlock: false, // replaced by CodeBlock (syntax highlighting)
       link: { openOnClick: false, autolink: true, linkOnPaste: true, defaultProtocol: 'https' },
       dropcursor: { color: 'var(--ws-accent)', width: 3 },
     }),
+    Quote,
+    TodoList,
+    TodoItem,
+    ...ToggleExtensions,
+    Callout,
+    CodeBlock,
+    ...mathExtensions(bridge),
+    Table,
+    ColumnList,
+    Column,
+    PageLink,
+    Breadcrumb,
+    TableOfContents,
     Placeholder.configure({ placeholder: placeholderFor, includeChildren: true }),
     UniqueID.configure({
       types: BLOCK_NODE_TYPES,
@@ -75,5 +108,6 @@ export function pageExtensions(doc: Y.Doc) {
     NodeRange,
     SlashCommand,
     OpenLinkOnModClick,
+    uiBridgeExtension(bridge),
   ];
 }
