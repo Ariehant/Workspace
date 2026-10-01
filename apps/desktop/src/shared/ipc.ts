@@ -9,9 +9,29 @@ export const IPC = {
   settingsSet: 'settings:set',
   search: 'search:query',
   themeSet: 'theme:set',
+  fileImport: 'file:import',
+  fileOpen: 'file:open',
+  linkPreview: 'link:preview',
   /** main -> renderer: a menu command. */
   command: 'app:command',
   ready: 'app:ready',
 } as const;
 
 export type ThemeSource = 'system' | 'light' | 'dark';
+
+/** An attachment stored in the workspace (see FileStore). */
+export interface FileRef {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+}
+
+export interface LinkPreview {
+  url: string;
+  title: string;
+  description: string;
+  image: string | null;
+  icon: string | null;
+  siteName: string | null;
+}

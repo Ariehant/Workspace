@@ -1,6 +1,13 @@
 import type { ChainedCommands, Editor } from '@tiptap/core';
 import {
+  Bookmark,
   ChevronRight,
+  FileText,
+  FileVideo,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  Music,
+  Paperclip,
   Code2,
   Columns2,
   Columns3,
@@ -28,10 +35,11 @@ import { insertBlockEquation, insertInlineEquation } from '../nodes/math';
 import type { ToggleLevel } from '../nodes/toggle';
 import { replaceCurrentBlock } from './commands';
 
-export type BlockGroup = 'basic' | 'advanced' | 'layout' | 'inline';
+export type BlockGroup = 'basic' | 'media' | 'advanced' | 'layout' | 'inline';
 
 export const BLOCK_GROUP_LABELS: Record<BlockGroup, string> = {
   basic: 'Basic blocks',
+  media: 'Media',
   advanced: 'Advanced blocks',
   layout: 'Layout',
   inline: 'Inline',
@@ -90,6 +98,42 @@ const insertOnly = { convertible: false, isActive: () => false } as const;
 function cursorRect(editor: Editor): DOMRect {
   const { left, top, bottom } = editor.view.coordsAtPos(editor.state.selection.from);
   return new DOMRect(left, top, 1, bottom - top);
+}
+
+/** Insert an empty media block and open its upload / link panel. */
+function mediaBlock(
+  id: string,
+  type: string,
+  title: string,
+  description: string,
+  icon: LucideIcon,
+  keywords: string[],
+): BlockDefinition {
+  return {
+    id,
+    title,
+    description,
+    keywords,
+    icon,
+    group: 'media',
+    apply: (chain) => chain.command(replaceCurrentBlock({ type })),
+    after: (editor) => focusPlaceholderBefore(editor),
+    ...insertOnly,
+  };
+}
+
+/** Focus the first input of the (placeholder) block just before the cursor. */
+function focusPlaceholderBefore(editor: Editor) {
+  const { $from } = editor.state.selection;
+  const before = $from.depth >= 1 ? $from.before($from.depth) : $from.pos;
+  const node = editor.state.doc.resolve(before).nodeBefore;
+  if (!node) return;
+  requestAnimationFrame(() => {
+    const dom = editor.view.nodeDOM(before - node.nodeSize);
+    if (dom instanceof HTMLElement) {
+      dom.querySelector<HTMLInputElement>('input:not([type="file"])')?.focus();
+    }
+  });
 }
 
 const HEADING_ICONS = [Heading1, Heading2, Heading3];
@@ -255,6 +299,51 @@ export const BLOCKS: readonly BlockDefinition[] = [
     isActive: (editor) => inToggleTitle(editor, level),
     convertible: true,
   })),
+
+  // --- Media ---
+  mediaBlock('image', 'image', 'Image', 'Upload or embed with a link.', ImageIcon, [
+    'picture',
+    'photo',
+    'img',
+    'png',
+    'jpg',
+  ]),
+  mediaBlock('video', 'video', 'Video', 'Upload or embed a video.', FileVideo, [
+    'movie',
+    'mp4',
+    'clip',
+  ]),
+  mediaBlock('audio', 'audio', 'Audio', 'Upload or embed audio.', Music, [
+    'sound',
+    'mp3',
+    'recording',
+  ]),
+  mediaBlock('file', 'file', 'File', 'Upload or link to a file.', Paperclip, [
+    'attachment',
+    'upload',
+    'document',
+  ]),
+  mediaBlock('pdf', 'pdf', 'PDF', 'Embed a PDF to read it in the page.', FileText, [
+    'document',
+    'paper',
+    'datasheet',
+  ]),
+  mediaBlock(
+    'bookmark',
+    'bookmark',
+    'Web bookmark',
+    'Save a link as a visual bookmark.',
+    Bookmark,
+    ['link', 'url', 'website', 'preview'],
+  ),
+  mediaBlock(
+    'embed',
+    'embed',
+    'Embed',
+    'YouTube, Vimeo, Loom, Figma, CodePen, Google Maps.',
+    LinkIcon,
+    ['iframe', 'youtube', 'video', 'figma', 'map'],
+  ),
 
   // --- Advanced blocks ---
   {

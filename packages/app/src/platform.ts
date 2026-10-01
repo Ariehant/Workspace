@@ -1,4 +1,5 @@
 import type { DocTransport } from '@workspace/core';
+import type { FileRef, LinkPreview } from '@workspace/editor';
 import type { ThemePreference } from '@workspace/ui';
 
 /** Commands the host (e.g. the Electron menu) can send to the UI. */
@@ -17,4 +18,12 @@ export interface Platform {
   onCommand(listener: (command: AppCommand) => void): () => void;
   /** The UI has loaded the workspace and rendered. */
   ready(): void;
+  /** Store a file in the workspace's attachments. */
+  importFile(file: File): Promise<FileRef>;
+  /** URL the UI can load a stored file from. */
+  fileUrl(id: string): string;
+  /** Open a stored file with the system's default app. */
+  openFile(id: string): void;
+  /** Title, description and image for a web bookmark. */
+  linkPreview(url: string): Promise<LinkPreview | null>;
 }

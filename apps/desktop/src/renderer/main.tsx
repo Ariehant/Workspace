@@ -18,6 +18,11 @@ const platform: Platform = {
   setTheme: api.setTheme,
   onCommand: (listener) => api.onCommand((command) => listener(command as AppCommand)),
   ready: api.ready,
+  importFile: async (file) =>
+    api.files.import(new Uint8Array(await file.arrayBuffer()), file.name, file.type),
+  fileUrl: (id) => `ws-file://${id}`,
+  openFile: (id) => void api.files.open(id),
+  linkPreview: (url) => api.linkPreview(url),
 };
 
 createRoot(document.getElementById('root')!).render(

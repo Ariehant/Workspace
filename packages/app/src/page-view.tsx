@@ -15,6 +15,7 @@ import { ChevronsRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type * as Y from 'yjs';
 import { useApp } from './context';
+import type { Platform } from './platform';
 import { useDoc } from './hooks';
 
 export interface PageViewProps {
@@ -25,7 +26,7 @@ export interface PageViewProps {
 }
 
 export function PageView({ pageId, sidebarOpen, onOpenSidebar, onNavigate }: PageViewProps) {
-  const { client, workspace } = useApp();
+  const { client, workspace, platform } = useApp();
   const pageDoc = useDoc(client, pageId);
   const editorRef = useRef<Editor | null>(null);
   // Enter in the title focuses the body; if the body's editor is still loading,
@@ -42,7 +43,7 @@ export function PageView({ pageId, sidebarOpen, onOpenSidebar, onNavigate }: Pag
     if (editorRef.current) editorRef.current.commands.focus('start');
     else focusBodyWhenReady.current = true;
   }, []);
-  const services = useEditorServices(workspace, pageId, onNavigate);
+  const services = useEditorServices(workspace, pageId, onNavigate, platform);
 
   const page = getPage(workspace, pageId);
   if (!page) return null;
@@ -155,6 +156,7 @@ function useEditorServices(
   workspace: Y.Doc,
   pageId: PageId,
   navigate: (id: PageId) => void,
+  platform: Platform,
 ): EditorServices {
   return useMemo(() => {
     const ref = (id: PageId): PageRef | null => {
@@ -180,6 +182,10 @@ function useEditorServices(
         workspace.on('update', listener);
         return () => workspace.off('update', listener);
       },
+      uploadFile: (file) => platform.importFile(file),
+      fileUrl: (id) => platform.fileUrl(id),
+      openFile: (id) => platform.openFile(id),
+      linkPreview: (url) => platform.linkPreview(url),
     };
-  }, [workspace, pageId, navigate]);
+  }, [workspace, pageId, navigate, platform]);
 }

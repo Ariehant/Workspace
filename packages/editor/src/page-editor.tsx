@@ -1,5 +1,5 @@
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type * as Y from 'yjs';
 import { BlockHandle } from './block-handle';
 import { SelectionToolbar } from './bubble-menu';
@@ -7,6 +7,7 @@ import { pageExtensions } from './extensions';
 import { MathEditor, type MathTarget } from './math-editor';
 import { TableMenu } from './nodes/table';
 import { PagePicker } from './page-picker';
+import { PasteUrlMenu, type PastedUrl } from './paste-url-menu';
 import {
   EditorServicesContext,
   UiBridgeHandle,
@@ -36,14 +37,18 @@ export function PageEditor({ doc, services, onEditor }: PageEditorProps) {
   const [bridge] = useState(() => new UiBridgeHandle());
   const [pick, setPick] = useState<PickRequest | null>(null);
   const [math, setMath] = useState<MathTarget | null>(null);
+  const [pasted, setPasted] = useState<PastedUrl | null>(null);
 
   useEffect(() => {
     bridge.set({
       services,
+      pastedUrl: (url, from, to) => setPasted({ url, from, to }),
       pickPage: (anchor) => new Promise((resolve) => setPick({ anchor, resolve })),
       editMath: (node, pos) => setMath({ node, pos }),
     });
   }, [bridge, services]);
+
+  const closePasteMenu = useCallback(() => setPasted(null), []);
 
   const editor = useEditor(
     {
@@ -67,6 +72,9 @@ export function PageEditor({ doc, services, onEditor }: PageEditorProps) {
       {editor && <SelectionToolbar editor={editor} />}
       {editor && <TableMenu editor={editor} />}
       {editor && math && <MathEditor editor={editor} target={math} onClose={() => setMath(null)} />}
+      {editor && pasted && (
+        <PasteUrlMenu editor={editor} pasted={pasted} onClose={closePasteMenu} />
+      )}
       {pick && (
         <PagePicker
           services={services}

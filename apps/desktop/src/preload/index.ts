@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, type ThemeSource } from '../shared/ipc';
+import { IPC, type FileRef, type LinkPreview, type ThemeSource } from '../shared/ipc';
 
 type Unsubscribe = () => void;
 
@@ -29,6 +29,13 @@ const api = {
     query: string,
   ): Promise<{ id: string; title: string; icon: string | null; snippet: string }[]> =>
     ipcRenderer.invoke(IPC.search, query),
+  files: {
+    import: (bytes: Uint8Array, name: string, mime: string): Promise<FileRef> =>
+      ipcRenderer.invoke(IPC.fileImport, bytes, name, mime),
+    open: (id: string): Promise<boolean> => ipcRenderer.invoke(IPC.fileOpen, id),
+  },
+  linkPreview: (url: string): Promise<LinkPreview | null> =>
+    ipcRenderer.invoke(IPC.linkPreview, url),
   setTheme: (theme: ThemeSource): void => ipcRenderer.send(IPC.themeSet, theme),
   onCommand: (listener: (command: string) => void): Unsubscribe => on(IPC.command, listener),
   ready: (): void => ipcRenderer.send(IPC.ready),

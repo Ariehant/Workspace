@@ -1,31 +1,8 @@
-import { Node, mergeAttributes } from '@tiptap/core';
-import {
-  NodeViewWrapper,
-  ReactNodeViewRenderer,
-  useEditorState,
-  type ReactNodeViewProps,
-} from '@tiptap/react';
+import { NodeViewWrapper, useEditorState, type ReactNodeViewProps } from '@tiptap/react';
 import { cn } from '@workspace/ui';
 import { ArrowUpRight, FileText } from 'lucide-react';
 import { useBreadcrumb, useEditorServices, usePageRef } from '../services';
-
-/** Block-level atom with a React view; used for the workspace-aware blocks below. */
-function atomBlock(name: string, view: React.ComponentType<ReactNodeViewProps>, attrs = {}) {
-  return Node.create({
-    name,
-    group: 'block',
-    atom: true,
-    selectable: true,
-    draggable: true,
-    addAttributes: () => attrs,
-    parseHTML: () => [{ tag: `div[data-type="${name}"]` }],
-    renderHTML: ({ HTMLAttributes }) => [
-      'div',
-      mergeAttributes(HTMLAttributes, { 'data-type': name }),
-    ],
-    addNodeView: () => ReactNodeViewRenderer(view),
-  });
-}
+import { atomBlock } from './atom';
 
 // --- Link to page ------------------------------------------------------------------
 

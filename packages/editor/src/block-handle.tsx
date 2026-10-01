@@ -21,6 +21,13 @@ import {
 } from './blocks/commands';
 import { CONVERTIBLE_BLOCKS } from './blocks/registry';
 
+/**
+ * Must keep its identity across renders: DragHandle re-registers its plugin when this
+ * object changes, and re-registering any plugin makes the Yjs binding re-render the
+ * document from Yjs, which can undo an edit that hasn't been synced yet.
+ */
+const POSITION = { placement: 'left-start', strategy: 'absolute' } as const;
+
 interface Target {
   node: PMNode;
   pos: number;
@@ -61,7 +68,7 @@ export function BlockHandle({ editor, pageId }: BlockHandleProps) {
       onNodeChange={({ node, pos }) => {
         if (!menuOpen) target.current = node ? { node, pos } : null;
       }}
-      computePositionConfig={{ placement: 'left-start', strategy: 'absolute' }}
+      computePositionConfig={POSITION}
     >
       <div className="ws-block-handle flex items-center pr-1 text-faint" data-testid="block-handle">
         <button

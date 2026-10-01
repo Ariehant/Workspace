@@ -1,6 +1,6 @@
 # Phase 1: Editor MVP and navigation
 
-**Status:** M1 and M2 done. M3–M6 to do.
+**Status:** M1–M3 done. M4–M6 to do.
 
 ## Context
 
@@ -90,12 +90,20 @@ Setters follow the `setPageIcon` pattern, and the page index gains whichever col
 - **Highlight.js "common" languages and KaTeX are bundled eagerly.** The renderer bundle is about 1.5 MB, and lazy-loading moves to polish.
 - **Columns:** dropping a block inside the left or right 15% of another block puts them side by side. Dropping in the gutter left of the text, where the drag handle is, still reorders. Drag the gap between columns to resize them.
 
-### M3: media and files
+### M3: media and files ✅
 
 - Image: paste, drop, upload or URL. Resize handles, caption and alignment. Uses the file store.
 - Video, audio, file and PDF blocks. PDFs use Chromium's built-in viewer in an `<iframe>` pointing at `ws-file://`.
 - Web bookmark (link unfurl card), and embeds from the allowlist (an `<iframe sandbox>` with the needed permissions only).
 - Pasting a URL offers a menu: Mention, Bookmark, Embed (when supported), or plain link.
+
+**M3 notes:**
+
+- **Attachments** are stored once per content hash in `~/.local/share/workspace-app/files/` and served to the sandboxed UI through the `ws-file://` protocol, which supports range requests for seeking in video and audio. PDFs open in Chromium's built-in viewer.
+- **Embeds** come from an allowlist: YouTube (via youtube-nocookie), Vimeo, Loom, Figma, CodePen and Google Maps. The CSP `frame-src` is generated from the same list in `packages/editor/src/nodes/embeds.ts`. Unsupported links offer a bookmark instead.
+- **Bookmark previews** are fetched in the main process (http(s) only, 6 s timeout, first 1 MB) and cached for 7 days.
+- **Not done yet:** garbage collection of unreferenced files, and "download / save as" for file blocks (they open in the default app). Both are planned for Phase 3 with import and export.
+- **Bug found:** passing a new `computePositionConfig` object to the React `DragHandle` on each render re-registered its plugin. Re-registering any plugin makes the Yjs binding re-render the document, which reverted unsynced edits. It's now a constant, and the paste-as-bookmark E2E test guards against regressions.
 
 ### M4: inline content
 

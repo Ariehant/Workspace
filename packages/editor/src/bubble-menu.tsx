@@ -111,7 +111,10 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
   };
 
   const applyLink = () => {
-    const chain = editor.chain().focus().extendMarkRange('link');
+    // Focus synchronously rather than with chain().focus(): TipTap's focus() runs a frame
+    // later and then rewrites the DOM selection, undoing a key pressed in between.
+    editor.view.focus();
+    const chain = editor.chain().extendMarkRange('link');
     const url = href.trim();
     if (!url) chain.unsetLink().run();
     else chain.setLink({ href: /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}` }).run();
@@ -189,7 +192,11 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
               autoFocus
               value={href}
               onChange={(event) => setHref(event.target.value)}
-              onKeyDown={(event) => event.key === 'Escape' && setPanel('none')}
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') return;
+                editor.view.focus();
+                setPanel('none');
+              }}
               placeholder="Paste link"
               aria-label="Link URL"
               className="h-7 w-64 rounded border border-line bg-surface px-2 text-sm outline-none focus:border-accent"

@@ -10,6 +10,24 @@ export interface PageRef {
   inTrash: boolean;
 }
 
+/** An attachment stored in the workspace. */
+export interface FileRef {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+}
+
+/** Metadata for a web bookmark card. */
+export interface LinkPreview {
+  url: string;
+  title: string;
+  description: string;
+  image: string | null;
+  icon: string | null;
+  siteName: string | null;
+}
+
 /**
  * What the editor needs from the workspace around it: page titles for page links
  * and breadcrumbs, navigation, and creating sub-pages. Provided by the app, so the
@@ -28,6 +46,13 @@ export interface EditorServices {
   createSubpage(): string;
   /** Called whenever any page metadata changes. */
   subscribe(listener: () => void): () => void;
+  /** Store a file (pasted, dropped or picked) in the workspace. */
+  uploadFile(file: File): Promise<FileRef>;
+  /** URL the renderer can load a stored file from. */
+  fileUrl(id: string): string;
+  /** Open a stored file with the system's default app. */
+  openFile(id: string): void;
+  linkPreview(url: string): Promise<LinkPreview | null>;
 }
 
 export const EditorServicesContext = createContext<EditorServices | null>(null);
@@ -63,13 +88,20 @@ export function useBreadcrumb(): PageRef[] {
 /** Handles to React UI owned by <PageEditor>, filled in once it mounts. */
 export interface UiBridge {
   services: EditorServices | null;
+  /** Offer to turn a just-pasted link at [from, to) into a bookmark or embed. */
+  pastedUrl: ((url: string, from: number, to: number) => void) | null;
   /** Ask the user to pick a page; resolves with `null` if they cancel. */
   pickPage: ((anchor: DOMRect) => Promise<PageRef | null>) | null;
   /** Open the equation editor for the math node at `pos`. */
   editMath: ((node: PMNode, pos: number) => void) | null;
 }
 
-export const EMPTY_UI_BRIDGE: UiBridge = { services: null, pickPage: null, editMath: null };
+export const EMPTY_UI_BRIDGE: UiBridge = {
+  services: null,
+  pastedUrl: null,
+  pickPage: null,
+  editMath: null,
+};
 
 /**
  * Mutable holder for the bridge: an external store, like a ref. <PageEditor> sets

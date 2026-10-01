@@ -19,6 +19,9 @@ complete. Phase 1 (editor and navigation) is in progress; see [docs/PHASE1.md](d
     `$$x$$` (inline equation).
   - Hover a block for `+` (add below) and `⋮⋮` (drag to move; click for turn into, duplicate,
     copy link, delete). Drop a block on another block's left or right edge to make columns.
+  - Media: images (upload, paste or drop; resize; captions), video, audio, PDFs (viewed in the
+    page), any file (opens in its default app), web bookmarks with previews, and embeds from
+    YouTube, Vimeo, Loom, Figma, CodePen and Google Maps. Pasting a link offers Bookmark or Embed.
   - Selecting text shows a toolbar for bold, italic, underline, strikethrough, code, links,
     equations and turn into. Ctrl+click opens a link.
 - Every block has a stable id, ready for block links, comments and sync later.
@@ -77,9 +80,10 @@ place, prefer the `.deb`.
 | What                                 | Location                                                               |
 | ------------------------------------ | ---------------------------------------------------------------------- |
 | Workspace database (pages, content)  | `~/.local/share/workspace-app/workspace.db` (honours `$XDG_DATA_HOME`) |
+| Attachments (images, PDFs, files)    | `~/.local/share/workspace-app/files/`                                  |
 | Chromium profile (caches, GPU state) | `~/.config/Workspace/`                                                 |
 
-Back up the workspace by copying `workspace.db` while the app is closed. Set `WORKSPACE_DATA_DIR`
+Back up the workspace by copying `workspace.db` and the `files/` folder while the app is closed. Set `WORKSPACE_DATA_DIR`
 to use a different directory, for example to keep separate workspaces.
 
 ## Architecture

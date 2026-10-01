@@ -56,6 +56,18 @@ describe('blocks', () => {
     expect(pageText(doc)).toBe('E = mc^2\nafter');
   });
 
+  it('indexes captions, file names and bookmark titles', () => {
+    const doc = new Y.Doc();
+    const image = new Y.XmlElement('image');
+    image.setAttribute('caption', 'Gripper close-up');
+    const file = new Y.XmlElement('file');
+    file.setAttribute('name', 'servo-datasheet.pdf');
+    const bookmark = new Y.XmlElement('bookmark');
+    bookmark.setAttribute('title', 'ROS 2 docs');
+    getPageContent(doc).insert(0, [image, file, bookmark]);
+    expect(pageText(doc)).toBe('Gripper close-up\nservo-datasheet.pdf\nROS 2 docs');
+  });
+
   it('ignores formatting when extracting text', () => {
     const doc = new Y.Doc();
     const p = new Y.XmlElement('paragraph');

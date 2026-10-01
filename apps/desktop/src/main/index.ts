@@ -1,9 +1,10 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DocManager, SqliteStore } from '@workspace/storage-local';
+import { DocManager, FileStore, SqliteStore } from '@workspace/storage-local';
 import { BrowserWindow, Menu, app, nativeTheme, shell } from 'electron';
 import type { ThemeSource } from '../shared/ipc';
+import { registerFileScheme, registerFiles } from './files';
 import { registerIpc } from './ipc';
 import { buildMenu } from './menu';
 import { resolveDataDir } from './paths';
@@ -35,6 +36,8 @@ if (!app.requestSingleInstanceLock()) {
 
 const store = new SqliteStore(join(dataDir, 'workspace.db'));
 const manager = new DocManager(store);
+const files = new FileStore(dataDir, store);
+registerFileScheme();
 
 interface WindowBounds {
   x?: number;
@@ -123,6 +126,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(() => {
+  registerFiles(files, store);
   nativeTheme.themeSource = store.getSetting<ThemeSource>('ui.theme') ?? 'system';
   Menu.setApplicationMenu(buildMenu(createWindow, isDev));
   createWindow();

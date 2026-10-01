@@ -33,7 +33,10 @@ export function MathEditor({
   }, [editor, target.pos]);
 
   const save = () => {
-    const chain = editor.chain().focus();
+    // Focus synchronously rather than with chain().focus(): TipTap's focus() runs a frame
+    // later and then rewrites the DOM selection, undoing a key pressed in between.
+    editor.view.focus();
+    const chain = editor.chain();
     if (block && !latex.trim()) chain.deleteBlockMath({ pos: target.pos });
     else if (block) chain.updateBlockMath({ latex, pos: target.pos });
     else if (!latex.trim()) chain.deleteInlineMath({ pos: target.pos });
@@ -59,7 +62,7 @@ export function MathEditor({
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
-            editor.commands.focus();
+            editor.view.focus();
             onClose();
           } else if (event.key === 'Enter' && (!block || event.ctrlKey || event.metaKey)) {
             event.preventDefault();

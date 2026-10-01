@@ -12,6 +12,8 @@ import { Callout } from './nodes/callout';
 import { CodeBlock } from './nodes/code-block';
 import { Column, ColumnList } from './nodes/columns';
 import { mathExtensions } from './nodes/math';
+import { MediaBlocks } from './nodes/media';
+import { PasteAndDrop } from './nodes/paste-drop';
 import { Breadcrumb, PageLink, TableOfContents } from './nodes/page-blocks';
 import { Quote } from './nodes/quote';
 import { Table } from './nodes/table';
@@ -41,6 +43,13 @@ export const BLOCK_NODE_TYPES = [
   'pageLink',
   'breadcrumb',
   'tableOfContents',
+  'image',
+  'video',
+  'audio',
+  'pdf',
+  'file',
+  'bookmark',
+  'embed',
 ];
 
 /** Ctrl/Cmd+click opens a link (plain clicks just place the cursor while editing). */
@@ -98,6 +107,8 @@ export function pageExtensions(doc: Y.Doc, bridge: UiBridgeHandle) {
     PageLink,
     Breadcrumb,
     TableOfContents,
+    ...MediaBlocks,
+    PasteAndDrop,
     Placeholder.configure({ placeholder: placeholderFor, includeChildren: true }),
     UniqueID.configure({
       types: BLOCK_NODE_TYPES,

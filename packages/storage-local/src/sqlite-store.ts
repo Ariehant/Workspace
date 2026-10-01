@@ -10,6 +10,8 @@ import { DatabaseSync } from 'node:sqlite';
  * - `pages` + `page_fts`: a query index derived from the Yjs docs, for search and
  *   (later) database views. It can always be rebuilt from `doc_updates`.
  * - `settings`: small JSON key/value store for app preferences.
+ * - `files`: metadata of attachments stored by `FileStore`.
+ * - `link_previews`: cached bookmark metadata, keyed by URL.
  */
 
 const MIGRATIONS: string[] = [
@@ -45,6 +47,22 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+  // 2: attachments and cached link previews (Phase 1 M3).
+  `
+  CREATE TABLE files (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE link_previews (
+    url TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export interface PageIndexRow {
@@ -57,6 +75,15 @@ export interface PageIndexRow {
   inTrash: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface FileRecord {
+  /** `<sha256>.<ext>`: content-addressed, so identical files are stored once. */
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  createdAt: number;
 }
 
 export interface SearchResult {
@@ -222,6 +249,42 @@ export class SqliteStore {
       )
       .all(fts, limit) as unknown as SearchResult[];
     return rows.map((r) => ({ ...r }));
+  }
+
+  // --- Files and link previews ------------------------------------------------
+
+  putFileRecord(file: FileRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO files (id, name, mime, size, created_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO NOTHING`,
+      )
+      .run(file.id, file.name, file.mime, file.size, file.createdAt);
+  }
+
+  getFileRecord(id: string): FileRecord | null {
+    const row = this.db.prepare('SELECT * FROM files WHERE id = ?').get(id) as
+      { id: string; name: string; mime: string; size: number; created_at: number } | undefined;
+    return row
+      ? { id: row.id, name: row.name, mime: row.mime, size: row.size, createdAt: row.created_at }
+      : null;
+  }
+
+  getLinkPreview<T>(url: string, maxAgeMs: number): T | null {
+    const row = this.db
+      .prepare('SELECT data, fetched_at FROM link_previews WHERE url = ?')
+      .get(url) as { data: string; fetched_at: number } | undefined;
+    if (!row || Date.now() - row.fetched_at > maxAgeMs) return null;
+    return JSON.parse(row.data) as T;
+  }
+
+  putLinkPreview(url: string, data: unknown): void {
+    this.db
+      .prepare(
+        `INSERT INTO link_previews (url, data, fetched_at) VALUES (?, ?, ?)
+         ON CONFLICT (url) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at`,
+      )
+      .run(url, JSON.stringify(data), Date.now());
   }
 
   // --- Settings -------------------------------------------------------------

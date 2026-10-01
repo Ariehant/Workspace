@@ -512,3 +512,126 @@
 .ws-prose .ws-page-link {
   color: inherit;
 }
+
+/* --- M3 media -------------------------------------------------------------------- */
+
+.ws-media-placeholder {
+  margin: 4px 0;
+  border-radius: 4px;
+  background: var(--ws-callout-bg);
+  font-size: 14px;
+  user-select: none;
+}
+
+.ws-image-block {
+  margin: 6px 0;
+}
+.ws-image {
+  position: relative;
+  margin: 0 auto;
+  max-width: 100%;
+}
+.ws-image img {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+  cursor: default;
+}
+/* Selected media show an outline rather than the text-selection background. */
+.ws-prose .ProseMirror-selectednode:has(.ws-image, .ws-media, .ws-embed, .ws-bookmark) {
+  background: none;
+}
+.ws-image.is-selected img,
+.ws-media.is-selected,
+.ws-embed.is-selected,
+.ws-bookmark.is-selected {
+  outline: 3px solid var(--ws-selection);
+  outline-offset: 0;
+}
+/* Side handles for resizing, shown on hover. */
+.ws-image-resize {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 48px;
+  max-height: 50%;
+  transform: translateY(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  background: rgba(15, 15, 15, 0.6);
+  cursor: col-resize;
+  opacity: 0;
+  transition: opacity 120ms;
+  touch-action: none;
+}
+.ws-image:hover .ws-image-resize {
+  opacity: 1;
+}
+.ws-image-resize-left {
+  left: 8px;
+}
+.ws-image-resize-right {
+  right: 8px;
+}
+
+.ws-media {
+  margin: 6px 0;
+  border-radius: 4px;
+}
+.ws-pdf {
+  display: block;
+  width: 100%;
+  height: 640px;
+  border: 1px solid var(--ws-border);
+  border-radius: 4px;
+}
+.ws-media-caption {
+  display: block;
+  width: 100%;
+  padding: 6px 2px 2px;
+  font-size: 14px;
+  color: var(--ws-muted);
+  background: transparent;
+  outline: none;
+}
+.ws-media-caption-empty {
+  opacity: 0;
+}
+.ws-image:hover .ws-media-caption-empty,
+.ws-media:hover .ws-media-caption-empty,
+.ws-media-caption-empty:focus {
+  opacity: 1;
+}
+
+.ws-bookmark {
+  display: flex;
+  margin: 6px 0;
+  min-height: 106px;
+  overflow: hidden;
+  border: 1px solid var(--ws-border);
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none !important;
+  user-select: none;
+}
+.ws-bookmark:hover {
+  background: var(--ws-hover);
+}
+.ws-bookmark-image {
+  flex: none;
+  width: 33%;
+  max-width: 250px;
+  height: auto;
+  object-fit: cover;
+}
+
+.ws-embed {
+  margin: 6px 0;
+}
+.ws-embed iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 4px;
+  background: var(--ws-callout-bg);
+}

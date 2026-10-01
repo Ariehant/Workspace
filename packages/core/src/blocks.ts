@@ -29,8 +29,12 @@ function deltaText(text: Y.XmlText): string {
 
 function readElement(element: Y.XmlElement): Block {
   const props = element.getAttributes();
-  // Equations keep their TeX source in an attribute; index it as their text.
-  const text = typeof props.latex === 'string' ? props.latex : '';
+  // Atom blocks keep their searchable text in attributes: TeX source, captions,
+  // file names and bookmark titles.
+  const text = ['latex', 'caption', 'name', 'title']
+    .map((key) => props[key])
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' ');
   const block: Block = { type: element.nodeName, props, text, children: [] };
   for (const child of element.toArray()) {
     if (child instanceof Y.XmlText) block.text += deltaText(child);
