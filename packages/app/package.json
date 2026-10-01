@@ -1,0 +1,29 @@
+{
+  "name": "@workspace/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@workspace/core": "workspace:*",
+    "@workspace/editor": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "lucide-react": "^1.49.0",
+    "yjs": "^13.6.27"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

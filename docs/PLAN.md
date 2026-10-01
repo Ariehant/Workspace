@@ -19,8 +19,8 @@ Out of scope: Notion AI (Q&A, writers, autofill, AI blocks, AI connectors), Noti
 │ Renderer: React + TipTap/ProseMirror + Yjs                 │
 │   editor · sidebar · database views · search UI            │
 │ Main process (Node):                                        │
-│   SQLite (better-sqlite3)  ← metadata, index, FTS5         │
-│   Yjs doc store (y-leveldb / SQLite blobs) ← page content  │
+│   SQLite (node:sqlite)     ← metadata, index, FTS5         │
+│   Yjs update log (SQLite blobs) ← page content            │
 │   Local file store (~/.local/share/<app>/files)            │
 │   Sync client (y-websocket/Hocuspocus provider) ──────┐    │
 └───────────────────────────────────────────────────────┼────┘
@@ -107,7 +107,7 @@ Tooling: TypeScript strict, ESLint, Prettier, Vitest for unit tests, Playwright 
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
-| **0. Foundation** (1–2 wk) | Monorepo, CI on ubuntu-24.04, Electron shell, design system, `core` block model on Yjs, SQLite persistence, IPC bridge | App launches, a page persists across restarts |
+| **0. Foundation** (1–2 wk) ✅ done | Monorepo, CI on ubuntu-24.04, Electron shell, design system, `core` block model on Yjs, SQLite persistence, IPC bridge | App launches, a page persists across restarts |
 | **1. Editor MVP** (4–6 wk) | All text, list, media and layout blocks; slash menu; Markdown shortcuts; DnD; inline formatting; mentions; page icon and cover; sidebar tree; trash; quick find (SQLite FTS5) | Can replace Notion for personal notes |
 | **2. Databases** (6–8 wk) | Property system, formula engine, table/board/list/gallery/calendar/timeline/chart views, filters/sorts/groups, relations/rollups, templates, linked views, side peek | Notion's own database templates can be rebuilt |
 | **3. Power features** (3–4 wk) | Synced blocks, buttons, page history, backlinks, templates gallery, multi-window/tabs, import/export (Notion zip first), Mermaid/KaTeX/code | A real Notion export imports with no meaningful loss |
@@ -137,7 +137,16 @@ Tooling: TypeScript strict, ESLint, Prettier, Vitest for unit tests, Playwright 
 - **CI matrix:** ubuntu-24.04, plus later Ubuntu releases as they ship. Install the built `.deb` in a clean `ubuntu:24.04` container and run a smoke test under xvfb.
 - **Manual QA:** go through the feature inventory in §3 against Notion side by side before each phase sign-off.
 
-## 8. First implementation steps (after approval)
+## 8. Phase 0 outcome
+
+Delivered: the monorepo (pnpm + Turborepo) with CI on ubuntu-24.04, the Yjs data model in `packages/core`, SQLite persistence and the search index in `packages/storage-local`, the design system, a TipTap editor bound to Yjs, the sidebar page tree, and the Electron shell with a sandboxed preload API. Packaging produces a `.deb` and an AppImage. The exit criterion ("app launches, a page persists across restarts") is covered by an E2E test.
+
+Changes from the original plan:
+- **SQLite uses Electron's built-in `node:sqlite` instead of `better-sqlite3`.** It includes FTS5 and removes the native-module rebuild for each Electron version and CPU architecture.
+- **Yjs updates are stored in SQLite (`doc_updates`) rather than y-leveldb.** That keeps one file per workspace, and the log is compacted on load.
+- **Vite 7 and TypeScript 6.0** (not Vite 8 and TS 7), because electron-vite 5 and typescript-eslint don't support the newer versions yet.
+
+## 9. First implementation steps (Phase 0, done)
 1. Scaffold the monorepo (pnpm, Turborepo, TS configs, lint, CI workflow).
 2. `packages/core`: the Block schema, Yjs bindings and ID generation, with unit tests.
 3. `apps/desktop`: the Electron shell, the SQLite + Yjs persistence adapter and a preload IPC API.

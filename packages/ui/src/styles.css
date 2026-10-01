@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+
+/* Scan the shared UI packages for class names (they are symlinked into node_modules). */
+@source '../../app/src';
+@source '../../editor/src';
+@source './';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Design tokens. Components use the Tailwind names (bg-surface, text-fg, ...);
+ * the values switch with `data-theme` on <html>, which ThemeProvider sets.
+ */
+:root {
+  --ws-bg: #ffffff;
+  --ws-sidebar: #f8f8f7;
+  --ws-fg: #37352f;
+  --ws-muted: #787774;
+  --ws-faint: #a5a29c;
+  --ws-border: #e9e9e7;
+  --ws-hover: rgba(55, 53, 47, 0.06);
+  --ws-active: rgba(55, 53, 47, 0.1);
+  --ws-accent: #2383e2;
+  --ws-accent-fg: #ffffff;
+  --ws-danger: #eb5757;
+  --ws-selection: rgba(35, 131, 226, 0.22);
+  --ws-menu: #ffffff;
+  --ws-shadow:
+    0 0 0 1px rgba(15, 15, 15, 0.05), 0 3px 6px rgba(15, 15, 15, 0.1),
+    0 9px 24px rgba(15, 15, 15, 0.2);
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --ws-bg: #191919;
+  --ws-sidebar: #202020;
+  --ws-fg: #d4d4d4;
+  --ws-muted: #9b9b9b;
+  --ws-faint: #5a5a5a;
+  --ws-border: #2f2f2f;
+  --ws-hover: rgba(255, 255, 255, 0.055);
+  --ws-active: rgba(255, 255, 255, 0.09);
+  --ws-accent: #2e8ae6;
+  --ws-accent-fg: #ffffff;
+  --ws-danger: #ff7369;
+  --ws-selection: rgba(46, 138, 230, 0.35);
+  --ws-menu: #252525;
+  --ws-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06), 0 3px 6px rgba(0, 0, 0, 0.4), 0 9px 24px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-surface: var(--ws-bg);
+  --color-sidebar: var(--ws-sidebar);
+  --color-fg: var(--ws-fg);
+  --color-muted: var(--ws-muted);
+  --color-faint: var(--ws-faint);
+  --color-line: var(--ws-border);
+  --color-hover: var(--ws-hover);
+  --color-active: var(--ws-active);
+  --color-accent: var(--ws-accent);
+  --color-accent-fg: var(--ws-accent-fg);
+  --color-danger: var(--ws-danger);
+  --color-menu: var(--ws-menu);
+  --shadow-menu: var(--ws-shadow);
+  --font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Ubuntu, Cantarell, 'Noto Sans',
+    Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Emoji';
+  --font-mono:
+    'SFMono-Regular', 'Ubuntu Mono', 'DejaVu Sans Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ws-bg);
+  color: var(--ws-fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--ws-selection);
+}
+
+/* Thin, unobtrusive scrollbars like the rest of the desktop. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ws-faint) transparent;
+}

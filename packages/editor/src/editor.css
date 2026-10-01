@@ -1,0 +1,116 @@
+/* Block typography for page content. Spacing follows Notion's rhythm. */
+.ws-prose {
+  outline: none;
+  font-size: 16px;
+  line-height: 1.5;
+  caret-color: var(--ws-fg);
+  padding-bottom: 30vh;
+  word-break: break-word;
+}
+
+.ws-prose > * + * {
+  margin-top: 2px;
+}
+
+.ws-prose p {
+  margin: 0;
+  padding: 3px 2px;
+  min-height: 1.5em;
+}
+
+.ws-prose h1,
+.ws-prose h2,
+.ws-prose h3 {
+  font-weight: 600;
+  line-height: 1.3;
+  padding: 3px 2px;
+  margin-bottom: 1px;
+}
+.ws-prose h1 {
+  font-size: 1.875em;
+  margin-top: 1.1em;
+}
+.ws-prose h2 {
+  font-size: 1.5em;
+  margin-top: 0.9em;
+}
+.ws-prose h3 {
+  font-size: 1.25em;
+  margin-top: 0.6em;
+}
+.ws-prose > :first-child {
+  margin-top: 0;
+}
+
+.ws-prose ul,
+.ws-prose ol {
+  padding-left: 1.6em;
+  margin: 0;
+}
+.ws-prose ul {
+  list-style: disc;
+}
+.ws-prose ol {
+  list-style: decimal;
+}
+.ws-prose li > p {
+  padding: 1px 2px;
+}
+
+.ws-prose blockquote {
+  border-left: 3px solid currentColor;
+  padding: 0 0.9em;
+  margin: 4px 0;
+}
+
+.ws-prose hr {
+  border: none;
+  border-top: 1px solid var(--ws-border);
+  margin: 12px 0;
+}
+
+.ws-prose code {
+  font-family: var(--font-mono);
+  font-size: 85%;
+  background: var(--ws-hover);
+  color: #eb5757;
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+}
+
+.ws-prose pre {
+  font-family: var(--font-mono);
+  font-size: 85%;
+  background: var(--ws-sidebar);
+  border-radius: 4px;
+  padding: 32px 16px 32px 32px;
+  margin: 4px 0;
+  overflow-x: auto;
+  tab-size: 2;
+}
+.ws-prose pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+.ws-prose a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--ws-faint);
+  text-underline-offset: 2px;
+}
+
+.ws-prose strong {
+  font-weight: 600;
+}
+
+/* Placeholder on the empty block that holds the cursor. */
+.ws-prose .is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--ws-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

@@ -1,0 +1,48 @@
+{
+  "name": "@workspace/desktop",
+  "productName": "Workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline-first workspace for notes, docs and databases",
+  "license": "UNLICENSED",
+  "author": {
+    "name": "Workspace Maintainers",
+    "email": "maintainers@example.invalid"
+  },
+  "homepage": "https://github.com/ariehant/workspace",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ariehant/workspace.git",
+    "directory": "apps/desktop"
+  },
+  "type": "module",
+  "main": "out/main/index.js",
+  "desktopName": "workspace-app.desktop",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:e2e": "playwright test",
+    "package": "electron-vite build && electron-builder --linux --publish never"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "@workspace/app": "workspace:*",
+    "@workspace/core": "workspace:*",
+    "@workspace/editor": "workspace:*",
+    "@workspace/storage-local": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^7.3.6",
+    "yjs": "^13.6.27"
+  }
+}
