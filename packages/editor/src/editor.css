@@ -114,3 +114,33 @@
   height: 0;
   pointer-events: none;
 }
+
+/* Floating UI (slash menu, selection toolbar) sits above page content. */
+.ws-floating {
+  position: absolute;
+  z-index: 40;
+}
+
+/* Block handle: the + and ⋮⋮ controls left of the hovered block. */
+.ws-block-handle {
+  height: 1.5em;
+  margin-top: 3px;
+}
+.ws-block-handle button {
+  transition:
+    background-color 80ms,
+    color 80ms;
+}
+
+/* Feedback while selecting or dragging whole blocks. */
+.ws-prose .ProseMirror-selectednode,
+.ws-prose .ProseMirror-selectednoderange {
+  background: var(--ws-selection);
+  border-radius: 4px;
+}
+.ws-prose hr.ProseMirror-selectednode {
+  border-top-color: var(--ws-accent);
+}
+.ProseMirror-hideselection *::selection {
+  background: transparent;
+}

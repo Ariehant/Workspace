@@ -70,3 +70,45 @@ export function MenuRadioItem({
     </DropdownMenu.RadioItem>
   );
 }
+
+export const MenuSub = DropdownMenu.Sub;
+
+export function MenuSubTrigger({
+  icon,
+  className,
+  children,
+  ...props
+}: ComponentProps<typeof DropdownMenu.SubTrigger> & { icon?: ReactNode }) {
+  return (
+    <DropdownMenu.SubTrigger
+      className={cn(
+        'flex h-7 cursor-default items-center gap-2 rounded-md px-2 outline-none select-none',
+        'data-[highlighted]:bg-hover data-[state=open]:bg-hover',
+        className,
+      )}
+      {...props}
+    >
+      {icon && <span className="flex size-4 items-center justify-center text-muted">{icon}</span>}
+      <span className="flex-1">{children}</span>
+      <span className="text-faint">›</span>
+    </DropdownMenu.SubTrigger>
+  );
+}
+
+export function MenuSubContent({
+  className,
+  ...props
+}: ComponentProps<typeof DropdownMenu.SubContent>) {
+  return (
+    <DropdownMenu.Portal>
+      <DropdownMenu.SubContent
+        sideOffset={4}
+        className={cn(
+          'z-50 min-w-48 rounded-lg bg-menu p-1 text-sm text-fg shadow-menu',
+          className,
+        )}
+        {...props}
+      />
+    </DropdownMenu.Portal>
+  );
+}

@@ -40,6 +40,14 @@ describe('blocks', () => {
     expect(pageText(doc)).toBe('Title\nBody\nfirst');
   });
 
+  it('exposes the editor-assigned block id in props', () => {
+    const doc = new Y.Doc();
+    const p = paragraph('With id');
+    p.setAttribute('id', 'block-1');
+    getPageContent(doc).insert(0, [p]);
+    expect(readBlocks(doc)[0]?.props.id).toBe('block-1');
+  });
+
   it('ignores formatting when extracting text', () => {
     const doc = new Y.Doc();
     const p = new Y.XmlElement('paragraph');

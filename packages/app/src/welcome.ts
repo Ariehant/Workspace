@@ -11,7 +11,11 @@ const WELCOME: Node[] = [
   ['heading', 'The basics', { level: 2 }],
   ['bullet', 'Create pages with “New page” in the sidebar, or press Ctrl+N.'],
   ['bullet', 'Nest pages by clicking + next to a page in the sidebar.'],
-  ['bullet', 'Type # and a space for a heading, - for a list, > for a quote, ``` for code.'],
+  [
+    'bullet',
+    'Type / for a menu of blocks, or use shortcuts: # heading, - list, > quote, ``` code.',
+  ],
+  ['bullet', 'Hover a block and drag ⋮⋮ to move it, or click it for more actions.'],
   ['bullet', 'Select text and press Ctrl+B or Ctrl+I to format it.'],
   ['heading', 'Coming next', { level: 2 }],
   [

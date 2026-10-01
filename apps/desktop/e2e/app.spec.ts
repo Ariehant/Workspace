@@ -1,62 +1,6 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import {
-  _electron as electron,
-  expect,
-  test,
-  type ElectronApplication,
-  type Page,
-} from '@playwright/test';
+import { editor, expect, quit, sidebarTitles, test, waitForIndexed } from './helpers';
 
-const appDir = fileURLToPath(new URL('..', import.meta.url));
-const electronPath = createRequire(import.meta.url)('electron') as string;
-
-let dataDir: string;
-const running: ElectronApplication[] = [];
-
-test.beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'workspace-e2e-'));
-});
-
-test.afterEach(async () => {
-  await Promise.all(running.splice(0).map((app) => app.close().catch(() => {})));
-  rmSync(dataDir, { recursive: true, force: true });
-});
-
-async function launch(): Promise<{ app: ElectronApplication; window: Page }> {
-  const args = [appDir];
-  // Chromium refuses to start its sandbox as root (e.g. in containers).
-  if (process.getuid?.() === 0) args.push('--no-sandbox');
-  const app = await electron.launch({
-    executablePath: electronPath,
-    args,
-    env: { ...process.env, WORKSPACE_DATA_DIR: dataDir },
-  });
-  running.push(app);
-  const window = await app.firstWindow();
-  await window.getByRole('tree', { name: 'Pages' }).waitFor();
-  return { app, window };
-}
-
-async function quit(app: ElectronApplication) {
-  running.splice(running.indexOf(app), 1);
-  await app.close();
-}
-
-const sidebarTitles = (window: Page) => window.getByTestId('sidebar-page-title');
-const editor = (window: Page) => window.getByTestId('page-editor');
-
-/** Wait until the main process has indexed `text`, i.e. it has really received the edits. */
-async function waitForIndexed(page: Page, text: string) {
-  await expect
-    .poll(() => page.evaluate((q) => window.workspace.search(q), text), { timeout: 10_000 })
-    .not.toEqual([]);
-}
-
-test('first launch shows the getting started page', async () => {
+test('first launch shows the getting started page', async ({ launch }) => {
   const { window } = await launch();
   await expect(sidebarTitles(window)).toHaveText(['Getting started']);
   await expect(window.getByLabel('Page title')).toHaveValue('Getting started');
@@ -64,7 +8,7 @@ test('first launch shows the getting started page', async () => {
   await expect(editor(window).locator('h2')).toHaveText(['The basics', 'Coming next']);
 });
 
-test('pages and their content survive a restart', async ({}, testInfo) => {
+test('pages and their content survive a restart', async ({ launch }, testInfo) => {
   const launched = await launch();
   const { app } = launched;
   let { window } = launched;
@@ -107,7 +51,7 @@ test('pages and their content survive a restart', async ({}, testInfo) => {
   await window.screenshot({ path: testInfo.outputPath('after-restart.png') });
 });
 
-test('edits in one window appear in another', async () => {
+test('edits in one window appear in another', async ({ launch }) => {
   const { app, window: first } = await launch();
   const secondPromise = app.waitForEvent('window');
   await app.evaluate(({ Menu }) =>
@@ -125,7 +69,7 @@ test('edits in one window appear in another', async () => {
   await expect(editor(second)).toContainText('Typed in window one.');
 });
 
-test('moving a page to the trash hides it and its sub-pages', async () => {
+test('moving a page to the trash hides it and its sub-pages', async ({ launch }) => {
   const { window } = await launch();
   await window.getByRole('button', { name: 'New page' }).click();
   await window.getByLabel('Page title').fill('Scratch');
@@ -141,7 +85,7 @@ test('moving a page to the trash hides it and its sub-pages', async () => {
   await expect(sidebarTitles(window)).toHaveText(['Getting started', 'Scratch']);
 });
 
-test('the theme choice applies immediately and is remembered', async ({}, testInfo) => {
+test('the theme choice applies immediately and is remembered', async ({ launch }, testInfo) => {
   const launched = await launch();
   const { app } = launched;
   let { window } = launched;

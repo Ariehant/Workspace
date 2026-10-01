@@ -1,13 +1,12 @@
-import { PAGE_CONTENT_FIELD } from '@workspace/core';
-import Collaboration from '@tiptap/extension-collaboration';
-import { Placeholder } from '@tiptap/extensions';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import { useEffect } from 'react';
 import type * as Y from 'yjs';
+import { BlockHandle } from './block-handle';
+import { SelectionToolbar } from './bubble-menu';
+import { pageExtensions } from './extensions';
 
 export interface PageEditorProps {
-  /** The page doc; content lives in its `PAGE_CONTENT_FIELD` XML fragment. */
+  /** The page doc; its guid is the page id. */
   doc: Y.Doc;
   /** Called with the editor once it is ready, and with `null` on teardown. */
   onEditor?: (editor: Editor | null) => void;
@@ -21,11 +20,7 @@ export interface PageEditorProps {
 export function PageEditor({ doc, onEditor }: PageEditorProps) {
   const editor = useEditor(
     {
-      extensions: [
-        StarterKit.configure({ undoRedo: false }),
-        Placeholder.configure({ placeholder: 'Start writing…' }),
-        Collaboration.configure({ document: doc, field: PAGE_CONTENT_FIELD }),
-      ],
+      extensions: pageExtensions(doc),
       editorProps: {
         attributes: { class: 'ws-prose', 'data-testid': 'page-editor', spellcheck: 'true' },
       },
@@ -38,5 +33,11 @@ export function PageEditor({ doc, onEditor }: PageEditorProps) {
     return () => onEditor?.(null);
   }, [editor, onEditor]);
 
-  return <EditorContent editor={editor} />;
+  return (
+    <>
+      <EditorContent editor={editor} />
+      {editor && <BlockHandle editor={editor} pageId={doc.guid} />}
+      {editor && <SelectionToolbar editor={editor} />}
+    </>
+  );
 }
