@@ -23,7 +23,11 @@ complete. Phase 1 (editor and navigation) is in progress; see [docs/PHASE1.md](d
     page), any file (opens in its default app), web bookmarks with previews, and embeds from
     YouTube, Vimeo, Loom, Figma, CodePen and Google Maps. Pasting a link offers Bookmark or Embed.
   - Selecting text shows a toolbar for bold, italic, underline, strikethrough, code, links,
-    equations and turn into. Ctrl+click opens a link.
+    colors, equations and turn into. Ctrl+click opens a link. Blocks can be colored from the `⋮⋮`
+    menu.
+  - `@` mentions pages (live titles) and dates ("next fri", "in 2 weeks"); `@remind tomorrow`
+    sends a desktop notification at 9:00. `:` suggests emoji.
+  - Paste Markdown to get blocks; copy gives Markdown as plain text. Ctrl+F finds and replaces.
 - Every block has a stable id, ready for block links, comments and sync later.
 - Everything is saved locally as you type and survives restarts, including the last open page and
   which sidebar items are expanded.

@@ -84,9 +84,10 @@ export const Callout = Node.create({
         parseHTML: (el) => el.getAttribute('data-icon') ?? '💡',
         renderHTML: (attrs) => ({ 'data-icon': attrs.icon }),
       },
+      // A palette value (see colors.ts); callouts default to a gray background.
       color: {
-        default: 'gray',
-        parseHTML: (el) => el.getAttribute('data-color') ?? 'gray',
+        default: 'gray_background',
+        parseHTML: (el) => el.getAttribute('data-color') ?? 'gray_background',
         renderHTML: (attrs) => ({ 'data-color': attrs.color }),
       },
     };

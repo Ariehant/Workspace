@@ -94,6 +94,7 @@ export interface UiBridge {
   pickPage: ((anchor: DOMRect) => Promise<PageRef | null>) | null;
   /** Open the equation editor for the math node at `pos`. */
   editMath: ((node: PMNode, pos: number) => void) | null;
+  openFind: (() => void) | null;
 }
 
 export const EMPTY_UI_BRIDGE: UiBridge = {
@@ -101,6 +102,7 @@ export const EMPTY_UI_BRIDGE: UiBridge = {
   pastedUrl: null,
   pickPage: null,
   editMath: null,
+  openFind: null,
 };
 
 /**

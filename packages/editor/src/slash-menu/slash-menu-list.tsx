@@ -1,21 +1,15 @@
 import { cn } from '@workspace/ui';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { BLOCK_GROUP_LABELS, type BlockDefinition } from '../blocks/registry';
+import type { SuggestionListHandle, SuggestionListProps } from '../suggestions/floating';
 
-export interface SlashMenuListProps {
-  items: BlockDefinition[];
-  command(item: BlockDefinition): void;
-  /** Show group headings (only for the unfiltered list). */
-  grouped: boolean;
-}
-
-export interface SlashMenuListHandle {
-  /** `current` are the newest results, which may be newer than the rendered ones. */
-  onKeyDown(event: KeyboardEvent, current: BlockDefinition[]): boolean;
-}
+export type SlashMenuListProps = SuggestionListProps<BlockDefinition>;
+export type SlashMenuListHandle = SuggestionListHandle<BlockDefinition>;
 
 export const SlashMenuList = forwardRef<SlashMenuListHandle, SlashMenuListProps>(
-  function SlashMenuList({ items, command, grouped }, ref) {
+  function SlashMenuList({ items, command, query, loading }, ref) {
+    // Group headings only for the unfiltered list.
+    const grouped = !query;
     const [selected, setSelected] = useState(0);
     const [prevItems, setPrevItems] = useState(items);
     const listRef = useRef<HTMLDivElement>(null);
@@ -61,7 +55,9 @@ export const SlashMenuList = forwardRef<SlashMenuListHandle, SlashMenuListProps>
         aria-label="Blocks"
         className="max-h-80 w-80 overflow-y-auto rounded-lg bg-menu p-1 text-sm text-fg shadow-menu"
       >
-        {items.length === 0 && <div className="px-2 py-1.5 text-muted">No results</div>}
+        {items.length === 0 && (
+          <div className="px-2 py-1.5 text-muted">{loading ? 'Searching…' : 'No results'}</div>
+        )}
         {items.map((item, index) => {
           const showGroup = grouped && (index === 0 || items[index - 1]!.group !== item.group);
           const Icon = item.icon;

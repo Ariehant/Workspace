@@ -14,6 +14,8 @@ export const IPC = {
   linkPreview: 'link:preview',
   /** main -> renderer: a menu command. */
   command: 'app:command',
+  /** main -> renderer: show this page (e.g. from a reminder notification). */
+  navigate: 'app:navigate',
   ready: 'app:ready',
 } as const;
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { getPageContent, pageText, readBlocks } from './index';
+import { getPageContent, pageText, readBlocks, readReminders } from './index';
 
 function paragraph(text: string): Y.XmlElement {
   const el = new Y.XmlElement('paragraph');
@@ -77,5 +77,23 @@ describe('blocks', () => {
     p.insert(0, [text]);
     getPageContent(doc).insert(0, [p]);
     expect(pageText(doc)).toBe('plain bold');
+  });
+
+  it('finds reminder mentions with the text around them', () => {
+    const doc = new Y.Doc();
+    const p = new Y.XmlElement('paragraph');
+    p.setAttribute('id', 'block-7');
+    const reminder = new Y.XmlElement('mention');
+    reminder.setAttribute('kind', 'date');
+    reminder.setAttribute('date', '2026-10-05');
+    reminder.setAttribute('reminder', true as unknown as string);
+    const plainDate = new Y.XmlElement('mention');
+    plainDate.setAttribute('kind', 'date');
+    plainDate.setAttribute('date', '2026-10-06');
+    p.insert(0, [new Y.XmlText('Order  servos '), reminder, plainDate]);
+    getPageContent(doc).insert(0, [p, paragraph('no reminders here')]);
+    expect(readReminders(doc)).toEqual([
+      { blockId: 'block-7', date: '2026-10-05', text: 'Order servos' },
+    ]);
   });
 });

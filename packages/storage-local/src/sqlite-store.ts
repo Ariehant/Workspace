@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
  * - `settings`: small JSON key/value store for app preferences.
  * - `files`: metadata of attachments stored by `FileStore`.
  * - `link_previews`: cached bookmark metadata, keyed by URL.
+ * - `reminders`: `@remind` mentions found in pages, and whether each has fired.
  */
 
 const MIGRATIONS: string[] = [
@@ -63,6 +64,18 @@ const MIGRATIONS: string[] = [
     fetched_at INTEGER NOT NULL
   );
   `,
+  // 3: reminders from @remind mentions, derived from page docs (Phase 1 M4).
+  `
+  CREATE TABLE reminders (
+    page_id TEXT NOT NULL,
+    block_id TEXT NOT NULL,
+    fire_at INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    fired INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (page_id, block_id, fire_at)
+  );
+  CREATE INDEX reminders_due ON reminders (fired, fire_at);
+  `,
 ];
 
 export interface PageIndexRow {
@@ -84,6 +97,14 @@ export interface FileRecord {
   mime: string;
   size: number;
   createdAt: number;
+}
+
+export interface Reminder {
+  pageId: string;
+  blockId: string;
+  pageTitle: string;
+  fireAt: number;
+  text: string;
 }
 
 export interface SearchResult {
@@ -285,6 +306,84 @@ export class SqliteStore {
          ON CONFLICT (url) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at`,
       )
       .run(url, JSON.stringify(data), Date.now());
+  }
+
+  // --- Reminders ------------------------------------------------------------
+
+  /**
+   * Make a page's reminders match `reminders`. A reminder is identified by its block
+   * and time, so editing the text around it keeps its `fired` flag (no second
+   * notification) while picking up the new text.
+   */
+  replaceReminders(
+    pageId: string,
+    reminders: { blockId: string; fireAt: number; text: string }[],
+  ): void {
+    this.transaction(() => {
+      const fired = new Set(
+        (
+          this.db
+            .prepare('SELECT block_id, fire_at FROM reminders WHERE page_id = ? AND fired = 1')
+            .all(pageId) as { block_id: string; fire_at: number }[]
+        ).map((r) => `${r.block_id}@${r.fire_at}`),
+      );
+      this.db.prepare('DELETE FROM reminders WHERE page_id = ?').run(pageId);
+      const insert = this.db.prepare(
+        'INSERT OR IGNORE INTO reminders (page_id, block_id, fire_at, text, fired) VALUES (?, ?, ?, ?, ?)',
+      );
+      for (const r of reminders) {
+        insert.run(
+          pageId,
+          r.blockId,
+          r.fireAt,
+          r.text,
+          fired.has(`${r.blockId}@${r.fireAt}`) ? 1 : 0,
+        );
+      }
+    });
+  }
+
+  /** Unfired reminders due by `now`, on pages that are not in the trash. */
+  dueReminders(now: number): Reminder[] {
+    const rows = this.db
+      .prepare(
+        `SELECT r.page_id, r.block_id, r.fire_at, r.text, p.title
+         FROM reminders r JOIN pages p ON p.id = r.page_id
+         WHERE r.fired = 0 AND r.fire_at <= ? AND p.in_trash = 0
+         ORDER BY r.fire_at`,
+      )
+      .all(now) as {
+      page_id: string;
+      block_id: string;
+      fire_at: number;
+      text: string;
+      title: string;
+    }[];
+    return rows.map((r) => ({
+      pageId: r.page_id,
+      blockId: r.block_id,
+      fireAt: r.fire_at,
+      text: r.text,
+      pageTitle: r.title,
+    }));
+  }
+
+  markReminderFired(reminder: Pick<Reminder, 'pageId' | 'blockId' | 'fireAt'>): void {
+    this.db
+      .prepare('UPDATE reminders SET fired = 1 WHERE page_id = ? AND block_id = ? AND fire_at = ?')
+      .run(reminder.pageId, reminder.blockId, reminder.fireAt);
+  }
+
+  /** When the next unfired reminder is due, or `null` if none is pending. */
+  nextReminderAt(): number | null {
+    const row = this.db
+      .prepare('SELECT MIN(fire_at) AS next FROM reminders WHERE fired = 0')
+      .get() as { next: number | null };
+    return row.next;
+  }
+
+  deleteReminders(pageId: string): void {
+    this.db.prepare('DELETE FROM reminders WHERE page_id = ?').run(pageId);
   }
 
   // --- Settings -------------------------------------------------------------

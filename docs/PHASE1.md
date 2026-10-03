@@ -1,6 +1,6 @@
 # Phase 1: Editor MVP and navigation
 
-**Status:** M1–M3 done. M4–M6 to do.
+**Status:** M1–M4 done. M5–M6 to do.
 
 ## Context
 
@@ -105,7 +105,7 @@ Setters follow the `setPageIcon` pattern, and the page index gains whichever col
 - **Not done yet:** garbage collection of unreferenced files, and "download / save as" for file blocks (they open in the default app). Both are planned for Phase 3 with import and export.
 - **Bug found:** passing a new `computePositionConfig` object to the React `DragHandle` on each render re-registered its plugin. Re-registering any plugin makes the Yjs binding re-render the document, which reverted unsynced edits. It's now a constant, and the paste-as-bookmark E2E test guards against regressions.
 
-### M4: inline content
+### M4: inline content ✅
 
 - `@` mentions (`@tiptap/extension-mention`): pages (searching the workspace doc) and dates ("today", "tomorrow", "next Friday", ISO dates). Each renders as a live chip. Person mentions come with accounts in Phase 5.
 - Reminders on date mentions are stored now and fire through a main-process timer with an Electron `Notification`.
@@ -113,11 +113,22 @@ Setters follow the `setPageIcon` pattern, and the page index gains whichever col
 - Rich copy and paste: paste Markdown as blocks (`@tiptap/markdown`), and copy as HTML plus Markdown.
 - Find and replace in a page (`prosemirror-search`, Ctrl+F) and word count.
 
+**M4 notes:**
+
+- **`@` mentions** cover pages (live title, click to open) and dates in natural language: "today", "next fri", "in 2 weeks", "oct 5". Person mentions arrive with accounts in Phase 5.
+- **Reminders** (`@remind tomorrow`) notify at 09:00 local through the main process. Ones missed while the app was closed fire on the next start. A reminder is identified by its block and time, so editing the sentence never notifies twice.
+- **Colors** use Notion's 9 colors, for text or background, on text spans and whole blocks. They're stored by name so each theme renders them, and callouts use the same palette.
+- **Markdown:** pasting Markdown, including VS Code's style-only HTML, becomes blocks, and copying puts Markdown in the plain-text clipboard.
+- **Find and replace** opens with Ctrl+F, with a case toggle, replace one or all, and a match count.
+- **Moved to M5:** word count, shown in the page "…" menu.
+- **Bundle size:** the renderer is now about 2.1 MB with the emoji data and the Markdown parser. Lazy-loading the emoji list, KaTeX and highlight.js is planned for polish.
+- **Bug found:** Suggestion v3 resolves items asynchronously and first reports `loading` with an empty list. The early-exit rules now ignore that state; they had been closing `:emoji` and `@in 2 weeks` while typing.
+
 ### M5: page chrome
 
 - Icon picker (Radix Popover). Emoji grid from `emojibase-data`, with search, recent emoji and a random button, plus "Upload image" through the file store. Hovering the page shows "Add icon" and "Add cover".
 - Covers: a gallery of solid colors and gradients, or an uploaded image. "Reposition" drags the vertical position, and "Remove" clears it.
-- Page "…" menu: full width, small text, font (Default, Serif, Mono), lock page (makes the editor and title read-only), word count, duplicate, move to, and move to trash.
+- Page "…" menu: full width, small text, font (Default, Serif, Mono), lock page (makes the editor and title read-only), word count (moved from M4), duplicate, move to, and move to trash.
 - **Duplicate** copies the page doc state into a new doc, reassigns block IDs, and copies sub-pages recursively.
 - **Move to** opens a page picker dialog that calls `movePage`.
 

@@ -4,6 +4,8 @@ import {
   isInTrash,
   listPages,
   pageText,
+  readReminders,
+  reminderTime,
   touchPage,
 } from '@workspace/core';
 import * as Y from 'yjs';
@@ -16,6 +18,8 @@ export interface DocManagerOptions {
   compactThreshold?: number;
   /** Debounce for search-index and `updatedAt` writes after an edit. */
   indexDelayMs?: number;
+  /** Called after a page's reminders were re-indexed (to reschedule notifications). */
+  onRemindersChanged?: () => void;
 }
 
 /** Origin for changes the manager makes itself (e.g. bumping `updatedAt`). */
@@ -41,6 +45,7 @@ export class DocManager {
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly compactThreshold: number;
   private readonly indexDelayMs: number;
+  private readonly onRemindersChanged: () => void;
 
   constructor(
     private readonly store: SqliteStore,
@@ -48,6 +53,7 @@ export class DocManager {
   ) {
     this.compactThreshold = options.compactThreshold ?? 200;
     this.indexDelayMs = options.indexDelayMs ?? 750;
+    this.onRemindersChanged = options.onRemindersChanged ?? (() => {});
     this.workspace = this.load(WORKSPACE_DOC_ID);
     this.docs.get(WORKSPACE_DOC_ID)!.refs = Infinity; // never unloaded
 
@@ -156,6 +162,15 @@ export class DocManager {
     const entry = this.docs.get(docId);
     if (!entry || !getPagesMap(this.workspace).has(docId)) return;
     this.store.setPageBody(docId, pageText(entry.doc));
+    this.store.replaceReminders(
+      docId,
+      readReminders(entry.doc).flatMap(({ blockId, date, text }, index) => {
+        const fireAt = reminderTime(date);
+        // Blocks always have ids in the editor; fall back to position for older content.
+        return fireAt === null ? [] : [{ blockId: blockId ?? `#${index}`, fireAt, text }];
+      }),
+    );
+    this.onRemindersChanged();
     this.workspace.transact(() => touchPage(this.workspace, docId), MAIN_ORIGIN);
     this.indexWorkspace();
   }
@@ -184,5 +199,6 @@ export class DocManager {
       this.docs.delete(pageId);
     }
     this.store.deleteDoc(pageId);
+    this.store.deleteReminders(pageId);
   }
 }

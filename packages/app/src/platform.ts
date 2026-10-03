@@ -16,6 +16,8 @@ export interface Platform {
   /** Lets the host match native chrome (title bar, menus) to the app theme. */
   setTheme(theme: ThemePreference): void;
   onCommand(listener: (command: AppCommand) => void): () => void;
+  /** The host asks to show a page (e.g. a reminder notification was clicked). */
+  onNavigate(listener: (pageId: string) => void): () => void;
   /** The UI has loaded the workspace and rendered. */
   ready(): void;
   /** Store a file in the workspace's attachments. */

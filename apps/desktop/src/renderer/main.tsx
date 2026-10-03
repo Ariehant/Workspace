@@ -17,6 +17,7 @@ const platform: Platform = {
   setSetting: api.settings.set,
   setTheme: api.setTheme,
   onCommand: (listener) => api.onCommand((command) => listener(command as AppCommand)),
+  onNavigate: (listener) => api.onNavigate(listener),
   ready: api.ready,
   importFile: async (file) =>
     api.files.import(new Uint8Array(await file.arrayBuffer()), file.name, file.type),

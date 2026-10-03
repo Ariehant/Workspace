@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { CONVERTIBLE_BLOCKS, activeBlock } from './blocks/registry';
+import { ColorPanel, ColorSwatch } from './color-menu';
+import type { ColorValue } from './nodes/colors';
 import { insertInlineEquation } from './nodes/math';
 
 const MARKS = [
@@ -87,7 +89,7 @@ function ToolbarButton(props: {
 
 /** Formatting toolbar shown over a text selection. */
 export function SelectionToolbar({ editor }: { editor: Editor }) {
-  const [panel, setPanel] = useState<'none' | 'turnInto' | 'link'>('none');
+  const [panel, setPanel] = useState<'none' | 'turnInto' | 'link' | 'color'>('none');
   const [href, setHref] = useState('');
 
   const state = useEditorState({
@@ -95,6 +97,7 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
     selector: ({ editor: e }) => ({
       marks: Object.fromEntries(MARKS.map(({ mark }) => [mark, e.isActive(mark)])),
       link: e.getAttributes('link').href as string | undefined,
+      color: (e.getAttributes('color').color as string | undefined) ?? null,
       block: activeBlock(e)?.title ?? 'Text',
     }),
   });
@@ -143,6 +146,14 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
             <Link2 size={16} />
           </ToolbarButton>
           <span className="mx-0.5 h-5 w-px bg-line" />
+          <ToolbarButton
+            label="Text color"
+            active={panel === 'color'}
+            onClick={() => setPanel(panel === 'color' ? 'none' : 'color')}
+          >
+            <ColorSwatch value={(state.color as ColorValue | null) ?? null} />
+            <ChevronDown size={12} />
+          </ToolbarButton>
           <ToolbarButton label="Create equation" onClick={() => insertInlineEquation(editor)}>
             <Radical size={16} />
           </ToolbarButton>
@@ -178,6 +189,16 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
               </button>
             ))}
           </div>
+        )}
+
+        {panel === 'color' && (
+          <ColorPanel
+            current={state.color}
+            onPick={(value) => {
+              editor.chain().focus().setTextColor(value).run();
+              setPanel('none');
+            }}
+          />
         )}
 
         {panel === 'link' && (

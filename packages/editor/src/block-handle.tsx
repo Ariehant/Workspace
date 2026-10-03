@@ -11,7 +11,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from '@workspace/ui';
-import { Copy, GripVertical, Link, Plus, Repeat2, Trash2 } from 'lucide-react';
+import { Copy, GripVertical, Link, Palette, Plus, Repeat2, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import {
   convertBlockAt,
@@ -20,6 +20,8 @@ import {
   insertBelowWithSlash,
 } from './blocks/commands';
 import { CONVERTIBLE_BLOCKS } from './blocks/registry';
+import { COLOR_CHOICES, ColorSwatch } from './color-menu';
+import type { ColorValue } from './nodes/colors';
 
 /**
  * Must keep its identity across renders: DragHandle re-registers its plugin when this
@@ -31,6 +33,15 @@ const POSITION = { placement: 'left-start', strategy: 'absolute' } as const;
 interface Target {
   node: PMNode;
   pos: number;
+}
+
+/**
+ * Color a block. Callouts keep a background: picking "Default background" on one
+ * restores its standard gray.
+ */
+function setBlockColor(editor: Editor, { node, pos }: Target, value: ColorValue | null) {
+  const next = node.type.name === 'callout' && value === null ? 'gray_background' : value;
+  editor.chain().focus().setBlockColor(pos, next).run();
 }
 
 export interface BlockHandleProps {
@@ -114,6 +125,25 @@ export function BlockHandle({ editor, pageId }: BlockHandleProps) {
                   >
                     {block.title}
                   </MenuItem>
+                ))}
+              </MenuSubContent>
+            </MenuSub>
+            <MenuSub>
+              <MenuSubTrigger icon={<Palette size={14} />}>Color</MenuSubTrigger>
+              <MenuSubContent className="max-h-96 overflow-y-auto">
+                {COLOR_CHOICES.map(({ section, choices }) => (
+                  <div key={section}>
+                    <div className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted">{section}</div>
+                    {choices.map((choice) => (
+                      <MenuItem
+                        key={choice.label}
+                        icon={<ColorSwatch value={choice.value} />}
+                        onSelect={() => act((t) => setBlockColor(editor, t, choice.value))}
+                      >
+                        {choice.label}
+                      </MenuItem>
+                    ))}
+                  </div>
                 ))}
               </MenuSubContent>
             </MenuSub>

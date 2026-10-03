@@ -4,6 +4,7 @@ import type * as Y from 'yjs';
 import { BlockHandle } from './block-handle';
 import { SelectionToolbar } from './bubble-menu';
 import { pageExtensions } from './extensions';
+import { FindBar } from './find-bar';
 import { MathEditor, type MathTarget } from './math-editor';
 import { TableMenu } from './nodes/table';
 import { PagePicker } from './page-picker';
@@ -38,6 +39,7 @@ export function PageEditor({ doc, services, onEditor }: PageEditorProps) {
   const [pick, setPick] = useState<PickRequest | null>(null);
   const [math, setMath] = useState<MathTarget | null>(null);
   const [pasted, setPasted] = useState<PastedUrl | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
 
   useEffect(() => {
     bridge.set({
@@ -45,6 +47,7 @@ export function PageEditor({ doc, services, onEditor }: PageEditorProps) {
       pastedUrl: (url, from, to) => setPasted({ url, from, to }),
       pickPage: (anchor) => new Promise((resolve) => setPick({ anchor, resolve })),
       editMath: (node, pos) => setMath({ node, pos }),
+      openFind: () => setFindOpen(true),
     });
   }, [bridge, services]);
 
@@ -59,6 +62,23 @@ export function PageEditor({ doc, services, onEditor }: PageEditorProps) {
     },
     [doc],
   );
+
+  // Ctrl+F also works when focus is outside the editor (e.g. in the page title).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === 'f'
+      ) {
+        event.preventDefault();
+        setFindOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useEffect(() => {
     onEditor?.(editor);
@@ -75,6 +95,7 @@ export function PageEditor({ doc, services, onEditor }: PageEditorProps) {
       {editor && pasted && (
         <PasteUrlMenu editor={editor} pasted={pasted} onClose={closePasteMenu} />
       )}
+      {editor && findOpen && <FindBar editor={editor} onClose={() => setFindOpen(false)} />}
       {pick && (
         <PagePicker
           services={services}

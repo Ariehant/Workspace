@@ -178,6 +178,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     };
   }, [platform, create]);
 
+  useEffect(
+    () => platform.onNavigate((id) => getPage(workspace, id) && navigate(id)),
+    [platform, workspace, navigate],
+  );
+
   return (
     <div className="flex h-full">
       {sidebarOpen && (

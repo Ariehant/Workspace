@@ -62,3 +62,37 @@ export function pageText(doc: Y.Doc): string {
   walk(readBlocks(doc));
   return lines.join('\n');
 }
+
+export interface PageReminder {
+  /** Id of the block the reminder sits in: with `date`, identifies the reminder. */
+  blockId: string | null;
+  /** Local calendar day, `YYYY-MM-DD`. */
+  date: string;
+  /** Text of the block the reminder sits in, for the notification. */
+  text: string;
+}
+
+/** Reminder mentions (`@remind …`) anywhere in a page. */
+export function readReminders(doc: Y.Doc): PageReminder[] {
+  const reminders: PageReminder[] = [];
+  const walk = (blocks: Block[]) => {
+    for (const block of blocks) {
+      for (const child of block.children) {
+        if (child.type === 'mention' && isReminder(child.props)) {
+          reminders.push({
+            blockId: typeof block.props.id === 'string' ? block.props.id : null,
+            date: String(child.props.date),
+            text: block.text.replace(/\s+/g, ' ').trim(),
+          });
+        }
+      }
+      walk(block.children);
+    }
+  };
+  walk(readBlocks(doc));
+  return reminders;
+}
+
+function isReminder(props: Record<string, unknown>): boolean {
+  return (props.reminder === true || props.reminder === 'true') && typeof props.date === 'string';
+}

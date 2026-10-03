@@ -45,7 +45,7 @@ export const test = base.extend<{ dataDir: string; launch: () => Promise<Launche
       const app = await electron.launch({
         executablePath: electronPath,
         args,
-        env: { ...process.env, WORKSPACE_DATA_DIR: dataDir },
+        env: { ...process.env, WORKSPACE_DATA_DIR: dataDir, WORKSPACE_E2E: '1' },
       });
       apps.push(app);
       // Surface renderer exceptions in the test output instead of failing silently.

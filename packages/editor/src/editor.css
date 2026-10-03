@@ -280,7 +280,8 @@
   padding: 16px 16px 16px 12px;
   margin: 4px 0;
   border-radius: 4px;
-  background: var(--ws-callout-bg);
+  /* Text-colored callouts keep a neutral background; *_background ones override it. */
+  background-color: var(--ws-callout-bg);
 }
 .ws-callout-icon {
   flex: none;
@@ -634,4 +635,189 @@
   border: 0;
   border-radius: 4px;
   background: var(--ws-callout-bg);
+}
+
+/* --- Colors (Notion palette), by name so both themes can render them ------------- */
+
+:root {
+  --ws-gray: #787774;
+  --ws-brown: #9f6b53;
+  --ws-orange: #d9730d;
+  --ws-yellow: #cb912f;
+  --ws-green: #448361;
+  --ws-blue: #337ea9;
+  --ws-purple: #9065b0;
+  --ws-pink: #c14c8a;
+  --ws-red: #d44c47;
+  --ws-gray-bg: #f1f1ef;
+  --ws-brown-bg: #f4eeee;
+  --ws-orange-bg: #fbecdd;
+  --ws-yellow-bg: #fbf3db;
+  --ws-green-bg: #edf3ec;
+  --ws-blue-bg: #e7f3f8;
+  --ws-purple-bg: #f6f3f9;
+  --ws-pink-bg: #faf1f5;
+  --ws-red-bg: #fdebec;
+}
+[data-theme='dark'] {
+  --ws-gray: #9b9b9b;
+  --ws-brown: #ba856f;
+  --ws-orange: #c77d48;
+  --ws-yellow: #ca9849;
+  --ws-green: #529e72;
+  --ws-blue: #379ad3;
+  --ws-purple: #9d68d3;
+  --ws-pink: #d15796;
+  --ws-red: #df5452;
+  --ws-gray-bg: #2f2f2f;
+  --ws-brown-bg: #4a3228;
+  --ws-orange-bg: #5c3b23;
+  --ws-yellow-bg: #564328;
+  --ws-green-bg: #243d30;
+  --ws-blue-bg: #143a4e;
+  --ws-purple-bg: #3c2d49;
+  --ws-pink-bg: #4e2c3c;
+  --ws-red-bg: #522e2a;
+}
+
+.ws-prose [data-color='gray'],
+.ws-swatch-gray {
+  color: var(--ws-gray);
+}
+.ws-prose [data-color='gray_background'],
+.ws-swatch-gray_background {
+  background-color: var(--ws-gray-bg);
+}
+.ws-prose [data-color='brown'],
+.ws-swatch-brown {
+  color: var(--ws-brown);
+}
+.ws-prose [data-color='brown_background'],
+.ws-swatch-brown_background {
+  background-color: var(--ws-brown-bg);
+}
+.ws-prose [data-color='orange'],
+.ws-swatch-orange {
+  color: var(--ws-orange);
+}
+.ws-prose [data-color='orange_background'],
+.ws-swatch-orange_background {
+  background-color: var(--ws-orange-bg);
+}
+.ws-prose [data-color='yellow'],
+.ws-swatch-yellow {
+  color: var(--ws-yellow);
+}
+.ws-prose [data-color='yellow_background'],
+.ws-swatch-yellow_background {
+  background-color: var(--ws-yellow-bg);
+}
+.ws-prose [data-color='green'],
+.ws-swatch-green {
+  color: var(--ws-green);
+}
+.ws-prose [data-color='green_background'],
+.ws-swatch-green_background {
+  background-color: var(--ws-green-bg);
+}
+.ws-prose [data-color='blue'],
+.ws-swatch-blue {
+  color: var(--ws-blue);
+}
+.ws-prose [data-color='blue_background'],
+.ws-swatch-blue_background {
+  background-color: var(--ws-blue-bg);
+}
+.ws-prose [data-color='purple'],
+.ws-swatch-purple {
+  color: var(--ws-purple);
+}
+.ws-prose [data-color='purple_background'],
+.ws-swatch-purple_background {
+  background-color: var(--ws-purple-bg);
+}
+.ws-prose [data-color='pink'],
+.ws-swatch-pink {
+  color: var(--ws-pink);
+}
+.ws-prose [data-color='pink_background'],
+.ws-swatch-pink_background {
+  background-color: var(--ws-pink-bg);
+}
+.ws-prose [data-color='red'],
+.ws-swatch-red {
+  color: var(--ws-red);
+}
+.ws-prose [data-color='red_background'],
+.ws-swatch-red_background {
+  background-color: var(--ws-red-bg);
+}
+/* Inline colored spans: background tints hug the text. */
+.ws-prose span.ws-color[data-color$='_background'] {
+  border-radius: 3px;
+  padding: 0 1px;
+}
+/* Colored blocks get a little padding so a background reads as a band. */
+.ws-prose p[data-color$='_background'],
+.ws-prose h1[data-color$='_background'],
+.ws-prose h2[data-color$='_background'],
+.ws-prose h3[data-color$='_background'] {
+  border-radius: 3px;
+  padding-inline: 4px;
+}
+
+/* --- Mentions --------------------------------------------------------------------- */
+.ws-mention {
+  position: relative;
+  white-space: nowrap;
+}
+.ws-mention-page {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.ws-mention-page:hover {
+  background: var(--ws-hover);
+}
+.ws-mention-icon {
+  position: relative;
+  display: inline-flex;
+  align-self: center;
+  font-size: 0.95em;
+}
+.ws-mention-arrow {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+}
+.ws-mention-title {
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--ws-faint);
+  text-underline-offset: 2px;
+}
+.ws-mention-date {
+  cursor: pointer;
+  color: var(--ws-muted);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.ws-mention-date:hover {
+  background: var(--ws-hover);
+}
+.ws-mention.is-selected {
+  background: var(--ws-selection);
+  border-radius: 3px;
+}
+
+/* --- Find in page ----------------------------------------------------------------- */
+.ws-prose .ProseMirror-search-match {
+  background: rgba(255, 212, 0, 0.35);
+  border-radius: 2px;
+}
+.ws-prose .ProseMirror-active-search-match {
+  background: rgba(255, 150, 0, 0.6);
 }

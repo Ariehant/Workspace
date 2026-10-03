@@ -5,13 +5,18 @@ import UniqueID from '@tiptap/extension-unique-id';
 import { Placeholder } from '@tiptap/extensions';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin } from '@tiptap/pm/state';
+import { search } from 'prosemirror-search';
 import StarterKit from '@tiptap/starter-kit';
 import { PAGE_CONTENT_FIELD } from '@workspace/core';
 import type * as Y from 'yjs';
 import { Callout } from './nodes/callout';
 import { CodeBlock } from './nodes/code-block';
 import { Column, ColumnList } from './nodes/columns';
+import { BlockColor, TextColor } from './nodes/colors';
+import { EmojiSuggest } from './nodes/emoji';
+import { MarkdownClipboard } from './nodes/markdown';
 import { mathExtensions } from './nodes/math';
+import { Mention } from './nodes/mention';
 import { MediaBlocks } from './nodes/media';
 import { PasteAndDrop } from './nodes/paste-drop';
 import { Breadcrumb, PageLink, TableOfContents } from './nodes/page-blocks';
@@ -51,6 +56,20 @@ export const BLOCK_NODE_TYPES = [
   'bookmark',
   'embed',
 ];
+
+/** Highlights for find-in-page; Mod-F opens the find bar. */
+const FindInPage = Extension.create({
+  name: 'findInPage',
+  addProseMirrorPlugins: () => [search()],
+  addKeyboardShortcuts() {
+    return {
+      'Mod-f': () => {
+        this.editor.storage.uiBridge.ref.current.openFind?.();
+        return true;
+      },
+    };
+  },
+});
 
 /** Ctrl/Cmd+click opens a link (plain clicks just place the cursor while editing). */
 const OpenLinkOnModClick = Extension.create({
@@ -109,6 +128,12 @@ export function pageExtensions(doc: Y.Doc, bridge: UiBridgeHandle) {
     TableOfContents,
     ...MediaBlocks,
     PasteAndDrop,
+    MarkdownClipboard,
+    Mention,
+    EmojiSuggest,
+    TextColor,
+    BlockColor,
+    FindInPage,
     Placeholder.configure({ placeholder: placeholderFor, includeChildren: true }),
     UniqueID.configure({
       types: BLOCK_NODE_TYPES,
