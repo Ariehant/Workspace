@@ -3,3 +3,5 @@ export { BLOCK_NODE_TYPES } from './extensions';
 export { PageEditor, type PageEditorProps } from './page-editor';
 export type { EditorServices, FileRef, LinkPreview, PageRef } from './services';
 export type { Editor } from '@tiptap/react';
+export { PageIcon, type PageIconProps } from './page-icon';
+export { searchEmoji, EMOJI } from './nodes/emoji';

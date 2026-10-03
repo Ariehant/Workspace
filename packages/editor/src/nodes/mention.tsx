@@ -1,10 +1,11 @@
+import { PageIcon } from '../page-icon';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { PluginKey } from '@tiptap/pm/state';
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react';
 import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
 import { formatDate, parseDate, reminderTime, toIsoDate } from '@workspace/core';
 import { cn } from '@workspace/ui';
-import { AlarmClock, ArrowUpRight, CalendarDays, FileText } from 'lucide-react';
+import { AlarmClock, ArrowUpRight, CalendarDays } from 'lucide-react';
 import { forwardRef, useRef, useSyncExternalStore } from 'react';
 import { useEditorServices, usePageRef, type EditorServices, type PageRef } from '../services';
 import {
@@ -80,6 +81,7 @@ export function mentionItemLabel(item: MentionItem, now = new Date()): string {
 
 const MentionList = forwardRef<SuggestionListHandle<MentionItem>, SuggestionListProps<MentionItem>>(
   function MentionList({ items, command, loading }, ref) {
+    const fileUrl = useEditorServices().fileUrl;
     return (
       <ItemList<MentionItem>
         ref={ref}
@@ -94,7 +96,7 @@ const MentionList = forwardRef<SuggestionListHandle<MentionItem>, SuggestionList
           <>
             <span className="flex size-5 items-center justify-center text-muted">
               {item.kind === 'page' ? (
-                (item.page.icon ?? <FileText size={16} />)
+                <PageIcon icon={item.page.icon} size={16} fileUrl={fileUrl} />
               ) : item.reminder ? (
                 <AlarmClock size={16} />
               ) : (
@@ -148,7 +150,7 @@ function MentionView({ node, updateAttributes, editor, selected }: ReactNodeView
           className={cn('ws-mention-page', missing && 'text-faint')}
         >
           <span className="ws-mention-icon">
-            {page?.icon ?? <FileText size={14} />}
+            <PageIcon icon={page?.icon ?? null} size={14} fileUrl={services.fileUrl} />
             <ArrowUpRight size={8} strokeWidth={3} className="ws-mention-arrow" />
           </span>
           <span className="ws-mention-title">

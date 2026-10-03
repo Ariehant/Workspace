@@ -20,6 +20,8 @@ export interface PageEditorProps {
   /** The page doc; its guid is the page id. */
   doc: Y.Doc;
   services: EditorServices;
+  /** `false` for locked pages: content can be read and copied but not changed. */
+  editable?: boolean;
   /** Called with the editor once it is ready, and with `null` on teardown. */
   onEditor?: (editor: Editor | null) => void;
 }
@@ -34,7 +36,7 @@ interface PickRequest {
  * becomes a Yjs update, so persistence and (later) live collaboration need no extra
  * wiring. Undo history comes from Yjs, so it only undoes this user's own edits.
  */
-export function PageEditor({ doc, services, onEditor }: PageEditorProps) {
+export function PageEditor({ doc, services, editable = true, onEditor }: PageEditorProps) {
   const [bridge] = useState(() => new UiBridgeHandle());
   const [pick, setPick] = useState<PickRequest | null>(null);
   const [math, setMath] = useState<MathTarget | null>(null);
@@ -79,6 +81,10 @@ export function PageEditor({ doc, services, onEditor }: PageEditorProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (editor && editor.isEditable !== editable) editor.setEditable(editable);
+  }, [editor, editable]);
 
   useEffect(() => {
     onEditor?.(editor);

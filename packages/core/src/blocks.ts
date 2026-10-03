@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import { newId } from './ids';
 import { PAGE_CONTENT_FIELD } from './schema';
 
 /**
@@ -95,4 +96,47 @@ export function readReminders(doc: Y.Doc): PageReminder[] {
 
 function isReminder(props: Record<string, unknown>): boolean {
   return (props.reminder === true || props.reminder === 'true') && typeof props.date === 'string';
+}
+
+/**
+ * Words in a page, as Notion counts them: runs of letters/digits, with each CJK
+ * character counted as a word.
+ */
+export function countWords(text: string): number {
+  const cjk =
+    text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu)
+      ?.length ?? 0;
+  const rest = text.replace(
+    /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu,
+    ' ',
+  );
+  // Joiners inside a word keep it one word: don't, 3.5, ROS-2, snake_case.
+  return cjk + (rest.match(/[\p{L}\p{N}]+(?:['’._-][\p{L}\p{N}]+)*/gu)?.length ?? 0);
+}
+
+/**
+ * Copy a page's content into another (empty) page doc. Block ids are replaced so
+ * they stay unique, and links to pages in `remap` (page links, mentions) point to
+ * their copies, so a duplicated page tree links to itself rather than the original.
+ */
+export function copyPageContent(
+  from: Y.Doc,
+  to: Y.Doc,
+  remap: ReadonlyMap<string, string> = new Map(),
+): void {
+  const fix = (node: Y.XmlElement | Y.XmlText | Y.XmlHook) => {
+    if (!(node instanceof Y.XmlElement)) return;
+    if (node.getAttribute('id') !== undefined) node.setAttribute('id', newId());
+    const pageId = node.getAttribute('pageId') as string | undefined;
+    if (pageId && remap.has(pageId)) node.setAttribute('pageId', remap.get(pageId)!);
+    node.toArray().forEach(fix);
+  };
+  to.transact(() => {
+    const clones = getPageContent(from)
+      .toArray()
+      .filter((node): node is Y.XmlElement | Y.XmlText => !(node instanceof Y.XmlHook))
+      .map((node) => node.clone());
+    getPageContent(to).insert(0, clones);
+    clones.forEach(fix);
+  });
 }

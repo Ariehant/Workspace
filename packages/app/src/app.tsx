@@ -6,6 +6,7 @@ import {
   getAncestorIds,
   getPage,
   listPages,
+  movePage,
   trashPage,
   type PageId,
   type PageTreeNode,
@@ -18,6 +19,8 @@ import { useDoc, useDocVersion } from './hooks';
 import { PageView } from './page-view';
 import type { Platform } from './platform';
 import { Sidebar } from './sidebar';
+import { MoveDialog } from './move-dialog';
+import { duplicatePage } from './page-actions';
 import { createWelcomePage } from './welcome';
 
 const SETTING = {
@@ -149,6 +152,17 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
 
   const trash = useCallback((id: PageId) => trashPage(workspace, id), [workspace]);
 
+  const duplicate = useCallback(
+    (id: PageId) => {
+      duplicatePage(client, workspace, id).then(navigate, (error: unknown) =>
+        console.error('Failed to duplicate page', error),
+      );
+    },
+    [client, workspace, navigate],
+  );
+
+  const [moving, setMoving] = useState<PageId | null>(null);
+
   const changeTheme = useCallback(
     (next: ThemePreference) => {
       setTheme(next);
@@ -195,6 +209,9 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
           onToggle={toggle}
           onCreate={create}
           onTrash={trash}
+          onDuplicate={duplicate}
+          onMove={setMoving}
+          fileUrl={platform.fileUrl}
           onThemeChange={changeTheme}
           onCollapse={() => setSidebarOpen(false)}
         />
@@ -205,9 +222,24 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
           sidebarOpen={sidebarOpen}
           onOpenSidebar={() => setSidebarOpen(true)}
           onNavigate={navigate}
+          onDuplicate={duplicate}
+          onMove={setMoving}
+          onTrash={trash}
         />
       ) : (
         <EmptyState onCreate={() => create(null)} />
+      )}
+      {moving && getPage(workspace, moving) && (
+        <MoveDialog
+          workspace={workspace}
+          pageId={moving}
+          fileUrl={platform.fileUrl}
+          onMove={(parentId) => {
+            movePage(workspace, moving, { parentId });
+            navigate(moving);
+          }}
+          onClose={() => setMoving(null)}
+        />
       )}
     </div>
   );

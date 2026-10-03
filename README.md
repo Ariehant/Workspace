@@ -33,6 +33,9 @@ complete. Phase 1 (editor and navigation) is in progress; see [docs/PHASE1.md](d
   which sidebar items are expanded.
 - Several windows on the same workspace stay in sync live (File → New Window, `Ctrl+Shift+N`).
 - Light, dark and system themes.
+- Page icons (emoji or image) and covers (gradients, colors or images, repositionable).
+- Page menu: font (default, serif, mono), small text, full width, lock, duplicate (with
+  sub-pages), move to, copy link, word count.
 - Full-text search index over titles and content (the search UI arrives in Phase 1).
 - `.deb` and AppImage packages for Ubuntu.
 

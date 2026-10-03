@@ -821,3 +821,19 @@
 .ws-prose .ProseMirror-active-search-match {
   background: rgba(255, 150, 0, 0.6);
 }
+
+/* --- Page styles (page menu) -------------------------------------------------------- */
+.ws-page[data-font='serif'] .ws-prose,
+.ws-page[data-font='serif'] textarea {
+  font-family: ui-serif, Lyon-Text, Georgia, 'Noto Serif', 'DejaVu Serif', serif;
+}
+.ws-page[data-font='mono'] .ws-prose,
+.ws-page[data-font='mono'] textarea {
+  font-family: var(--font-mono);
+}
+.ws-page[data-small-text] .ws-prose {
+  font-size: 14px;
+}
+.ws-page[data-small-text] textarea {
+  font-size: 32px;
+}

@@ -1,6 +1,7 @@
+import { PageIcon } from './page-icon';
 import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { cn } from '@workspace/ui';
-import { FileText } from 'lucide-react';
+
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EditorServices, PageRef } from './services';
 
@@ -78,7 +79,7 @@ export function PagePicker({ services, anchor, onPick }: PagePickerProps) {
             )}
           >
             <span className="flex size-5 items-center justify-center text-muted">
-              {page.icon ?? <FileText size={16} />}
+              <PageIcon icon={page.icon} size={16} fileUrl={services.fileUrl} />
             </span>
             <span className="truncate">{page.title || 'Untitled'}</span>
           </button>

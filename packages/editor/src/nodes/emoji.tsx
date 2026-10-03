@@ -11,7 +11,7 @@ import {
 import { ItemList } from '../suggestions/item-list';
 
 /** Emoji that have a character, minus the bare regional-indicator letters. */
-const EMOJI: EmojiItem[] = emojis.filter(
+export const EMOJI: EmojiItem[] = emojis.filter(
   (e) => e.emoji && !e.name.startsWith('regional_indicator'),
 );
 

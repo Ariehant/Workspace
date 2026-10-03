@@ -1,4 +1,5 @@
 import type { PageId, PageTreeNode } from '@workspace/core';
+import { PageIcon } from '@workspace/editor';
 import {
   IconButton,
   Menu,
@@ -6,6 +7,7 @@ import {
   MenuItem,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuSeparator,
   MenuTrigger,
   cn,
   type ThemePreference,
@@ -13,7 +15,8 @@ import {
 import {
   ChevronRight,
   ChevronsLeft,
-  FileText,
+  Copy,
+  CornerUpRight,
   MoreHorizontal,
   Palette,
   Plus,
@@ -30,6 +33,9 @@ export interface SidebarProps {
   onToggle(id: PageId): void;
   onCreate(parentId: PageId | null): void;
   onTrash(id: PageId): void;
+  onDuplicate(id: PageId): void;
+  onMove(id: PageId): void;
+  fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
   onCollapse(): void;
 }
@@ -118,7 +124,19 @@ interface TreeItemProps extends SidebarProps {
 }
 
 function TreeItem(props: TreeItemProps) {
-  const { node, depth, currentPageId, expanded, onSelect, onToggle, onCreate, onTrash } = props;
+  const {
+    node,
+    depth,
+    currentPageId,
+    expanded,
+    onSelect,
+    onToggle,
+    onCreate,
+    onTrash,
+    onDuplicate,
+    onMove,
+    fileUrl,
+  } = props;
   const { page, children } = node;
   const isOpen = expanded.has(page.id);
   const isCurrent = page.id === currentPageId;
@@ -135,11 +153,7 @@ function TreeItem(props: TreeItemProps) {
       >
         <span className="relative flex size-5 shrink-0 items-center justify-center">
           <span className="flex items-center justify-center group-hover:invisible">
-            {page.icon ? (
-              <span className="text-sm leading-none">{page.icon}</span>
-            ) : (
-              <FileText size={16} />
-            )}
+            <PageIcon icon={page.icon} size={16} fileUrl={fileUrl} />
           </span>
           <IconButton
             label={isOpen ? 'Collapse' : 'Expand'}
@@ -168,6 +182,13 @@ function TreeItem(props: TreeItemProps) {
               </IconButton>
             </MenuTrigger>
             <MenuContent onClick={(e) => e.stopPropagation()}>
+              <MenuItem icon={<Copy size={14} />} onSelect={() => onDuplicate(page.id)}>
+                Duplicate
+              </MenuItem>
+              <MenuItem icon={<CornerUpRight size={14} />} onSelect={() => onMove(page.id)}>
+                Move to
+              </MenuItem>
+              <MenuSeparator />
               <MenuItem icon={<Trash2 size={14} />} danger onSelect={() => onTrash(page.id)}>
                 Move to Trash
               </MenuItem>

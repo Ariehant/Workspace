@@ -1,6 +1,7 @@
+import { PageIcon } from '../page-icon';
 import { NodeViewWrapper, useEditorState, type ReactNodeViewProps } from '@tiptap/react';
 import { cn } from '@workspace/ui';
-import { ArrowUpRight, FileText } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { useBreadcrumb, useEditorServices, usePageRef } from '../services';
 import { atomBlock } from './atom';
 
@@ -25,7 +26,7 @@ function PageLinkView({ node, selected }: ReactNodeViewProps) {
         )}
       >
         <span className="relative flex size-5 shrink-0 items-center justify-center">
-          {page?.icon ? <span>{page.icon}</span> : <FileText size={18} strokeWidth={1.6} />}
+          <PageIcon icon={page?.icon ?? null} size={18} fileUrl={services.fileUrl} />
           <ArrowUpRight size={10} strokeWidth={3} className="absolute -right-0.5 -bottom-0.5" />
         </span>
         <span className="truncate border-b border-line font-medium">
@@ -67,7 +68,7 @@ function BreadcrumbView({ selected }: ReactNodeViewProps) {
               onClick={() => services.navigate(crumb.id)}
               className="flex items-center gap-1 rounded px-1 hover:bg-hover"
             >
-              {crumb.icon && <span>{crumb.icon}</span>}
+              {crumb.icon && <PageIcon icon={crumb.icon} size={14} fileUrl={services.fileUrl} />}
               <span className="underline decoration-line underline-offset-2">
                 {crumb.title || 'Untitled'}
               </span>

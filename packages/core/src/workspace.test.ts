@@ -37,6 +37,11 @@ describe('pages', () => {
       createdAt: 1000,
       updatedAt: 1000,
       trashedAt: null,
+      cover: null,
+      fullWidth: false,
+      smallText: false,
+      font: 'default',
+      locked: false,
     });
   });
 

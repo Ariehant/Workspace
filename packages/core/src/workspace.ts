@@ -1,7 +1,15 @@
 import { generateKeyBetween } from 'fractional-indexing';
 import * as Y from 'yjs';
 import { newId } from './ids';
-import { PAGES_MAP, PageField, type PageId, type PageMeta } from './schema';
+import {
+  PAGES_MAP,
+  PageField,
+  type PageCover,
+  type PageFont,
+  type PageId,
+  type PageMeta,
+  type PageOptions,
+} from './schema';
 import { applyTextDiff } from './text';
 
 type PageMap = Y.Map<unknown>;
@@ -27,6 +35,12 @@ function readPage(page: PageMap): PageMeta {
     createdAt: page.get(PageField.createdAt) as number,
     updatedAt: page.get(PageField.updatedAt) as number,
     trashedAt: (page.get(PageField.trashedAt) as number | null | undefined) ?? null,
+    // Fields added after Phase 0 default when absent, so old workspaces need no migration.
+    cover: (page.get(PageField.cover) as PageCover | null | undefined) ?? null,
+    fullWidth: page.get(PageField.fullWidth) === true,
+    smallText: page.get(PageField.smallText) === true,
+    font: (page.get(PageField.font) as PageFont | undefined) ?? 'default',
+    locked: page.get(PageField.locked) === true,
   };
 }
 
@@ -118,6 +132,20 @@ export function setPageIcon(doc: Y.Doc, id: PageId, icon: string | null, now = D
   doc.transact(() => {
     const page = getPageMap(doc, id);
     page.set(PageField.icon, icon);
+    page.set(PageField.updatedAt, now);
+  });
+}
+
+/** Change page-menu options (cover, width, text size, font, lock). */
+export function setPageOptions(
+  doc: Y.Doc,
+  id: PageId,
+  options: Partial<PageOptions>,
+  now = Date.now(),
+): void {
+  doc.transact(() => {
+    const page = getPageMap(doc, id);
+    for (const [key, value] of Object.entries(options)) page.set(key, value);
     page.set(PageField.updatedAt, now);
   });
 }
@@ -214,4 +242,31 @@ export function deletePagePermanently(doc: Y.Doc, id: PageId): PageId[] {
     for (const pid of ids) pages.delete(pid);
   });
   return ids;
+}
+
+/**
+ * Copy a page and all its sub-pages (metadata only; see `copyPageContent` for the
+ * content). The copy goes right after the original and gets " (1)" appended to its
+ * title, like Notion. Returns a map from each original id to its copy.
+ */
+export function duplicatePageTree(doc: Y.Doc, id: PageId, now = Date.now()): Map<PageId, PageId> {
+  const root = getPage(doc, id);
+  if (!root) throw new Error(`Page not found: ${id}`);
+  const mapping = new Map<PageId, PageId>();
+
+  doc.transact(() => {
+    const copy = (page: PageMeta, parentId: PageId | null, index?: number, title = page.title) => {
+      const newId = createPage(doc, { parentId, title, icon: page.icon, index, now });
+      const { cover, fullWidth, smallText, font, locked } = page;
+      setPageOptions(doc, newId, { cover, fullWidth, smallText, font, locked }, now);
+      mapping.set(page.id, newId);
+      for (const child of siblingsOf(doc, page.id)) {
+        if (!mapping.has(child.id)) copy(child, newId);
+      }
+    };
+    const siblings = siblingsOf(doc, root.parentId);
+    const index = siblings.findIndex((p) => p.id === id) + 1;
+    copy(root, root.parentId, index, `${root.title || 'Untitled'} (1)`);
+  });
+  return mapping;
 }

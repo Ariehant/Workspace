@@ -1,6 +1,6 @@
 # Phase 1: Editor MVP and navigation
 
-**Status:** M1–M4 done. M5–M6 to do.
+**Status:** M1–M5 done. M6 to do.
 
 ## Context
 
@@ -124,13 +124,21 @@ Setters follow the `setPageIcon` pattern, and the page index gains whichever col
 - **Bundle size:** the renderer is now about 2.1 MB with the emoji data and the Markdown parser. Lazy-loading the emoji list, KaTeX and highlight.js is planned for polish.
 - **Bug found:** Suggestion v3 resolves items asynchronously and first reports `loading` with an empty list. The early-exit rules now ignore that state; they had been closing `:emoji` and `@in 2 weeks` while typing.
 
-### M5: page chrome
+### M5: page chrome ✅
 
 - Icon picker (Radix Popover). Emoji grid from `emojibase-data`, with search, recent emoji and a random button, plus "Upload image" through the file store. Hovering the page shows "Add icon" and "Add cover".
 - Covers: a gallery of solid colors and gradients, or an uploaded image. "Reposition" drags the vertical position, and "Remove" clears it.
 - Page "…" menu: full width, small text, font (Default, Serif, Mono), lock page (makes the editor and title read-only), word count (moved from M4), duplicate, move to, and move to trash.
 - **Duplicate** copies the page doc state into a new doc, reassigns block IDs, and copies sub-pages recursively.
 - **Move to** opens a page picker dialog that calls `movePage`.
+
+**M5 notes:**
+
+- **Icons** are an emoji or an uploaded image, stored as `file:<id>` in the same field. One `PageIcon` component renders them everywhere: sidebar, breadcrumbs, links, mentions and pickers.
+- **Covers** are stored as `{ kind: color | gradient | file, value, positionY }`. Gradients and colors render in both themes. "Add cover" picks a random gradient and "Add icon" a random emoji, as in Notion.
+- **Page options** (font, small text, full width, lock) live in the shared workspace doc, so later collaborators see the same page style. Missing fields default, so older workspaces need no migration.
+- **Duplicate** copies the page tree and content, gives the copies fresh block IDs, and points links between the copied pages at the copies. The copy is titled "<title> (1)".
+- **Not done yet:** recent emoji in the picker, and the Unsplash gallery. Unsplash needs network access and an API key, so it's left out of an offline-first app for now.
 
 ### M6: navigation
 

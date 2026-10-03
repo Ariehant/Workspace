@@ -31,7 +31,34 @@ export interface PageMeta {
   updatedAt: number;
   /** When the page itself was moved to the trash, or `null`. */
   trashedAt: number | null;
+  cover: PageCover | null;
+  /** Content uses the full window width instead of a reading column. */
+  fullWidth: boolean;
+  smallText: boolean;
+  font: PageFont;
+  /** Locked pages can't be edited until unlocked (guards against accidental edits). */
+  locked: boolean;
 }
+
+export type PageFont = 'default' | 'serif' | 'mono';
+
+/** Banner image above the title. */
+export interface PageCover {
+  /** `color`: a palette name; `gradient`: a gradient id; `file`: a stored image id. */
+  kind: 'color' | 'gradient' | 'file';
+  value: string;
+  /** Vertical focus of an image cover, 0 (top) to 100 (bottom). */
+  positionY: number;
+}
+
+/** Options set from the page menu (see `setPageOptions`). */
+export type PageOptions = Pick<PageMeta, 'cover' | 'fullWidth' | 'smallText' | 'font' | 'locked'>;
+
+/**
+ * An icon is an emoji, or `file:<id>` for an uploaded image. Missing on older
+ * pages means the default document icon.
+ */
+export const FILE_ICON_PREFIX = 'file:';
 
 /** Keys stored in each page's Y.Map inside the workspace doc. */
 export const PageField = {
@@ -43,4 +70,9 @@ export const PageField = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   trashedAt: 'trashedAt',
+  cover: 'cover',
+  fullWidth: 'fullWidth',
+  smallText: 'smallText',
+  font: 'font',
+  locked: 'locked',
 } as const;
