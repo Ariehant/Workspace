@@ -9,12 +9,13 @@ export const IPC = {
   settingsSet: 'settings:set',
   search: 'search:query',
   themeSet: 'theme:set',
+  windowOpen: 'window:open',
   fileImport: 'file:import',
   fileOpen: 'file:open',
   linkPreview: 'link:preview',
   /** main -> renderer: a menu command. */
   command: 'app:command',
-  /** main -> renderer: show this page (e.g. from a reminder notification). */
+  /** main -> renderer: show this page (and block), e.g. from a link or notification. */
   navigate: 'app:navigate',
   ready: 'app:ready',
 } as const;

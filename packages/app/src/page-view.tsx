@@ -6,6 +6,7 @@ import {
   getPageTitleText,
   isInTrash,
   listPages,
+  pageUrl,
   restorePage,
   setPageIcon,
   setPageOptions,
@@ -21,19 +22,35 @@ import {
   type PageRef,
 } from '@workspace/editor';
 import { Button, IconButton, Popover, PopoverContent, PopoverTrigger, cn } from '@workspace/ui';
-import { ChevronsRight, ImageIcon, Lock, Smile } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronsRight, ImageIcon, Lock, Smile, Star } from 'lucide-react';
 import { Cover, randomCover } from './cover';
 import { IconPicker, randomEmoji } from './icon-picker';
 import { PageMenu } from './page-menu';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from 'react';
 import type * as Y from 'yjs';
 import { useApp } from './context';
 import type { Platform } from './platform';
+import type { BlockTarget } from './app';
 import { useDoc } from './hooks';
 
 export interface PageViewProps {
   pageId: PageId;
   sidebarOpen: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  onGo(direction: -1 | 1): void;
+  /** Block to scroll to and highlight (from a link to a block). */
+  blockTarget: BlockTarget | null;
+  isFavorite: boolean;
+  onToggleFavorite(): void;
   onOpenSidebar(): void;
   onNavigate(id: PageId): void;
   onDuplicate(id: PageId): void;
@@ -44,6 +61,12 @@ export interface PageViewProps {
 export function PageView({
   pageId,
   sidebarOpen,
+  canGoBack,
+  canGoForward,
+  onGo,
+  blockTarget,
+  isFavorite,
+  onToggleFavorite,
   onOpenSidebar,
   onNavigate,
   onDuplicate,
@@ -69,6 +92,8 @@ export function PageView({
   }, []);
   const services = useEditorServices(workspace, pageId, onNavigate, platform);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const articleRef = useRef<HTMLElement>(null);
+  useScrollToBlock(articleRef, pageDoc ? blockTarget : null);
 
   const page = getPage(workspace, pageId);
   if (!page) return null;
@@ -95,6 +120,22 @@ export function PageView({
             <ChevronsRight size={18} />
           </IconButton>
         )}
+        <IconButton
+          label="Go back (Alt+←)"
+          className="disabled:opacity-30"
+          disabled={!canGoBack}
+          onClick={() => onGo(-1)}
+        >
+          <ArrowLeft size={16} />
+        </IconButton>
+        <IconButton
+          label="Go forward (Alt+→)"
+          className="disabled:opacity-30"
+          disabled={!canGoForward}
+          onClick={() => onGo(1)}
+        >
+          <ArrowRight size={16} />
+        </IconButton>
         <ol className="flex min-w-0 flex-1 items-center gap-0.5" aria-label="Breadcrumb">
           {crumbs.map((crumb, i) => (
             <li key={crumb.id} className="flex min-w-0 items-center gap-0.5">
@@ -120,13 +161,24 @@ export function PageView({
             <Lock size={12} /> Locked
           </button>
         )}
+        <IconButton
+          label={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+          aria-pressed={isFavorite}
+          onClick={onToggleFavorite}
+        >
+          <Star
+            size={16}
+            className={cn(isFavorite && 'fill-yellow-400 text-yellow-400')}
+            aria-hidden
+          />
+        </IconButton>
         <PageMenu
           page={page}
           pageDoc={pageDoc}
           onOptions={setOptions}
           onDuplicate={() => onDuplicate(pageId)}
           onMove={() => onMove(pageId)}
-          onCopyLink={() => void navigator.clipboard.writeText(`workspace://page/${pageId}`)}
+          onCopyLink={() => void navigator.clipboard.writeText(pageUrl(pageId))}
           onTrash={() => onTrash(pageId)}
         />
       </header>
@@ -158,6 +210,7 @@ export function PageView({
           />
         )}
         <article
+          ref={articleRef}
           data-testid="page-article"
           data-font={page.font}
           data-small-text={page.smallText || undefined}
@@ -334,4 +387,41 @@ function useEditorServices(
       linkPreview: (url) => platform.linkPreview(url),
     };
   }, [workspace, pageId, navigate, platform]);
+}
+
+const FLASH_MS = 1600;
+const FIND_BLOCK_TIMEOUT_MS = 3000;
+
+/**
+ * Scroll a block into view and flash it. The editor renders after its doc loads, so
+ * wait (a few frames) for the block to appear. (The flash is an animation rather than
+ * a class: ProseMirror resets attributes it didn't render.)
+ */
+function useScrollToBlock(articleRef: RefObject<HTMLElement | null>, target: BlockTarget | null) {
+  useEffect(() => {
+    if (!target) return;
+    const started = performance.now();
+    let frame = 0;
+    let flash: Animation | undefined;
+    const find = () => {
+      const el = articleRef.current?.querySelector<HTMLElement>(
+        `[data-id="${CSS.escape(target.blockId)}"]`,
+      );
+      if (el) {
+        el.scrollIntoView({ block: 'center' });
+        const color = 'color-mix(in srgb, var(--ws-accent) 22%, transparent)';
+        flash = el.animate(
+          [{ backgroundColor: color }, { backgroundColor: color, offset: 0.4 }, {}],
+          { duration: FLASH_MS, easing: 'ease-out', id: 'ws-flash' },
+        );
+      } else if (performance.now() - started < FIND_BLOCK_TIMEOUT_MS) {
+        frame = requestAnimationFrame(find);
+      }
+    };
+    find();
+    return () => {
+      cancelAnimationFrame(frame);
+      flash?.cancel();
+    };
+  }, [articleRef, target]);
 }

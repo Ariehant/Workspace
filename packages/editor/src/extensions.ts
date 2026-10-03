@@ -71,15 +71,18 @@ const FindInPage = Extension.create({
   },
 });
 
-/** Ctrl/Cmd+click opens a link (plain clicks just place the cursor while editing). */
+/**
+ * Ctrl/Cmd+click opens a link (plain clicks just place the cursor while editing; in a
+ * read-only page any click opens it). `workspace://` links open in the app via the host.
+ */
 const OpenLinkOnModClick = Extension.create({
   name: 'openLinkOnModClick',
   addProseMirrorPlugins() {
     return [
       new Plugin({
         props: {
-          handleClick(_view, _pos, event) {
-            if (!(event.ctrlKey || event.metaKey)) return false;
+          handleClick(view, _pos, event) {
+            if (!(event.ctrlKey || event.metaKey) && view.editable) return false;
             const link = (event.target as HTMLElement | null)?.closest('a[href]');
             if (!link) return false;
             window.open(link.getAttribute('href')!, '_blank', 'noopener');

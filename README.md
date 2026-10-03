@@ -3,13 +3,18 @@
 An offline-first replacement for Notion's core features (pages, rich text, databases, and later sync
 and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI features are out of scope.
 
-The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) is
-complete. Phase 1 (editor and navigation) is in progress; see [docs/PHASE1.md](docs/PHASE1.md).
+The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
+Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) are complete. Phase 2
+(databases) is next.
 
 ## What works today
 
-- Desktop app (Electron) with a page tree in the sidebar: create, nest, select, move to trash and
-  restore pages.
+- Desktop app (Electron) with a page tree in the sidebar: create pages, drag to reorder or nest
+  them, favorites, and a resizable sidebar. Trash: restore or delete permanently; pages are deleted
+  automatically after 30 days.
+- Quick find (`Ctrl+K` / `Ctrl+P`) over titles and content, with recent pages; `Ctrl+Enter` opens
+  the result in a new window. Back and forward with `Alt+←`/`Alt+→` or the mouse's side buttons.
+- `workspace://page/…` links to pages and blocks open in the app, including from other apps.
 - Rich-text page editor (TipTap/ProseMirror):
   - `/` opens a filterable block menu: text, headings, to-do, bulleted/numbered and toggle lists,
     toggle headings, quote, divider, callout, table, code (syntax highlighting, language picker),
@@ -36,7 +41,6 @@ complete. Phase 1 (editor and navigation) is in progress; see [docs/PHASE1.md](d
 - Page icons (emoji or image) and covers (gradients, colors or images, repositionable).
 - Page menu: font (default, serif, mono), small text, full width, lock, duplicate (with
   sub-pages), move to, copy link, word count.
-- Full-text search index over titles and content (the search UI arrives in Phase 1).
 - `.deb` and AppImage packages for Ubuntu.
 
 ## Requirements

@@ -38,7 +38,9 @@ const api = {
     ipcRenderer.invoke(IPC.linkPreview, url),
   setTheme: (theme: ThemeSource): void => ipcRenderer.send(IPC.themeSet, theme),
   onCommand: (listener: (command: string) => void): Unsubscribe => on(IPC.command, listener),
-  onNavigate: (listener: (pageId: string) => void): Unsubscribe => on(IPC.navigate, listener),
+  onNavigate: (listener: (pageId: string, blockId: string | null) => void): Unsubscribe =>
+    on(IPC.navigate, listener),
+  openWindow: (pageId: string): void => ipcRenderer.send(IPC.windowOpen, pageId),
   ready: (): void => ipcRenderer.send(IPC.ready),
 };
 

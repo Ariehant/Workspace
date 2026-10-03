@@ -15,6 +15,12 @@ files:
   - package.json
 asar: true
 
+# Lets the desktop open workspace://page/… links (adds the MIME type to the .desktop file).
+protocols:
+  - name: Workspace link
+    schemes:
+      - workspace
+
 linux:
   target:
     - deb

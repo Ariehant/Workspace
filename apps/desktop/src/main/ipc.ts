@@ -12,7 +12,12 @@ const THEMES: readonly ThemeSource[] = ['system', 'light', 'dark'];
  * Connects renderer windows to the DocManager. Tracks which docs each window has
  * open so updates are only sent where needed and are released when a window closes.
  */
-export function registerIpc(manager: DocManager, store: SqliteStore, onReady: () => void): void {
+export function registerIpc(
+  manager: DocManager,
+  store: SqliteStore,
+  onReady: () => void,
+  openWindow: (pageId: string) => void,
+): void {
   const openDocs = new Map<number, Map<string, number>>();
 
   const track = (sender: WebContents, docId: string) => {
@@ -86,4 +91,8 @@ export function registerIpc(manager: DocManager, store: SqliteStore, onReady: ()
   });
 
   ipcMain.on(IPC.ready, () => onReady());
+
+  ipcMain.on(IPC.windowOpen, (_event, pageId: unknown) => {
+    if (isDocId(pageId)) openWindow(pageId);
+  });
 }

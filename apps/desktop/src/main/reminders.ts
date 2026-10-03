@@ -53,11 +53,15 @@ export class ReminderScheduler {
   }
 }
 
-/** Bring a window forward and show `pageId` in it. */
-export function openPage(pageId: string): void {
-  const [window] = BrowserWindow.getAllWindows();
+/** Bring a window forward (the focused one, else the first) and show the page in it. */
+export function openPage(
+  pageId: string,
+  blockId: string | null = null,
+  target?: BrowserWindow,
+): void {
+  const window = target ?? BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   if (!window) return;
   if (window.isMinimized()) window.restore();
   window.focus();
-  window.webContents.send(IPC.navigate, pageId);
+  window.webContents.send(IPC.navigate, pageId, blockId);
 }

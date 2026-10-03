@@ -1,6 +1,6 @@
 # Phase 1: Editor MVP and navigation
 
-**Status:** M1–M5 done. M6 to do.
+**Status:** Phase 1 complete (M1–M6).
 
 ## Context
 
@@ -140,19 +140,27 @@ Setters follow the `setPageIcon` pattern, and the page index gains whichever col
 - **Duplicate** copies the page tree and content, gives the copies fresh block IDs, and points links between the copied pages at the copies. The copy is titled "<title> (1)".
 - **Not done yet:** recent emoji in the picker, and the Unsplash gallery. Unsplash needs network access and an API key, so it's left out of an offline-first app for now.
 
-### M6: navigation
+### M6: navigation ✅
 
-- Sidebar drag-and-drop (`@dnd-kit/core`): reorder, nest by dropping onto a page, and un-nest. It calls `movePage` with an index. Pages also auto-expand while dragging over them.
+- Sidebar drag-and-drop: reorder, nest by dropping onto a page, and un-nest. It calls `movePage` with an index. Pages also auto-expand while dragging over them.
 - Favorites section (per-user list in settings), a "Recent" list (stored in settings) and a resizable sidebar width.
 - Trash popover:
-  - lists `buildPageTree(..., { includeTrashed: true })` roots where `trashedAt` is set, with filter-as-you-type
+  - lists the pages put in the trash, with filter-as-you-type
   - restore, and delete permanently with a confirm dialog
   - pages older than 30 days are deleted automatically at startup
 - Quick find (Ctrl+K and Ctrl+P):
-  - a dialog backed by `Platform.search`, a new method that wraps IPC `search:query`, which is already implemented
+  - a dialog backed by `Platform.search`, which wraps the existing IPC `search:query`
   - an empty query shows recent pages; results show the breadcrumb path and the snippet with the matching words highlighted
   - Enter opens the page, Ctrl+Enter opens it in a new window
 - Back and forward history (Alt+Left/Right, mouse buttons) and `workspace://page/<id>` deep links registered via the `.desktop` MimeType.
+
+**M6 notes:**
+
+- **Drag and drop** uses native HTML5 drag events rather than `@dnd-kit/core`: the tree is small, rows already handle the pointer, and it saves a dependency. A drop on a row's top or bottom quarter goes before or after it; the middle nests. `resolveDrop` (in `@workspace/core`, unit tested) turns a drop into `{ parentId, index }` and refuses drops into a page's own sub-pages. Dropping below the tree moves a page to the end of the top level.
+- **Quick find** shows title matches straight away, then adds content matches from the full-text index. It excludes trashed pages.
+- **History** is per window and kept in memory (`pushHistory`/`stepHistory` in core). Going back skips pages that have since been deleted.
+- **Links:** `workspace://page/<id>#<blockId>` links open in the app from anywhere: a link in a page, "Copy link" or "Copy link to block", another app, or the desktop (a second launch hands the link to the running app). A link to a block scrolls to it and flashes it. In a locked or trashed page, a plain click opens a link.
+- **The Go menu** lists Search, Back and Forward. The renderer handles the shortcuts itself so they work in the web build too.
 
 ## Critical files
 

@@ -12,6 +12,7 @@ import {
   MenuTrigger,
 } from '@workspace/ui';
 import { Copy, GripVertical, Link, Palette, Plus, Repeat2, Trash2 } from 'lucide-react';
+import { pageUrl } from '@workspace/core';
 import { useRef, useState } from 'react';
 import {
   convertBlockAt,
@@ -158,9 +159,7 @@ export function BlockHandle({ editor, pageId }: BlockHandleProps) {
               onSelect={() =>
                 act((t) => {
                   const id = t.node.attrs.id as string | undefined;
-                  void navigator.clipboard.writeText(
-                    `workspace://page/${pageId}${id ? `#${id}` : ''}`,
-                  );
+                  void navigator.clipboard.writeText(pageUrl(pageId, id));
                 })
               }
             >

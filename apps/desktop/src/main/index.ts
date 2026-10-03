@@ -1,11 +1,13 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LINK_SCHEME, parsePageUrl } from '@workspace/core';
 import { DocManager, FileStore, SqliteStore } from '@workspace/storage-local';
 import { BrowserWindow, Menu, app, nativeTheme, shell } from 'electron';
 import type { ThemeSource } from '../shared/ipc';
 import { registerFileScheme, registerFiles } from './files';
 import { registerIpc } from './ipc';
+import { openPage } from './reminders';
 import { ReminderScheduler } from './reminders';
 import { buildMenu } from './menu';
 import { resolveDataDir } from './paths';
@@ -56,7 +58,8 @@ function backgroundColor(): string {
   return nativeTheme.shouldUseDarkColors ? '#191919' : '#ffffff';
 }
 
-function createWindow(): BrowserWindow {
+/** Open a window; with `pageId` it starts on that page (passed in the URL hash). */
+function createWindow(pageId?: string): BrowserWindow {
   const saved = store.getSetting<WindowBounds>('window.bounds');
   const hasOtherWindows = BrowserWindow.getAllWindows().length > 0;
   const window = new BrowserWindow({
@@ -91,14 +94,26 @@ function createWindow(): BrowserWindow {
   };
   window.on('close', saveBounds);
 
-  if (isDev) void window.loadURL(process.env.ELECTRON_RENDERER_URL!);
-  else void window.loadFile(rendererPath);
+  const hash = pageId ? `page=${encodeURIComponent(pageId)}` : '';
+  if (isDev) void window.loadURL(`${process.env.ELECTRON_RENDERER_URL!}${hash ? `#${hash}` : ''}`);
+  else void window.loadFile(rendererPath, hash ? { hash } : undefined);
   return window;
 }
 
-// Keep the app on its own page: open web links in the default browser.
+/** Show the page a `workspace://` link points to; `false` if it isn't one. */
+function openLink(url: string, target?: BrowserWindow): boolean {
+  const link = parsePageUrl(url);
+  if (!link) return false;
+  openPage(link.pageId, link.blockId, target);
+  return true;
+}
+
+// Keep the app on its own page: workspace:// links open inside it, web links in the
+// default browser.
 app.on('web-contents-created', (_event, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
+    if (openLink(url, BrowserWindow.fromWebContents(contents) ?? undefined))
+      return { action: 'deny' };
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -118,9 +133,12 @@ function onRendererReady(): void {
   app.quit();
 }
 
-registerIpc(manager, store, onRendererReady);
+registerIpc(manager, store, onRendererReady, (pageId) => createWindow(pageId));
 
-app.on('second-instance', () => {
+// A second launch (e.g. the desktop opening a workspace:// link) hands over to us.
+app.on('second-instance', (_event, argv) => {
+  const link = argv.find((arg) => arg.toLowerCase().startsWith(`${LINK_SCHEME}://`));
+  if (link && openLink(link)) return;
   const [window] = BrowserWindow.getAllWindows();
   if (!window) return;
   if (window.isMinimized()) window.restore();
@@ -131,8 +149,11 @@ app.whenReady().then(() => {
   registerFiles(files, store);
   if (!smokeTest) reminders.check();
   nativeTheme.themeSource = store.getSetting<ThemeSource>('ui.theme') ?? 'system';
-  Menu.setApplicationMenu(buildMenu(createWindow, isDev));
-  createWindow();
+  Menu.setApplicationMenu(buildMenu(() => createWindow(), isDev));
+  // Handle workspace:// links system-wide (the .deb also registers the MIME type).
+  if (app.isPackaged) app.setAsDefaultProtocolClient(LINK_SCHEME);
+  const startLink = process.argv.map(parsePageUrl).find((link) => link !== null);
+  createWindow(startLink?.pageId);
 
   if (smokeTest) {
     smokeTimer = setTimeout(() => {

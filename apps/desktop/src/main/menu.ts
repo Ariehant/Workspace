@@ -48,6 +48,32 @@ export function buildMenu(createWindow: () => BrowserWindow, isDev: boolean): Me
       ],
     },
     {
+      label: '&Go',
+      // The renderer handles these shortcuts itself (they also work in the web build),
+      // so the menu only shows them.
+      submenu: [
+        {
+          label: 'Search…',
+          accelerator: 'CmdOrCtrl+K',
+          registerAccelerator: false,
+          click: send('quick-find'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Back',
+          accelerator: 'Alt+Left',
+          registerAccelerator: false,
+          click: send('go-back'),
+        },
+        {
+          label: 'Forward',
+          accelerator: 'Alt+Right',
+          registerAccelerator: false,
+          click: send('go-forward'),
+        },
+      ],
+    },
+    {
       label: '&Help',
       submenu: [{ label: `About ${app.getName()}`, role: 'about' }],
     },

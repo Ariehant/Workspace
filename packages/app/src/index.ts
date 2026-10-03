@@ -1,2 +1,2 @@
 export { App } from './app';
-export type { AppCommand, Platform } from './platform';
+export type { AppCommand, Platform, SearchHit } from './platform';
