@@ -18,6 +18,7 @@ import {
   calculate,
   calculationInfo,
   calculationsFor,
+  effectiveType,
   DATE_FORMATS,
   NUMBER_FORMATS,
   TIME_FORMATS,
@@ -55,6 +56,7 @@ import {
 } from '@workspace/ui';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
+  AlertCircle,
   ArrowDown,
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -72,6 +74,7 @@ import {
   Maximize2,
   Plus,
   Repeat2,
+  Sigma,
   Trash2,
 } from 'lucide-react';
 import {
@@ -85,6 +88,7 @@ import {
 } from 'react';
 import { useApp } from '../context';
 import { duplicateRowWithContent } from './actions';
+import { FormulaEditor } from './formula-editor';
 import {
   CellDisplay,
   OptionPill,
@@ -199,6 +203,7 @@ export function TableView({
   const [selected, setSelected] = useState<CellRef | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [headerMenu, setHeaderMenu] = useState<string | null>(null);
+  const [formulaFor, setFormulaFor] = useState<string | null>(null);
   const [resizing, setResizing] = useState<{ id: string; width: number } | null>(null);
 
   const byId = useMemo(() => new Map(snapshot.properties.map((p) => [p.id, p])), [snapshot]);
@@ -655,6 +660,7 @@ export function TableView({
                 setHeaderMenu(id);
               }}
               onFilter={() => onFilter(property.id)}
+              onEditFormula={() => setFormulaFor(property.id)}
             />
           ))}
           {editable && (
@@ -665,7 +671,9 @@ export function TableView({
                   type,
                   afterId: lastColumn,
                 });
-                setHeaderMenu(id);
+                // A new formula opens straight in the formula editor, as in Notion.
+                if (type === 'formula') setFormulaFor(id);
+                else setHeaderMenu(id);
               }}
             />
           )}
@@ -697,6 +705,19 @@ export function TableView({
           ))}
         </div>
       </div>
+      {formulaFor && byId.get(formulaFor) && (
+        <FormulaEditor
+          handle={handle}
+          snapshot={snapshot}
+          property={byId.get(formulaFor)!}
+          row={result.rows[0]}
+          ctx={ctx}
+          onClose={() => {
+            setFormulaFor(null);
+            focusGrid();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -789,8 +810,8 @@ function CalcCell({
   editable: boolean;
   onChange(calc: CalculationId | null): void;
 }) {
-  const info = calc ? calculationInfo(property.type, calc) : undefined;
-  const options = calculationsFor(property.type);
+  const info = calc ? calculationInfo(effectiveType(property), calc) : undefined;
+  const options = calculationsFor(effectiveType(property));
   const value = info ? calculate(rows, property, info.id, ctx) : '';
   return (
     <Menu>
@@ -1040,6 +1061,7 @@ interface HeaderCellProps {
   onDragEnd(): void;
   onInsert(side: 'left' | 'right'): void;
   onFilter(): void;
+  onEditFormula(): void;
 }
 
 function HeaderCell(props: HeaderCellProps) {
@@ -1115,6 +1137,15 @@ function HeaderCell(props: HeaderCellProps) {
         >
           <PropertyIcon type={property.type} />
           <span className="truncate">{property.name}</span>
+          {property.config.formulaError && (
+            <span
+              title={property.config.formulaError}
+              className="shrink-0 text-danger"
+              aria-label="Formula error"
+            >
+              <AlertCircle size={13} />
+            </span>
+          )}
         </button>
         <MenuContent className="w-60" data-testid="property-menu">
           <div className="p-1" onKeyDown={(e) => e.stopPropagation()}>
@@ -1147,7 +1178,10 @@ function HeaderCell(props: HeaderCellProps) {
                   <MenuItem
                     key={type}
                     icon={<PropertyIcon type={type} />}
-                    onSelect={() => changePropertyType(doc, property.id, type, ctx)}
+                    onSelect={() => {
+                      changePropertyType(doc, property.id, type, ctx);
+                      if (type === 'formula') props.onEditFormula();
+                    }}
                   >
                     <span className="flex-1">{propertyKind(type).label}</span>
                     {type === property.type && '✓'}
@@ -1155,6 +1189,11 @@ function HeaderCell(props: HeaderCellProps) {
                 ))}
               </MenuSubContent>
             </MenuSub>
+          )}
+          {property.type === 'formula' && (
+            <MenuItem icon={<Sigma size={14} />} onSelect={props.onEditFormula}>
+              Edit formula
+            </MenuItem>
           )}
           <PropertyFormatMenu handle={handle} property={property} />
           <MenuSeparator />
@@ -1287,7 +1326,8 @@ function PropertyFormatMenu({ handle, property }: { handle: DatabaseHandle; prop
     </MenuSub>
   );
 
-  if (property.type === 'number') {
+  const type = effectiveType(property);
+  if (type === 'number') {
     return radio(
       'Number format',
       <Hash size={14} />,
@@ -1296,7 +1336,7 @@ function PropertyFormatMenu({ handle, property }: { handle: DatabaseHandle; prop
       (numberFormat) => set({ numberFormat }),
     );
   }
-  if (['date', 'createdTime', 'lastEditedTime'].includes(property.type)) {
+  if (['date', 'createdTime', 'lastEditedTime'].includes(type)) {
     return (
       <>
         {radio(

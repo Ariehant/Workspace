@@ -6,6 +6,7 @@ import {
   cellText,
   cellValue,
   deleteOption,
+  effectiveType,
   isDateValue,
   nextOptionColor,
   optionsOf,
@@ -35,6 +36,7 @@ import {
   Clock,
   Fingerprint,
   Hash,
+  Sigma,
   Link,
   List,
   MoreHorizontal,
@@ -73,6 +75,7 @@ const ICONS: Record<PropertyType, LucideIcon> = {
   lastEditedTime: Clock,
   lastEditedBy: UserCircle,
   uniqueId: Fingerprint,
+  formula: Sigma,
 };
 
 export function PropertyIcon({ type, size = 14 }: { type: PropertyType; size?: number }) {
@@ -157,6 +160,36 @@ export function CellDisplay({
   const value = cellValue(row, property);
   const kind = propertyKind(property.type);
   const lines = wrap ? 'whitespace-pre-wrap break-words' : 'truncate';
+
+  if (property.type === 'formula') {
+    // A computed value, shown as its result type (and not editable).
+    const type = effectiveType(property);
+    if (type === 'checkbox') {
+      return (
+        <span
+          role="checkbox"
+          aria-checked={value === true}
+          aria-readonly
+          aria-label={property.name}
+          className={cn(
+            'flex size-4 items-center justify-center rounded-[3px] border opacity-80',
+            value === true ? 'border-accent bg-accent text-accent-fg' : 'border-faint',
+          )}
+        >
+          {value === true && <Check size={12} strokeWidth={3} />}
+        </span>
+      );
+    }
+    if (kind.isEmpty(value)) return null;
+    return (
+      <span
+        data-testid="formula-value"
+        className={cn(lines, type === 'number' && variant === 'cell' && 'ml-auto tabular-nums')}
+      >
+        {cellText(row, property, ctx)}
+      </span>
+    );
+  }
 
   if (property.type === 'checkbox') {
     const on = value === true;

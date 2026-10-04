@@ -1,6 +1,6 @@
 import { newId } from '@workspace/core';
 import { dateFromString, dayOffset } from './format';
-import { cellValue, isDateValue, propertyKind } from './properties';
+import { cellValue, effectiveType, isDateValue, propertyKind } from './properties';
 import type {
   DisplayContext,
   Filter,
@@ -143,26 +143,33 @@ const OPERATORS: Record<PropertyType, OperatorInfo[]> = {
   lastEditedTime: DATE_OPS.filter((o) => o.value !== 'none'),
   checkbox: [{ id: 'is', label: 'Is', value: 'boolean' }],
   files: EMPTY_OPS,
+  // Formulas use the operators of their result type (see `effectiveType`).
+  formula: TEXT_OPS,
 };
 
-export function filterOperators(type: PropertyType): OperatorInfo[] {
+/** Operators for a property (or a property type); formulas by their result type. */
+export function filterOperators(of: PropertyType | Property): OperatorInfo[] {
+  const type = typeof of === 'string' ? of : effectiveType(of);
   return OPERATORS[type] ?? TEXT_OPS;
 }
 
-export function operatorInfo(type: PropertyType, operator: string): OperatorInfo | undefined {
-  return filterOperators(type).find((o) => o.id === operator);
+export function operatorInfo(
+  of: PropertyType | Property,
+  operator: string,
+): OperatorInfo | undefined {
+  return filterOperators(of).find((o) => o.id === operator);
 }
 
 /** A new rule for a property, with Notion's default operator. */
 export function newFilterRule(property: Property): FilterRule {
-  const first = filterOperators(property.type)[0]!;
+  const first = filterOperators(property)[0]!;
   return {
     type: 'rule',
     id: newId(),
     propertyId: property.id,
     operator: first.id,
     value:
-      property.type === 'checkbox'
+      effectiveType(property) === 'checkbox'
         ? true
         : first.value === 'date'
           ? ({ kind: 'relative', relative: 'today' } satisfies DateTarget)
@@ -179,7 +186,7 @@ export function newFilterGroup(
 
 /** Whether a rule has what it needs to apply (incomplete rules don't filter). */
 export function isRuleComplete(rule: FilterRule, property: Property): boolean {
-  const info = operatorInfo(property.type, rule.operator);
+  const info = operatorInfo(property, rule.operator);
   if (!info) return false;
   const v = rule.value;
   switch (info.value) {
@@ -283,7 +290,8 @@ function matchesRule(row: Row, rule: FilterRule, property: Property, ctx: Displa
   if (op === 'isNotEmpty') return !empty;
   const now = new Date(ctx.now ?? Date.now());
 
-  switch (property.type) {
+  const type = effectiveType(property);
+  switch (type) {
     case 'title':
     case 'text':
     case 'url':
@@ -352,7 +360,7 @@ function matchesRule(row: Row, rule: FilterRule, property: Property, ctx: Displa
     case 'date':
     case 'createdTime':
     case 'lastEditedTime': {
-      const day = cellDay(value, property.type);
+      const day = cellDay(value, type);
       if (day === null) return false;
       if (op === 'isWithin') {
         const [from, to] = rangeDays(rule.value as DateRangeTarget, now);

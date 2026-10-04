@@ -9,3 +9,4 @@ export * from './calc';
 export * from './filter';
 export * from './group';
 export * from './reminders';
+export * from './formula';

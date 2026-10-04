@@ -40,6 +40,7 @@ import {
 } from '../page-view';
 import { PageMenu } from '../page-menu';
 import { duplicateRowWithContent } from './actions';
+import { FormulaEditor } from './formula-editor';
 import {
   CellDisplay,
   PopoverCellEditor,
@@ -90,7 +91,8 @@ function rowPageModel(
 function useRow(rowId: string, databaseId: string) {
   const { workspace, user } = useApp();
   const loaded = useDatabase(databaseId);
-  const row = loaded?.handle.row(rowId);
+  // From the snapshot (not the handle), so formula values are included.
+  const row = loaded?.handle.row(rowId) && loaded.snapshot.rows.find((r) => r.id === rowId);
   if (!loaded || !row) return null;
   const model = rowPageModel(
     loaded.handle,
@@ -119,6 +121,7 @@ export function PropertiesPanel({
   const ctx = useDisplayContext();
   const [editing, setEditing] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [formulaFor, setFormulaFor] = useState<string | null>(null);
   const all = snapshot.properties.filter((p) => p.id !== TITLE_PROPERTY_ID);
   const hideEmpty = snapshot.meta.hideEmptyProperties;
   // Empty properties fold away (unless being edited) when the database asks for it.
@@ -137,9 +140,22 @@ export function PropertiesPanel({
           ctx={ctx}
           editable={editable}
           editing={editing === property.id}
-          onEdit={(on) => setEditing(on ? property.id : null)}
+          onEdit={(on) => {
+            if (on && property.type === 'formula') setFormulaFor(property.id);
+            else setEditing(on ? property.id : null);
+          }}
         />
       ))}
+      {formulaFor && snapshot.properties.find((p) => p.id === formulaFor) && (
+        <FormulaEditor
+          handle={handle}
+          snapshot={snapshot}
+          property={snapshot.properties.find((p) => p.id === formulaFor)!}
+          row={snapshot.rows.find((r) => r.id === row.id)}
+          ctx={ctx}
+          onClose={() => setFormulaFor(null)}
+        />
+      )}
       {hidden.length > 0 && (
         <button
           type="button"
@@ -215,7 +231,8 @@ function PropertyRow({
   onEdit(on: boolean): void;
 }) {
   const { user } = useApp();
-  const canEdit = editable && isEditable(property.type);
+  // Formulas are edited as a whole (their expression), from the value too.
+  const canEdit = editable && (isEditable(property.type) || property.type === 'formula');
   const toggle = () =>
     editable && setCell(handle.doc, row.id, property.id, row.values[property.id] !== true, user.id);
   const editorProps = { handle, row, property, ctx, onDone: () => onEdit(false) };

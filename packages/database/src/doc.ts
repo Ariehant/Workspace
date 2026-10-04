@@ -1,6 +1,7 @@
 import { PageField, applyTextDiff, newId, type PageOptions } from '@workspace/core';
 import { generateKeyBetween } from 'fractional-indexing';
 import * as Y from 'yjs';
+import { renameInFormula } from './formula/engine';
 import { cellText, propertyKind, optionsOf } from './properties';
 import {
   DEFAULT_VIEW_CONFIG,
@@ -220,12 +221,28 @@ export function newPropertyName(doc: Y.Doc, base = 'Property'): string {
   for (let i = 1; ; i++) if (!names.has(`${base} ${i}`)) return `${base} ${i}`;
 }
 
+/** Rename a property; formulas that refer to it are updated to the new name. */
 export function renameProperty(doc: Y.Doc, id: string, name: string): void {
-  getPropertyMap(doc, id).set('name', name);
+  doc.transact(() => {
+    const map = getPropertyMap(doc, id);
+    const oldName = map.get('name') as string;
+    map.set('name', name);
+    if (oldName === name) return;
+    for (const p of readProperties(doc)) {
+      if (p.type !== 'formula' || !p.config.expression?.includes(oldName)) continue;
+      const expression = renameInFormula(p.config.expression, oldName, name);
+      if (expression !== p.config.expression)
+        setPropertyConfig(doc, p.id, { ...p.config, expression });
+    }
+  });
 }
 
+/** Store a property's config (computed fields such as a formula's result type are dropped). */
 export function setPropertyConfig(doc: Y.Doc, id: string, config: PropertyConfig): void {
-  getPropertyMap(doc, id).set('config', config);
+  const { resultType: _type, formulaError: _error, ...stored } = config;
+  void _type;
+  void _error;
+  getPropertyMap(doc, id).set('config', stored);
 }
 
 /**

@@ -3,6 +3,7 @@ import {
   GROUPABLE_TYPES,
   ME,
   countRules,
+  effectiveType,
   filterOperators,
   newFilterGroup,
   newFilterRule,
@@ -92,7 +93,7 @@ const RELATIVE_DATES: DateTarget[] = (
 
 /** Short text of a rule's condition, for its chip: "contains servo", "Done, Doing". */
 export function ruleSummary(rule: FilterRule, property: Property, ctx: DisplayContext): string {
-  const info = operatorInfo(property.type, rule.operator);
+  const info = operatorInfo(property, rule.operator);
   if (!info) return '';
   const v = rule.value;
   switch (info.value) {
@@ -139,8 +140,8 @@ export function RuleFields({
   ctx: DisplayContext;
   onChange(rule: FilterRule): void;
 }) {
-  const operators = filterOperators(property.type);
-  const info = operatorInfo(property.type, rule.operator) ?? operators[0]!;
+  const operators = filterOperators(property);
+  const info = operatorInfo(property, rule.operator) ?? operators[0]!;
   const set = (value: unknown) => onChange({ ...rule, value });
   const selectedIds = (rule.value as string[] | undefined) ?? [];
   const toggleId = (id: string) =>
@@ -322,7 +323,7 @@ export function RuleFields({
         aria-label="Condition"
         value={info.id}
         onChange={(e) => {
-          const next = operatorInfo(property.type, e.target.value)!;
+          const next = operatorInfo(property, e.target.value)!;
           // Keep the value while the kind of value stays the same.
           const value =
             next.value === info.value
@@ -696,8 +697,9 @@ function GroupOptions({
       {input}
     </label>
   );
-  const isDate = ['date', 'createdTime', 'lastEditedTime'].includes(property.type);
-  const isText = ['title', 'text', 'url', 'email', 'phone'].includes(property.type);
+  const type = effectiveType(property);
+  const isDate = ['date', 'createdTime', 'lastEditedTime'].includes(type);
+  const isText = ['title', 'text', 'url', 'email', 'phone'].includes(type);
   const range = groupBy.numberRange ?? { start: 0, end: 100, step: 10 };
   return (
     <div className="flex flex-col">
@@ -749,7 +751,7 @@ function GroupOptions({
             <option value="group">Group</option>
           </select>,
         )}
-      {property.type === 'number' && (
+      {type === 'number' && (
         <div className="flex items-center gap-1 py-1 text-muted">
           <span className="flex-1">Range</span>
           {(['start', 'end', 'step'] as const).map((key) => (

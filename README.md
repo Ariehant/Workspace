@@ -5,8 +5,8 @@ and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI featu
 
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) are complete. Phase 2
-(databases, see [docs/PHASE2.md](docs/PHASE2.md)) is in progress: the table view (M1) and
-views, filters, sorts, groups and calculations (M2) are done.
+(databases, see [docs/PHASE2.md](docs/PHASE2.md)) is in progress: the table view (M1),
+views, filters, sorts, groups and calculations (M2) and formulas (M3) are done.
 
 ## What works today
 
@@ -44,6 +44,8 @@ views, filters, sorts, groups and calculations (M2) are done.
   - Several views per database, each with its own filters (simple chips or nested AND/OR),
     sorts, grouping and sub-grouping, column calculations and visible columns; search inside a
     view. Number, date and time formats; reminders on dates.
+  - Formulas (Notion's Formula 2.0 language): an editor with highlighting, autocomplete,
+    function docs, live preview and error positions; results sort, filter and group by type.
   - Rows are pages: open them in a side peek, a center peek or full page, with their properties
     above the content. Rows show up in quick find (including their property text), can be
     linked to, and go to the Trash when deleted.

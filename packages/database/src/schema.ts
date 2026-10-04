@@ -46,7 +46,8 @@ export type PropertyType =
   | 'createdBy'
   | 'lastEditedTime'
   | 'lastEditedBy'
-  | 'uniqueId';
+  | 'uniqueId'
+  | 'formula';
 
 /** Notion's option palette (also used for text colors). */
 export const OPTION_COLORS = [
@@ -102,7 +103,18 @@ export interface PropertyConfig {
   /** date, created time, last edited time. */
   dateFormat?: DateFormat;
   timeFormat?: TimeFormat;
+  /** formula: the expression, with properties as `prop("Name")`. */
+  expression?: string;
+  /**
+   * formula: the type of its result and its error, if any. Computed when formulas are
+   * applied to a snapshot (see `applyFormulas`), never stored.
+   */
+  resultType?: FormulaResultType;
+  formulaError?: string;
 }
+
+/** What a formula's result is shown and filtered as. */
+export type FormulaResultType = 'number' | 'text' | 'boolean' | 'date';
 
 export interface Property {
   id: string;

@@ -1,5 +1,5 @@
 import { dateFromString, formatDateString, formatNumber, formatTimestamp } from './format';
-import { cellText, cellValue, isDateValue, propertyKind } from './properties';
+import { cellText, cellValue, effectiveType, isDateValue, propertyKind } from './properties';
 import type { CalculationId, DisplayContext, Property, PropertyType, Row } from './schema';
 
 export interface CalculationInfo {
@@ -148,7 +148,7 @@ export function calculate(
         max: nums[nums.length - 1]!,
         range: nums[nums.length - 1]! - nums[0]!,
       }[calc];
-      return property.type === 'number'
+      return effectiveType(property) === 'number'
         ? formatNumber(round(result), property.config)
         : String(round(result));
     }
@@ -159,7 +159,7 @@ export function calculate(
       if (all.length === 0) return '';
       if (calc === 'dateRange') return formatSpan(all[all.length - 1]! - all[0]!);
       const t = calc === 'earliest' ? all[0]! : all[all.length - 1]!;
-      if (property.type !== 'date') return formatTimestamp(t, property.config, now);
+      if (effectiveType(property) !== 'date') return formatTimestamp(t, property.config, now);
       // Show a date the way the property does (with a time only if the values have one).
       const sample = rows
         .map((r) => cellValue(r, property))

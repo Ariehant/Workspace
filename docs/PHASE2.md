@@ -1,6 +1,6 @@
 # Phase 2: Databases
 
-**Status:** M1 and M2 done. M3 next.
+**Status:** M1, M2 and M3 done. M4 next.
 
 ## Context
 
@@ -200,7 +200,7 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - Number formats don't include Notion's "bar" and "ring" displays.
 - **Fixed along the way:** a race in the editor's selection toolbar, present since Phase 1. TipTap hid the toolbar at once but showed it after a 250 ms debounce, which sometimes left it out of step with the selection. It now updates without the delay.
 
-### M3: formula engine (Formula 2.0)
+### M3: formula engine (Formula 2.0) ✅
 
 - **Language:**
   - a lexer and Pratt parser for the syntax: operators, `prop("Name")` and dot access (`prop("Tags").length()`), lists, `let` and `lets`, lambdas with `current` and `index`, comments
@@ -220,6 +220,34 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - syntax highlighting, autocomplete of properties and functions, inline docs for each function, a live preview against the current row, and the type of the result
 - **Formula results** can be filtered, sorted, grouped and calculated on according to their result type.
 - A fixture suite of Notion formulas with expected results (inline JSON fixtures, around 300 cases).
+
+**M3 notes:**
+
+- **Engine** (`packages/database/src/formula/`):
+  - a lexer (comments, curly quotes and escapes) and a Pratt parser (operator precedence, right-associative `^` and `? :`, `value.fn()` method calls, lists, `let`/`lets`)
+  - a static type checker whose errors carry the exact position
+  - an evaluator with lazy `if`, `ifs`, `and` and `or`, and lambdas that bind `current` and `index`
+  - 95 functions (plus `prop`, `let` and `lets`) across logic, text, math, dates, lists and people/pages, each with a signature, description and example for the editor
+- **Formula properties:**
+  - stored as text, with properties referenced as `prop("Name")`; renaming a property rewrites the formulas that use it
+  - `compileFormulas` orders formulas by their dependencies and flags circular references
+  - `FormulaCache` adds results to the snapshot, reusing them for rows that didn't change (the handle keeps unchanged `Row` objects)
+  - a formula's result type (number, text, checkbox, date) decides how it is shown, sorted, filtered, grouped and calculated, and which number and date formats apply
+  - formulas that use `now()`/`today()` refresh every minute
+- **Editor:**
+  - syntax highlighting, with the error range underlined
+  - autocomplete of property names (inside `prop("…`), functions and keywords, with Tab/Enter to accept, plus docs for the selected suggestion
+  - a live preview of the result and its type for a row
+  - a formula can't be saved while it has an error
+  - opens from the column menu ("Edit formula"), when adding a formula property, when changing a property's type to formula, and from the value on a row page
+  - columns whose formula is broken (e.g. a deleted property) show an error icon
+- **Semantics:** follows Formula 2.0: `day()` is 1 (Monday) to 7, `month()` is 1–12, `+` joins text, `empty()` is true for "", 0, false and [], and empty numbers count as 0 in arithmetic.
+- **Tests:** about 360 fixture cases plus error and engine tests in `formula/formula.test.ts`. I wrote the expected values from Notion's documentation and behaviour as I understand it, not from exports of real Notion results, so parity checks against a real Notion workspace are still to do (with the importer, Phase 3).
+- **Not done:**
+  - `style()` and `link()` return plain text; styled formula output isn't rendered.
+  - Lists, people and pages show as text (and filter as text).
+  - Formula values aren't in the search index.
+  - Formulas over relations and rollups come with M4.
 
 ### M4: relations and rollups
 

@@ -1,5 +1,12 @@
 import { dateFromString, formatDateString } from './format';
-import { STATUS_GROUPS, cellValue, isDateValue, optionsOf, propertyKind } from './properties';
+import {
+  STATUS_GROUPS,
+  cellValue,
+  effectiveType,
+  isDateValue,
+  optionsOf,
+  propertyKind,
+} from './properties';
 import type {
   DateBucket,
   DisplayContext,
@@ -44,6 +51,7 @@ export const GROUPABLE_TYPES: readonly PropertyType[] = [
   'email',
   'phone',
   'number',
+  'formula',
 ];
 
 export const DATE_BUCKETS: { id: DateBucket; label: string }[] = [
@@ -116,12 +124,23 @@ function rowGroups(
   groupBy: GroupBy,
   ctx: DisplayContext,
 ): GroupInfo[] {
+  const groups = rowGroupsOf(row, property, groupBy, ctx);
+  // A formula's value comes from other properties; its groups can't be assigned.
+  return property.type === 'formula' ? groups.map((g) => ({ ...g, value: undefined })) : groups;
+}
+
+function rowGroupsOf(
+  row: Row,
+  property: Property,
+  groupBy: GroupBy,
+  ctx: DisplayContext,
+): GroupInfo[] {
   const value = cellValue(row, property);
   const kind = propertyKind(property.type);
   const none: GroupInfo = { key: NO_VALUE, label: `No ${property.name}`, value: null };
   const now = new Date(ctx.now ?? Date.now());
 
-  switch (property.type) {
+  switch (effectiveType(property)) {
     case 'select':
     case 'status': {
       if (kind.isEmpty(value)) return [none];
@@ -160,7 +179,7 @@ function rowGroups(
     case 'date':
     case 'createdTime':
     case 'lastEditedTime': {
-      const date = dateOf(value, property.type);
+      const date = dateOf(value, effectiveType(property));
       if (!date) return [none];
       const bucket = groupBy.dateBucket ?? 'relative';
       const { key, label } = dateKey(date, bucket, now);
@@ -217,7 +236,7 @@ function statusGroupInfo(property: Property, group: string): GroupInfo {
 
 /** Groups that exist even without rows (every option, both checkbox states). */
 function knownGroups(property: Property, groupBy: GroupBy): GroupInfo[] {
-  switch (property.type) {
+  switch (effectiveType(property)) {
     case 'select':
     case 'multiSelect':
       return optionsOf(property).map((o) => optionInfo(property, o.id)!);
@@ -285,7 +304,7 @@ export function groupRows(
   if (groupBy.sort === 'desc') list.reverse();
   // Checkbox groups have no "empty" group; neither do unordered groups without empties.
   list = [...none.filter((g) => g.rows.length > 0 || ordered), ...list];
-  if (property.type === 'checkbox') list = list.filter((g) => g.info.key !== NO_VALUE);
+  if (effectiveType(property) === 'checkbox') list = list.filter((g) => g.info.key !== NO_VALUE);
   if (groupBy.hideEmpty) list = list.filter((g) => g.rows.length > 0);
   return list;
 }

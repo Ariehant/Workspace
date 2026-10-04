@@ -323,6 +323,35 @@ function computedKind(
   };
 }
 
+/**
+ * The type a property behaves as: a formula behaves as its result type (number,
+ * text, checkbox or date) for display, sorting, filters, groups and calculations.
+ */
+export function effectiveType(property: Property): PropertyType {
+  if (property.type !== 'formula') return property.type;
+  switch (property.config.resultType) {
+    case 'number':
+      return 'number';
+    case 'boolean':
+      return 'checkbox';
+    case 'date':
+      return 'date';
+    default:
+      return 'text';
+  }
+}
+
+KINDS.push({
+  type: 'formula',
+  label: 'Formula',
+  computed: true,
+  defaultConfig: () => ({ expression: '' }),
+  isEmpty: (v) => v === null || v === undefined || v === '',
+  text: (v, p, ctx) => propertyKind(effectiveType(p)).text(v, p, ctx),
+  compare: (a, b, p, ctx) => propertyKind(effectiveType(p)).compare(a, b, p, ctx),
+  parse: () => ({ value: null }),
+});
+
 const BY_TYPE = new Map(KINDS.map((k) => [k.type, k]));
 
 export function propertyKind(type: PropertyType): PropertyKind {
