@@ -1,4 +1,6 @@
 import type { DocManager, SqliteStore } from '@workspace/storage-local';
+import { randomUUID } from 'node:crypto';
+import { userInfo } from 'node:os';
 import { BrowserWindow, ipcMain, nativeTheme, type WebContents } from 'electron';
 import { IPC, type ThemeSource } from '../shared/ipc';
 
@@ -86,6 +88,20 @@ export function registerIpc(
     typeof query === 'string' ? store.search(query.slice(0, 200)) : [],
   );
 
+  ipcMain.handle(IPC.pageLocate, (_event, id: unknown) =>
+    isDocId(id) ? store.locatePage(id) : null,
+  );
+
+  // The local user: an id kept for this install, named after the OS account.
+  ipcMain.handle(IPC.user, () => {
+    let id = store.getSetting<string>('app.userId');
+    if (!id) {
+      id = randomUUID();
+      store.setSetting('app.userId', id);
+    }
+    return { id, name: osUserName() };
+  });
+
   ipcMain.on(IPC.themeSet, (_event, theme: unknown) => {
     if (THEMES.includes(theme as ThemeSource)) nativeTheme.themeSource = theme as ThemeSource;
   });
@@ -95,4 +111,14 @@ export function registerIpc(
   ipcMain.on(IPC.windowOpen, (_event, pageId: unknown) => {
     if (isDocId(pageId)) openWindow(pageId);
   });
+}
+
+/** The OS login name, capitalized (a stand-in until accounts exist). */
+function osUserName(): string {
+  try {
+    const { username } = userInfo();
+    return username.charAt(0).toUpperCase() + username.slice(1);
+  } catch {
+    return 'Me';
+  }
 }

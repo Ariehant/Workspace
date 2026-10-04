@@ -1,323 +1,295 @@
 import {
   FILE_ICON_PREFIX,
-  createPage,
-  getAncestorIds,
   getPage,
+  getPageContent,
   getPageTitleText,
   isInTrash,
-  listPages,
   pageUrl,
   restorePage,
   setPageIcon,
   setPageOptions,
   setPageTitle,
   type PageId,
+  type PageMeta,
   type PageOptions,
 } from '@workspace/core';
-import {
-  PageEditor,
-  PageIcon,
-  type Editor,
-  type EditorServices,
-  type PageRef,
-} from '@workspace/editor';
+import { PageEditor, PageIcon, type Editor, type PageRef } from '@workspace/editor';
 import { Button, IconButton, Popover, PopoverContent, PopoverTrigger, cn } from '@workspace/ui';
-import { ArrowLeft, ArrowRight, ChevronsRight, ImageIcon, Lock, Smile, Star } from 'lucide-react';
-import { Cover, randomCover } from './cover';
-import { IconPicker, randomEmoji } from './icon-picker';
-import { PageMenu } from './page-menu';
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronsRight,
+  ImageIcon,
+  Lock,
+  Smile,
+  Star,
+  Table2,
+} from 'lucide-react';
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
+  type ReactNode,
   type RefObject,
 } from 'react';
 import type * as Y from 'yjs';
-import { useApp } from './context';
-import type { Platform } from './platform';
 import type { BlockTarget } from './app';
-import { useDoc } from './hooks';
+import { useApp } from './context';
+import { Cover, randomCover } from './cover';
+import { DatabaseView } from './database/database-view';
+import { convertToDatabase } from './database/registry';
+import { useEditorServices } from './editor-services';
+import { useDoc, useDocVersion } from './hooks';
+import { IconPicker, randomEmoji } from './icon-picker';
+import { useNavigation } from './navigation';
+import { PageMenu } from './page-menu';
 
-export interface PageViewProps {
-  pageId: PageId;
+/** Back/forward and sidebar controls shared by every page header. */
+export interface ChromeProps {
   sidebarOpen: boolean;
+  onOpenSidebar(): void;
   canGoBack: boolean;
   canGoForward: boolean;
   onGo(direction: -1 | 1): void;
-  /** Block to scroll to and highlight (from a link to a block). */
-  blockTarget: BlockTarget | null;
-  isFavorite: boolean;
-  onToggleFavorite(): void;
-  onOpenSidebar(): void;
-  onNavigate(id: PageId): void;
-  onDuplicate(id: PageId): void;
-  onMove(id: PageId): void;
-  onTrash(id: PageId): void;
 }
 
-export function PageView({
-  pageId,
-  sidebarOpen,
-  canGoBack,
-  canGoForward,
-  onGo,
-  blockTarget,
-  isFavorite,
-  onToggleFavorite,
-  onOpenSidebar,
-  onNavigate,
-  onDuplicate,
-  onMove,
-  onTrash,
-}: PageViewProps) {
-  const { client, workspace, platform } = useApp();
-  const pageDoc = useDoc(client, pageId);
-  const editorRef = useRef<Editor | null>(null);
-  // Enter in the title focuses the body; if the body's editor is still loading,
-  // focus it as soon as it is ready.
-  const focusBodyWhenReady = useRef(false);
-  const onEditor = useCallback((editor: Editor | null) => {
-    editorRef.current = editor;
-    if (editor && focusBodyWhenReady.current) {
-      focusBodyWhenReady.current = false;
-      editor.commands.focus('start');
-    }
-  }, []);
-  const focusBody = useCallback(() => {
-    if (editorRef.current) editorRef.current.commands.focus('start');
-    else focusBodyWhenReady.current = true;
-  }, []);
-  const services = useEditorServices(workspace, pageId, onNavigate, platform);
-  const [iconPickerOpen, setIconPickerOpen] = useState(false);
-  const articleRef = useRef<HTMLElement>(null);
-  useScrollToBlock(articleRef, pageDoc ? blockTarget : null);
+/**
+ * A page as the page chrome sees it: a workspace page or a database row (rows have
+ * the same fields, stored in their database doc).
+ */
+export interface PageModel {
+  id: string;
+  meta: PageMeta;
+  titleText: Y.Text;
+  setTitle(title: string): void;
+  setIcon(icon: string | null): void;
+  setOptions(options: Partial<PageOptions>): void;
+  /** The page, an ancestor, or (for a row) its database is in the trash. */
+  trashed: boolean;
+  restore(): void;
+}
 
-  const page = getPage(workspace, pageId);
-  if (!page) return null;
+// --- Header ------------------------------------------------------------------------------
 
-  const crumbs = [...getAncestorIds(workspace, pageId).reverse(), pageId]
-    .map((id) => getPage(workspace, id))
-    .filter((p) => p !== null);
-  const trashed = isInTrash(workspace, pageId);
-  const editable = !page.locked && !trashed;
-  const fileUrl = platform.fileUrl;
-  const setOptions = (options: Partial<PageOptions>) => setPageOptions(workspace, pageId, options);
-  const uploadImage = async (file: File) => (await platform.importFile(file)).id;
-  const setIcon = (icon: string | null) => {
-    setPageIcon(workspace, pageId, icon);
-    setIconPickerOpen(false);
-  };
+export interface PageHeaderProps {
+  chrome: ChromeProps;
+  crumbs: PageRef[];
+  locked: boolean;
+  onUnlock(): void;
+  /** Favorite toggle (pages only). */
+  favorite?: { on: boolean; toggle(): void };
+  menu: ReactNode;
+}
 
-  const heroButton = 'flex h-7 items-center gap-1.5 rounded px-2 text-sm text-muted hover:bg-hover';
+export function PageHeader({ chrome, crumbs, locked, onUnlock, favorite, menu }: PageHeaderProps) {
+  const { platform } = useApp();
+  const { navigate } = useNavigation();
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col bg-surface">
-      <header className="flex h-11 shrink-0 items-center gap-1 px-3 text-sm">
-        {!sidebarOpen && (
-          <IconButton label="Open sidebar (Ctrl+\)" onClick={onOpenSidebar}>
-            <ChevronsRight size={18} />
-          </IconButton>
-        )}
-        <IconButton
-          label="Go back (Alt+←)"
-          className="disabled:opacity-30"
-          disabled={!canGoBack}
-          onClick={() => onGo(-1)}
-        >
-          <ArrowLeft size={16} />
+    <header className="flex h-11 shrink-0 items-center gap-1 px-3 text-sm">
+      {!chrome.sidebarOpen && (
+        <IconButton label="Open sidebar (Ctrl+\)" onClick={chrome.onOpenSidebar}>
+          <ChevronsRight size={18} />
         </IconButton>
-        <IconButton
-          label="Go forward (Alt+→)"
-          className="disabled:opacity-30"
-          disabled={!canGoForward}
-          onClick={() => onGo(1)}
+      )}
+      <IconButton
+        label="Go back (Alt+←)"
+        className="disabled:opacity-30"
+        disabled={!chrome.canGoBack}
+        onClick={() => chrome.onGo(-1)}
+      >
+        <ArrowLeft size={16} />
+      </IconButton>
+      <IconButton
+        label="Go forward (Alt+→)"
+        className="disabled:opacity-30"
+        disabled={!chrome.canGoForward}
+        onClick={() => chrome.onGo(1)}
+      >
+        <ArrowRight size={16} />
+      </IconButton>
+      <ol className="flex min-w-0 flex-1 items-center gap-0.5" aria-label="Breadcrumb">
+        {crumbs.map((crumb, i) => (
+          <li key={crumb.id} className="flex min-w-0 items-center gap-0.5">
+            {i > 0 && <span className="text-faint">/</span>}
+            <button
+              type="button"
+              onClick={() => navigate(crumb.id)}
+              className="flex max-w-48 items-center gap-1.5 truncate rounded px-1.5 py-0.5 hover:bg-hover"
+            >
+              {crumb.icon && <PageIcon icon={crumb.icon} size={16} fileUrl={platform.fileUrl} />}
+              <span className="truncate">{crumb.title || 'Untitled'}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      {locked && (
+        <button
+          type="button"
+          title="Click to unlock"
+          onClick={onUnlock}
+          className="flex h-7 items-center gap-1 rounded px-2 text-xs text-muted hover:bg-hover"
         >
-          <ArrowRight size={16} />
-        </IconButton>
-        <ol className="flex min-w-0 flex-1 items-center gap-0.5" aria-label="Breadcrumb">
-          {crumbs.map((crumb, i) => (
-            <li key={crumb.id} className="flex min-w-0 items-center gap-0.5">
-              {i > 0 && <span className="text-faint">/</span>}
-              <button
-                type="button"
-                onClick={() => onNavigate(crumb.id)}
-                className="flex max-w-48 items-center gap-1.5 truncate rounded px-1.5 py-0.5 hover:bg-hover"
-              >
-                {crumb.icon && <PageIcon icon={crumb.icon} size={16} fileUrl={fileUrl} />}
-                <span className="truncate">{crumb.title || 'Untitled'}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
-        {page.locked && (
-          <button
-            type="button"
-            title="Click to unlock"
-            onClick={() => setOptions({ locked: false })}
-            className="flex h-7 items-center gap-1 rounded px-2 text-xs text-muted hover:bg-hover"
-          >
-            <Lock size={12} /> Locked
-          </button>
-        )}
+          <Lock size={12} /> Locked
+        </button>
+      )}
+      {favorite && (
         <IconButton
-          label={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-          aria-pressed={isFavorite}
-          onClick={onToggleFavorite}
+          label={favorite.on ? 'Remove from Favorites' : 'Add to Favorites'}
+          aria-pressed={favorite.on}
+          onClick={favorite.toggle}
         >
           <Star
             size={16}
-            className={cn(isFavorite && 'fill-yellow-400 text-yellow-400')}
+            className={cn(favorite.on && 'fill-yellow-400 text-yellow-400')}
             aria-hidden
           />
         </IconButton>
-        <PageMenu
-          page={page}
-          pageDoc={pageDoc}
-          onOptions={setOptions}
-          onDuplicate={() => onDuplicate(pageId)}
-          onMove={() => onMove(pageId)}
-          onCopyLink={() => void navigator.clipboard.writeText(pageUrl(pageId))}
-          onTrash={() => onTrash(pageId)}
-        />
-      </header>
-
-      {trashed && (
-        <div className="flex items-center justify-center gap-3 bg-danger py-1.5 text-sm text-white">
-          This page is in Trash.
-          <Button
-            className="h-6 border border-white/60 text-white hover:bg-white/15 hover:text-white"
-            onClick={() => restorePage(workspace, pageId)}
-          >
-            Restore page
-          </Button>
-        </div>
       )}
-
-      <div className="flex-1 overflow-y-auto" data-testid="page-scroll">
-        {page.cover && (
-          <Cover
-            cover={page.cover}
-            editable={editable}
-            fileUrl={fileUrl}
-            onChange={(cover) => setOptions({ cover })}
-            onUpload={async (file) => ({
-              kind: 'file',
-              value: await uploadImage(file),
-              positionY: 50,
-            })}
-          />
-        )}
-        <article
-          ref={articleRef}
-          data-testid="page-article"
-          data-font={page.font}
-          data-small-text={page.smallText || undefined}
-          data-full-width={page.fullWidth || undefined}
-          className={cn(
-            'ws-page mx-auto w-full px-24 max-md:px-6',
-            page.fullWidth ? 'max-w-none' : 'max-w-[900px]',
-            page.cover ? 'pt-4' : 'pt-20',
-          )}
-        >
-          <div className="group/hero">
-            {page.icon && (
-              <Popover
-                open={iconPickerOpen}
-                onOpenChange={(open) => editable && setIconPickerOpen(open)}
-              >
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Change page icon"
-                    disabled={!editable}
-                    className={cn(
-                      'mb-2 flex size-[78px] items-center justify-center rounded text-[64px] leading-none enabled:hover:bg-hover',
-                      page.cover && 'relative -mt-[58px]',
-                    )}
-                  >
-                    <PageIcon
-                      icon={page.icon}
-                      size={page.icon.startsWith(FILE_ICON_PREFIX) ? 72 : 64}
-                      fileUrl={fileUrl}
-                    />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent>
-                  <IconPicker
-                    hasIcon
-                    onPick={setIcon}
-                    onUpload={async (file) =>
-                      setIcon(`${FILE_ICON_PREFIX}${await uploadImage(file)}`)
-                    }
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-            {editable && (!page.icon || !page.cover) && (
-              <div className="mb-1 flex h-7 gap-1 opacity-0 transition-opacity group-hover/hero:opacity-100 focus-within:opacity-100">
-                {!page.icon && (
-                  <button
-                    type="button"
-                    className={heroButton}
-                    onClick={() => setPageIcon(workspace, pageId, randomEmoji())}
-                  >
-                    <Smile size={15} /> Add icon
-                  </button>
-                )}
-                {!page.cover && (
-                  <button
-                    type="button"
-                    className={heroButton}
-                    onClick={() => setOptions({ cover: randomCover() })}
-                  >
-                    <ImageIcon size={15} /> Add cover
-                  </button>
-                )}
-              </div>
-            )}
-            <TitleInput
-              key={pageId}
-              workspace={workspace}
-              pageId={pageId}
-              readOnly={!editable}
-              onEnter={focusBody}
-            />
-          </div>
-          <div className="mt-2">
-            {pageDoc ? (
-              <PageEditor
-                key={pageId}
-                doc={pageDoc}
-                services={services}
-                editable={editable}
-                onEditor={onEditor}
-              />
-            ) : (
-              <div className="h-6" aria-busy="true" />
-            )}
-          </div>
-        </article>
-      </div>
-    </main>
+      {menu}
+    </header>
   );
 }
 
-interface TitleInputProps {
-  workspace: Y.Doc;
-  pageId: PageId;
-  readOnly: boolean;
-  onEnter(): void;
+export function TrashBanner({ label, onRestore }: { label: string; onRestore(): void }) {
+  return (
+    <div className="flex items-center justify-center gap-3 bg-danger py-1.5 text-sm text-white">
+      {label}
+      <Button
+        className="h-6 border border-white/60 text-white hover:bg-white/15 hover:text-white"
+        onClick={onRestore}
+      >
+        Restore page
+      </Button>
+    </div>
+  );
 }
 
-/** Page title bound to its collaborative Y.Text in the workspace doc. */
-function TitleInput({ workspace, pageId, readOnly, onEnter }: TitleInputProps) {
-  const ytext = getPageTitleText(workspace, pageId);
+// --- Hero: cover, icon, title ------------------------------------------------------------
+
+export function PageHero({
+  model,
+  editable,
+  onEnter,
+}: {
+  model: PageModel;
+  editable: boolean;
+  onEnter(): void;
+}) {
+  const { platform } = useApp();
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const { meta } = model;
+  const uploadImage = async (file: File) => (await platform.importFile(file)).id;
+  const setIcon = (icon: string | null) => {
+    model.setIcon(icon);
+    setIconPickerOpen(false);
+  };
+  const heroButton = 'flex h-7 items-center gap-1.5 rounded px-2 text-sm text-muted hover:bg-hover';
+  return (
+    <>
+      <div className={cn('group/hero', meta.cover ? 'pt-4' : 'pt-20')}>
+        {meta.icon && (
+          <Popover
+            open={iconPickerOpen}
+            onOpenChange={(open) => editable && setIconPickerOpen(open)}
+          >
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="Change page icon"
+                disabled={!editable}
+                className={cn(
+                  'mb-2 flex size-[78px] items-center justify-center rounded text-[64px] leading-none enabled:hover:bg-hover',
+                  meta.cover && 'relative -mt-[58px]',
+                )}
+              >
+                <PageIcon
+                  icon={meta.icon}
+                  size={meta.icon.startsWith(FILE_ICON_PREFIX) ? 72 : 64}
+                  fileUrl={platform.fileUrl}
+                />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <IconPicker
+                hasIcon
+                onPick={setIcon}
+                onUpload={async (file) => setIcon(`${FILE_ICON_PREFIX}${await uploadImage(file)}`)}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
+        {editable && (!meta.icon || !meta.cover) && (
+          <div className="mb-1 flex h-7 gap-1 opacity-0 transition-opacity group-hover/hero:opacity-100 focus-within:opacity-100">
+            {!meta.icon && (
+              <button
+                type="button"
+                className={heroButton}
+                onClick={() => model.setIcon(randomEmoji())}
+              >
+                <Smile size={15} /> Add icon
+              </button>
+            )}
+            {!meta.cover && (
+              <button
+                type="button"
+                className={heroButton}
+                onClick={() => model.setOptions({ cover: randomCover() })}
+              >
+                <ImageIcon size={15} /> Add cover
+              </button>
+            )}
+          </div>
+        )}
+        <TitleInput
+          key={model.id}
+          ytext={model.titleText}
+          onChange={model.setTitle}
+          readOnly={!editable}
+          onEnter={onEnter}
+        />
+      </div>
+    </>
+  );
+}
+
+/** The cover banner above a page (full width, outside the reading column). */
+export function HeroCover({ model, editable }: { model: PageModel; editable: boolean }) {
+  const { platform } = useApp();
+  const { cover } = model.meta;
+  if (!cover) return null;
+  return (
+    <Cover
+      cover={cover}
+      editable={editable}
+      fileUrl={platform.fileUrl}
+      onChange={(next) => model.setOptions({ cover: next })}
+      onUpload={async (file) => ({
+        kind: 'file',
+        value: (await platform.importFile(file)).id,
+        positionY: 50,
+      })}
+    />
+  );
+}
+
+/** Page title bound to its collaborative Y.Text. */
+export function TitleInput({
+  ytext,
+  onChange,
+  readOnly,
+  onEnter,
+}: {
+  ytext: Y.Text;
+  onChange(title: string): void;
+  readOnly: boolean;
+  onEnter(): void;
+}) {
   const subscribe = useCallback(
-    (onChange: () => void) => {
-      ytext.observe(onChange);
-      return () => ytext.unobserve(onChange);
+    (listener: () => void) => {
+      ytext.observe(listener);
+      return () => ytext.unobserve(listener);
     },
     [ytext],
   );
@@ -338,7 +310,7 @@ function TitleInput({ workspace, pageId, readOnly, onEnter }: TitleInputProps) {
       placeholder="Untitled"
       aria-label="Page title"
       spellCheck
-      onChange={(event) => setPageTitle(workspace, pageId, event.target.value.replace(/\n/g, ' '))}
+      onChange={(event) => onChange(event.target.value.replace(/\n/g, ' '))}
       onKeyDown={(event) => {
         if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
           event.preventDefault();
@@ -350,44 +322,194 @@ function TitleInput({ workspace, pageId, readOnly, onEnter }: TitleInputProps) {
   );
 }
 
-/** What the editor needs from the workspace: page lookups, navigation, sub-pages. */
-function useEditorServices(
-  workspace: Y.Doc,
-  pageId: PageId,
-  navigate: (id: PageId) => void,
-  platform: Platform,
-): EditorServices {
-  return useMemo(() => {
-    const ref = (id: PageId): PageRef | null => {
-      const page = getPage(workspace, id);
-      return page
-        ? { id, title: page.title, icon: page.icon, inTrash: isInTrash(workspace, id) }
-        : null;
-    };
-    return {
-      pageId,
-      getPage: ref,
-      listPages: () =>
-        listPages(workspace)
-          .sort((a, b) => b.updatedAt - a.updatedAt)
-          .map((page) => ref(page.id)!),
-      getBreadcrumb: () =>
-        [...getAncestorIds(workspace, pageId).reverse(), pageId]
-          .map(ref)
-          .filter((page) => page !== null),
-      navigate,
-      createSubpage: () => createPage(workspace, { parentId: pageId }),
-      subscribe: (listener) => {
-        workspace.on('update', listener);
-        return () => workspace.off('update', listener);
-      },
-      uploadFile: (file) => platform.importFile(file),
-      fileUrl: (id) => platform.fileUrl(id),
-      openFile: (id) => platform.openFile(id),
-      linkPreview: (url) => platform.linkPreview(url),
-    };
-  }, [workspace, pageId, navigate, platform]);
+// --- Body --------------------------------------------------------------------------------
+
+/** The editor of a page's (or row's) content, with "Enter in the title focuses it". */
+export function usePageBody(pageId: PageId | null) {
+  const { client } = useApp();
+  const pageDoc = useDoc(client, pageId);
+  const editorRef = useRef<Editor | null>(null);
+  // If the editor is still loading when Enter is pressed in the title, focus it once ready.
+  const focusWhenReady = useRef(false);
+  const onEditor = useCallback((editor: Editor | null) => {
+    editorRef.current = editor;
+    if (editor && focusWhenReady.current) {
+      focusWhenReady.current = false;
+      editor.commands.focus('start');
+    }
+  }, []);
+  const focusBody = useCallback(() => {
+    if (editorRef.current) editorRef.current.commands.focus('start');
+    else focusWhenReady.current = true;
+  }, []);
+  return { pageDoc, onEditor, focusBody };
 }
+
+export function PageBody({
+  pageId,
+  pageDoc,
+  editable,
+  onEditor,
+}: {
+  pageId: PageId;
+  pageDoc: Y.Doc | null;
+  editable: boolean;
+  onEditor(editor: Editor | null): void;
+}) {
+  const services = useEditorServices(pageId);
+  return pageDoc ? (
+    <PageEditor
+      key={pageId}
+      doc={pageDoc}
+      services={services}
+      editable={editable}
+      onEditor={onEditor}
+    />
+  ) : (
+    <div className="h-6" aria-busy="true" />
+  );
+}
+
+/** Article classes for page options (width, text size, font). */
+export function articleProps(meta: PageMeta, wide = false) {
+  return {
+    'data-testid': 'page-article',
+    'data-font': meta.font,
+    'data-small-text': meta.smallText || undefined,
+    'data-full-width': meta.fullWidth || undefined,
+    className: cn(
+      'ws-page mx-auto w-full px-24 pb-24 max-md:px-6',
+      meta.fullWidth || wide ? 'max-w-none' : 'max-w-[900px]',
+    ),
+  };
+}
+
+// --- Workspace pages ---------------------------------------------------------------------
+
+export interface PageViewProps {
+  pageId: PageId;
+  chrome: ChromeProps;
+  /** Block to scroll to and highlight (from a link to a block). */
+  blockTarget: BlockTarget | null;
+  isFavorite: boolean;
+  onToggleFavorite(): void;
+  onDuplicate(id: PageId): void;
+  onMove(id: PageId): void;
+  onTrash(id: PageId): void;
+}
+
+function useWorkspacePageModel(pageId: PageId): PageModel | null {
+  const { workspace } = useApp();
+  const page = getPage(workspace, pageId);
+  if (!page) return null;
+  return {
+    id: pageId,
+    meta: page,
+    titleText: getPageTitleText(workspace, pageId),
+    setTitle: (title) => setPageTitle(workspace, pageId, title),
+    setIcon: (icon) => setPageIcon(workspace, pageId, icon),
+    setOptions: (options) => setPageOptions(workspace, pageId, options),
+    trashed: isInTrash(workspace, pageId),
+    restore: () => restorePage(workspace, pageId),
+  };
+}
+
+/** A workspace page: its content, or for a database page, its views. */
+export function PageView({
+  pageId,
+  chrome,
+  blockTarget,
+  isFavorite,
+  onToggleFavorite,
+  onDuplicate,
+  onMove,
+  onTrash,
+}: PageViewProps) {
+  const { pages } = useApp();
+  const model = useWorkspacePageModel(pageId);
+  const isDatabase = model?.meta.kind === 'database';
+  // A database page has no content doc; `useDoc` with null loads nothing.
+  const { pageDoc, onEditor, focusBody } = usePageBody(isDatabase ? null : pageId);
+  const articleRef = useRef<HTMLElement>(null);
+  useScrollToBlock(articleRef, pageDoc ? blockTarget : null);
+  if (!model) return null;
+  const { meta } = model;
+  const editable = !meta.locked && !model.trashed;
+
+  return (
+    <main className="flex h-full min-w-0 flex-1 flex-col bg-surface">
+      <PageHeader
+        chrome={chrome}
+        crumbs={pages.breadcrumb(pageId)}
+        locked={meta.locked}
+        onUnlock={() => model.setOptions({ locked: false })}
+        favorite={{ on: isFavorite, toggle: onToggleFavorite }}
+        menu={
+          <PageMenu
+            page={meta}
+            pageDoc={pageDoc}
+            onOptions={model.setOptions}
+            onDuplicate={() => onDuplicate(pageId)}
+            onMove={() => onMove(pageId)}
+            onCopyLink={() => void navigator.clipboard.writeText(pageUrl(pageId))}
+            onTrash={() => onTrash(pageId)}
+          />
+        }
+      />
+      {model.trashed && <TrashBanner label="This page is in Trash." onRestore={model.restore} />}
+      <div className="flex-1 overflow-y-auto" data-testid="page-scroll" data-scroll-root>
+        <HeroCover model={model} editable={editable} />
+        <article ref={articleRef} {...articleProps(meta, isDatabase)}>
+          <PageHero model={model} editable={editable} onEnter={focusBody} />
+          <div className="mt-2">
+            {isDatabase ? (
+              <DatabaseView databaseId={pageId} editable={editable} />
+            ) : (
+              <>
+                <PageBody
+                  pageId={pageId}
+                  pageDoc={pageDoc}
+                  editable={editable}
+                  onEditor={onEditor}
+                />
+                {editable && pageDoc && <GetStarted pageId={pageId} pageDoc={pageDoc} />}
+              </>
+            )}
+          </div>
+        </article>
+      </div>
+    </main>
+  );
+}
+
+/** Notion's "Get started with": an empty page can become a database. */
+function GetStarted({ pageId, pageDoc }: { pageId: PageId; pageDoc: Y.Doc }) {
+  const { client, workspace } = useApp();
+  useDocVersion(pageDoc);
+  const content = getPageContent(pageDoc);
+  const empty =
+    content.length === 0 ||
+    (content.length === 1 &&
+      content
+        .toArray()[0]!
+        .toString()
+        .replace(/<[^>]*>/g, '') === '');
+  if (!empty) return null;
+  return (
+    <div className="mt-6 flex items-center gap-2 text-sm text-faint" data-testid="get-started">
+      <span>Get started with</span>
+      <button
+        type="button"
+        onClick={() => void convertToDatabase(client, workspace, pageId)}
+        className="flex h-7 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+      >
+        <Table2 size={15} /> Database
+      </button>
+    </div>
+  );
+}
+
+// --- Scroll to block ---------------------------------------------------------------------
 
 const FLASH_MS = 1600;
 const FIND_BLOCK_TIMEOUT_MS = 3000;
@@ -397,7 +519,10 @@ const FIND_BLOCK_TIMEOUT_MS = 3000;
  * wait (a few frames) for the block to appear. (The flash is an animation rather than
  * a class: ProseMirror resets attributes it didn't render.)
  */
-function useScrollToBlock(articleRef: RefObject<HTMLElement | null>, target: BlockTarget | null) {
+export function useScrollToBlock(
+  articleRef: RefObject<HTMLElement | null>,
+  target: BlockTarget | null,
+) {
   useEffect(() => {
     if (!target) return;
     const started = performance.now();

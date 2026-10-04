@@ -28,6 +28,7 @@ import {
   Radical,
   Sigma,
   Table2,
+  Database,
   Type,
   type LucideIcon,
 } from 'lucide-react';
@@ -35,10 +36,11 @@ import { insertBlockEquation, insertInlineEquation } from '../nodes/math';
 import type { ToggleLevel } from '../nodes/toggle';
 import { replaceCurrentBlock } from './commands';
 
-export type BlockGroup = 'basic' | 'media' | 'advanced' | 'layout' | 'inline';
+export type BlockGroup = 'basic' | 'database' | 'media' | 'advanced' | 'layout' | 'inline';
 
 export const BLOCK_GROUP_LABELS: Record<BlockGroup, string> = {
   basic: 'Basic blocks',
+  database: 'Database',
   media: 'Media',
   advanced: 'Advanced blocks',
   layout: 'Layout',
@@ -300,6 +302,39 @@ export const BLOCKS: readonly BlockDefinition[] = [
     convertible: true,
   })),
 
+  // --- Databases ---
+  {
+    id: 'database-inline',
+    title: 'Database - Inline',
+    description: 'Add a table you can sort, with typed properties, inside this page.',
+    keywords: ['table view', 'database', 'inline database', 'db'],
+    icon: Table2,
+    group: 'database',
+    prepare: async (editor) => {
+      const services = editor.storage.uiBridge.ref.current.services;
+      return services ? { pageId: await services.createDatabase(true) } : null;
+    },
+    apply: (chain, { pageId }) =>
+      chain.command(replaceCurrentBlock({ type: 'database', attrs: { pageId } })),
+    ...insertOnly,
+  },
+  {
+    id: 'database-page',
+    title: 'Database - Full page',
+    description: 'Add a database as a sub-page.',
+    keywords: ['database', 'full page database', 'table', 'db'],
+    icon: Database,
+    group: 'database',
+    prepare: async (editor) => {
+      const services = editor.storage.uiBridge.ref.current.services;
+      return services ? { pageId: await services.createDatabase(false) } : null;
+    },
+    apply: (chain, { pageId }) =>
+      chain.command(replaceCurrentBlock({ type: 'pageLink', attrs: { pageId } })),
+    after: (editor, { pageId }) =>
+      editor.storage.uiBridge.ref.current.services?.navigate(pageId as string),
+    ...insertOnly,
+  },
   // --- Media ---
   mediaBlock('image', 'image', 'Image', 'Upload or embed with a link.', ImageIcon, [
     'picture',

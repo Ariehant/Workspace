@@ -1,4 +1,4 @@
-import type { DocTransport } from '@workspace/core';
+import type { DocTransport, User } from '@workspace/core';
 import type { FileRef, LinkPreview } from '@workspace/editor';
 import type { ThemePreference } from '@workspace/ui';
 
@@ -9,6 +9,8 @@ export interface SearchHit {
   id: string;
   title: string;
   icon: string | null;
+  /** For a database row, its database; `null` for pages. */
+  databaseId: string | null;
   /** Matching excerpt with hits wrapped in `[` `]`. */
   snippet: string;
 }
@@ -30,6 +32,13 @@ export interface Platform {
   openWindow(pageId: string): void;
   /** Full-text search over page titles and content. */
   search(query: string): Promise<SearchHit[]>;
+  /**
+   * Where a page lives, from the index: `databaseId` null for a workspace page, the
+   * database for a row; `null` when unknown.
+   */
+  locatePage(id: string): Promise<{ databaseId: string | null } | null>;
+  /** The person using the app (the local user until accounts exist). */
+  getUser(): Promise<User>;
   /** The UI has loaded the workspace and rendered. */
   ready(): void;
   /** Store a file in the workspace's attachments. */

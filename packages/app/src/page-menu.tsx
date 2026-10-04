@@ -18,7 +18,8 @@ export interface PageMenuProps {
   pageDoc: Y.Doc | null;
   onOptions(options: Partial<Pick<PageMeta, 'font' | 'smallText' | 'fullWidth' | 'locked'>>): void;
   onDuplicate(): void;
-  onMove(): void;
+  /** Omitted where pages can't be moved (database rows). */
+  onMove?(): void;
   onCopyLink(): void;
   onTrash(): void;
 }
@@ -139,9 +140,11 @@ export function PageMenu({
         <MenuItem icon={<Copy size={14} />} onSelect={onDuplicate}>
           Duplicate
         </MenuItem>
-        <MenuItem icon={<CornerUpRight size={14} />} onSelect={onMove}>
-          Move to
-        </MenuItem>
+        {onMove && (
+          <MenuItem icon={<CornerUpRight size={14} />} onSelect={onMove}>
+            Move to
+          </MenuItem>
+        )}
         <MenuItem icon={<Link2 size={14} />} onSelect={onCopyLink}>
           Copy link
         </MenuItem>

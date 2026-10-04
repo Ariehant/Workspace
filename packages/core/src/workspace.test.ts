@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import {
+  duplicatePageTree,
+  listUsers,
+  upsertUser,
   buildPageTree,
   createPage,
   deletePagePermanently,
@@ -30,6 +33,7 @@ describe('pages', () => {
     const id = createPage(doc, { title: 'Hello', icon: '👋', now: 1000 });
     expect(getPage(doc, id)).toEqual({
       id,
+      kind: 'page',
       parentId: null,
       title: 'Hello',
       icon: '👋',
@@ -43,6 +47,21 @@ describe('pages', () => {
       font: 'default',
       locked: false,
     });
+  });
+
+  it('creates databases and keeps the kind when duplicating', () => {
+    const doc = new Y.Doc();
+    const id = createPage(doc, { title: 'Tasks', kind: 'database' });
+    expect(getPage(doc, id)?.kind).toBe('database');
+    const copy = duplicatePageTree(doc, id).get(id)!;
+    expect(getPage(doc, copy)?.kind).toBe('database');
+  });
+
+  it('keeps one entry per user', () => {
+    const doc = new Y.Doc();
+    upsertUser(doc, { id: 'u1', name: 'ravi' });
+    upsertUser(doc, { id: 'u1', name: 'Ravi' });
+    expect(listUsers(doc)).toEqual([{ id: 'u1', name: 'Ravi' }]);
   });
 
   it('rejects a missing parent', () => {

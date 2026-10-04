@@ -10,7 +10,9 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.14.13",
     "@workspace/core": "workspace:*",
+    "@workspace/database": "workspace:*",
     "@workspace/editor": "workspace:*",
     "@workspace/ui": "workspace:*",
     "lucide-react": "^1.49.0",

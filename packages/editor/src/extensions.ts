@@ -20,6 +20,7 @@ import { Mention } from './nodes/mention';
 import { MediaBlocks } from './nodes/media';
 import { PasteAndDrop } from './nodes/paste-drop';
 import { Breadcrumb, PageLink, TableOfContents } from './nodes/page-blocks';
+import { DatabaseBlock } from './nodes/database';
 import { Quote } from './nodes/quote';
 import { Table } from './nodes/table';
 import { TodoItem, TodoList } from './nodes/todo';
@@ -46,6 +47,7 @@ export const BLOCK_NODE_TYPES = [
   'columnList',
   'column',
   'pageLink',
+  'database',
   'breadcrumb',
   'tableOfContents',
   'image',
@@ -127,6 +129,7 @@ export function pageExtensions(doc: Y.Doc, bridge: UiBridgeHandle) {
     ColumnList,
     Column,
     PageLink,
+    DatabaseBlock,
     Breadcrumb,
     TableOfContents,
     ...MediaBlocks,

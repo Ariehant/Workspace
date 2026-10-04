@@ -98,9 +98,15 @@ importers:
 
   packages/app:
     dependencies:
+      '@tanstack/react-virtual':
+        specifier: ^3.14.13
+        version: 3.14.13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@workspace/core':
         specifier: workspace:*
         version: link:../core
+      '@workspace/database':
+        specifier: workspace:*
+        version: link:../database
       '@workspace/editor':
         specifier: workspace:*
         version: link:../editor
@@ -129,6 +135,18 @@ importers:
 
   packages/core:
     dependencies:
+      fractional-indexing:
+        specifier: ^3.4.0
+        version: 3.4.0
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.33
+
+  packages/database:
+    dependencies:
+      '@workspace/core':
+        specifier: workspace:*
+        version: link:../core
       fractional-indexing:
         specifier: ^3.4.0
         version: 3.4.0
@@ -256,6 +274,9 @@ importers:
       '@workspace/core':
         specifier: workspace:*
         version: link:../core
+      '@workspace/database':
+        specifier: workspace:*
+        version: link:../database
       yjs:
         specifier: ^13.6.27
         version: 13.6.33
@@ -1499,6 +1520,15 @@ packages:
     resolution: {integrity: sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@tanstack/react-virtual@3.14.13':
+    resolution: {integrity: sha512-JbDTAwtzZ99aOeCrAfW5EsE5KSq5RWh6Af2dtFwyLIIk48Ja7vm6n4axu/43T3vfjFnEGJalxJ1wyYjSQD6bSg==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  '@tanstack/virtual-core@3.17.11':
+    resolution: {integrity: sha512-+ILjvtHup6Y2hzQ6YzwMgX1Q+oQpxEGOXCEsCNaPoIP0VxMbizIBTmYTDtkerkIQS8/CbP1BRuyt8V/8BCsy1g==}
 
   '@tiptap/core@3.31.4':
     resolution: {integrity: sha512-cIVUQYBycighzsk6GbmCef8ZiEDVxoT5EuAe4xg2q9dNkDqCXVqI4YGr9aavCQEiAS4uHiRwqvcsPqJHipFDfg==}
@@ -4738,6 +4768,14 @@ snapshots:
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
       vite: 7.3.6(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.33.0)
+
+  '@tanstack/react-virtual@3.14.13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@tanstack/virtual-core': 3.17.11
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+
+  '@tanstack/virtual-core@3.17.11': {}
 
   '@tiptap/core@3.31.4(@tiptap/pm@3.31.4)':
     dependencies:

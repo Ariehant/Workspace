@@ -3,13 +3,21 @@ import {
   getPagesMap,
   isInTrash,
   listPages,
+  listUsers,
   pageText,
   readReminders,
   reminderTime,
   touchPage,
 } from '@workspace/core';
+import {
+  hasRow,
+  isDatabaseDoc,
+  readDatabase,
+  rowPropertiesText,
+  touchRow,
+} from '@workspace/database';
 import * as Y from 'yjs';
-import type { PageIndexRow, SqliteStore } from './sqlite-store';
+import type { PageIndexRow, RowIndexRow, SqliteStore } from './sqlite-store';
 
 export type UpdateListener = (docId: string, update: Uint8Array, origin: unknown) => void;
 
@@ -160,19 +168,60 @@ export class DocManager {
       return;
     }
     const entry = this.docs.get(docId);
-    if (!entry || !getPagesMap(this.workspace).has(docId)) return;
-    this.store.setPageBody(docId, pageText(entry.doc));
+    if (!entry) return;
+    if (isDatabaseDoc(entry.doc)) {
+      this.indexDatabase(docId, entry.doc);
+      return;
+    }
+    const isPage = getPagesMap(this.workspace).has(docId);
+    const databaseId = isPage ? null : this.store.locatePage(docId)?.databaseId;
+    if (!isPage && !databaseId) return;
+    this.indexContent(docId, entry.doc);
+    if (databaseId) {
+      // A row's page: "last edited" lives in its database doc (if it's open).
+      const db = this.docs.get(databaseId)?.doc;
+      if (db && hasRow(db, docId)) db.transact(() => touchRow(db, docId, undefined), MAIN_ORIGIN);
+      return;
+    }
+    this.workspace.transact(() => touchPage(this.workspace, docId), MAIN_ORIGIN);
+    this.indexWorkspace();
+  }
+
+  /** Search text and reminders of a page's (or row's) content. */
+  private indexContent(docId: string, doc: Y.Doc): void {
+    this.store.setPageBody(docId, pageText(doc));
     this.store.replaceReminders(
       docId,
-      readReminders(entry.doc).flatMap(({ blockId, date, text }, index) => {
+      readReminders(doc).flatMap(({ blockId, date, text }, index) => {
         const fireAt = reminderTime(date);
         // Blocks always have ids in the editor; fall back to position for older content.
         return fireAt === null ? [] : [{ blockId: blockId ?? `#${index}`, fireAt, text }];
       }),
     );
     this.onRemindersChanged();
-    this.workspace.transact(() => touchPage(this.workspace, docId), MAIN_ORIGIN);
-    this.indexWorkspace();
+  }
+
+  /** Index a database's rows: titles and property text, for search and links. */
+  private indexDatabase(databaseId: string, doc: Y.Doc): void {
+    const users = new Map(listUsers(this.workspace).map((u) => [u.id, u.name]));
+    const db = readDatabase(doc);
+    const rows: RowIndexRow[] = db.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      icon: row.icon,
+      sortKey: row.sortKey,
+      inTrash: row.trashedAt !== null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      props: rowPropertiesText(row, db.properties, { users }),
+    }));
+    const { added, removed } = this.store.syncRowIndex(databaseId, rows);
+    // Content typed before the row reached the index.
+    for (const id of added) {
+      const content = this.docs.get(id)?.doc;
+      if (content) this.indexContent(id, content);
+    }
+    for (const id of removed) this.dropDoc(id);
   }
 
   private indexWorkspace(): void {
@@ -190,6 +239,16 @@ export class DocManager {
   }
 
   private dropPageDoc(pageId: string): void {
+    // A deleted database takes its rows (and their content) with it.
+    for (const rowId of this.store.rowIdsOf(pageId)) {
+      this.dropDoc(rowId);
+      this.store.removePageIndex(rowId);
+    }
+    this.dropDoc(pageId);
+  }
+
+  /** Forget a doc for good: in memory, its update log and its reminders. */
+  private dropDoc(pageId: string): void {
     const timer = this.pending.get(pageId);
     if (timer !== undefined) clearTimeout(timer);
     this.pending.delete(pageId);

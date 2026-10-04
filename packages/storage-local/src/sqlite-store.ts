@@ -7,15 +7,17 @@ import { DatabaseSync } from 'node:sqlite';
  * module to rebuild per Electron version or CPU architecture.
  *
  * - `doc_updates`: append-only log of Yjs updates per document; compacted on load.
- * - `pages` + `page_fts`: a query index derived from the Yjs docs, for search and
- *   (later) database views. It can always be rebuilt from `doc_updates`.
+ * - `pages` + `page_fts`: a query index derived from the Yjs docs, for search. It
+ *   holds workspace pages and database rows (`database_id` set). It can always be
+ *   rebuilt from `doc_updates`.
  * - `settings`: small JSON key/value store for app preferences.
  * - `files`: metadata of attachments stored by `FileStore`.
  * - `link_previews`: cached bookmark metadata, keyed by URL.
  * - `reminders`: `@remind` mentions found in pages, and whether each has fired.
  */
 
-const MIGRATIONS: string[] = [
+/** Schema migrations; index + 1 is the `user_version` each one produces. */
+export const MIGRATIONS: string[] = [
   `
   CREATE TABLE doc_updates (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +78,23 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX reminders_due ON reminders (fired, fire_at);
   `,
+  // 4: database rows in the page index, with their property text searchable (Phase 2).
+  `
+  ALTER TABLE pages ADD COLUMN database_id TEXT;
+  CREATE INDEX pages_database ON pages (database_id);
+
+  CREATE VIRTUAL TABLE page_fts_v4 USING fts5 (
+    page_id UNINDEXED,
+    title,
+    body,
+    props,
+    tokenize = 'unicode61 remove_diacritics 2'
+  );
+  INSERT INTO page_fts_v4 (page_id, title, body, props)
+    SELECT page_id, title, body, '' FROM page_fts;
+  DROP TABLE page_fts;
+  ALTER TABLE page_fts_v4 RENAME TO page_fts;
+  `,
 ];
 
 export interface PageIndexRow {
@@ -88,6 +107,19 @@ export interface PageIndexRow {
   inTrash: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A database row in the page index. */
+export interface RowIndexRow {
+  id: string;
+  title: string;
+  icon: string | null;
+  sortKey: string;
+  inTrash: boolean;
+  createdAt: number;
+  updatedAt: number;
+  /** Text of the row's properties, searchable. */
+  props: string;
 }
 
 export interface FileRecord {
@@ -111,6 +143,8 @@ export interface SearchResult {
   id: string;
   title: string;
   icon: string | null;
+  /** The database a row belongs to; `null` for pages. */
+  databaseId: string | null;
   /** Matching excerpt with hits wrapped in `[` `]`. */
   snippet: string;
 }
@@ -193,11 +227,15 @@ export class SqliteStore {
 
   // --- Page index -----------------------------------------------------------
 
-  /** Make the page index match `rows` exactly. */
+  /** Make the index of workspace pages match `rows` exactly (database rows aside). */
   syncPageIndex(rows: PageIndexRow[]): void {
     this.transaction(() => {
       const existing = new Set(
-        (this.db.prepare('SELECT id FROM pages').all() as { id: string }[]).map((r) => r.id),
+        (
+          this.db.prepare('SELECT id FROM pages WHERE database_id IS NULL').all() as {
+            id: string;
+          }[]
+        ).map((r) => r.id),
       );
       const upsert = this.db.prepare(`
         INSERT INTO pages (id, parent_id, title, icon, sort_key, in_trash, created_at, updated_at)
@@ -230,7 +268,78 @@ export class SqliteStore {
     });
   }
 
-  private removePageIndex(id: string): void {
+  /**
+   * Make the index of one database's rows match `rows`. Returns the ids that were
+   * added and removed (so the caller can index or drop their content docs).
+   */
+  syncRowIndex(databaseId: string, rows: RowIndexRow[]): { added: string[]; removed: string[] } {
+    const added: string[] = [];
+    const removed: string[] = [];
+    this.transaction(() => {
+      const existing = new Set(this.rowIdsOf(databaseId));
+      const upsert = this.db.prepare(`
+        INSERT INTO pages
+          (id, parent_id, database_id, title, icon, sort_key, in_trash, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET
+          parent_id = excluded.parent_id, database_id = excluded.database_id,
+          title = excluded.title, icon = excluded.icon, sort_key = excluded.sort_key,
+          in_trash = excluded.in_trash, created_at = excluded.created_at,
+          updated_at = excluded.updated_at
+      `);
+      const ftsUpdate = this.db.prepare(
+        'UPDATE page_fts SET title = ?, props = ? WHERE page_id = ?',
+      );
+      const ftsInsert = this.db.prepare(
+        "INSERT INTO page_fts (page_id, title, body, props) VALUES (?, ?, '', ?)",
+      );
+      for (const row of rows) {
+        upsert.run(
+          row.id,
+          databaseId,
+          databaseId,
+          row.title,
+          row.icon,
+          row.sortKey,
+          row.inTrash ? 1 : 0,
+          row.createdAt,
+          row.updatedAt,
+        );
+        if (existing.has(row.id)) ftsUpdate.run(row.title, row.props, row.id);
+        else {
+          ftsInsert.run(row.id, row.title, row.props);
+          added.push(row.id);
+        }
+        existing.delete(row.id);
+      }
+      for (const id of existing) {
+        this.removePageIndex(id);
+        removed.push(id);
+      }
+    });
+    return { added, removed };
+  }
+
+  /** Ids of a database's rows in the index. */
+  rowIdsOf(databaseId: string): string[] {
+    return (
+      this.db.prepare('SELECT id FROM pages WHERE database_id = ?').all(databaseId) as {
+        id: string;
+      }[]
+    ).map((r) => r.id);
+  }
+
+  /**
+   * Where a page lives: `{ databaseId: null }` for a workspace page, the database for
+   * a row, `null` if the index doesn't know the id.
+   */
+  locatePage(id: string): { databaseId: string | null } | null {
+    const row = this.db.prepare('SELECT database_id FROM pages WHERE id = ?').get(id) as
+      { database_id: string | null } | undefined;
+    return row ? { databaseId: row.database_id } : null;
+  }
+
+  removePageIndex(id: string): void {
     this.db.prepare('DELETE FROM pages WHERE id = ?').run(id);
     this.db.prepare('DELETE FROM page_fts WHERE page_id = ?').run(id);
   }
@@ -260,12 +369,13 @@ export class SqliteStore {
     if (!fts) return [];
     const rows = this.db
       .prepare(
-        `SELECT p.id, p.title, p.icon,
+        `SELECT p.id, p.title, p.icon, p.database_id AS databaseId,
                 snippet(page_fts, -1, '[', ']', '…', 12) AS snippet
          FROM page_fts
          JOIN pages p ON p.id = page_fts.page_id
-         WHERE page_fts MATCH ? AND p.in_trash = 0
-         ORDER BY bm25(page_fts, 0, 10.0, 1.0)
+         LEFT JOIN pages d ON d.id = p.database_id
+         WHERE page_fts MATCH ? AND p.in_trash = 0 AND COALESCE(d.in_trash, 0) = 0
+         ORDER BY bm25(page_fts, 0, 10.0, 1.0, 2.0)
          LIMIT ?`,
       )
       .all(fts, limit) as unknown as SearchResult[];

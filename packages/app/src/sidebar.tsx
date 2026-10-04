@@ -23,6 +23,7 @@ import {
   Search,
   SquarePen,
   Star,
+  Table2,
   StarOff,
   Trash2,
 } from 'lucide-react';
@@ -344,7 +345,11 @@ function TreeItem(props: TreeItemProps) {
         )}
         <span className="relative flex size-5 shrink-0 items-center justify-center">
           <span className="flex items-center justify-center group-hover:invisible">
-            <PageIcon icon={page.icon} size={16} fileUrl={fileUrl} />
+            {page.kind === 'database' && !page.icon ? (
+              <Table2 size={16} aria-label="Database" />
+            ) : (
+              <PageIcon icon={page.icon} size={16} fileUrl={fileUrl} />
+            )}
           </span>
           <IconButton
             label={isOpen ? 'Collapse' : 'Expand'}

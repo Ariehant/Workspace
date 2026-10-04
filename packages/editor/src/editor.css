@@ -837,3 +837,87 @@
 .ws-page[data-small-text] textarea {
   font-size: 32px;
 }
+
+/* --- Databases ---------------------------------------------------------------------- */
+
+/* Select, multi-select and status options. */
+.ws-option {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ws-fg);
+  background-color: color-mix(in srgb, var(--ws-gray) 16%, transparent);
+}
+.ws-option[data-status] {
+  border-radius: 10px;
+  gap: 5px;
+}
+.ws-option[data-status]::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--ws-gray);
+}
+.ws-option[data-color='gray'] {
+  background-color: color-mix(in srgb, var(--ws-gray) 20%, var(--ws-gray-bg));
+}
+.ws-option[data-status][data-color='gray']::before {
+  background-color: var(--ws-gray);
+}
+.ws-option[data-color='brown'] {
+  background-color: color-mix(in srgb, var(--ws-brown) 20%, var(--ws-brown-bg));
+}
+.ws-option[data-status][data-color='brown']::before {
+  background-color: var(--ws-brown);
+}
+.ws-option[data-color='orange'] {
+  background-color: color-mix(in srgb, var(--ws-orange) 20%, var(--ws-orange-bg));
+}
+.ws-option[data-status][data-color='orange']::before {
+  background-color: var(--ws-orange);
+}
+.ws-option[data-color='yellow'] {
+  background-color: color-mix(in srgb, var(--ws-yellow) 20%, var(--ws-yellow-bg));
+}
+.ws-option[data-status][data-color='yellow']::before {
+  background-color: var(--ws-yellow);
+}
+.ws-option[data-color='green'] {
+  background-color: color-mix(in srgb, var(--ws-green) 20%, var(--ws-green-bg));
+}
+.ws-option[data-status][data-color='green']::before {
+  background-color: var(--ws-green);
+}
+.ws-option[data-color='blue'] {
+  background-color: color-mix(in srgb, var(--ws-blue) 20%, var(--ws-blue-bg));
+}
+.ws-option[data-status][data-color='blue']::before {
+  background-color: var(--ws-blue);
+}
+.ws-option[data-color='purple'] {
+  background-color: color-mix(in srgb, var(--ws-purple) 20%, var(--ws-purple-bg));
+}
+.ws-option[data-status][data-color='purple']::before {
+  background-color: var(--ws-purple);
+}
+.ws-option[data-color='pink'] {
+  background-color: color-mix(in srgb, var(--ws-pink) 20%, var(--ws-pink-bg));
+}
+.ws-option[data-status][data-color='pink']::before {
+  background-color: var(--ws-pink);
+}
+.ws-option[data-color='red'] {
+  background-color: color-mix(in srgb, var(--ws-red) 20%, var(--ws-red-bg));
+}
+.ws-option[data-status][data-color='red']::before {
+  background-color: var(--ws-red);
+}

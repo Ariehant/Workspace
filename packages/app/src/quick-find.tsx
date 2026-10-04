@@ -1,9 +1,11 @@
-import { getAncestorIds, getPage, isInTrash, listPages, type PageId } from '@workspace/core';
+import { listPages, type PageId } from '@workspace/core';
 import { PageIcon } from '@workspace/editor';
 import { Dialog, DialogContent, cn } from '@workspace/ui';
 import { CornerDownLeft, Search } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type * as Y from 'yjs';
+import { useApp } from './context';
+import { useRegistryVersion } from './database/hooks';
 import type { Platform, SearchHit } from './platform';
 
 export interface QuickFindProps {
@@ -44,6 +46,8 @@ export function QuickFind({
   const [selected, setSelected] = useState(0);
   const [found, setFound] = useState<{ query: string; hits: SearchHit[] } | null>(null);
   const q = query.trim();
+  const { pages } = useApp();
+  const registryVersion = useRegistryVersion();
 
   useEffect(() => {
     if (!q) return;
@@ -61,12 +65,14 @@ export function QuickFind({
   }, [platform, q]);
 
   const results = useMemo(() => {
+    // Pages and database rows alike (rows load their database on first lookup).
     const toResult = (id: PageId, snippet: string | null = null): Result | null => {
-      const page = getPage(workspace, id);
-      if (!page || isInTrash(workspace, id)) return null;
-      const path = getAncestorIds(workspace, id)
-        .reverse()
-        .map((a) => getPage(workspace, a)?.title || 'Untitled');
+      const page = pages.get(id);
+      if (!page || page.inTrash) return null;
+      const path = pages
+        .breadcrumb(id)
+        .slice(0, -1)
+        .map((p) => p.title || 'Untitled');
       return { id, title: page.title || 'Untitled', icon: page.icon, path, snippet };
     };
     const live = (r: Result | null): r is Result => r !== null;
@@ -100,7 +106,9 @@ export function QuickFind({
       .map((id) => toResult(id, snippets.get(id) ?? null))
       .filter(live)
       .slice(0, MAX_RESULTS);
-  }, [workspace, recent, q, found]);
+    // `registryVersion`: rows found by search appear once their database loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace, pages, recent, q, found, registryVersion]);
 
   const index = Math.min(selected, Math.max(results.length - 1, 0));
   const choose = (i: number, inWindow: boolean) => {

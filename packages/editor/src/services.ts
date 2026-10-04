@@ -1,6 +1,6 @@
 import { Extension } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
-import { createContext, useContext, useSyncExternalStore } from 'react';
+import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react';
 
 export interface PageRef {
   id: string;
@@ -44,6 +44,13 @@ export interface EditorServices {
   navigate(id: string): void;
   /** Create an empty sub-page of the current page and return its id. */
   createSubpage(): string;
+  /**
+   * Create a database inside the current page (`inline`: shown in the page, else a
+   * full-page database linked from it). Resolves its id once it is set up.
+   */
+  createDatabase(inline: boolean): Promise<string>;
+  /** The UI of an inline database block (database views live in the app). */
+  renderDatabase(databaseId: string): ReactNode;
   /** Called whenever any page metadata changes. */
   subscribe(listener: () => void): () => void;
   /** Store a file (pasted, dropped or picked) in the workspace. */

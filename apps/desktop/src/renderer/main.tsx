@@ -20,6 +20,8 @@ const platform: Platform = {
   onNavigate: (listener) => api.onNavigate(listener),
   openWindow: (pageId) => api.openWindow(pageId),
   search: (query) => api.search(query),
+  locatePage: (id) => api.locatePage(id),
+  getUser: () => api.user(),
   ready: api.ready,
   importFile: async (file) =>
     api.files.import(new Uint8Array(await file.arrayBuffer()), file.name, file.type),

@@ -18,11 +18,19 @@ import {
   type NavHistory,
   type PageId,
   type PageTreeNode,
+  type User,
+  upsertUser,
 } from '@workspace/core';
+import type { OpenPagesIn } from '@workspace/database';
 import { useAppliedTheme, type ThemePreference } from '@workspace/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type * as Y from 'yjs';
-import { AppContext } from './context';
+import { AppContext, useApp } from './context';
+import { DatabaseRegistry } from './database/registry';
+import { useRegistryVersion } from './database/hooks';
+import { RowPageView, RowPeek } from './database/row-page';
+import { NavigationContext, type Navigation } from './navigation';
+import { PageDirectory } from './pages';
 import { useDoc, useDocVersion } from './hooks';
 import { PageView } from './page-view';
 import type { AppCommand, Platform } from './platform';
@@ -98,16 +106,38 @@ export function App({ platform }: { platform: Platform }) {
   useEffect(() => () => client.destroy(), [client]);
   const workspace = useDoc(client, WORKSPACE_DOC_ID);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     loadSettings(platform).then(setSettings, (error: unknown) => {
       console.error('Failed to load settings', error);
     });
+    platform.getUser().then(setUser, (error: unknown) => {
+      console.error('Failed to load the user', error);
+    });
   }, [platform]);
 
-  if (!workspace || !settings) return null;
+  const context = useMemo(() => {
+    if (!workspace || !user) return null;
+    const databases = new DatabaseRegistry(client, platform, workspace);
+    return {
+      platform,
+      client,
+      workspace,
+      user,
+      databases,
+      pages: new PageDirectory(workspace, databases),
+    };
+  }, [platform, client, workspace, user]);
+  useEffect(() => () => context?.databases.destroy(), [context]);
+  // Keep the user's name current in the workspace (created by / person values show it).
+  useEffect(() => {
+    if (workspace && user) upsertUser(workspace, user);
+  }, [workspace, user]);
+
+  if (!workspace || !settings || !context) return null;
   return (
-    <AppContext.Provider value={{ platform, client, workspace }}>
+    <AppContext.Provider value={context}>
       <Shell platform={platform} client={client} workspace={workspace} initial={settings} />
     </AppContext.Provider>
   );
@@ -129,7 +159,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   // `version` changes whenever the workspace doc does, which is what invalidates the tree.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tree = useMemo(() => buildPageTree(listPages(workspace)), [workspace, version]);
-  const exists = useCallback((id: PageId) => getPage(workspace, id) !== null, [workspace]);
+  const { databases, pages } = useApp();
+  // Rows of databases loading in, found through links or history.
+  const registryVersion = useRegistryVersion();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const exists = useCallback((id: PageId) => pages.exists(id), [pages, registryVersion]);
 
   const [theme, setTheme] = useState(initial.theme);
   const [history, setHistory] = useState<NavHistory>(() => {
@@ -143,11 +177,18 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(initial.sidebarWidth);
   const [finding, setFinding] = useState(false);
   const [blockTarget, setBlockTarget] = useState<BlockTarget | null>(null);
+  const [peek, setPeek] = useState<{
+    rowId: string;
+    databaseId: string;
+    mode: Exclude<OpenPagesIn, 'fullPage'>;
+  } | null>(null);
   useAppliedTheme(theme);
 
   // Fall back to the first page when the remembered one no longer exists.
   const selected = history.entries[history.index] ?? null;
-  const currentPageId = selected && exists(selected) ? selected : firstPage(tree);
+  // A row not loaded yet is looked up first (`exists` starts that) before falling back.
+  const pending = selected !== null && !exists(selected) && databases.isLocating(selected);
+  const currentPageId = selected && (exists(selected) || pending) ? selected : firstPage(tree);
 
   useEffect(() => platform.setTheme(theme), [platform, theme]);
   useEffect(() => platform.setSetting(SETTING.lastPage, currentPageId), [platform, currentPageId]);
@@ -179,9 +220,21 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const navigate = useCallback(
     (id: PageId) => {
       setHistory((prev) => pushHistory(prev, id));
+      setPeek(null);
       show(id);
     },
     [show],
+  );
+
+  const navigation = useMemo<Navigation>(
+    () => ({
+      navigate,
+      openRow: (rowId, databaseId, mode) => {
+        if (mode === 'fullPage') navigate(rowId);
+        else setPeek({ rowId, databaseId, mode });
+      },
+    }),
+    [navigate],
   );
 
   const go = useCallback(
@@ -306,81 +359,110 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   useEffect(
     () =>
       platform.onNavigate((pageId, blockId) => {
-        if (!exists(pageId)) return;
-        navigate(pageId);
-        if (blockId) setBlockTarget({ pageId, blockId, nonce: ++nonce.current });
+        const go = () => {
+          navigate(pageId);
+          if (blockId) setBlockTarget({ pageId, blockId, nonce: ++nonce.current });
+        };
+        if (exists(pageId)) go();
+        // A row: find and load its database first.
+        else void databases.locate(pageId).then((databaseId) => databaseId && go());
       }),
-    [platform, exists, navigate],
+    [platform, exists, navigate, databases],
   );
 
+  const chrome = {
+    sidebarOpen,
+    onOpenSidebar: () => setSidebarOpen(true),
+    canGoBack: stepHistory(history, -1, exists) !== null,
+    canGoForward: stepHistory(history, 1, exists) !== null,
+    onGo: go,
+  };
+
   return (
-    <div className="flex h-full">
-      {sidebarOpen && (
-        <Sidebar
-          workspace={workspace}
-          tree={tree}
-          favorites={favorites}
-          width={sidebarWidth}
-          currentPageId={currentPageId}
-          expanded={expanded}
-          theme={theme}
-          onSelect={navigate}
-          onToggle={toggle}
-          onCreate={create}
-          onTrash={trash}
-          onDuplicate={duplicate}
-          onMove={setMoving}
-          onDrop={drop}
-          onToggleFavorite={toggleFavorite}
-          onSearch={() => setFinding(true)}
-          onResize={setSidebarWidth}
-          fileUrl={platform.fileUrl}
-          onThemeChange={changeTheme}
-          onCollapse={() => setSidebarOpen(false)}
-        />
-      )}
-      {currentPageId ? (
-        <PageView
-          pageId={currentPageId}
-          sidebarOpen={sidebarOpen}
-          canGoBack={stepHistory(history, -1, exists) !== null}
-          canGoForward={stepHistory(history, 1, exists) !== null}
-          onGo={go}
-          blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
-          onOpenSidebar={() => setSidebarOpen(true)}
-          onNavigate={navigate}
-          onDuplicate={duplicate}
-          onMove={setMoving}
-          onTrash={trash}
-          isFavorite={favorites.includes(currentPageId)}
-          onToggleFavorite={() => toggleFavorite(currentPageId)}
-        />
-      ) : (
-        <EmptyState onCreate={() => create(null)} />
-      )}
-      {moving && getPage(workspace, moving) && (
-        <MoveDialog
-          workspace={workspace}
-          pageId={moving}
-          fileUrl={platform.fileUrl}
-          onMove={(parentId) => {
-            movePage(workspace, moving, { parentId });
-            navigate(moving);
-          }}
-          onClose={() => setMoving(null)}
-        />
-      )}
-      {finding && (
-        <QuickFind
-          workspace={workspace}
-          platform={platform}
-          recent={recent}
-          onOpen={navigate}
-          onOpenInWindow={(id) => platform.openWindow(id)}
-          onClose={() => setFinding(false)}
-        />
-      )}
-    </div>
+    <NavigationContext.Provider value={navigation}>
+      <div className="flex h-full">
+        {sidebarOpen && (
+          <Sidebar
+            workspace={workspace}
+            tree={tree}
+            favorites={favorites}
+            width={sidebarWidth}
+            currentPageId={currentPageId}
+            expanded={expanded}
+            theme={theme}
+            onSelect={navigate}
+            onToggle={toggle}
+            onCreate={create}
+            onTrash={trash}
+            onDuplicate={duplicate}
+            onMove={setMoving}
+            onDrop={drop}
+            onToggleFavorite={toggleFavorite}
+            onSearch={() => setFinding(true)}
+            onResize={setSidebarWidth}
+            fileUrl={platform.fileUrl}
+            onThemeChange={changeTheme}
+            onCollapse={() => setSidebarOpen(false)}
+          />
+        )}
+        {!currentPageId ? (
+          <EmptyState onCreate={() => create(null)} />
+        ) : getPage(workspace, currentPageId) ? (
+          <PageView
+            pageId={currentPageId}
+            chrome={chrome}
+            blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
+            onDuplicate={duplicate}
+            onMove={setMoving}
+            onTrash={trash}
+            isFavorite={favorites.includes(currentPageId)}
+            onToggleFavorite={() => toggleFavorite(currentPageId)}
+          />
+        ) : pages.databaseOf(currentPageId) ? (
+          <RowPageView
+            key={currentPageId}
+            rowId={currentPageId}
+            databaseId={pages.databaseOf(currentPageId)!}
+            chrome={chrome}
+            blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
+          />
+        ) : (
+          // Still looking up a row.
+          <main className="flex-1 bg-surface" aria-busy="true" />
+        )}
+        {peek && (
+          <RowPeek
+            key={peek.rowId}
+            rowId={peek.rowId}
+            databaseId={peek.databaseId}
+            mode={peek.mode}
+            onClose={() => setPeek(null)}
+          />
+        )}
+        {moving && getPage(workspace, moving) && (
+          <MoveDialog
+            workspace={workspace}
+            pageId={moving}
+            fileUrl={platform.fileUrl}
+            onMove={(parentId) => {
+              movePage(workspace, moving, { parentId });
+              navigate(moving);
+            }}
+            onClose={() => setMoving(null)}
+          />
+        )}
+        {finding && (
+          <QuickFind
+            workspace={workspace}
+            platform={platform}
+            recent={recent}
+            onOpen={navigate}
+            onOpenInWindow={(id) => platform.openWindow(id)}
+            onClose={() => setFinding(false)}
+          />
+        )}
+      </div>
+    </NavigationContext.Provider>
   );
 }
 

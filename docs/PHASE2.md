@@ -1,6 +1,6 @@
 # Phase 2: Databases
 
-**Status:** planned. M1 not started.
+**Status:** M1 done. M2 next.
 
 ## Context
 
@@ -110,7 +110,7 @@ The table is a custom grid rather than TanStack Table: the query engine already 
 
 ## Milestones
 
-### M1: database model and table view
+### M1: database model and table view ✅
 
 - **Core model:**
   - the database doc layout and `kind` on pages; create full-page and inline databases (slash commands, "New database" in the sidebar menu)
@@ -127,6 +127,40 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - back and forward history and `workspace://` links work for rows
 - **Indexing:** rows appear in quick find and @-mentions (migration 4).
 - **Benchmark:** a unit test opens a database of 50,000 rows and times decode, snapshot and `runView`. The numbers are recorded in this doc.
+
+**M1 notes:**
+
+- **Where the code went:** doc operations and `DatabaseHandle` live in `packages/database` with the property registry (they need it), not in `packages/core`. Core only gained `kind` on pages, the users map and helpers for page-shaped maps.
+- **Creating databases:**
+  - an empty page offers "Get started with: Database", which turns the page itself into a full-page database
+  - `/database inline` and `/database full page` in the slash menu
+  - there is no "New database" item in the sidebar menu
+- **Rows look like pages.** A row's map uses the page field names, so the page chrome (title, icon, cover, page options, page menu, word count) is shared. `PageDirectory` in the app resolves ids across pages and rows, so breadcrumbs, links, history, quick find and mentions treat rows like pages. Rows that aren't loaded are found through the index (`Platform.locatePage`), then their database is loaded.
+- **Keyboard and clipboard:**
+  - copy and paste between cells use the `copy`/`paste` events, because the Electron Edit menu owns Ctrl+C and Ctrl+V
+  - every cell edit, paste or new row is its own undo step
+- **Benchmark** (`packages/database/src/bench.test.ts`, run on the dev container):
+
+  | Step                       | Result                                 |
+  | -------------------------- | -------------------------------------- |
+  | Doc size                   | 18.8 MB for 50,000 rows × 4 properties |
+  | Encode                     | 0.6 s                                  |
+  | Decode (load)              | 2.3 s                                  |
+  | First snapshot             | 0.2 s                                  |
+  | Sort by a number           | 85 ms                                  |
+  | Snapshot after a cell edit | 22 ms                                  |
+
+  Edits stay fast because only the changed row is re-read. Loading is the cost to watch; splitting rows across bucket docs remains the fallback (Phase 7).
+
+- **Changed or deferred from the M1 list:**
+  - Filter from the column menu moves to M2, with filters. Wrap is a per-view switch in the view menu.
+  - "Hide empty properties" on row pages moves to M2.
+  - Reminders on date properties move to M2.
+  - The @-mention picker lists rows only from databases already loaded in the window; quick find covers every row.
+  - A row's "last edited" time follows content edits only while its database is open somewhere.
+  - Rows can't be favorited or moved to another database yet.
+  - Unique IDs can repeat if two devices add rows offline at the same time; sync (Phase 4) will fix this.
+  - Databases stay loaded for the rest of the session once shown.
 
 ### M2: views, filters, sorts, groups and calculations
 

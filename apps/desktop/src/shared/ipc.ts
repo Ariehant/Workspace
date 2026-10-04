@@ -8,6 +8,8 @@ export const IPC = {
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   search: 'search:query',
+  pageLocate: 'page:locate',
+  user: 'app:user',
   themeSet: 'theme:set',
   windowOpen: 'window:open',
   fileImport: 'file:import',

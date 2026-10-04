@@ -4,11 +4,14 @@ import { newId } from './ids';
 import {
   PAGES_MAP,
   PageField,
+  USERS_MAP,
   type PageCover,
   type PageFont,
   type PageId,
+  type PageKind,
   type PageMeta,
   type PageOptions,
+  type User,
 } from './schema';
 import { applyTextDiff } from './text';
 
@@ -24,10 +27,15 @@ function getPageMap(doc: Y.Doc, id: PageId): PageMap {
   return page;
 }
 
-function readPage(page: PageMap): PageMeta {
+/**
+ * Read a page-shaped Y.Map: a page in the workspace doc, or a database row (rows use
+ * the same field names, so the page chrome works for both).
+ */
+export function readPageMap(page: Y.Map<unknown>): PageMeta {
   const title = page.get(PageField.title);
   return {
     id: page.get(PageField.id) as string,
+    kind: (page.get(PageField.kind) as PageKind | undefined) ?? 'page',
     parentId: (page.get(PageField.parentId) as string | null | undefined) ?? null,
     title: title instanceof Y.Text ? title.toString() : '',
     icon: (page.get(PageField.icon) as string | null | undefined) ?? null,
@@ -46,11 +54,11 @@ function readPage(page: PageMap): PageMeta {
 
 export function getPage(doc: Y.Doc, id: PageId): PageMeta | null {
   const page = getPagesMap(doc).get(id);
-  return page ? readPage(page) : null;
+  return page ? readPageMap(page) : null;
 }
 
 export function listPages(doc: Y.Doc): PageMeta[] {
-  return Array.from(getPagesMap(doc).values(), readPage);
+  return Array.from(getPagesMap(doc).values(), readPageMap);
 }
 
 /** Order siblings by fractional index; ties (concurrent inserts) break on id. */
@@ -80,6 +88,7 @@ function sortKeyAt(siblings: PageMeta[], index: number): string {
 
 export interface CreatePageOptions {
   id?: PageId;
+  kind?: PageKind;
   parentId?: PageId | null;
   title?: string;
   icon?: string | null;
@@ -102,6 +111,7 @@ export function createPage(doc: Y.Doc, options: CreatePageOptions = {}): PageId 
     const title = new Y.Text();
     if (options.title) title.insert(0, options.title);
     page.set(PageField.id, id);
+    if (options.kind && options.kind !== 'page') page.set(PageField.kind, options.kind);
     page.set(PageField.parentId, parentId);
     page.set(PageField.title, title);
     page.set(PageField.icon, options.icon ?? null);
@@ -116,9 +126,46 @@ export function createPage(doc: Y.Doc, options: CreatePageOptions = {}): PageId 
 
 /** The collaborative Y.Text holding a page's title, for binding to an input. */
 export function getPageTitleText(doc: Y.Doc, id: PageId): Y.Text {
-  const title = getPageMap(doc, id).get(PageField.title);
-  if (!(title instanceof Y.Text)) throw new Error(`Page has no title text: ${id}`);
+  return pageMapTitle(getPageMap(doc, id));
+}
+
+/** Title Y.Text of a page-shaped map (page or database row). */
+export function pageMapTitle(page: Y.Map<unknown>): Y.Text {
+  const title = page.get(PageField.title);
+  if (!(title instanceof Y.Text)) throw new Error('Page has no title text');
   return title;
+}
+
+/** Turn an empty page into a database (the caller sets up its database doc). */
+export function setPageKind(doc: Y.Doc, id: PageId, kind: PageKind): void {
+  getPageMap(doc, id).set(PageField.kind, kind);
+}
+
+// --- Users ---------------------------------------------------------------------------
+
+export function getUsersMap(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
+  return doc.getMap<Y.Map<unknown>>(USERS_MAP);
+}
+
+/** Add a user, or update their name. */
+export function upsertUser(doc: Y.Doc, user: User): void {
+  doc.transact(() => {
+    const users = getUsersMap(doc);
+    let entry = users.get(user.id);
+    if (!entry) {
+      entry = new Y.Map<unknown>();
+      entry.set('id', user.id);
+      users.set(user.id, entry);
+    }
+    if (entry.get('name') !== user.name) entry.set('name', user.name);
+  });
+}
+
+export function listUsers(doc: Y.Doc): User[] {
+  return Array.from(getUsersMap(doc).values(), (u) => ({
+    id: u.get('id') as string,
+    name: (u.get('name') as string | undefined) ?? '',
+  }));
 }
 
 export function setPageTitle(doc: Y.Doc, id: PageId, title: string, now = Date.now()): void {
@@ -256,7 +303,14 @@ export function duplicatePageTree(doc: Y.Doc, id: PageId, now = Date.now()): Map
 
   doc.transact(() => {
     const copy = (page: PageMeta, parentId: PageId | null, index?: number, title = page.title) => {
-      const newId = createPage(doc, { parentId, title, icon: page.icon, index, now });
+      const newId = createPage(doc, {
+        parentId,
+        title,
+        icon: page.icon,
+        kind: page.kind,
+        index,
+        now,
+      });
       const { cover, fullWidth, smallText, font, locked } = page;
       setPageOptions(doc, newId, { cover, fullWidth, smallText, font, locked }, now);
       mapping.set(page.id, newId);

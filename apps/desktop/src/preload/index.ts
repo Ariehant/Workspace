@@ -27,8 +27,12 @@ const api = {
   },
   search: (
     query: string,
-  ): Promise<{ id: string; title: string; icon: string | null; snippet: string }[]> =>
-    ipcRenderer.invoke(IPC.search, query),
+  ): Promise<
+    { id: string; title: string; icon: string | null; databaseId: string | null; snippet: string }[]
+  > => ipcRenderer.invoke(IPC.search, query),
+  locatePage: (id: string): Promise<{ databaseId: string | null } | null> =>
+    ipcRenderer.invoke(IPC.pageLocate, id),
+  user: (): Promise<{ id: string; name: string }> => ipcRenderer.invoke(IPC.user),
   files: {
     import: (bytes: Uint8Array, name: string, mime: string): Promise<FileRef> =>
       ipcRenderer.invoke(IPC.fileImport, bytes, name, mime),

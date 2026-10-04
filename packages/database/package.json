@@ -1,5 +1,5 @@
 {
-  "name": "@workspace/storage-local",
+  "name": "@workspace/database",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@workspace/core": "workspace:*",
-    "@workspace/database": "workspace:*",
+    "fractional-indexing": "^3.4.0",
     "yjs": "^13.6.27"
   }
 }

@@ -5,7 +5,7 @@ and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI featu
 
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) are complete. Phase 2
-(databases) is next.
+(databases, see [docs/PHASE2.md](docs/PHASE2.md)) is in progress: M1 (the table view) is done.
 
 ## What works today
 
@@ -33,6 +33,16 @@ Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) are comple
   - `@` mentions pages (live titles) and dates ("next fri", "in 2 weeks"); `@remind tomorrow`
     sends a desktop notification at 9:00. `:` suggests emoji.
   - Paste Markdown to get blocks; copy gives Markdown as plain text. Ctrl+F finds and replaces.
+- Databases, inline or full page (`/database inline`, `/database full page`, or "Get started
+  with: Database" on an empty page):
+  - Property types: text, number, select, multi-select, status, date (ranges, times), checkbox,
+    URL, email, phone, files, person, created/edited time and by, and unique ID.
+  - Table view: edit cells in place, keyboard navigation, copy and paste, undo; sort; rename,
+    retype, hide, resize, reorder, duplicate and delete columns; drag rows to reorder. Large
+    tables only render the rows in view.
+  - Rows are pages: open them in a side peek, a center peek or full page, with their properties
+    above the content. Rows show up in quick find (including their property text), can be
+    linked to, and go to the Trash when deleted.
 - Every block has a stable id, ready for block links, comments and sync later.
 - Everything is saved locally as you type and survives restarts, including the last open page and
   which sidebar items are expanded.

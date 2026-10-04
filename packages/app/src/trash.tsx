@@ -16,9 +16,24 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@workspace/ui';
+import { deleteRow, restoreRow } from '@workspace/database';
 import { Trash2, Undo2 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type * as Y from 'yjs';
+import { useApp } from './context';
+import { useRegistryVersion } from './database/hooks';
+
+/** A trashed page or database row. */
+interface TrashItem {
+  id: string;
+  title: string;
+  icon: string | null;
+  trashedAt: number;
+  /** Where it was: the parent page or the database. */
+  parentTitle: string | null;
+  restore(): void;
+  remove(): void;
+}
 
 export interface TrashProps {
   workspace: Y.Doc;
@@ -32,12 +47,46 @@ export function Trash({ workspace, fileUrl, onOpen, children }: TrashProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [confirming, setConfirming] = useState<PageId | null>(null);
+  const { databases } = useApp();
+  useRegistryVersion();
+
+  // Trashed rows live in their databases: load them all while the trash is open.
+  useEffect(() => {
+    if (open) void databases.loadAll();
+  }, [open, databases]);
+
+  const items: TrashItem[] = [
+    ...trashedPages(workspace).map((page) => {
+      const parent = getAncestorIds(workspace, page.id)[0];
+      return {
+        id: page.id,
+        title: page.title,
+        icon: page.icon,
+        trashedAt: page.trashedAt!,
+        parentTitle: parent ? getPage(workspace, parent)?.title || 'Untitled' : null,
+        restore: () => restorePage(workspace, page.id),
+        remove: () => deletePagePermanently(workspace, page.id),
+      };
+    }),
+    ...databases.loaded().flatMap((handle) =>
+      handle
+        .snapshot()
+        .rows.filter((row) => row.trashedAt !== null)
+        .map((row) => ({
+          id: row.id,
+          title: row.title,
+          icon: row.icon,
+          trashedAt: row.trashedAt!,
+          parentTitle: getPage(workspace, handle.id)?.title || 'Untitled',
+          restore: () => restoreRow(handle.doc, row.id),
+          remove: () => deleteRow(handle.doc, row.id),
+        })),
+    ),
+  ].sort((a, b) => b.trashedAt - a.trashedAt);
 
   const q = query.trim().toLowerCase();
-  const pages = open
-    ? trashedPages(workspace).filter((p) => (p.title || 'untitled').toLowerCase().includes(q))
-    : [];
-  const confirmPage = confirming ? getPage(workspace, confirming) : null;
+  const pages = open ? items.filter((p) => (p.title || 'untitled').toLowerCase().includes(q)) : [];
+  const confirmPage = confirming ? items.find((i) => i.id === confirming) : null;
 
   return (
     <>
@@ -67,8 +116,7 @@ export function Trash({ workspace, fileUrl, onOpen, children }: TrashProps) {
               </li>
             )}
             {pages.map((page) => {
-              const parent = getAncestorIds(workspace, page.id)[0];
-              const parentTitle = parent ? getPage(workspace, parent)?.title || 'Untitled' : null;
+              const { parentTitle } = page;
               return (
                 <li
                   key={page.id}
@@ -93,7 +141,7 @@ export function Trash({ workspace, fileUrl, onOpen, children }: TrashProps) {
                     size="sm"
                     onClick={(event) => {
                       event.stopPropagation();
-                      restorePage(workspace, page.id);
+                      page.restore();
                     }}
                   >
                     <Undo2 size={14} />
@@ -133,7 +181,7 @@ export function Trash({ workspace, fileUrl, onOpen, children }: TrashProps) {
               <Button
                 className="justify-center bg-danger text-white hover:bg-danger/90 hover:text-white"
                 onClick={() => {
-                  deletePagePermanently(workspace, confirmPage.id);
+                  confirmPage.remove();
                   setConfirming(null);
                 }}
               >
