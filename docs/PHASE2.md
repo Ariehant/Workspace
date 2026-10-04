@@ -1,0 +1,260 @@
+# Phase 2: Databases
+
+**Status:** planned. M1 not started.
+
+## Context
+
+Phase 1 is complete on the branch `ccr-9cd9bc27-ksa6p1` (see [PHASE1.md](PHASE1.md)): the full block editor, page chrome, sidebar, trash, quick find, history and deep links.
+
+Phase 2 goal from the roadmap ([PLAN.md](PLAN.md) §4): **"Notion's own database templates can be rebuilt."** That means:
+
+- a typed property system with every non-AI property type
+- the Formula 2.0 language
+- relations and rollups
+- table, board, list, gallery, calendar, timeline and chart views
+- filters, sorts, grouping and calculations per view
+- inline and full-page databases, linked views and database templates
+- row pages that open as a side peek, a center modal or a full page
+
+The roadmap budgets 6–8 weeks, so Phase 2 is split into seven milestones. Each one is committed and pushed on its own, with tests.
+
+**Not in Phase 2:**
+
+| Item                                                | Goes to                                                                                            |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Form view, database automations, "repeat" templates | Phase 6 (automation)                                                                               |
+| Button property                                     | Phase 3, together with button blocks                                                               |
+| Real people                                         | Phase 5 (accounts). Until then, the person property and created/edited by use a single local user. |
+| CSV import and export                               | Phase 3 (import/export)                                                                            |
+
+## Data model
+
+### Where a database lives
+
+**A database is a page.** Its entry in the workspace doc gets a new field, `kind: 'page' | 'database'`. A missing field means `page`, so existing workspaces need no migration. Because of this, databases can do everything pages already do, with no extra code: the sidebar, trash, move, duplicate, favorites, quick find, links and mentions.
+
+- **Full-page database:** a database page in the tree.
+- **Inline database:** a database page whose `parentId` is the host page, plus a `database` block in the host page's content that points at it (`databaseId`). Deleting the block trashes the database, as in Notion.
+
+**The database doc** has the same guid as the database page. It holds three top-level structures:
+
+- **`schema`** (Y.Map): `propertyId → Y.Map { name, type, config, sortKey }`. The title property always exists and can't be deleted.
+- **`views`** (Y.Map): `viewId → Y.Map { viewSet, name, type, sortKey, filter, sorts, groupBy, subGroupBy, properties, calculations, layout }`. Each value is plain JSON, written last-writer-wins one field at a time.
+- **`rows`** (Y.Map): `rowId → Y.Map`. Each row holds:
+  - `title` (Y.Text, so two people can edit a title together, like page titles)
+  - `sortKey` (the manual order)
+  - `createdAt`, `createdBy`, `updatedAt`, `updatedBy`
+  - `uid` (for the unique ID property)
+  - `trashedAt`, `icon`, `cover`
+  - one key per property, holding that property's value
+
+**Row bodies.** A row's page content is an ordinary page doc with guid = row id. The editor, files, mentions and reminders all work in row pages unchanged.
+
+**Why rows live in the database doc.** [PLAN.md](PLAN.md) §6 suggested one Yjs subdocument per row. This plan deliberately does something else. Filters, sorts, groups, calculations, formulas and rollups need every row's values anyway. With one doc per row, a view of 5,000 rows would mean loading 5,000 docs, or keeping a second index that has to stay consistent with them. Keeping the values in one doc gives:
+
+- atomic multi-row edits, with one undo stack
+- one sync unit per database for Phase 4
+- simple queries over plain objects
+
+Row content, which is the bulk of the data, still lives in per-row docs.
+
+The scale target is 50,000 rows (Phase 7). If that doc turns out too big, rows can be split across bucket docs behind the same `DatabaseHandle` API later. M1 includes a benchmark that keeps this risk in view.
+
+**Linked views.** A linked database block stores `{ databaseId, viewSet }`. Views are grouped into view sets, so a linked block's own views live in the source database doc under the block's id. The database's own view set is its id. This keeps every view next to the data it queries. It also means unrelated pages never have to load another page's doc to render a linked view.
+
+**Values** are stored as JSON per property type:
+
+| Type                    | Value                                                |
+| ----------------------- | ---------------------------------------------------- |
+| text, url, email, phone | `string`                                             |
+| number                  | `number`                                             |
+| checkbox                | `boolean`                                            |
+| select, status          | `optionId`                                           |
+| multi-select            | `optionId[]`                                         |
+| date                    | `{ start, end?, time: boolean, tz?, reminder? }`     |
+| person                  | `userId[]`                                           |
+| files                   | `FileRef[]` (from the Phase 1 file store) or URLs    |
+| relation                | `rowId[]` (plus `databaseId` in the property config) |
+
+Formula, rollup, created/edited time and by, and unique ID are computed and never stored. Options (`{ id, name, color }`) live in the property config. Status options also have a group: To-do, In progress or Complete.
+
+**The local user.** A `users` map in the workspace doc holds one profile, created on first run (the name comes from the OS user and can be renamed in settings). Phase 5 replaces it with real accounts. The ids it stores stay valid.
+
+### Packages
+
+- **`packages/database`** (new, no UI, unit tested):
+  - `properties/` is the type registry. For each type it defines: default config, value validation and coercion when a property's type changes, display text, sort comparator, filter operators, calculations and grouping.
+  - `query.ts`: `runView(snapshot, view, ctx) → { groups, rows, calculations }`. The snapshot is the decoded doc plus the related databases it needs. It is a pure function, memoized per view on the doc version.
+  - `formula/`: lexer, Pratt parser, type checker, evaluator, standard library and dependency graph.
+  - `dates.ts`: date buckets, relative dates and time zones (`date-fns` + `@date-fns/tz`).
+- **`packages/core`:**
+  - `database.ts` holds the doc-level operations: create a database, add/rename/retype/reorder/delete properties, row CRUD, `setCell`, view CRUD and option management.
+  - A `DatabaseHandle` class wraps a loaded doc for the UI: snapshot, subscribe and undo.
+- **`packages/app/src/database/`** holds the view components, property editors, the row peek and the view toolbar. It is shared with the future web build.
+- **`packages/editor`:** `database` (inline) and `linkedDatabase` block nodes, with slash commands `/table view`, `/board view`, `/database inline`, `/database full page` and `/linked view`.
+- **`packages/storage-local`:**
+  - Migration 4 adds `pages.database_id`.
+  - `DocManager` indexes rows from database docs into `pages` and `page_fts`: the title and the text of the row's properties. Quick find, @-mentions and links then reach rows.
+  - Reminders on date properties go through the existing `ReminderScheduler`.
+
+**Libraries (all MIT):**
+
+| Library                               | Used for                                                             |
+| ------------------------------------- | -------------------------------------------------------------------- |
+| `@tanstack/react-virtual`             | row and card virtualization                                          |
+| `@dnd-kit/core` + `@dnd-kit/sortable` | board cards across columns, column and row reorder, with auto-scroll |
+| `recharts`                            | chart view, lazy-loaded                                              |
+| `date-fns` + `@date-fns/tz`           | date math and time zones                                             |
+
+The table is a custom grid rather than TanStack Table: the query engine already does sorting and filtering, and the grid needs Notion's own keyboard model.
+
+## Milestones
+
+### M1: database model and table view
+
+- **Core model:**
+  - the database doc layout and `kind` on pages; create full-page and inline databases (slash commands, "New database" in the sidebar menu)
+  - `DatabaseHandle` with undo (`Y.UndoManager` on local origins; Ctrl+Z while focus is in a view)
+- **Property types:** text, number, select, multi-select, status, date (with end date and time), checkbox, URL, email, phone, files and media, person (local user), created time, created by, last edited time, last edited by, and unique ID (with a prefix).
+- **Table view:**
+  - **Columns:** header menu to rename, change type, hide, duplicate, delete, insert left or right, sort, filter and wrap; drag to reorder; drag to resize.
+  - **Rows:** "+ New", inline editing of every type, row handle (drag to reorder, menu with open, duplicate, delete, copy link).
+  - **Keyboard:** arrow keys move between cells, Enter edits, Esc leaves; copy and paste between cells.
+  - **Large databases:** rows are virtualized.
+- **Row pages:**
+  - open as a side peek, a center modal or a full page, set per view
+  - the properties panel sits above the body editor, with hide-empty and "add a property"
+  - back and forward history and `workspace://` links work for rows
+- **Indexing:** rows appear in quick find and @-mentions (migration 4).
+- **Benchmark:** a unit test opens a database of 50,000 rows and times decode, snapshot and `runView`. The numbers are recorded in this doc.
+
+### M2: views, filters, sorts, groups and calculations
+
+- View tabs: add, rename, duplicate, delete and reorder views; per-view property visibility and order.
+- **Filters:**
+  - simple filter chips, plus advanced filters with nested AND/OR groups
+  - operators per type (contains, is, starts with, is empty; number comparisons; date is / before / after / on or before / within the past or next N days, weeks or months, relative to today; checkbox; select is / is any of; person "me")
+- **Sorts:** multiple, drag to reorder. With no sort, the manual order applies.
+- **Grouping and sub-grouping** by select, status (in its groups), multi-select, checkbox, person, date (by day, week, month or year; relative buckets), text, number ranges, relation and formula. Groups can be hidden, collapsed and reordered, and show their counts.
+- **Calculations** under each column:
+  - **any type:** count all, count values, count unique, empty, not empty, and their percentages
+  - **numbers:** sum, average, median, min, max, range
+  - **dates:** earliest, latest, date range
+  - **checkboxes:** checked and unchecked
+- Search inside a view; number formats (number, comma, percent, currencies); date formats and 12/24-hour time.
+
+### M3: formula engine (Formula 2.0)
+
+- **Language:**
+  - a lexer and Pratt parser for the syntax: operators, `prop("Name")` and dot access (`prop("Tags").length()`), lists, `let` and `lets`, lambdas with `current` and `index`, comments
+  - a static type checker for text, number, boolean, date, person, page and list types, with errors placed at the right position
+- **Standard library**, Notion's whole function set:
+  - **logic:** `if`, `ifs`, `empty`, `and`, `or`, `not`
+  - **text:** `length`, `substring`, `contains`, `test`, `match`, `replace`, `replaceAll`, `lower`, `upper`, `repeat`, `padStart`, `padEnd`, `split`, `join`, `trim`, `format`, `link`, `style`, `unstyle`
+  - **math:** `abs`, `ceil`, `floor`, `round`, `sqrt`, `cbrt`, `exp`, `ln`, `log10`, `log2`, `sign`, `pi`, `e`, `min`, `max`, `sum`, `mean`, `median`, `toNumber`
+  - **dates:** `now`, `today`, `minute`, `hour`, `day`, `date`, `week`, `month`, `year`, `dateAdd`, `dateSubtract`, `dateBetween`, `dateRange`, `dateStart`, `dateEnd`, `timestamp`, `fromTimestamp`, `formatDate`, `parseDate`
+  - **lists:** `at`, `first`, `last`, `slice`, `concat`, `sort`, `reverse`, `includes`, `find`, `findIndex`, `filter`, `some`, `every`, `map`, `flat`, `unique`
+  - **people and pages:** `name`, `email`, `id`
+- **Evaluation:**
+  - a dependency graph across formula, rollup and relation properties, with cycle errors
+  - results cached per row and invalidated by the doc changes that affect them
+  - `now()` re-evaluates every minute
+- **Formula editor:**
+  - syntax highlighting, autocomplete of properties and functions, inline docs for each function, a live preview against the current row, and the type of the result
+- **Formula results** can be filtered, sorted, grouped and calculated on according to their result type.
+- A fixture suite of Notion formulas with expected results (inline JSON fixtures, around 300 cases).
+
+### M4: relations and rollups
+
+- **Relations:**
+  - one-way and two-way relations, to another database or to the same one
+  - two-way edits update both sides in one operation per doc; both docs are loaded through `DocClient`
+  - a relation picker with search and "create new"; limit to one page or allow many
+- **Rollups** of any property through a relation, with the full set of calculations (show original, count, unique, sum, average, min, max, range, earliest, latest, percent checked and so on).
+- **Sub-items:** a self-relation pair "Parent item" / "Sub-items". The table shows nested rows with toggles, and filters can include parents or sub-items.
+- **Dependencies:** a self-relation pair "Blocked by" / "Blocking", used by the timeline in M6.
+- **Integrity:** a trashed row disappears from relations and rollups and comes back when restored. Permanently deleting a database turns the relations that point at it into a "deleted database" state instead of crashing.
+
+### M5: board, list and gallery views
+
+- **Board:**
+  - grouped by select, status, person, checkbox, relation and the other groupable types; sub-groups as swimlanes
+  - drag cards between columns (this changes the property) and within a column (manual order, when no sort is set)
+  - hide groups, color columns, and "+ New" per column, pre-filled with that column's value
+- **Card settings**, shared by board and gallery:
+  - card preview: none, the page cover, the first image in the page content, or a files property; fit or crop
+  - card size: small, medium or large
+  - which properties show on the card, and whether to wrap them
+- **List view:** a compact list showing the title and the properties you choose.
+- **Gallery view:** a responsive grid of cards.
+- All three are virtualized for large databases.
+
+### M6: calendar, timeline and chart views
+
+- **Calendar:**
+  - month and week layouts, shown by any date property (multi-day ranges span days)
+  - drag to reschedule or to resize a range; click a day to create a row on it
+  - a "No date" panel; start the week on Sunday or Monday
+- **Timeline:**
+  - zoom levels from hours up to years
+  - bars from start/end date properties, or from a single date-range property
+  - drag to move bars, drag their edges to resize, draw dependency arrows (from M4)
+  - an optional table on the left, grouping, and "Today" and "Jump to" controls
+- **Chart:**
+  - bar (vertical, horizontal, stacked), line, pie and donut
+  - the X axis groups by a property; the Y axis is a count or a calculation over a property
+  - sorting, colors, legend and data labels; built on recharts, lazy-loaded
+  - charts embed inline like any view
+
+### M7: templates, linked views and the rest of the database surface
+
+- **Database templates:**
+  - create and edit templates (property values plus body content)
+  - a default template per database or per view
+  - the "New" button dropdown; applying a template to an existing empty row
+- **Linked views:** `/linked view`, then pick a source database. The linked block has its own views, filters and sorts, which can be changed without affecting the source.
+- **"Turn into database"** converts a simple table block into a database, and the reverse.
+- **Lock database:** locks views, properties or both.
+- Duplicate a database, with its rows and their bodies.
+- Database page settings: title, description, icon, full width, and the default "Open pages in" mode.
+- **Exit check:** rebuild Notion's own templates as E2E fixtures: Tasks + Projects (relations, rollups, status, board, timeline), a reading list (gallery, select, rating formula), a habit tracker (checkboxes, calculations, chart), a simple CRM (relations, rollups, calendar) and a content calendar (calendar, person, status). Restart, and check that every view renders the same data.
+
+## Critical files
+
+- **New:**
+  - `packages/database/src/{properties/*, query.ts, formula/*, dates.ts}`
+  - `packages/core/src/database.ts`
+  - `packages/app/src/database/{database-view.tsx, table/*, board/*, list.tsx, gallery.tsx, calendar/*, timeline/*, chart.tsx, toolbar/*, filters/*, property-editors/*, row-peek.tsx, templates.tsx}`
+  - `packages/editor/src/nodes/database.tsx`
+- **Modified:**
+  - `packages/core/src/{schema.ts, workspace.ts, index.ts}` (`kind`, users)
+  - `packages/storage-local/src/{sqlite-store.ts, doc-manager.ts}` (migration 4, row indexing, date reminders)
+  - `packages/app/src/{app.tsx, page-view.tsx, sidebar.tsx, quick-find.tsx}`
+  - `packages/editor/src/{extensions.ts, blocks/registry.ts}`
+
+## Verification
+
+- **Unit tests (Vitest)** for every property type:
+  - value coercion when the type changes
+  - filter operators
+  - sort order, including empties last and locale-aware text
+  - group buckets
+  - calculations
+- **Query engine:** `runView` over fixture databases, combining nested filters, multiple sorts, groups, sub-groups and calculations.
+- **Formula engine:** parser round-trips, type errors with positions, the ~300-case Notion fixture suite, dependency cycles and cache invalidation.
+- **Relations:** two-way consistency after concurrent edits on two doc replicas (Yjs merge tests), and rollups after trash and restore.
+- **Scale:** the 50,000-row benchmark from M1 runs in CI as a smoke test with a time limit.
+- **E2E (Playwright), one spec per milestone:**
+  - create a database, add every property type, edit cells, restart and check the values
+  - filters, sorts and groups, then restart
+  - write a formula in the editor
+  - a two-way relation and a rollup
+  - drag a board card between columns
+  - drag on the calendar and the timeline
+  - render a chart
+  - apply a template
+  - a linked view with its own filter
+  - the M7 template rebuilds
+- Before every push: `pnpm lint`, `pnpm typecheck`, `pnpm test`, then `xvfb-run -a pnpm test:e2e`, run twice.
+- Check each view by eye in light and dark themes.
+- Keep the renderer bundle in check: lazy-load the database views and recharts, so the editor doesn't pay for them.

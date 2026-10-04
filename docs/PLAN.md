@@ -108,8 +108,8 @@ Tooling: TypeScript strict, ESLint, Prettier, Vitest for unit tests, Playwright 
 | Phase | Scope | Exit criteria |
 |---|---|---|
 | **0. Foundation** (1–2 wk) ✅ done | Monorepo, CI on ubuntu-24.04, Electron shell, design system, `core` block model on Yjs, SQLite persistence, IPC bridge | App launches, a page persists across restarts |
-| **1. Editor MVP** (4–6 wk) | All text, list, media and layout blocks; slash menu; Markdown shortcuts; DnD; inline formatting; mentions; page icon and cover; sidebar tree; trash; quick find (SQLite FTS5) | Can replace Notion for personal notes |
-| **2. Databases** (6–8 wk) | Property system, formula engine, table/board/list/gallery/calendar/timeline/chart views, filters/sorts/groups, relations/rollups, templates, linked views, side peek | Notion's own database templates can be rebuilt |
+| **1. Editor MVP** (4–6 wk) ✅ done | All text, list, media and layout blocks; slash menu; Markdown shortcuts; DnD; inline formatting; mentions; page icon and cover; sidebar tree; trash; quick find (SQLite FTS5) | Can replace Notion for personal notes |
+| **2. Databases** (6–8 wk), plan: [PHASE2.md](PHASE2.md) | Property system, formula engine, table/board/list/gallery/calendar/timeline/chart views, filters/sorts/groups, relations/rollups, templates, linked views, side peek | Notion's own database templates can be rebuilt |
 | **3. Power features** (3–4 wk) | Synced blocks, buttons, page history, backlinks, templates gallery, multi-window/tabs, import/export (Notion zip first), Mermaid/KaTeX/code | A real Notion export imports with no meaningful loss |
 | **4. Sync server** (4–5 wk) | Docker Compose stack, auth (email/password + OIDC), Hocuspocus sync, attachment upload to MinIO, device sync, web app build | Two devices for one user stay in sync, including after offline edits |
 | **5. Collaboration** (5–6 wk) | Workspaces, members, guests, permissions, presence and cursors, comments, inbox and notifications, publish to web | Several users co-edit with the correct permission checks |
