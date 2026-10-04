@@ -73,11 +73,35 @@ export interface SelectOption {
   group?: StatusGroup;
 }
 
+export type NumberFormat =
+  | 'number'
+  | 'commas'
+  | 'percent'
+  | 'dollar'
+  | 'euro'
+  | 'pound'
+  | 'yen'
+  | 'rupee'
+  | 'yuan'
+  | 'won'
+  | 'real'
+  | 'franc';
+
+export type DateFormat = 'full' | 'mdy' | 'dmy' | 'ymd' | 'relative';
+export type TimeFormat = '12h' | '24h';
+
 export interface PropertyConfig {
   /** select, multiSelect, status. */
   options?: SelectOption[];
   /** uniqueId: shown before the number, e.g. `TASK-12`. */
   prefix?: string;
+  /** number: how values are shown. */
+  numberFormat?: NumberFormat;
+  /** number: decimal places (default: as entered). */
+  precision?: number;
+  /** date, created time, last edited time. */
+  dateFormat?: DateFormat;
+  timeFormat?: TimeFormat;
 }
 
 export interface Property {
@@ -93,7 +117,16 @@ export interface Property {
 export interface DateValue {
   start: string;
   end?: string | null;
+  /** Notify before the start (see `DATE_REMINDERS`); none when absent. */
+  reminder?: DateReminder | null;
 }
+
+/**
+ * When to remind: for dates without a time, at 9:00 on the day or days before; for
+ * dates with a time, before that time.
+ */
+export type DateReminder =
+  'onDay' | '1d' | '2d' | '1w' | 'atTime' | '5m' | '10m' | '15m' | '30m' | '1h' | '2h';
 
 /** A file in the workspace file store (`id`) or a link to one on the web (`url`). */
 export interface FileValue {
@@ -119,10 +152,85 @@ export interface Sort {
   direction: 'asc' | 'desc';
 }
 
+// --- Filters -------------------------------------------------------------------------
+
+/** One condition on a property; `value` depends on the operator (see filter.ts). */
+export interface FilterRule {
+  type: 'rule';
+  id: string;
+  propertyId: string;
+  operator: string;
+  value?: unknown;
+}
+
+/** Conditions joined with AND / OR; groups nest for advanced filters. */
+export interface FilterGroup {
+  type: 'group';
+  id: string;
+  conjunction: 'and' | 'or';
+  filters: Filter[];
+}
+
+export type Filter = FilterRule | FilterGroup;
+
+// --- Grouping ------------------------------------------------------------------------
+
+export type DateBucket = 'relative' | 'day' | 'week' | 'month' | 'year';
+
+export interface GroupBy {
+  propertyId: string;
+  /** Dates: bucket size. */
+  dateBucket?: DateBucket;
+  /** Text: whole value, or by first letter. */
+  textBucket?: 'exact' | 'alphabetical';
+  /** Numbers: bucket ranges. */
+  numberRange?: { start: number; end: number; step: number };
+  /** Status: one group per option, or per To-do / In progress / Complete. */
+  statusBucket?: 'option' | 'group';
+  /** Group keys hidden from the view. */
+  hidden?: string[];
+  /** Group keys shown collapsed. */
+  collapsed?: string[];
+  /** Hide groups without rows. */
+  hideEmpty?: boolean;
+  /** Order of groups (natural order of the property, or reversed). */
+  sort?: 'asc' | 'desc';
+}
+
+// --- Calculations --------------------------------------------------------------------
+
+export type CalculationId =
+  | 'countAll'
+  | 'countValues'
+  | 'countUnique'
+  | 'countEmpty'
+  | 'countNotEmpty'
+  | 'percentEmpty'
+  | 'percentNotEmpty'
+  | 'sum'
+  | 'average'
+  | 'median'
+  | 'min'
+  | 'max'
+  | 'range'
+  | 'earliest'
+  | 'latest'
+  | 'dateRange'
+  | 'checked'
+  | 'unchecked'
+  | 'percentChecked'
+  | 'percentUnchecked';
+
 export interface ViewConfig {
   /** Column order, visibility and width. Properties missing here show at the end. */
   properties: ViewProperty[];
   sorts: Sort[];
+  /** Root filter group (AND/OR of rules and nested groups); null for none. */
+  filter: FilterGroup | null;
+  groupBy: GroupBy | null;
+  subGroupBy: GroupBy | null;
+  /** Calculation shown under each column, by property id. */
+  calculations: Record<string, CalculationId>;
   openPagesIn: OpenPagesIn;
   /** Wrap long cell content instead of cutting it off. */
   wrap: boolean;
@@ -168,17 +276,34 @@ export interface DatabaseSnapshot {
   views: View[];
   /** Every row including trashed ones, in manual order. */
   rows: Row[];
+  meta: DatabaseMeta;
 }
 
-/** Lookups that turn stored values into display text. */
+/** Lookups that turn stored values into display text (and evaluate filters). */
 export interface DisplayContext {
   /** User id -> name. */
   users: ReadonlyMap<string, string>;
+  /** The current user, for "me" in person filters. */
+  me?: string;
+  /** "Now" for relative dates (defaults to the clock). */
+  now?: number;
 }
+
+/** Database-wide settings, in the doc's `meta` map. */
+export interface DatabaseMeta {
+  /** Row pages fold empty properties away under "N more properties". */
+  hideEmptyProperties: boolean;
+}
+
+export const META_MAP = 'meta';
 
 export const DEFAULT_VIEW_CONFIG: ViewConfig = {
   properties: [],
   sorts: [],
+  filter: null,
+  groupBy: null,
+  subGroupBy: null,
+  calculations: {},
   openPagesIn: 'sidePeek',
   wrap: false,
 };

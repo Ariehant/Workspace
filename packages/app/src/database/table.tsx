@@ -14,12 +14,20 @@ import {
   newPropertyName,
   propertyKind,
   renameProperty,
-  runView,
+  NO_VALUE,
+  calculate,
+  calculationInfo,
+  calculationsFor,
+  DATE_FORMATS,
+  NUMBER_FORMATS,
+  TIME_FORMATS,
   setCell,
+  setPropertyConfig,
   trashRow,
   updateView,
   updateViewColumn,
   viewColumns,
+  type CalculationId,
   type DatabaseHandle,
   type DatabaseSnapshot,
   type DisplayContext,
@@ -27,6 +35,8 @@ import {
   type PropertyType,
   type Row,
   type View,
+  type ViewGroup,
+  type ViewResult,
 } from '@workspace/database';
 import { PageIcon } from '@workspace/editor';
 import {
@@ -34,6 +44,8 @@ import {
   Menu,
   MenuContent,
   MenuItem,
+  MenuRadioGroup,
+  MenuRadioItem,
   MenuSeparator,
   MenuSub,
   MenuSubContent,
@@ -47,20 +59,35 @@ import {
   ArrowLeftToLine,
   ArrowRightToLine,
   ArrowUp,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  Clock,
   Copy,
   EyeOff,
   GripVertical,
+  Hash,
   Link2,
+  ListFilter,
   Maximize2,
   Plus,
   Repeat2,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { useApp } from '../context';
 import { duplicateRowWithContent } from './actions';
 import {
   CellDisplay,
+  OptionPill,
   PopoverCellEditor,
   PropertyIcon,
   TEXT_TYPES,
@@ -79,12 +106,75 @@ export interface TableViewProps {
   handle: DatabaseHandle;
   snapshot: DatabaseSnapshot;
   view: View;
+  /** The view's rows (filtered, searched, sorted) and groups. */
+  result: ViewResult;
   ctx: DisplayContext;
   editable: boolean;
   onOpenRow(rowId: string): void;
+  /** Start a filter on a property (from its column menu). */
+  onFilter(propertyId: string): void;
+}
+
+/** A property value shared by every row of a group (new rows in the group get it). */
+interface GroupValue {
+  propertyId: string;
+  value: unknown;
+}
+
+/** One line of the table body. */
+type Item =
+  | { kind: 'group'; key: string; depth: number; group: ViewGroup; values: GroupValue[] }
+  | { kind: 'row'; key: string; depth: number; row: Row; values: GroupValue[] }
+  | { kind: 'new'; key: string; depth: number; values: GroupValue[] }
+  | { kind: 'calc'; key: string; depth: number; rows: Row[] };
+
+const GROUP_HEIGHT = 41;
+
+/** Flatten groups into lines: header, rows, "+ New", calculations; hidden groups left out. */
+function buildItems(result: ViewResult, view: View): Item[] {
+  if (!result.groups) {
+    return [
+      ...result.rows.map((row) => ({
+        kind: 'row' as const,
+        key: `/${row.id}`,
+        depth: 0,
+        row,
+        values: [],
+      })),
+      { kind: 'new', key: 'new:/', depth: 0, values: [] },
+      { kind: 'calc', key: 'calc:/', depth: 0, rows: result.rows },
+    ];
+  }
+  const items: Item[] = [];
+  const levels = [view.groupBy, view.subGroupBy];
+  const add = (groups: ViewGroup[], depth: number, parent: GroupValue[], path: string) => {
+    for (const group of groups) {
+      if (group.hidden) continue;
+      const key = `${path}${group.info.key}/`;
+      const values = [
+        ...parent,
+        { propertyId: levels[depth]!.propertyId, value: group.info.value },
+      ];
+      items.push({ kind: 'group', key: `group:${key}`, depth, group, values });
+      if (group.collapsed) continue;
+      if (group.subgroups) {
+        add(group.subgroups, depth + 1, values, key);
+        continue;
+      }
+      for (const row of group.rows) {
+        items.push({ kind: 'row', key: `${key}${row.id}`, depth, row, values });
+      }
+      items.push({ kind: 'new', key: `new:${key}`, depth, values });
+      items.push({ kind: 'calc', key: `calc:${key}`, depth, rows: group.rows });
+    }
+  };
+  add(result.groups, 0, [], '/');
+  return items;
 }
 
 interface CellRef {
+  /** The row's line (a row can show in several groups). */
+  key: string;
   rowId: string;
   propertyId: string;
 }
@@ -93,7 +183,16 @@ interface Editing extends CellRef {
   initialText?: string;
 }
 
-export function TableView({ handle, snapshot, view, ctx, editable, onOpenRow }: TableViewProps) {
+export function TableView({
+  handle,
+  snapshot,
+  view,
+  result,
+  ctx,
+  editable,
+  onOpenRow,
+  onFilter,
+}: TableViewProps) {
   const { user } = useApp();
   const doc = handle.doc;
   const gridRef = useRef<HTMLDivElement>(null);
@@ -114,7 +213,11 @@ export function TableView({ handle, snapshot, view, ctx, editable, onOpenRow }: 
     [view, snapshot.properties, byId],
   );
   const widthOf = (id: string, width: number) => (resizing?.id === id ? resizing.width : width);
-  const rows = useMemo(() => runView(snapshot, view, ctx).rows, [snapshot, view, ctx]);
+  const items = useMemo(() => buildItems(result, view), [result, view]);
+  const rowItems = useMemo(
+    () => items.filter((i): i is Extract<Item, { kind: 'row' }> => i.kind === 'row'),
+    [items],
+  );
   const totalWidth = columns.reduce((sum, c) => sum + widthOf(c.property.id, c.width), 0);
 
   const focusGrid = () => gridRef.current?.focus({ preventScroll: true });
@@ -122,11 +225,12 @@ export function TableView({ handle, snapshot, view, ctx, editable, onOpenRow }: 
   // --- Selection and editing -------------------------------------------------------------
 
   const move = (from: CellRef, dRow: number, dCol: number) => {
-    const r = rows.findIndex((row) => row.id === from.rowId);
+    const r = rowItems.findIndex((item) => item.key === from.key);
     const c = columns.findIndex((col) => col.property.id === from.propertyId);
-    const row = rows[Math.max(0, Math.min(rows.length - 1, r + dRow))];
+    const item = rowItems[Math.max(0, Math.min(rowItems.length - 1, r + dRow))];
     const col = columns[Math.max(0, Math.min(columns.length - 1, c + dCol))];
-    if (row && col) setSelected({ rowId: row.id, propertyId: col.property.id });
+    if (item && col)
+      setSelected({ key: item.key, rowId: item.row.id, propertyId: col.property.id });
   };
 
   const finishEdit = (cell: CellRef, exit: EditExit) => {
@@ -238,15 +342,34 @@ export function TableView({ handle, snapshot, view, ctx, editable, onOpenRow }: 
     };
   });
 
-  const addNewRow = () => {
-    const id = addRow(doc, { actor: user.id });
-    setEditing({ rowId: id, propertyId: TITLE_PROPERTY_ID });
+  /** Add a row (with its group's values) and start typing its title. */
+  const addNewRow = (item: Extract<Item, { kind: 'new' }>) => {
+    const values = Object.fromEntries(
+      item.values.filter((v) => v.value !== undefined).map((v) => [v.propertyId, v.value]),
+    );
+    const id = addRow(doc, { actor: user.id, values });
+    const prefix = item.key.slice('new:'.length);
+    setEditing({ key: `${prefix}${id}`, rowId: id, propertyId: TITLE_PROPERTY_ID });
   };
 
-  // --- Virtual rows ----------------------------------------------------------------------
+  /** Hide or collapse a group (saved in the view). */
+  const updateGroupBy = (depth: number, key: string, field: 'hidden' | 'collapsed') => {
+    const levelKey = depth === 0 ? 'groupBy' : 'subGroupBy';
+    const groupBy = view[levelKey];
+    if (!groupBy) return;
+    const list = groupBy[field] ?? [];
+    updateView(doc, view.id, {
+      [levelKey]: {
+        ...groupBy,
+        [field]: list.includes(key) ? list.filter((k) => k !== key) : [...list, key],
+      },
+    });
+  };
+
+  // --- Virtual lines ---------------------------------------------------------------------
 
   const bodyRef = useRef<HTMLDivElement>(null);
-  const virtual = rows.length >= VIRTUALIZE_FROM;
+  const virtual = rowItems.length >= VIRTUALIZE_FROM;
   const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
   useEffect(() => {
@@ -269,45 +392,55 @@ export function TableView({ handle, snapshot, view, ctx, editable, onOpenRow }: 
   // The table isn't memoized by the compiler anyway; the virtualizer re-renders it.
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
-    count: virtual ? rows.length : 0,
+    count: virtual ? items.length : 0,
     getScrollElement: () => scrollRoot,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: (i) => (items[i]?.kind === 'group' ? GROUP_HEIGHT : ROW_HEIGHT),
     overscan: 12,
     scrollMargin,
-    getItemKey: (i) => rows[i]?.id ?? i,
+    getItemKey: (i) => items[i]?.key ?? i,
   });
-  const visibleRows = virtual
-    ? virtualizer.getVirtualItems().map((item) => ({ row: rows[item.index]!, item }))
-    : rows.map((row) => ({ row, item: null }));
+  const visibleItems = virtual
+    ? virtualizer.getVirtualItems().map((v) => ({ item: items[v.index]!, virtual: v }))
+    : items.map((item) => ({ item, virtual: null }));
 
   // Keep the selected (or edited, e.g. a new row's title) cell in view.
   const focusCell = editing ?? selected;
   useEffect(() => {
     if (!focusCell) return;
-    const index = rows.findIndex((r) => r.id === focusCell.rowId);
+    const index = items.findIndex((i) => i.key === focusCell.key);
     if (virtual && index >= 0) virtualizer.scrollToIndex(index);
     gridRef.current
-      ?.querySelector(`[data-cell="${focusCell.rowId}:${focusCell.propertyId}"]`)
+      ?.querySelector(`[data-cell="${CSS.escape(`${focusCell.key}:${focusCell.propertyId}`)}"]`)
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [focusCell, rows, virtual, virtualizer, scrollRoot, scrollMargin]);
+  }, [focusCell, items, virtual, virtualizer, scrollRoot, scrollMargin]);
 
   // --- Row drag and drop -----------------------------------------------------------------
 
   const [dragRow, setDragRow] = useState<string | null>(null);
-  const [dropRow, setDropRow] = useState<{ id: string; before: boolean } | null>(null);
-  const canReorder = editable && view.sorts.length === 0;
-  const dropRowAt = (event: DragEvent<HTMLElement>, id: string) => {
-    if (!dragRow || dragRow === id) return;
+  const [dropRow, setDropRow] = useState<{ key: string; before: boolean } | null>(null);
+  const grouped = result.groups !== null;
+  // Without sorts rows can be reordered; in groups, dropping also moves a row to a group.
+  const canDrag = editable && (view.sorts.length === 0 || grouped);
+  const dropRowAt = (event: DragEvent<HTMLElement>, key: string) => {
+    if (!dragRow) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     const before = event.clientY < rect.top + rect.height / 2;
-    if (dropRow?.id !== id || dropRow.before !== before) setDropRow({ id, before });
+    if (dropRow?.key !== key || dropRow.before !== before) setDropRow({ key, before });
   };
   const finishRowDrop = () => {
-    if (dragRow && dropRow) {
-      const at = rows.findIndex((r) => r.id === dropRow.id);
-      const beforeId = dropRow.before ? dropRow.id : (rows[at + 1]?.id ?? null);
-      if (beforeId !== dragRow) moveRow(doc, dragRow, beforeId);
+    const target = dropRow && rowItems.find((i) => i.key === dropRow.key);
+    if (dragRow && dropRow && target) {
+      doc.transact(() => {
+        for (const { propertyId, value } of target.values) {
+          if (value !== undefined) setCell(doc, dragRow, propertyId, value, user.id);
+        }
+        if (view.sorts.length === 0) {
+          const at = rowItems.indexOf(target);
+          const beforeId = dropRow.before ? target.row.id : (rowItems[at + 1]?.row.id ?? null);
+          if (beforeId !== dragRow) moveRow(doc, dragRow, beforeId);
+        }
+      });
     }
     setDragRow(null);
     setDropRow(null);
@@ -328,13 +461,143 @@ export function TableView({ handle, snapshot, view, ctx, editable, onOpenRow }: 
   };
 
   const lastColumn = columns[columns.length - 1]?.property.id;
+  const groupProperty = (depth: number) =>
+    byId.get((depth === 0 ? view.groupBy : view.subGroupBy)?.propertyId ?? '');
+
+  const renderItem = (item: Item) => {
+    switch (item.kind) {
+      case 'group':
+        return (
+          <GroupHeader
+            group={item.group}
+            property={groupProperty(item.depth)}
+            depth={item.depth}
+            editable={editable}
+            onToggle={() => updateGroupBy(item.depth, item.group.info.key, 'collapsed')}
+            onHide={() => updateGroupBy(item.depth, item.group.info.key, 'hidden')}
+            onAdd={() =>
+              addNewRow({
+                kind: 'new',
+                key: `new:${item.key.slice('group:'.length)}`,
+                depth: item.depth,
+                values: item.values,
+              })
+            }
+          />
+        );
+      case 'new':
+        return editable ? (
+          <button
+            type="button"
+            onClick={() => addNewRow(item)}
+            data-testid="table-new-row"
+            className="flex h-[33px] w-full items-center gap-1.5 border-b border-line px-2 text-muted hover:bg-hover"
+            style={{ width: totalWidth }}
+          >
+            <Plus size={14} /> New
+          </button>
+        ) : null;
+      case 'calc':
+        return (
+          <div role="row" className="group/calc flex h-[33px]" data-testid="calc-row">
+            {columns.map(({ property, width }) => (
+              <CalcCell
+                key={property.id}
+                rows={item.rows}
+                property={property}
+                width={widthOf(property.id, width)}
+                calc={view.calculations[property.id] ?? null}
+                ctx={ctx}
+                editable={editable}
+                onChange={(calc) => {
+                  const calculations = { ...view.calculations };
+                  if (calc) calculations[property.id] = calc;
+                  else delete calculations[property.id];
+                  updateView(doc, view.id, { calculations });
+                }}
+              />
+            ))}
+          </div>
+        );
+      case 'row': {
+        const { row } = item;
+        return (
+          <div
+            role="row"
+            data-testid="table-row"
+            data-row-id={row.id}
+            onDragOver={(e) => dropRowAt(e, item.key)}
+            onDrop={finishRowDrop}
+            className={cn(
+              'group/row relative flex border-b border-line',
+              dragRow === row.id && 'opacity-50',
+            )}
+          >
+            {dropRow?.key === item.key && (
+              <span
+                aria-hidden
+                className={cn(
+                  'pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-accent',
+                  dropRow.before ? '-top-px' : '-bottom-px',
+                )}
+              />
+            )}
+            <RowHandle
+              handle={handle}
+              row={row}
+              editable={editable}
+              draggable={canDrag}
+              onOpen={() => onOpenRow(row.id)}
+              onDragStart={() => setDragRow(row.id)}
+              onDragEnd={() => {
+                setDragRow(null);
+                setDropRow(null);
+              }}
+            />
+            {columns.map(({ property, width }) => {
+              const cell = { key: item.key, rowId: row.id, propertyId: property.id };
+              const isSelected = selected?.key === item.key && selected.propertyId === property.id;
+              const isEditing = editing?.key === item.key && editing.propertyId === property.id;
+              return (
+                <Cell
+                  key={property.id}
+                  cellKey={`${item.key}:${property.id}`}
+                  handle={handle}
+                  row={row}
+                  property={property}
+                  ctx={ctx}
+                  width={widthOf(property.id, width)}
+                  wrap={view.wrap}
+                  selected={isSelected}
+                  editing={isEditing ? editing : null}
+                  editable={editable}
+                  onClick={() => {
+                    setSelected(cell);
+                    if (editable && !isEditing) startEdit(cell);
+                    else focusGrid();
+                  }}
+                  onToggle={() => {
+                    setSelected(cell);
+                    startEdit(cell);
+                    focusGrid();
+                  }}
+                  onDone={(exit) => finishEdit(cell, exit)}
+                  onOpen={() => onOpenRow(row.id)}
+                />
+              );
+            })}
+          </div>
+        );
+      }
+    }
+  };
 
   return (
     <div
       ref={gridRef}
       role="grid"
       aria-label="Table"
-      aria-rowcount={rows.length + 1}
+      aria-rowcount={rowItems.length + 1}
       tabIndex={0}
       data-testid="table-view"
       onKeyDown={onKeyDown}
@@ -391,6 +654,7 @@ export function TableView({ handle, snapshot, view, ctx, editable, onOpenRow }: 
                 });
                 setHeaderMenu(id);
               }}
+              onFilter={() => onFilter(property.id)}
             />
           ))}
           {editable && (
@@ -414,102 +678,172 @@ export function TableView({ handle, snapshot, view, ctx, editable, onOpenRow }: 
           className="relative"
           style={virtual ? { height: virtualizer.getTotalSize() } : undefined}
         >
-          {visibleRows.map(({ row, item }) => (
+          {visibleItems.map(({ item, virtual: v }) => (
             <div
-              key={row.id}
-              role="row"
-              data-testid="table-row"
-              data-row-id={row.id}
-              data-index={item?.index}
-              ref={view.wrap && item ? virtualizer.measureElement : undefined}
-              onDragOver={(e) => dropRowAt(e, row.id)}
-              onDrop={finishRowDrop}
-              className={cn(
-                'group/row flex border-b border-line',
-                virtual ? 'absolute top-0 left-0 w-full' : 'relative',
-                dragRow === row.id && 'opacity-50',
-              )}
+              key={item.key}
+              data-index={v?.index}
+              ref={
+                v && (view.wrap || item.kind === 'group') ? virtualizer.measureElement : undefined
+              }
+              className={v ? 'absolute top-0 left-0 w-full' : undefined}
               style={
-                item
-                  ? { transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)` }
+                v
+                  ? { transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }
                   : undefined
               }
             >
-              {dropRow?.id === row.id && (
-                <span
-                  aria-hidden
-                  className={cn(
-                    'pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-accent',
-                    dropRow.before ? '-top-px' : '-bottom-px',
-                  )}
-                />
-              )}
-              <RowHandle
-                handle={handle}
-                row={row}
-                editable={editable}
-                draggable={canReorder}
-                onOpen={() => onOpenRow(row.id)}
-                onDragStart={() => setDragRow(row.id)}
-                onDragEnd={() => {
-                  setDragRow(null);
-                  setDropRow(null);
-                }}
-              />
-              {columns.map(({ property, width }) => {
-                const cell = { rowId: row.id, propertyId: property.id };
-                const isSelected =
-                  selected?.rowId === row.id && selected.propertyId === property.id;
-                const isEditing = editing?.rowId === row.id && editing.propertyId === property.id;
-                return (
-                  <Cell
-                    key={property.id}
-                    handle={handle}
-                    row={row}
-                    property={property}
-                    ctx={ctx}
-                    width={widthOf(property.id, width)}
-                    wrap={view.wrap}
-                    selected={isSelected}
-                    editing={isEditing ? editing : null}
-                    editable={editable}
-                    onClick={() => {
-                      setSelected(cell);
-                      if (editable && !isEditing) startEdit(cell);
-                      else focusGrid();
-                    }}
-                    onToggle={() => {
-                      setSelected(cell);
-                      startEdit(cell);
-                      focusGrid();
-                    }}
-                    onDone={(exit) => finishEdit(cell, exit)}
-                    onOpen={() => onOpenRow(row.id)}
-                  />
-                );
-              })}
+              {renderItem(item)}
             </div>
           ))}
         </div>
-
-        {editable && (
-          <button
-            type="button"
-            onClick={addNewRow}
-            className="flex h-[33px] w-full items-center gap-1.5 border-b border-line px-2 text-muted hover:bg-hover"
-            style={{ width: totalWidth }}
-          >
-            <Plus size={14} /> New
-          </button>
-        )}
       </div>
     </div>
+  );
+}
+
+// --- Groups and calculations -------------------------------------------------------------
+
+function GroupHeader({
+  group,
+  property,
+  depth,
+  editable,
+  onToggle,
+  onHide,
+  onAdd,
+}: {
+  group: ViewGroup;
+  property: Property | undefined;
+  depth: number;
+  editable: boolean;
+  onToggle(): void;
+  onHide(): void;
+  onAdd(): void;
+}) {
+  const { info } = group;
+  const isOption =
+    info.color !== undefined ||
+    property?.type === 'select' ||
+    property?.type === 'multiSelect' ||
+    property?.type === 'status';
+  return (
+    <div
+      role="row"
+      data-testid="group-header"
+      data-group-key={info.key}
+      className={cn('group/g flex h-[41px] items-center gap-1.5 text-sm', depth > 0 && 'pl-5')}
+    >
+      <IconButton
+        label={group.collapsed ? 'Expand group' : 'Collapse group'}
+        size="sm"
+        onClick={onToggle}
+      >
+        <ChevronRight
+          size={14}
+          className={cn('transition-transform', !group.collapsed && 'rotate-90')}
+        />
+      </IconButton>
+      <span className="flex min-w-0 items-center gap-2" data-testid="group-label">
+        {isOption && info.key !== NO_VALUE ? (
+          <OptionPill
+            option={{ id: info.key, name: info.label, color: info.color ?? 'default' }}
+            status={info.status}
+          />
+        ) : (
+          <span className="truncate font-medium">{info.label}</span>
+        )}
+        <span className="text-faint" data-testid="group-count">
+          {group.rows.length}
+        </span>
+      </span>
+      {editable && (
+        <span className="flex items-center opacity-0 group-hover/g:opacity-100">
+          <IconButton label="Hide group" size="sm" onClick={onHide}>
+            <EyeOff size={13} />
+          </IconButton>
+          {info.value !== undefined && (
+            <IconButton label="New in group" size="sm" onClick={onAdd}>
+              <Plus size={14} />
+            </IconButton>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CalcCell({
+  rows,
+  property,
+  width,
+  calc,
+  ctx,
+  editable,
+  onChange,
+}: {
+  rows: Row[];
+  property: Property;
+  width: number;
+  calc: CalculationId | null;
+  ctx: DisplayContext;
+  editable: boolean;
+  onChange(calc: CalculationId | null): void;
+}) {
+  const info = calc ? calculationInfo(property.type, calc) : undefined;
+  const options = calculationsFor(property.type);
+  const value = info ? calculate(rows, property, info.id, ctx) : '';
+  return (
+    <Menu>
+      <MenuTrigger asChild disabled={!editable}>
+        <button
+          type="button"
+          style={{ width }}
+          data-testid="calc-cell"
+          className={cn(
+            'flex h-full shrink-0 items-center justify-end gap-1.5 px-2 text-xs text-faint hover:bg-hover',
+            !info && 'opacity-0 group-hover/calc:opacity-100 data-[state=open]:opacity-100',
+          )}
+        >
+          {info ? (
+            <>
+              <span className="uppercase">{info.short}</span>
+              <span className="text-sm text-fg" data-testid="calc-value">
+                {value || '—'}
+              </span>
+            </>
+          ) : (
+            <>
+              Calculate <ChevronDown size={12} />
+            </>
+          )}
+        </button>
+      </MenuTrigger>
+      <MenuContent align="end" className="max-h-96 overflow-y-auto" data-testid="calc-menu">
+        <MenuItem onSelect={() => onChange(null)}>None</MenuItem>
+        {(['count', 'percent', 'more'] as const).map((group) => {
+          const list = options.filter((o) => o.group === group);
+          return list.length ? (
+            <div key={group}>
+              <MenuSeparator />
+              {list.map((o) => (
+                <MenuItem key={o.id} onSelect={() => onChange(o.id)}>
+                  <span className="flex-1">{o.label}</span>
+                  {o.id === calc && '✓'}
+                </MenuItem>
+              ))}
+            </div>
+          ) : null;
+        })}
+      </MenuContent>
+    </Menu>
   );
 }
 
 // --- Cells -------------------------------------------------------------------------------
 
 interface CellProps {
+  /** Identifies the cell's line and column (for scrolling it into view). */
+  cellKey: string;
   handle: DatabaseHandle;
   row: Row;
   property: Property;
@@ -541,7 +875,7 @@ function Cell(props: CellProps) {
     <div
       role="gridcell"
       aria-selected={selected}
-      data-cell={`${row.id}:${property.id}`}
+      data-cell={props.cellKey}
       data-testid="table-cell"
       onClick={onClick}
       style={{ width }}
@@ -705,6 +1039,7 @@ interface HeaderCellProps {
   onDrop(): void;
   onDragEnd(): void;
   onInsert(side: 'left' | 'right'): void;
+  onFilter(): void;
 }
 
 function HeaderCell(props: HeaderCellProps) {
@@ -821,7 +1156,11 @@ function HeaderCell(props: HeaderCellProps) {
               </MenuSubContent>
             </MenuSub>
           )}
+          <PropertyFormatMenu handle={handle} property={property} />
           <MenuSeparator />
+          <MenuItem icon={<ListFilter size={14} />} onSelect={props.onFilter}>
+            Filter
+          </MenuItem>
           <MenuItem icon={<ArrowUp size={14} />} onSelect={() => sort('asc')}>
             Sort ascending
           </MenuItem>
@@ -917,5 +1256,89 @@ function AddPropertyButton({ onAdd }: { onAdd(type: PropertyType): void }) {
         ))}
       </MenuContent>
     </Menu>
+  );
+}
+
+/** Format settings in a column menu: number and date formats, ID prefix. */
+function PropertyFormatMenu({ handle, property }: { handle: DatabaseHandle; property: Property }) {
+  const set = (changes: Partial<Property['config']>) =>
+    setPropertyConfig(handle.doc, property.id, { ...property.config, ...changes });
+  const radio = <T extends string>(
+    label: string,
+    icon: ReactNode,
+    value: T,
+    options: { id: T; label: string }[],
+    onChange: (value: T) => void,
+  ) => (
+    <MenuSub>
+      <MenuSubTrigger icon={icon}>
+        <span className="flex-1">{label}</span>
+        <span className="text-xs text-faint">{options.find((o) => o.id === value)?.label}</span>
+      </MenuSubTrigger>
+      <MenuSubContent className="max-h-96 overflow-y-auto">
+        <MenuRadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
+          {options.map((o) => (
+            <MenuRadioItem key={o.id} value={o.id}>
+              {o.label}
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuSubContent>
+    </MenuSub>
+  );
+
+  if (property.type === 'number') {
+    return radio(
+      'Number format',
+      <Hash size={14} />,
+      property.config.numberFormat ?? 'number',
+      NUMBER_FORMATS,
+      (numberFormat) => set({ numberFormat }),
+    );
+  }
+  if (['date', 'createdTime', 'lastEditedTime'].includes(property.type)) {
+    return (
+      <>
+        {radio(
+          'Date format',
+          <Calendar size={14} />,
+          property.config.dateFormat ?? 'full',
+          DATE_FORMATS,
+          (dateFormat) => set({ dateFormat }),
+        )}
+        {radio(
+          'Time format',
+          <Clock size={14} />,
+          property.config.timeFormat ?? '12h',
+          TIME_FORMATS,
+          (timeFormat) => set({ timeFormat }),
+        )}
+      </>
+    );
+  }
+  if (property.type === 'uniqueId') {
+    return (
+      <PrefixInput value={property.config.prefix ?? ''} onChange={(prefix) => set({ prefix })} />
+    );
+  }
+  return null;
+}
+
+function PrefixInput({ value, onChange }: { value: string; onChange(prefix: string): void }) {
+  const [text, setText] = useState(value);
+  return (
+    <div className="p-1" onKeyDown={(e) => e.stopPropagation()}>
+      <input
+        value={text}
+        placeholder="ID prefix, e.g. TASK"
+        aria-label="ID prefix"
+        onChange={(e) => setText(e.target.value.replace(/[^\w]/g, '').toUpperCase())}
+        onBlur={() => text !== value && onChange(text)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onChange(text);
+        }}
+        className="h-7 w-full rounded border border-line bg-surface px-2 outline-none focus:border-accent"
+      />
+    </div>
   );
 }

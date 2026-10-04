@@ -1,5 +1,14 @@
 import * as Y from 'yjs';
-import { readProperties, readRow, readViews, rowsMap, schemaMap, viewsMap } from './doc';
+import {
+  metaMap,
+  readMeta,
+  readProperties,
+  readRow,
+  readViews,
+  rowsMap,
+  schemaMap,
+  viewsMap,
+} from './doc';
 import { PageField } from '@workspace/core';
 import type { DatabaseSnapshot, Row } from './schema';
 
@@ -30,8 +39,9 @@ export class DatabaseHandle {
     rows.observeDeep(this.onRows);
     schemaMap(doc).observeDeep(this.onMeta);
     viewsMap(doc).observeDeep(this.onMeta);
+    metaMap(doc).observe(this.onMeta);
     // Only local edits (origin null) are undoable, not other windows' updates.
-    this.undo = new Y.UndoManager([rows, schemaMap(doc), viewsMap(doc)], {
+    this.undo = new Y.UndoManager([rows, schemaMap(doc), viewsMap(doc), metaMap(doc)], {
       // Each edit (a cell, a paste, a new row) is its own undo step.
       captureTimeout: 0,
     });
@@ -109,7 +119,11 @@ export class DatabaseHandle {
     }
     const meta =
       this.metaDirty || !this.lastMeta
-        ? { properties: readProperties(this.doc), views: readViews(this.doc) }
+        ? {
+            properties: readProperties(this.doc),
+            views: readViews(this.doc),
+            meta: readMeta(this.doc),
+          }
         : this.lastMeta;
     this.lastMeta = meta;
     this.metaDirty = false;
@@ -117,7 +131,7 @@ export class DatabaseHandle {
     return this.current;
   };
 
-  private lastMeta: Pick<DatabaseSnapshot, 'properties' | 'views'> | null = null;
+  private lastMeta: Pick<DatabaseSnapshot, 'properties' | 'views' | 'meta'> | null = null;
 
   /** The row with this id, if the database has it. */
   row(id: string): Row | undefined {
@@ -130,6 +144,7 @@ export class DatabaseHandle {
     rowsMap(this.doc).unobserveDeep(this.onRows);
     schemaMap(this.doc).unobserveDeep(this.onMeta);
     viewsMap(this.doc).unobserveDeep(this.onMeta);
+    metaMap(this.doc).unobserve(this.onMeta);
     this.undo.destroy();
     this.listeners.clear();
   }

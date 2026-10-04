@@ -133,7 +133,12 @@ test('selection toolbar formats text, links it and turns the block into a headin
   await toolbar.getByLabel('Link URL').press('Enter');
   await expect(editor(window).locator('a')).toHaveAttribute('href', 'https://example.com');
 
+  // Other test workers' windows can take the OS focus, which blurs the editor and
+  // (rightly) hides the toolbar; take it back first.
+  await window.bringToFront();
+  await expect(editor(window)).toBeFocused();
   await window.keyboard.press('End');
+  await expect(toolbar).toBeHidden();
   await window.keyboard.press('Shift+Home');
   await expect(toolbar).toBeVisible();
   await toolbar.getByRole('button', { name: 'Turn into' }).click();

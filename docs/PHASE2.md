@@ -1,6 +1,6 @@
 # Phase 2: Databases
 
-**Status:** M1 done. M2 next.
+**Status:** M1 and M2 done. M3 next.
 
 ## Context
 
@@ -162,7 +162,7 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - Unique IDs can repeat if two devices add rows offline at the same time; sync (Phase 4) will fix this.
   - Databases stay loaded for the rest of the session once shown.
 
-### M2: views, filters, sorts, groups and calculations
+### M2: views, filters, sorts, groups and calculations ✅
 
 - View tabs: add, rename, duplicate, delete and reorder views; per-view property visibility and order.
 - **Filters:**
@@ -176,6 +176,29 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - **dates:** earliest, latest, date range
   - **checkboxes:** checked and unchecked
 - Search inside a view; number formats (number, comma, percent, currencies); date formats and 12/24-hour time.
+
+**M2 notes:**
+
+- **Where it lives:** `packages/database` gained `filter.ts` (operators per type, nested AND/OR evaluation, relative dates, "me"), `group.ts` (buckets per type), `calc.ts`, `format.ts` (number, date and time formats) and `reminders.ts`. `runView` now filters, searches, sorts, then groups and sub-groups. All of it is unit tested.
+- **Toolbar:**
+  - Filter, Sort and Group buttons, plus a search box (search isn't saved, as in Notion).
+  - Filters show as chips, one per rule. Choosing "Advanced", or adding OR or a group, turns them into one "N rules" chip that opens the nested editor (groups nest one level, like Notion).
+  - Incomplete rules are ignored. Inside an OR group they drop out instead of matching every row.
+- **Grouped tables:** the body is a flat list of lines (group header, rows, "+ New", calculations), so grouping, collapsing and virtualization share one path.
+  - "+ New" in a group gives the row that group's value.
+  - Dragging a row into another group changes its value.
+  - A multi-select row appears in each of its groups.
+- **Calculations** are saved per view and per column, and shown for each group.
+- **Formats:** number format, date format and time format live in the property config. Table cells, calculations and row pages all use them.
+- **Carried over from M1, now done:**
+  - Filter from the column menu.
+  - "Hide empty properties" on row pages (a per-database setting, with "N more properties").
+  - Reminders on date properties. They are indexed with the rows and notify like `@remind`.
+- **Not done or changed:**
+  - Groups follow the property's order, ascending or descending. They can't be dragged into a custom order.
+  - Grouping by relation and formula comes with those property types (M3, M4).
+  - Number formats don't include Notion's "bar" and "ring" displays.
+- **Fixed along the way:** a race in the editor's selection toolbar, present since Phase 1. TipTap hid the toolbar at once but showed it after a 250 ms debounce, which sometimes left it out of step with the selection. It now updates without the delay.
 
 ### M3: formula engine (Formula 2.0)
 

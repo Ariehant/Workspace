@@ -13,6 +13,7 @@ import {
   hasRow,
   isDatabaseDoc,
   readDatabase,
+  readDateReminders,
   rowPropertiesText,
   touchRow,
 } from '@workspace/database';
@@ -216,6 +217,8 @@ export class DocManager {
       props: rowPropertiesText(row, db.properties, { users }),
     }));
     const { added, removed } = this.store.syncRowIndex(databaseId, rows);
+    this.store.replacePropertyReminders(databaseId, readDateReminders(db));
+    this.onRemindersChanged();
     // Content typed before the row reached the index.
     for (const id of added) {
       const content = this.docs.get(id)?.doc;

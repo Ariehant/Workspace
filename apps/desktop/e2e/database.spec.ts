@@ -1,51 +1,5 @@
-import type { Locator, Page } from '@playwright/test';
+import { addProperty, addRow, cell, header, newDatabase, popover, rows, table, titles } from './db';
 import { editor, expect, quit, test, waitForIndexed } from './helpers';
-
-/** A new full-page database named `title` (via "Get started with: Database"). */
-async function newDatabase(window: Page, title: string) {
-  await window.getByRole('button', { name: 'New page' }).click();
-  await window.getByLabel('Page title').fill(title);
-  await window.getByTestId('get-started').getByRole('button', { name: 'Database' }).click();
-  await expect(table(window)).toBeVisible();
-}
-
-const table = (window: Page) => window.getByTestId('table-view');
-const rows = (window: Page) => table(window).getByTestId('table-row');
-const titles = (window: Page) => table(window).getByTestId('row-title');
-const header = (window: Page, name: string) =>
-  table(window).getByTestId('column-header').filter({ hasText: name });
-
-/** The cell of row `rowTitle` under column `column`. */
-async function cell(window: Page, rowTitle: string, column: string): Promise<Locator> {
-  const headers = await table(window).getByTestId('column-header').allInnerTexts();
-  const index = headers.findIndex((h) => h.trim() === column);
-  expect(index, `column ${column}`).toBeGreaterThanOrEqual(0);
-  return rows(window)
-    .filter({ has: window.getByTestId('row-title').getByText(rowTitle, { exact: true }) })
-    .getByTestId('table-cell')
-    .nth(index);
-}
-
-async function addRow(window: Page, title: string) {
-  await table(window).getByRole('button', { name: 'New', exact: true }).click();
-  await window.keyboard.type(title);
-  await window.keyboard.press('Enter');
-  await expect(titles(window).getByText(title, { exact: true })).toBeVisible();
-}
-
-async function addProperty(window: Page, type: string, name: string) {
-  await table(window).getByRole('button', { name: 'Add a property' }).click();
-  await window
-    .getByTestId('add-property-menu')
-    .getByRole('menuitem', { name: type, exact: true })
-    .click();
-  const input = window.getByTestId('property-menu').getByLabel('Property name');
-  await input.fill(name);
-  await input.press('Enter');
-  await expect(header(window, name)).toBeVisible();
-}
-
-const popover = (window: Page) => window.getByTestId('cell-popover');
 
 test('database: every property type, edited in the table, kept after restart', async ({
   launch,
@@ -179,7 +133,7 @@ test('columns: sort, rename, change type, hide, resize, reorder, delete', async 
     ['b', '1.5'],
     ['c', '1.10'],
     ['a', '3'],
-  ]) {
+  ] as const) {
     await addRow(window, title);
     await (await cell(window, title, 'Rank')).click();
     await window.keyboard.type(rank);
@@ -198,7 +152,9 @@ test('columns: sort, rename, change type, hide, resize, reorder, delete', async 
   await window.getByRole('menuitem', { name: 'Number', exact: true }).click();
   await expect(titles(window)).toHaveText(['c', 'b', 'a']);
   await expect(await cell(window, 'c', 'Rank')).toHaveText('1.1');
-  await window.getByRole('button', { name: 'Remove sort' }).click();
+  await window.getByTestId('sort-chip').click();
+  await window.getByTestId('sort-editor').getByRole('button', { name: 'Delete sort' }).click();
+  await window.keyboard.press('Escape');
   await expect(titles(window)).toHaveText(['b', 'c', 'a']);
 
   // Rename.
@@ -382,6 +338,7 @@ test('rows in quick find, links to rows, and inline databases', async ({ launch 
   await window.getByRole('button', { name: 'New page' }).click();
   await window.getByLabel('Page title').fill('Lab notes');
   await window.getByLabel('Page title').press('Enter');
+  await expect(editor(window)).toBeFocused();
   await window.keyboard.type('/database inline');
   await expect(window.getByTestId('slash-menu').getByRole('option').first()).toContainText(
     'Database - Inline',

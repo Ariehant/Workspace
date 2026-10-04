@@ -12,6 +12,7 @@ import {
 } from '@workspace/core';
 import {
   addOption,
+  addProperty,
   addRow,
   deleteRow,
   initDatabase,
@@ -137,6 +138,38 @@ describe('database indexing', () => {
     const store = new SqliteStore(dbPath);
     expect(store.search('legacy')).toMatchObject([{ id: 'p1', databaseId: null }]);
     expect(store.locatePage('p1')).toEqual({ databaseId: null });
+    store.close();
+  });
+});
+
+describe('date property reminders', () => {
+  it('are indexed per row, apart from content reminders, and survive re-indexing once fired', () => {
+    const { store, manager, db } = setup();
+    const due = addProperty(db, { name: 'Due', type: 'date' });
+    const row = addRow(db, {
+      actor: null,
+      title: 'Ship',
+      values: { [due]: { start: '2026-10-20', reminder: 'onDay' } },
+    });
+    manager.flush();
+    const at = new Date(2026, 9, 20, 9).getTime();
+    expect(store.dueReminders(at)).toMatchObject([
+      { pageId: row, pageTitle: 'Ship', text: 'Due: Ship', fireAt: at },
+    ]);
+
+    // Content reminders on the row's page don't replace the property's.
+    store.replaceReminders(row, [{ blockId: 'b1', fireAt: at, text: 'From content' }]);
+    expect(store.dueReminders(at)).toHaveLength(2);
+
+    store.markReminderFired({ pageId: row, blockId: `prop:${due}`, fireAt: at });
+    setCell(db, row, due, { start: '2026-10-20', reminder: 'onDay' }, null);
+    manager.flush();
+    expect(store.dueReminders(at).map((r) => r.text)).toEqual(['From content']);
+
+    setCell(db, row, due, { start: '2026-10-21' }, null);
+    manager.flush();
+    expect(store.dueReminders(at + 2 * 86_400_000).map((r) => r.text)).toEqual(['From content']);
+    manager.close();
     store.close();
   });
 });

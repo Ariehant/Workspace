@@ -5,7 +5,8 @@ and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI featu
 
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) are complete. Phase 2
-(databases, see [docs/PHASE2.md](docs/PHASE2.md)) is in progress: M1 (the table view) is done.
+(databases, see [docs/PHASE2.md](docs/PHASE2.md)) is in progress: the table view (M1) and
+views, filters, sorts, groups and calculations (M2) are done.
 
 ## What works today
 
@@ -40,6 +41,9 @@ Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) are comple
   - Table view: edit cells in place, keyboard navigation, copy and paste, undo; sort; rename,
     retype, hide, resize, reorder, duplicate and delete columns; drag rows to reorder. Large
     tables only render the rows in view.
+  - Several views per database, each with its own filters (simple chips or nested AND/OR),
+    sorts, grouping and sub-grouping, column calculations and visible columns; search inside a
+    view. Number, date and time formats; reminders on dates.
   - Rows are pages: open them in a side peek, a center peek or full page, with their properties
     above the content. Rows show up in quick find (including their property text), can be
     linked to, and go to the Trash when deleted.

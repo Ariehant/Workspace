@@ -10,6 +10,7 @@ import {
   nextOptionColor,
   optionsOf,
   propertyKind,
+  reminderOptions,
   setCell,
   updateOption,
   type DatabaseHandle,
@@ -731,10 +732,31 @@ function DateEditor({ handle, row, property }: CellEditorProps) {
           on={Boolean(value?.end)}
           onChange={(on) => {
             const start = value?.start ?? today;
-            write(on ? { start, end: start } : { start });
+            const reminder = value?.reminder ? { reminder: value.reminder } : {};
+            write(on ? { start, end: start, ...reminder } : { start, ...reminder });
           }}
         />
         <Toggle label="Include time" on={withTime} onChange={setTime} />
+        {value && (
+          <label className="flex h-8 items-center justify-between gap-2 rounded px-2 hover:bg-hover">
+            <span>Remind</span>
+            <select
+              aria-label="Remind"
+              value={value.reminder ?? ''}
+              onChange={(e) =>
+                write({ ...value, reminder: (e.target.value || null) as DateValue['reminder'] })
+              }
+              className="h-7 max-w-40 rounded border border-line bg-surface px-1 text-sm outline-none"
+            >
+              <option value="">None</option>
+              {reminderOptions(withTime).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button
           type="button"
           onClick={() => write(null)}

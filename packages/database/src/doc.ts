@@ -4,11 +4,13 @@ import * as Y from 'yjs';
 import { cellText, propertyKind, optionsOf } from './properties';
 import {
   DEFAULT_VIEW_CONFIG,
+  META_MAP,
   ROWS_MAP,
   RowField,
   SCHEMA_MAP,
   TITLE_PROPERTY_ID,
   VIEWS_MAP,
+  type DatabaseMeta,
   type DatabaseSnapshot,
   type DisplayContext,
   type Property,
@@ -26,6 +28,17 @@ type YMap = Y.Map<unknown>;
 export const schemaMap = (doc: Y.Doc) => doc.getMap<YMap>(SCHEMA_MAP);
 export const viewsMap = (doc: Y.Doc) => doc.getMap<YMap>(VIEWS_MAP);
 export const rowsMap = (doc: Y.Doc) => doc.getMap<YMap>(ROWS_MAP);
+export const metaMap = (doc: Y.Doc) => doc.getMap<unknown>(META_MAP);
+
+export function readMeta(doc: Y.Doc): DatabaseMeta {
+  return { hideEmptyProperties: metaMap(doc).get('hideEmptyProperties') === true };
+}
+
+export function setMeta(doc: Y.Doc, changes: Partial<DatabaseMeta>): void {
+  doc.transact(() => {
+    for (const [key, value] of Object.entries(changes)) metaMap(doc).set(key, value);
+  });
+}
 
 /** True once the doc has been set up as a database. */
 export function isDatabaseDoc(doc: Y.Doc): boolean {
@@ -70,6 +83,10 @@ export function readView(map: YMap): View {
     sortKey: (map.get('sortKey') as string | undefined) ?? '',
     properties: get('properties'),
     sorts: get('sorts'),
+    filter: get('filter'),
+    groupBy: get('groupBy'),
+    subGroupBy: get('subGroupBy'),
+    calculations: get('calculations'),
     openPagesIn: get('openPagesIn'),
     wrap: get('wrap'),
   };
@@ -112,6 +129,7 @@ export function readDatabase(doc: Y.Doc): DatabaseSnapshot {
     properties: readProperties(doc),
     views: readViews(doc),
     rows: Array.from(rowsMap(doc).values(), readRow).sort(byKey),
+    meta: readMeta(doc),
   };
 }
 
@@ -570,6 +588,35 @@ export function updateView(
 
 export function deleteView(doc: Y.Doc, id: string): void {
   viewsMap(doc).delete(id);
+}
+
+/** Copy a view (filters, sorts, groups, columns) right after it. Returns the copy's id. */
+export function duplicateView(doc: Y.Doc, id: string): string {
+  const view = readView(getViewMap(doc, id));
+  const copyId = newId();
+  doc.transact(() => {
+    const siblings = readViews(doc).filter((v) => v.viewSet === view.viewSet);
+    const at = siblings.findIndex((v) => v.id === id) + 1;
+    const map = new Y.Map<unknown>();
+    const { id: _id, sortKey: _key, ...rest } = view;
+    void _id;
+    void _key;
+    for (const [key, value] of Object.entries(structuredClone(rest))) map.set(key, value);
+    map.set('id', copyId);
+    map.set('name', `${view.name} (1)`);
+    map.set('sortKey', keyAt(siblings, at));
+    viewsMap(doc).set(copyId, map);
+  });
+  return copyId;
+}
+
+/** Move a view tab before another (or last with `null`). */
+export function moveView(doc: Y.Doc, id: string, beforeId: string | null): void {
+  if (id === beforeId) return;
+  const view = readView(getViewMap(doc, id));
+  const siblings = readViews(doc).filter((v) => v.viewSet === view.viewSet && v.id !== id);
+  const at = beforeId ? siblings.findIndex((v) => v.id === beforeId) : -1;
+  getViewMap(doc, id).set('sortKey', keyAt(siblings, at < 0 ? siblings.length : at));
 }
 
 /** Views of one view set, in tab order. */

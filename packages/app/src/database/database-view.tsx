@@ -1,10 +1,21 @@
 import { getPage, getPageTitleText, isInTrash, setPageTitle } from '@workspace/core';
 import {
   addRow,
+  addView,
+  countRules,
+  deleteView,
+  duplicateView,
+  moveView,
+  newFilterGroup,
+  newFilterRule,
+  runView,
+  updateFilterTree,
   updateView,
   updateViewColumn,
   viewColumns,
   viewsOf,
+  type FilterGroup,
+  type FilterRule,
   type OpenPagesIn,
   type View,
 } from '@workspace/database';
@@ -21,27 +32,45 @@ import {
   MenuSubContent,
   MenuSubTrigger,
   MenuTrigger,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
   cn,
 } from '@workspace/ui';
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  Copy,
   Eye,
   EyeOff,
+  Layers,
+  ListFilter,
   Maximize2,
   PanelRight,
-  SquareStack,
+  Plus,
+  Search,
   Table2,
+  Trash2,
   WrapText,
   X,
 } from 'lucide-react';
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../context';
 import { useDocVersion } from '../hooks';
 import { useNavigation } from '../navigation';
 import { PropertyIcon } from './cells';
 import { useDatabase, useDisplayContext } from './hooks';
 import { TableView } from './table';
+import {
+  FilterGroupEditor,
+  GroupEditor,
+  PropertyPicker,
+  RuleChip,
+  SortEditor,
+  isAdvanced,
+} from './view-controls';
 
 export interface DatabaseViewProps {
   databaseId: string;
@@ -50,11 +79,39 @@ export interface DatabaseViewProps {
   editable: boolean;
 }
 
-const OPEN_MODES: { mode: OpenPagesIn; label: string; icon: typeof PanelRight }[] = [
-  { mode: 'sidePeek', label: 'Side peek', icon: PanelRight },
-  { mode: 'center', label: 'Center peek', icon: SquareStack },
-  { mode: 'fullPage', label: 'Full page', icon: Maximize2 },
+const OPEN_MODES: { mode: OpenPagesIn; label: string }[] = [
+  { mode: 'sidePeek', label: 'Side peek' },
+  { mode: 'center', label: 'Center peek' },
+  { mode: 'fullPage', label: 'Full page' },
 ];
+
+/** Which panel of the toolbar is open. */
+type Panel = 'filter' | 'advanced' | 'sort' | 'group' | null;
+
+/** The last view picked in a view set, remembered per window user. */
+function useActiveView(viewSet: string): [string | null, (id: string) => void] {
+  const { platform } = useApp();
+  const key = `view.${viewSet}`;
+  const [active, setActive] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    platform.getSetting<string>(key).then(
+      (id) => alive && id && setActive(id),
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, [platform, key]);
+  const choose = useCallback(
+    (id: string) => {
+      setActive(id);
+      platform.setSetting(key, id);
+    },
+    [platform, key],
+  );
+  return [active, choose];
+}
 
 /** A database's view tabs, toolbar and the active view. */
 export function DatabaseView({ databaseId, viewSet = databaseId, editable }: DatabaseViewProps) {
@@ -62,87 +119,328 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
   const ctx = useDisplayContext();
   const { user } = useApp();
   const { openRow } = useNavigation();
-  const [activeId, setActiveId] = useState<string | null>(null);
-  if (!loaded) return <div className="h-24" aria-busy="true" />;
+  const [activeId, setActiveId] = useActiveView(viewSet);
+  const [panel, setPanel] = useState<Panel>(null);
+  const [openChip, setOpenChip] = useState<string | null>(null);
+  const [search, setSearch] = useState<string | null>(null);
+  const [dragTab, setDragTab] = useState<string | null>(null);
 
-  const { handle, snapshot } = loaded;
-  const views = viewsOf(snapshot, viewSet);
+  const snapshot = loaded?.snapshot;
+  const views = snapshot ? viewsOf(snapshot, viewSet) : [];
   const view = views.find((v) => v.id === activeId) ?? views[0];
-  if (!view) return <p className="py-4 text-muted">This database has no views.</p>;
+  // (The React compiler memoizes these.)
+  const viewCtx = { ...ctx, me: user.id };
+  const result =
+    snapshot && view ? runView(snapshot, view, viewCtx, { search: search ?? '' }) : null;
+  if (!loaded || !snapshot) return <div className="h-24" aria-busy="true" />;
+  const { handle } = loaded;
+  const doc = handle.doc;
+  if (!view || !result) return <p className="py-4 text-muted">This database has no views.</p>;
 
   const open = (rowId: string) => openRow(rowId, databaseId, view.openPagesIn);
-  const sortNames = view.sorts
-    .map((s) => ({ ...s, property: snapshot.properties.find((p) => p.id === s.propertyId) }))
-    .filter((s) => s.property);
+  const properties = snapshot.properties;
+  const byId = new Map(properties.map((p) => [p.id, p]));
+  const setFilter = (filter: FilterGroup | null) =>
+    updateView(doc, view.id, { filter: filter && filter.filters.length ? filter : null });
+  const addFilter = (propertyId: string) => {
+    const property = byId.get(propertyId);
+    if (!property) return;
+    const rule = newFilterRule(property);
+    const root = view.filter ?? newFilterGroup('and');
+    setFilter({ ...root, filters: [...root.filters, rule] });
+    setPanel(null);
+    if (isAdvanced(root)) setPanel('advanced');
+    else setOpenChip(rule.id);
+  };
+  const advanced = isAdvanced(view.filter);
+  const ruleCount = countRules(view.filter);
+  const sortNames = view.sorts.map((s) => byId.get(s.propertyId)?.name).filter(Boolean);
+  const showBar = ruleCount > 0 || view.sorts.length > 0;
+
+  const toolbarButton = (active: boolean) =>
+    cn(
+      'flex h-7 items-center gap-1 rounded px-1.5 text-sm hover:bg-hover',
+      active ? 'text-accent' : 'text-muted',
+    );
 
   return (
     <div data-testid="database-view" data-database-id={databaseId}>
       <div className="flex h-10 items-center gap-1 border-b border-line text-sm">
-        <div className="flex min-w-0 flex-1 items-center gap-0.5" role="tablist" aria-label="Views">
-          {views.map((v) =>
-            v.id === view.id ? (
-              <ViewMenu
-                key={v.id}
-                view={v}
-                editable={editable}
-                onChange={(changes) => updateView(handle.doc, v.id, changes)}
-                columns={viewColumns(v, snapshot.properties).map((c) => ({
-                  ...c,
-                  property: snapshot.properties.find((p) => p.id === c.id)!,
-                }))}
-                onToggleColumn={(id, visible) =>
-                  updateViewColumn(handle.doc, v.id, id, { visible })
+        <div
+          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+          role="tablist"
+          aria-label="Views"
+        >
+          {views.map((v) => (
+            <div
+              key={v.id}
+              draggable={editable}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', v.name);
+                setDragTab(v.id);
+              }}
+              onDragOver={(e) => dragTab && dragTab !== v.id && e.preventDefault()}
+              onDrop={() => {
+                if (dragTab && dragTab !== v.id) moveView(doc, dragTab, v.id);
+                setDragTab(null);
+              }}
+              onDragEnd={() => setDragTab(null)}
+              className={cn('shrink-0', dragTab === v.id && 'opacity-50')}
+            >
+              {v.id === view.id ? (
+                <ViewMenu
+                  view={v}
+                  editable={editable}
+                  canDelete={views.length > 1}
+                  onChange={(changes) => updateView(doc, v.id, changes)}
+                  columns={viewColumns(v, properties).map((c) => ({
+                    ...c,
+                    property: byId.get(c.id)!,
+                  }))}
+                  onToggleColumn={(id, visible) => updateViewColumn(doc, v.id, id, { visible })}
+                  onDuplicate={() => setActiveId(duplicateView(doc, v.id))}
+                  onDelete={() => {
+                    deleteView(doc, v.id);
+                    const next = views.find((x) => x.id !== v.id);
+                    if (next) setActiveId(next.id);
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={false}
+                  onClick={() => setActiveId(v.id)}
+                  className="flex h-7 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+                >
+                  <Table2 size={14} /> {v.name}
+                </button>
+              )}
+            </div>
+          ))}
+          {editable && (
+            <IconButton
+              label="Add a view"
+              onClick={() =>
+                setActiveId(
+                  addView(doc, {
+                    viewSet,
+                    name: views.some((v) => v.name === 'Table')
+                      ? `Table ${views.length + 1}`
+                      : 'Table',
+                    type: 'table',
+                  }),
+                )
+              }
+            >
+              <Plus size={15} />
+            </IconButton>
+          )}
+        </div>
+
+        {/* Toolbar */}
+        <Popover
+          open={panel === 'filter' || panel === 'advanced'}
+          onOpenChange={(o) => !o && setPanel(null)}
+        >
+          <PopoverAnchor asChild>
+            <button
+              type="button"
+              className={toolbarButton(ruleCount > 0)}
+              onClick={() => setPanel(advanced ? 'advanced' : panel === 'filter' ? null : 'filter')}
+            >
+              <ListFilter size={15} /> <span className="max-md:hidden">Filter</span>
+            </button>
+          </PopoverAnchor>
+          <PopoverContent
+            align="end"
+            // Focus coming back from a closing chip popover shouldn't close this one.
+            onFocusOutside={(e) => e.preventDefault()}
+          >
+            {panel === 'advanced' && view.filter ? (
+              <FilterGroupEditor
+                root={view.filter}
+                properties={properties}
+                ctx={viewCtx}
+                onChange={setFilter}
+              />
+            ) : (
+              <PropertyPicker
+                properties={properties}
+                label="Filter by…"
+                onPick={(p) => addFilter(p.id)}
+              />
+            )}
+          </PopoverContent>
+        </Popover>
+        <Popover open={panel === 'sort'} onOpenChange={(o) => !o && setPanel(null)}>
+          <PopoverAnchor asChild>
+            <button
+              type="button"
+              className={toolbarButton(view.sorts.length > 0)}
+              onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
+            >
+              <ArrowUpDown size={15} /> <span className="max-md:hidden">Sort</span>
+            </button>
+          </PopoverAnchor>
+          <PopoverContent align="end">
+            {view.sorts.length === 0 ? (
+              <PropertyPicker
+                properties={properties}
+                label="Sort by…"
+                onPick={(p) =>
+                  updateView(doc, view.id, { sorts: [{ propertyId: p.id, direction: 'asc' }] })
                 }
               />
             ) : (
-              <button
-                key={v.id}
-                type="button"
-                role="tab"
-                aria-selected={false}
-                onClick={() => setActiveId(v.id)}
-                className="flex h-7 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
-              >
-                <Table2 size={14} /> {v.name}
-              </button>
-            ),
-          )}
-          {sortNames.length > 0 && (
-            <span className="ml-2 flex items-center gap-1 rounded-full bg-accent/10 py-0.5 pr-1 pl-2 text-xs text-accent">
-              {sortNames[0]!.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-              {sortNames.map((s) => s.property!.name).join(', ')}
-              {editable && (
-                <button
-                  type="button"
-                  aria-label="Remove sort"
-                  onClick={() => updateView(handle.doc, view.id, { sorts: [] })}
-                  className="rounded-full p-0.5 hover:bg-accent/20"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </span>
-          )}
-        </div>
+              <SortEditor
+                sorts={view.sorts}
+                properties={properties}
+                onChange={(sorts) => updateView(doc, view.id, { sorts })}
+              />
+            )}
+          </PopoverContent>
+        </Popover>
+        <Popover open={panel === 'group'} onOpenChange={(o) => !o && setPanel(null)}>
+          <PopoverAnchor asChild>
+            <button
+              type="button"
+              className={toolbarButton(view.groupBy !== null)}
+              onClick={() => setPanel(panel === 'group' ? null : 'group')}
+            >
+              <Layers size={15} /> <span className="max-md:hidden">Group</span>
+            </button>
+          </PopoverAnchor>
+          <PopoverContent align="end">
+            <GroupEditor
+              properties={properties}
+              groupBy={view.groupBy}
+              subGroupBy={view.subGroupBy}
+              groups={result.groups}
+              onChange={(changes) => updateView(doc, view.id, changes)}
+            />
+          </PopoverContent>
+        </Popover>
+        {search === null ? (
+          <IconButton label="Search" onClick={() => setSearch('')}>
+            <Search size={15} />
+          </IconButton>
+        ) : (
+          <span className="flex h-7 items-center gap-1 rounded border border-line px-1.5">
+            <Search size={14} className="text-faint" />
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setSearch(null);
+              }}
+              onBlur={() => !search && setSearch(null)}
+              placeholder="Type to search…"
+              aria-label="Search in view"
+              className="w-36 bg-transparent text-sm outline-none"
+            />
+            <button type="button" aria-label="Clear search" onClick={() => setSearch(null)}>
+              <X size={13} className="text-faint" />
+            </button>
+          </span>
+        )}
         {editable && (
           <button
             type="button"
-            onClick={() => open(addRow(handle.doc, { actor: user.id }))}
-            className="flex h-7 items-center rounded-md bg-accent px-2.5 text-sm font-medium text-accent-fg hover:opacity-90"
+            onClick={() => open(addRow(doc, { actor: user.id }))}
+            className="ml-1 flex h-7 items-center rounded-md bg-accent px-2.5 text-sm font-medium text-accent-fg hover:opacity-90"
           >
             New
           </button>
         )}
       </div>
+
+      {/* Sorts and filters in effect */}
+      {showBar && (
+        <div
+          className="flex flex-wrap items-center gap-1.5 border-b border-line py-1.5"
+          data-testid="filter-bar"
+        >
+          {view.sorts.length > 0 && (
+            <button
+              type="button"
+              data-testid="sort-chip"
+              onClick={() => setPanel('sort')}
+              className="flex h-6 items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 text-xs text-accent"
+            >
+              {view.sorts[0]!.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+              {view.sorts.length === 1 ? sortNames[0] : `${view.sorts.length} sorts`}
+              <ChevronDown size={12} />
+            </button>
+          )}
+          {view.sorts.length > 0 && ruleCount > 0 && <span className="mx-1 h-4 w-px bg-line" />}
+          {advanced ? (
+            <button
+              type="button"
+              data-testid="advanced-chip"
+              onClick={() => setPanel('advanced')}
+              className="flex h-6 items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 text-xs text-accent"
+            >
+              <ListFilter size={12} /> {ruleCount} rule{ruleCount === 1 ? '' : 's'}
+              <ChevronDown size={12} />
+            </button>
+          ) : (
+            view.filter?.filters.map((f) => {
+              const property = f.type === 'rule' ? byId.get(f.propertyId) : undefined;
+              if (f.type !== 'rule' || !property) return null;
+              return (
+                <RuleChip
+                  key={f.id}
+                  rule={f}
+                  property={property}
+                  ctx={viewCtx}
+                  open={openChip === f.id}
+                  onOpenChange={(o) => setOpenChip(o ? f.id : null)}
+                  onChange={(rule: FilterRule) =>
+                    setFilter(updateFilterTree(view.filter!, f.id, () => rule))
+                  }
+                  onDelete={() => {
+                    setOpenChip(null);
+                    setFilter(updateFilterTree(view.filter!, f.id, () => null));
+                  }}
+                  onAdvanced={() => {
+                    setOpenChip(null);
+                    setPanel('advanced');
+                  }}
+                />
+              );
+            })
+          )}
+          {ruleCount > 0 && !advanced && editable && (
+            <button
+              type="button"
+              onClick={() => setPanel('filter')}
+              className="flex h-6 items-center gap-1 rounded px-1.5 text-xs text-muted hover:bg-hover"
+            >
+              <Plus size={12} /> Add filter
+            </button>
+          )}
+        </div>
+      )}
+
       {view.type === 'table' && (
         <TableView
           handle={handle}
           snapshot={snapshot}
           view={view}
-          ctx={ctx}
+          result={result}
+          ctx={viewCtx}
           editable={editable}
           onOpenRow={open}
+          onFilter={addFilter}
         />
+      )}
+      {result.rows.length === 0 && (ruleCount > 0 || search) && (
+        <p className="py-3 text-sm text-faint" data-testid="no-results">
+          No results
+        </p>
       )}
     </div>
   );
@@ -151,12 +449,16 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
 function ViewMenu({
   view,
   editable,
+  canDelete,
   columns,
   onChange,
   onToggleColumn,
+  onDuplicate,
+  onDelete,
 }: {
   view: View;
   editable: boolean;
+  canDelete: boolean;
   columns: {
     id: string;
     visible: boolean;
@@ -164,6 +466,8 @@ function ViewMenu({
   }[];
   onChange(changes: Partial<View>): void;
   onToggleColumn(id: string, visible: boolean): void;
+  onDuplicate(): void;
+  onDelete(): void;
 }) {
   const [name, setName] = useState(view.name);
   return (
@@ -244,6 +548,15 @@ function ViewMenu({
             {view.wrap ? 'On' : 'Off'}
           </span>
         </MenuItem>
+        <MenuSeparator />
+        <MenuItem icon={<Copy size={14} />} onSelect={onDuplicate}>
+          Duplicate view
+        </MenuItem>
+        {canDelete && (
+          <MenuItem icon={<Trash2 size={14} />} danger onSelect={onDelete}>
+            Delete view
+          </MenuItem>
+        )}
       </MenuContent>
     </Menu>
   );

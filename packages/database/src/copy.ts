@@ -1,6 +1,6 @@
 import { newId } from '@workspace/core';
 import * as Y from 'yjs';
-import { readDatabase, rowsMap, schemaMap, viewsMap } from './doc';
+import { metaMap, readDatabase, rowsMap, schemaMap, viewsMap } from './doc';
 
 /**
  * Copy a database into an empty doc: properties, views (moved to `viewSet`) and rows
@@ -17,6 +17,7 @@ export function copyDatabase(
     for (const [id, map] of schemaMap(from)) {
       schemaMap(to).set(id, cloneMap(map));
     }
+    for (const [key, value] of metaMap(from)) metaMap(to).set(key, structuredClone(value));
     for (const view of source.views) {
       if (view.viewSet !== options.fromViewSet) continue;
       const id = newId();

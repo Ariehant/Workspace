@@ -9,6 +9,7 @@ import {
   propertyKind,
   restoreRow,
   setCell,
+  setMeta,
   setRowPageFields,
   setRowTitle,
   trashRow,
@@ -20,7 +21,7 @@ import {
   type Row,
 } from '@workspace/database';
 import { IconButton, Menu, MenuContent, MenuItem, MenuTrigger, cn } from '@workspace/ui';
-import { ChevronsRight, Maximize2, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronsRight, Eye, EyeOff, Maximize2, Plus, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { BlockTarget } from '../app';
 import { useApp } from '../context';
@@ -117,7 +118,14 @@ export function PropertiesPanel({
 }) {
   const ctx = useDisplayContext();
   const [editing, setEditing] = useState<string | null>(null);
-  const properties = snapshot.properties.filter((p) => p.id !== TITLE_PROPERTY_ID);
+  const [showAll, setShowAll] = useState(false);
+  const all = snapshot.properties.filter((p) => p.id !== TITLE_PROPERTY_ID);
+  const hideEmpty = snapshot.meta.hideEmptyProperties;
+  // Empty properties fold away (unless being edited) when the database asks for it.
+  const isEmpty = (p: Property) => isCellEmpty(row, p) && p.type !== 'checkbox';
+  const hidden = hideEmpty && !showAll ? all.filter((p) => isEmpty(p) && p.id !== editing) : [];
+  const properties = all.filter((p) => !hidden.includes(p));
+  const emptyCount = all.filter(isEmpty).length;
   return (
     <div className="mt-2 border-b border-line pb-3 text-sm" data-testid="row-properties">
       {properties.map((property) => (
@@ -132,34 +140,59 @@ export function PropertiesPanel({
           onEdit={(on) => setEditing(on ? property.id : null)}
         />
       ))}
-      {editable && (
-        <Menu>
-          <MenuTrigger asChild>
-            <button
-              type="button"
-              className="mt-1 flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
-            >
-              <Plus size={14} /> Add a property
-            </button>
-          </MenuTrigger>
-          <MenuContent className="max-h-96 w-56 overflow-y-auto">
-            {PROPERTY_TYPES.map((type) => (
-              <MenuItem
-                key={type}
-                icon={<PropertyIcon type={type} />}
-                onSelect={() =>
-                  addProperty(handle.doc, {
-                    name: newPropertyName(handle.doc, propertyKind(type).label),
-                    type,
-                  })
-                }
-              >
-                {propertyKind(type).label}
-              </MenuItem>
-            ))}
-          </MenuContent>
-        </Menu>
+      {hidden.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+        >
+          <ChevronDown size={14} /> {hidden.length} more{' '}
+          {hidden.length === 1 ? 'property' : 'properties'}
+        </button>
       )}
+      <div className="flex flex-wrap items-center gap-1">
+        {editable && (
+          <Menu>
+            <MenuTrigger asChild>
+              <button
+                type="button"
+                className="mt-1 flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+              >
+                <Plus size={14} /> Add a property
+              </button>
+            </MenuTrigger>
+            <MenuContent className="max-h-96 w-56 overflow-y-auto">
+              {PROPERTY_TYPES.map((type) => (
+                <MenuItem
+                  key={type}
+                  icon={<PropertyIcon type={type} />}
+                  onSelect={() =>
+                    addProperty(handle.doc, {
+                      name: newPropertyName(handle.doc, propertyKind(type).label),
+                      type,
+                    })
+                  }
+                >
+                  {propertyKind(type).label}
+                </MenuItem>
+              ))}
+            </MenuContent>
+          </Menu>
+        )}
+        {editable && (emptyCount > 0 || hideEmpty) && (
+          <button
+            type="button"
+            onClick={() => {
+              setMeta(handle.doc, { hideEmptyProperties: !hideEmpty });
+              setShowAll(false);
+            }}
+            className="mt-1 flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+          >
+            {hideEmpty ? <Eye size={14} /> : <EyeOff size={14} />}
+            {hideEmpty ? 'Show empty properties' : 'Hide empty properties'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

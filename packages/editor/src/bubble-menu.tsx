@@ -129,6 +129,9 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
       editor={editor}
       options={options}
       shouldShow={showForTextSelection}
+      // TipTap debounces showing (250 ms) but hides at once; mixing the two can leave
+      // the toolbar out of step with the selection. Update right away instead.
+      updateDelay={0}
       className="ws-floating"
       data-testid="selection-toolbar"
     >

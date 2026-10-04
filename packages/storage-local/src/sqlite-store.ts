@@ -149,6 +149,9 @@ export interface SearchResult {
   snippet: string;
 }
 
+/** Block id prefix of reminders set on date properties (not in page content). */
+const PROPERTY_REMINDER = 'prop:';
+
 /** Turn free text into an FTS5 query that prefix-matches every word. */
 function toFtsQuery(input: string): string | null {
   const terms = input.match(/[\p{L}\p{N}_]+/gu);
@@ -425,19 +428,21 @@ export class SqliteStore {
    * and time, so editing the text around it keeps its `fired` flag (no second
    * notification) while picking up the new text.
    */
+  /** Replace a page's content reminders (`@remind` mentions), keeping fired state. */
   replaceReminders(
     pageId: string,
     reminders: { blockId: string; fireAt: number; text: string }[],
   ): void {
     this.transaction(() => {
+      const scope = `page_id = ? AND block_id NOT LIKE '${PROPERTY_REMINDER}%'`;
       const fired = new Set(
         (
           this.db
-            .prepare('SELECT block_id, fire_at FROM reminders WHERE page_id = ? AND fired = 1')
+            .prepare(`SELECT block_id, fire_at FROM reminders WHERE ${scope} AND fired = 1`)
             .all(pageId) as { block_id: string; fire_at: number }[]
         ).map((r) => `${r.block_id}@${r.fire_at}`),
       );
-      this.db.prepare('DELETE FROM reminders WHERE page_id = ?').run(pageId);
+      this.db.prepare(`DELETE FROM reminders WHERE ${scope}`).run(pageId);
       const insert = this.db.prepare(
         'INSERT OR IGNORE INTO reminders (page_id, block_id, fire_at, text, fired) VALUES (?, ?, ?, ?, ?)',
       );
@@ -448,6 +453,43 @@ export class SqliteStore {
           r.fireAt,
           r.text,
           fired.has(`${r.blockId}@${r.fireAt}`) ? 1 : 0,
+        );
+      }
+    });
+  }
+
+  /**
+   * Replace the reminders on date properties of a database's rows (block ids
+   * `prop:<propertyId>`), keeping fired state. Call after `syncRowIndex`.
+   */
+  replacePropertyReminders(
+    databaseId: string,
+    reminders: { rowId: string; propertyId: string; fireAt: number; text: string }[],
+  ): void {
+    this.transaction(() => {
+      const scope = `block_id LIKE '${PROPERTY_REMINDER}%'
+        AND page_id IN (SELECT id FROM pages WHERE database_id = ?)`;
+      const fired = new Set(
+        (
+          this.db
+            .prepare(
+              `SELECT page_id, block_id, fire_at FROM reminders WHERE ${scope} AND fired = 1`,
+            )
+            .all(databaseId) as { page_id: string; block_id: string; fire_at: number }[]
+        ).map((r) => `${r.page_id}/${r.block_id}@${r.fire_at}`),
+      );
+      this.db.prepare(`DELETE FROM reminders WHERE ${scope}`).run(databaseId);
+      const insert = this.db.prepare(
+        'INSERT OR IGNORE INTO reminders (page_id, block_id, fire_at, text, fired) VALUES (?, ?, ?, ?, ?)',
+      );
+      for (const r of reminders) {
+        const blockId = `${PROPERTY_REMINDER}${r.propertyId}`;
+        insert.run(
+          r.rowId,
+          blockId,
+          r.fireAt,
+          r.text,
+          fired.has(`${r.rowId}/${blockId}@${r.fireAt}`) ? 1 : 0,
         );
       }
     });

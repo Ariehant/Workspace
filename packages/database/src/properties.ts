@@ -1,4 +1,5 @@
 import { newId, parseDate, toIsoDate } from '@workspace/core';
+import { formatDateString, formatNumber, formatTimestamp } from './format';
 import {
   OPTION_COLORS,
   TITLE_PROPERTY_ID,
@@ -121,34 +122,6 @@ export const isDateValue = (v: unknown): v is DateValue =>
   typeof (v as DateValue).start === 'string' &&
   DATE_RE.test((v as DateValue).start);
 
-/** Local Date for a stored `YYYY-MM-DD[THH:mm]`. */
-export function dateFromString(s: string): Date {
-  const [day, time] = s.split('T');
-  const [y, m, d] = day!.split('-').map(Number);
-  const [hh, mm] = (time ?? '00:00').split(':').map(Number);
-  return new Date(y!, m! - 1, d!, hh, mm);
-}
-
-const dayFormat = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-const timeFormat = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
-
-/** "Oct 4, 2026" or "Oct 4, 2026 3:00 PM". */
-export function formatDateString(s: string): string {
-  const date = dateFromString(s);
-  return s.includes('T')
-    ? `${dayFormat.format(date)} ${timeFormat.format(date)}`
-    : dayFormat.format(date);
-}
-
-export function formatTimestamp(ms: number): string {
-  const date = new Date(ms);
-  return `${dayFormat.format(date)} ${timeFormat.format(date)}`;
-}
-
 function parseDateText(text: string): DateValue | null {
   const t = text.trim();
   if (!t) return null;
@@ -178,7 +151,7 @@ const KINDS: PropertyKind[] = [
     computed: false,
     defaultConfig: () => ({}),
     isEmpty: (v) => typeof v !== 'number' || Number.isNaN(v),
-    text: (v) => String(v),
+    text: (v, p) => formatNumber(v as number, p.config),
     compare: (a, b) => compareNumber(a as number, b as number),
     parse: (text) => {
       const cleaned = text.replace(/[,\s$€£¥%]/g, '');
@@ -246,11 +219,11 @@ const KINDS: PropertyKind[] = [
     computed: false,
     defaultConfig: () => ({}),
     isEmpty: (v) => !isDateValue(v),
-    text: (v) => {
+    text: (v, p, ctx) => {
       const d = v as DateValue;
-      return d.end
-        ? `${formatDateString(d.start)} → ${formatDateString(d.end)}`
-        : formatDateString(d.start);
+      const now = new Date(ctx.now ?? Date.now());
+      const one = (s: string) => formatDateString(s, p.config, now);
+      return d.end ? `${one(d.start)} → ${one(d.end)}` : one(d.start);
     },
     compare: (a, b) => compareText((a as DateValue).start, (b as DateValue).start),
     parse: (text) => ({ value: parseDateText(text) }),
@@ -336,9 +309,9 @@ function computedKind(
     computed: true,
     defaultConfig: () => ({}),
     isEmpty: (v) => v === null || v === undefined,
-    text: (v, _p, ctx) =>
+    text: (v, p, ctx) =>
       of === 'time'
-        ? formatTimestamp(v as number)
+        ? formatTimestamp(v as number, p.config, new Date(ctx.now ?? Date.now()))
         : of === 'user'
           ? (ctx.users.get(v as string) ?? '')
           : String(v),
