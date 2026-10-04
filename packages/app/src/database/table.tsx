@@ -781,10 +781,7 @@ function HeaderCell(props: HeaderCellProps) {
           <PropertyIcon type={property.type} />
           <span className="truncate">{property.name}</span>
         </button>
-        <MenuContent
-          className="w-60"
-          data-testid="property-menu"
-        >
+        <MenuContent className="w-60" data-testid="property-menu">
           <div className="p-1" onKeyDown={(e) => e.stopPropagation()}>
             <input
               ref={nameRef}
