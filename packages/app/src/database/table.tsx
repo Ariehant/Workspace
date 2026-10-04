@@ -7,8 +7,9 @@ import {
   addRow,
   cellText,
   changePropertyType,
-  deleteProperty,
   duplicateProperty,
+  relationIds,
+  setRelation,
   moveRow,
   moveViewColumn,
   newPropertyName,
@@ -25,6 +26,7 @@ import {
   setCell,
   setPropertyConfig,
   trashRow,
+  type DatabaseMeta,
   updateView,
   updateViewColumn,
   viewColumns,
@@ -74,7 +76,10 @@ import {
   Maximize2,
   Plus,
   Repeat2,
+  Search,
   Sigma,
+  CornerDownRight,
+  ArrowUpRight,
   Trash2,
 } from 'lucide-react';
 import {
@@ -87,8 +92,9 @@ import {
   type ReactNode,
 } from 'react';
 import { useApp } from '../context';
-import { duplicateRowWithContent } from './actions';
+import { detachRelation, duplicateRowWithContent, removeProperty, writeCell } from './actions';
 import { FormulaEditor } from './formula-editor';
+import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup';
 import {
   CellDisplay,
   OptionPill,
@@ -128,14 +134,75 @@ interface GroupValue {
 /** One line of the table body. */
 type Item =
   | { kind: 'group'; key: string; depth: number; group: ViewGroup; values: GroupValue[] }
-  | { kind: 'row'; key: string; depth: number; row: Row; values: GroupValue[] }
+  | {
+      kind: 'row';
+      key: string;
+      depth: number;
+      row: Row;
+      values: GroupValue[];
+      /** Sub-items: nesting level and number of sub-items shown under it. */
+      nest?: { level: number; children: number };
+    }
   | { kind: 'new'; key: string; depth: number; values: GroupValue[] }
   | { kind: 'calc'; key: string; depth: number; rows: Row[] };
 
 const GROUP_HEIGHT = 41;
 
+/**
+ * Rows nested under their parent item (sub-items): a row whose parent isn't in the
+ * view shows at the top level. Expanded rows list their sub-items under them.
+ */
+function nestedRows(
+  rows: readonly Row[],
+  parentId: string,
+  expanded: ReadonlySet<string>,
+): Extract<Item, { kind: 'row' }>[] {
+  const ids = new Set(rows.map((r) => r.id));
+  const children = new Map<string, Row[]>();
+  const roots: Row[] = [];
+  for (const row of rows) {
+    const parent = relationIds(row.values[parentId])[0];
+    if (parent && ids.has(parent) && parent !== row.id) {
+      const list = children.get(parent) ?? [];
+      list.push(row);
+      children.set(parent, list);
+    } else roots.push(row);
+  }
+  const out: Extract<Item, { kind: 'row' }>[] = [];
+  const seen = new Set<string>();
+  const add = (row: Row, level: number, prefix: string) => {
+    if (seen.has(row.id)) return;
+    seen.add(row.id);
+    const key = `${prefix}/${row.id}`;
+    const kids = children.get(row.id) ?? [];
+    out.push({
+      kind: 'row',
+      key,
+      depth: 0,
+      row,
+      values: [],
+      nest: { level, children: kids.length },
+    });
+    if (expanded.has(row.id)) for (const kid of kids) add(kid, level + 1, key);
+  };
+  roots.forEach((row) => add(row, 0, ''));
+  return out;
+}
+
 /** Flatten groups into lines: header, rows, "+ New", calculations; hidden groups left out. */
-function buildItems(result: ViewResult, view: View): Item[] {
+function buildItems(
+  result: ViewResult,
+  view: View,
+  subItems: DatabaseMeta['subItems'],
+  expanded: ReadonlySet<string>,
+): Item[] {
+  if (!result.groups && subItems) {
+    return [
+      ...nestedRows(result.rows, subItems.parentId, expanded),
+      { kind: 'new', key: 'new:/', depth: 0, values: [] },
+      { kind: 'calc', key: 'calc:/', depth: 0, rows: result.rows },
+    ];
+  }
   if (!result.groups) {
     return [
       ...result.rows.map((row) => ({
@@ -204,6 +271,17 @@ export function TableView({
   const [editing, setEditing] = useState<Editing | null>(null);
   const [headerMenu, setHeaderMenu] = useState<string | null>(null);
   const [formulaFor, setFormulaFor] = useState<string | null>(null);
+  const [setup, setSetup] = useState<SetupRequest | null>(null);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleExpanded = (id: string, open?: boolean) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (open ?? !next.has(id)) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const { databases } = useApp();
+  const subItems = snapshot.meta.subItems;
   const [resizing, setResizing] = useState<{ id: string; width: number } | null>(null);
 
   const byId = useMemo(() => new Map(snapshot.properties.map((p) => [p.id, p])), [snapshot]);
@@ -218,7 +296,10 @@ export function TableView({
     [view, snapshot.properties, byId],
   );
   const widthOf = (id: string, width: number) => (resizing?.id === id ? resizing.width : width);
-  const items = useMemo(() => buildItems(result, view), [result, view]);
+  const items = useMemo(
+    () => buildItems(result, view, subItems, expanded),
+    [result, view, subItems, expanded],
+  );
   const rowItems = useMemo(
     () => items.filter((i): i is Extract<Item, { kind: 'row' }> => i.kind === 'row'),
     [items],
@@ -286,7 +367,14 @@ export function TableView({
     };
     if (editable && !propertyKind(property.type).computed) {
       const clear = () =>
-        setCell(doc, row.id, property.id, property.type === 'checkbox' ? false : null, user.id);
+        writeCell(
+          databases,
+          handle,
+          row.id,
+          property,
+          property.type === 'checkbox' ? false : null,
+          user.id,
+        );
       keys.Backspace = clear;
       keys.Delete = clear;
     }
@@ -315,7 +403,14 @@ export function TableView({
     const parsed = kind.parse(text, property, ctx);
     doc.transact(() => {
       for (const option of parsed.newOptions ?? []) addOption(doc, property.id, option);
-      setCell(doc, row.id, property.id, property.type === 'title' ? text : parsed.value, user.id);
+      writeCell(
+        databases,
+        handle,
+        row.id,
+        property,
+        property.type === 'title' ? text : parsed.value,
+        user.id,
+      );
     });
   };
 
@@ -551,6 +646,27 @@ export function TableView({
               handle={handle}
               row={row}
               editable={editable}
+              onAddSubItem={
+                subItems && editable && !grouped
+                  ? () => {
+                      const id = addRow(doc, { actor: user.id, afterId: row.id });
+                      setRelation(
+                        databases.resolveDoc,
+                        handle.id,
+                        id,
+                        subItems.parentId,
+                        [row.id],
+                        user.id,
+                      );
+                      toggleExpanded(row.id, true);
+                      setEditing({
+                        key: `${item.key}/${id}`,
+                        rowId: id,
+                        propertyId: TITLE_PROPERTY_ID,
+                      });
+                    }
+                  : undefined
+              }
               draggable={canDrag}
               onOpen={() => onOpenRow(row.id)}
               onDragStart={() => setDragRow(row.id)}
@@ -588,6 +704,15 @@ export function TableView({
                   }}
                   onDone={(exit) => finishEdit(cell, exit)}
                   onOpen={() => onOpenRow(row.id)}
+                  nest={
+                    property.type === 'title' && item.nest
+                      ? {
+                          ...item.nest,
+                          expanded: expanded.has(row.id),
+                          onToggle: () => toggleExpanded(row.id),
+                        }
+                      : undefined
+                  }
                 />
               );
             })}
@@ -661,11 +786,17 @@ export function TableView({
               }}
               onFilter={() => onFilter(property.id)}
               onEditFormula={() => setFormulaFor(property.id)}
+              onSetup={setSetup}
             />
           ))}
           {editable && (
             <AddPropertyButton
               onAdd={(type) => {
+                // Relations are set up before they are added.
+                if (type === 'relation') {
+                  setSetup({ kind: 'relation', mode: 'add', afterId: lastColumn });
+                  return;
+                }
                 const id = addProperty(doc, {
                   name: newPropertyName(doc, propertyKind(type).label),
                   type,
@@ -673,6 +804,7 @@ export function TableView({
                 });
                 // A new formula opens straight in the formula editor, as in Notion.
                 if (type === 'formula') setFormulaFor(id);
+                else if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
                 else setHeaderMenu(id);
               }}
             />
@@ -705,6 +837,28 @@ export function TableView({
           ))}
         </div>
       </div>
+      {setup?.kind === 'relation' && (
+        <RelationSetup
+          handle={handle}
+          request={setup}
+          ctx={ctx}
+          onClose={() => {
+            setSetup(null);
+            focusGrid();
+          }}
+        />
+      )}
+      {setup?.kind === 'rollup' && (
+        <RollupSetup
+          handle={handle}
+          properties={snapshot.properties}
+          propertyId={setup.propertyId}
+          onClose={() => {
+            setSetup(null);
+            focusGrid();
+          }}
+        />
+      )}
       {formulaFor && byId.get(formulaFor) && (
         <FormulaEditor
           handle={handle}
@@ -878,6 +1032,8 @@ interface CellProps {
   onToggle(): void;
   onDone(exit: EditExit): void;
   onOpen(): void;
+  /** Sub-items: indent the title and show a toggle. */
+  nest?: { level: number; children: number; expanded: boolean; onToggle(): void };
 }
 
 function Cell(props: CellProps) {
@@ -908,7 +1064,27 @@ function Cell(props: CellProps) {
       )}
     >
       {isTitle ? (
-        <span className="flex min-w-0 flex-1 items-start gap-1.5">
+        <span
+          className="flex min-w-0 flex-1 items-start gap-1.5"
+          style={props.nest ? { paddingLeft: props.nest.level * 20 } : undefined}
+        >
+          {props.nest && (
+            <button
+              type="button"
+              aria-label={props.nest.expanded ? 'Collapse sub-items' : 'Expand sub-items'}
+              aria-expanded={props.nest.expanded}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.nest!.onToggle();
+              }}
+              className={cn(
+                'flex size-5 shrink-0 items-center justify-center rounded text-muted hover:bg-hover',
+                props.nest.children === 0 && 'invisible',
+              )}
+            >
+              {props.nest.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+          )}
           {row.icon && (
             <span className="flex h-5 shrink-0 items-center">
               <PageIcon icon={row.icon} size={16} fileUrl={platform.fileUrl} />
@@ -923,6 +1099,11 @@ function Cell(props: CellProps) {
           >
             {row.title}
           </span>
+          {props.nest && props.nest.children > 0 && (
+            <span className="shrink-0 text-xs leading-5 text-faint" data-testid="sub-item-count">
+              {props.nest.children}
+            </span>
+          )}
         </span>
       ) : (
         <span className="flex min-w-0 flex-1 items-center">
@@ -963,16 +1144,18 @@ function RowHandle({
   onOpen,
   onDragStart,
   onDragEnd,
+  onAddSubItem,
 }: {
   handle: DatabaseHandle;
   row: Row;
   editable: boolean;
   draggable: boolean;
+  onAddSubItem?: () => void;
   onOpen(): void;
   onDragStart(): void;
   onDragEnd(): void;
 }) {
-  const { client, user } = useApp();
+  const { client, user, databases } = useApp();
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -1011,9 +1194,16 @@ function RowHandle({
           {editable && (
             <MenuItem
               icon={<Copy size={14} />}
-              onSelect={() => void duplicateRowWithContent(client, handle, row.id, user.id)}
+              onSelect={() =>
+                void duplicateRowWithContent(client, databases, handle, row.id, user.id)
+              }
             >
               Duplicate
+            </MenuItem>
+          )}
+          {onAddSubItem && (
+            <MenuItem icon={<CornerDownRight size={14} />} onSelect={onAddSubItem}>
+              Add sub-item
             </MenuItem>
           )}
           <MenuItem
@@ -1062,12 +1252,16 @@ interface HeaderCellProps {
   onInsert(side: 'left' | 'right'): void;
   onFilter(): void;
   onEditFormula(): void;
+  onSetup(request: SetupRequest): void;
 }
 
 function HeaderCell(props: HeaderCellProps) {
   const { handle, property, view, ctx, width, editable, menuOpen, onMenuOpenChange } = props;
   const doc = handle.doc;
+  const { databases } = useApp();
   const isTitle = property.type === 'title';
+  const missingTarget =
+    property.type === 'relation' && !databases.exists(property.config.databaseId ?? '');
   const resize = useRef<{ x: number; width: number } | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(property.name);
@@ -1146,6 +1340,15 @@ function HeaderCell(props: HeaderCellProps) {
               <AlertCircle size={13} />
             </span>
           )}
+          {missingTarget && (
+            <span
+              title="The related database no longer exists"
+              className="shrink-0 text-danger"
+              aria-label="Related database missing"
+            >
+              <AlertCircle size={13} />
+            </span>
+          )}
         </button>
         <MenuContent className="w-60" data-testid="property-menu">
           <div className="p-1" onKeyDown={(e) => e.stopPropagation()}>
@@ -1179,8 +1382,21 @@ function HeaderCell(props: HeaderCellProps) {
                     key={type}
                     icon={<PropertyIcon type={type} />}
                     onSelect={() => {
+                      if (type === property.type) return;
+                      // A relation needs its database first: the setup dialog changes it.
+                      if (type === 'relation') {
+                        props.onSetup({
+                          kind: 'relation',
+                          mode: 'change',
+                          propertyId: property.id,
+                        });
+                        return;
+                      }
+                      detachRelation(databases, handle, property);
                       changePropertyType(doc, property.id, type, ctx);
                       if (type === 'formula') props.onEditFormula();
+                      if (type === 'rollup')
+                        props.onSetup({ kind: 'rollup', propertyId: property.id });
                     }}
                   >
                     <span className="flex-1">{propertyKind(type).label}</span>
@@ -1193,6 +1409,24 @@ function HeaderCell(props: HeaderCellProps) {
           {property.type === 'formula' && (
             <MenuItem icon={<Sigma size={14} />} onSelect={props.onEditFormula}>
               Edit formula
+            </MenuItem>
+          )}
+          {property.type === 'relation' && (
+            <MenuItem
+              icon={<ArrowUpRight size={14} />}
+              onSelect={() =>
+                props.onSetup({ kind: 'relation', mode: 'edit', propertyId: property.id })
+              }
+            >
+              Edit relation
+            </MenuItem>
+          )}
+          {property.type === 'rollup' && (
+            <MenuItem
+              icon={<Search size={14} />}
+              onSelect={() => props.onSetup({ kind: 'rollup', propertyId: property.id })}
+            >
+              Edit rollup
             </MenuItem>
           )}
           <PropertyFormatMenu handle={handle} property={property} />
@@ -1234,7 +1468,7 @@ function HeaderCell(props: HeaderCellProps) {
               <MenuItem
                 icon={<Trash2 size={14} />}
                 danger
-                onSelect={() => deleteProperty(doc, property.id)}
+                onSelect={() => removeProperty(databases, handle, property)}
               >
                 Delete property
               </MenuItem>

@@ -1,6 +1,6 @@
 # Phase 2: Databases
 
-**Status:** M1, M2 and M3 done. M4 next.
+**Status:** M1–M4 done. M5 next.
 
 ## Context
 
@@ -249,7 +249,7 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - Formula values aren't in the search index.
   - Formulas over relations and rollups come with M4.
 
-### M4: relations and rollups
+### M4: relations and rollups ✅
 
 - **Relations:**
   - one-way and two-way relations, to another database or to the same one
@@ -259,6 +259,33 @@ The table is a custom grid rather than TanStack Table: the query engine already 
 - **Sub-items:** a self-relation pair "Parent item" / "Sub-items". The table shows nested rows with toggles, and filters can include parents or sub-items.
 - **Dependencies:** a self-relation pair "Blocked by" / "Blocking", used by the timeline in M6.
 - **Integrity:** a trashed row disappears from relations and rollups and comes back when restored. Permanently deleting a database turns the relations that point at it into a "deleted database" state instead of crashing.
+
+**M4 notes:**
+
+- **Storage:** a relation value is a nested `Y.Map` of linked row id → time added. It works as a set CRDT, so links added on two replicas at the same time both survive, and links keep the order they were added in. Older plain-array values are converted the first time they are written.
+- **Operations** (`packages/database/src/relations.ts`): `createRelation`, `updateRelation` (limit; turning two-way on links existing values back, turning it off leaves the other side as a one-way relation), `setRelation`, `deleteRelation`, `syncTwoWayLinks` (after duplicating a row), and enable/disable for sub-items and dependencies.
+  - Every write goes through `setRelation`, which updates both sides of a two-way relation. A one-page limit on the other side moves that page away from its old link, like Notion.
+  - The app sends cell clears, pastes, duplicates and property deletes through these operations (`packages/app/src/database/actions.ts`).
+- **Computed snapshots** (`ComputedCache` in `computed.ts`): relation values become arrays of live (not trashed) page ids, rollups are computed, and then formulas run.
+  - A row is only recomputed when it, the rows it links to, or the related pages' titles change. When nothing changed, the previous snapshot object is returned, so views don't re-run.
+  - `DatabaseRegistry.computed` loads related databases on demand. It reads the other database's stored values, or its computed values when a rollup reads a formula, rollup or relation there. Cycles fall back to stored values.
+- **Rollups:** 22 calculations (show original or unique values, five counts, two percentages, sum, average, median, min, max, range, earliest, latest, date range, and checked/unchecked counts and percentages). Results are numbers, text or dates. They take the target property's number or date format, and percentages show as percent.
+- **Formulas:** a relation is a `list of page` (`format()` gives titles) and a rollup has its result type.
+- **Filters and groups:** relation filters match related page titles (contains, does not contain, empty). Grouping by relation puts a row in one group per linked page. Rollups sort, filter and group by their result type.
+- **UI:**
+  - A setup dialog for relations: the related database (or this one), the limit, and the name on the other side. It opens when adding a relation, when changing a type to relation (text values link to pages with the same title), and from "Edit relation".
+  - A rollup dialog with the relation, property and calculation.
+  - Relation cells show page chips that open the page. The picker searches, adds and removes pages, and can create a page from what you typed.
+  - Columns pointing at a deleted database show a warning.
+- **Sub-items and dependencies:** turned on from the view menu. Turning them off can keep or delete the two properties.
+  - The table nests sub-items under their parent, with expand/collapse toggles and a count, plus "Add sub-item" in the row menu.
+  - A row whose parent is filtered out shows at the top level.
+- **Copies:** duplicating a database remaps self-relations to the new rows and makes relations to other databases one-way. A duplicated relation property is one-way.
+- **Not done:**
+  - Undo is per database, so undoing a two-way edit only reverts the side it was made from.
+  - Nesting only applies to ungrouped tables.
+  - There's no "include sub-items/parents" filter option.
+  - Formulas can't read other properties of related pages (`current.prop("…")`).
 
 ### M5: board, list and gallery views
 

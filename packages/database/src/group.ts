@@ -6,6 +6,7 @@ import {
   isDateValue,
   optionsOf,
   propertyKind,
+  relationIds,
 } from './properties';
 import type {
   DateBucket,
@@ -52,6 +53,8 @@ export const GROUPABLE_TYPES: readonly PropertyType[] = [
   'phone',
   'number',
   'formula',
+  'rollup',
+  'relation',
 ];
 
 export const DATE_BUCKETS: { id: DateBucket; label: string }[] = [
@@ -126,7 +129,9 @@ function rowGroups(
 ): GroupInfo[] {
   const groups = rowGroupsOf(row, property, groupBy, ctx);
   // A formula's value comes from other properties; its groups can't be assigned.
-  return property.type === 'formula' ? groups.map((g) => ({ ...g, value: undefined })) : groups;
+  return property.type === 'formula' || property.type === 'rollup' || property.type === 'relation'
+    ? groups.map((g) => ({ ...g, value: undefined }))
+    : groups;
 }
 
 function rowGroupsOf(
@@ -174,6 +179,15 @@ function rowGroupsOf(
         key: id,
         label: ctx.users.get(id) ?? 'Unknown',
         value: property.type === 'person' ? [id] : undefined,
+      }));
+    }
+    case 'relation': {
+      const ids = relationIds(value);
+      if (ids.length === 0) return [none];
+      return ids.map((id) => ({
+        key: id,
+        label: ctx.pages?.get(id)?.title || 'Untitled',
+        value: undefined,
       }));
     }
     case 'date':
@@ -294,7 +308,8 @@ export function groupRows(
     const sortKey = (g: RowGroup) =>
       property.type === 'person' ||
       property.type === 'createdBy' ||
-      property.type === 'lastEditedBy'
+      property.type === 'lastEditedBy' ||
+      property.type === 'relation'
         ? g.info.label
         : g.info.key;
     list.sort((a, b) => collator.compare(sortKey(a), sortKey(b)));

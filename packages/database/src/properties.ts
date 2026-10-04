@@ -328,7 +328,7 @@ function computedKind(
  * text, checkbox or date) for display, sorting, filters, groups and calculations.
  */
 export function effectiveType(property: Property): PropertyType {
-  if (property.type !== 'formula') return property.type;
+  if (property.type !== 'formula' && property.type !== 'rollup') return property.type;
   switch (property.config.resultType) {
     case 'number':
       return 'number';
@@ -351,6 +351,57 @@ KINDS.push({
   compare: (a, b, p, ctx) => propertyKind(effectiveType(p)).compare(a, b, p, ctx),
   parse: () => ({ value: null }),
 });
+
+/**
+ * Ids a relation links to, in the order they were added. Stored as a map of id ->
+ * time added (so concurrent edits merge); computed snapshots hold a plain array.
+ */
+export function relationIds(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string');
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, number>)
+      .sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : 1))
+      .map(([id]) => id);
+  }
+  return [];
+}
+
+const pageTitle = (id: string, ctx: DisplayContext) => ctx.pages?.get(id)?.title ?? '';
+
+KINDS.push(
+  {
+    type: 'relation',
+    label: 'Relation',
+    computed: false,
+    defaultConfig: () => ({ databaseId: '', syncedPropertyId: null }),
+    isEmpty: (v) => relationIds(v).length === 0,
+    text: (v, _p, ctx) =>
+      relationIds(v)
+        .map((id) => pageTitle(id, ctx) || 'Untitled')
+        .join(', '),
+    compare: (a, b, _p, ctx) =>
+      compareText(pageTitle(relationIds(a)[0] ?? '', ctx), pageTitle(relationIds(b)[0] ?? '', ctx)),
+    parse: (text, property, ctx) => {
+      // Paste titles of pages in the related database.
+      const names = text.split(',').map((t) => t.trim().toLowerCase());
+      const ids = [...(ctx.pages?.values() ?? [])]
+        .filter((p) => p.databaseId === property.config.databaseId)
+        .filter((p) => names.includes(p.title.toLowerCase()))
+        .map((p) => p.id);
+      return { value: ids.length ? ids : null };
+    },
+  },
+  {
+    type: 'rollup',
+    label: 'Rollup',
+    computed: true,
+    defaultConfig: () => ({ calculation: 'showOriginal' }),
+    isEmpty: (v) => v === null || v === undefined || v === '',
+    text: (v, p, ctx) => propertyKind(effectiveType(p)).text(v, p, ctx),
+    compare: (a, b, p, ctx) => propertyKind(effectiveType(p)).compare(a, b, p, ctx),
+    parse: () => ({ value: null }),
+  },
+);
 
 const BY_TYPE = new Map(KINDS.map((k) => [k.type, k]));
 
@@ -400,9 +451,13 @@ export function rowPropertiesText(
   properties: readonly Property[],
   ctx: DisplayContext,
 ): string {
-  return properties
-    .filter((p) => p.id !== TITLE_PROPERTY_ID && !propertyKind(p.type).computed)
-    .filter((p) => p.type !== 'checkbox' && !isCellEmpty(row, p))
-    .map((p) => cellText(row, p, ctx))
-    .join('\n');
+  return (
+    properties
+      .filter((p) => p.id !== TITLE_PROPERTY_ID && !propertyKind(p.type).computed)
+      // Relations show page titles, which need the related database.
+      .filter((p) => p.type !== 'relation' || ctx.pages !== undefined)
+      .filter((p) => p.type !== 'checkbox' && !isCellEmpty(row, p))
+      .map((p) => cellText(row, p, ctx))
+      .join('\n')
+  );
 }

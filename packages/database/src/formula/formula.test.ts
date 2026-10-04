@@ -264,7 +264,12 @@ describe('formula properties', () => {
     expect(compiled.byId.get('f3')?.error).toMatch(/end of formula/);
     expect(compiled.byId.get('f4')?.error).toBeNull();
     const snapshot = new FormulaCache().apply(
-      { properties, views: [], rows: [makeRow('r', {})], meta: { hideEmptyProperties: false } },
+      {
+        properties,
+        views: [],
+        rows: [makeRow('r', {})],
+        meta: { hideEmptyProperties: false, subItems: null, dependencies: null },
+      },
       ctx,
     );
     expect(snapshot.rows[0]!.values).toMatchObject({ f1: null, f3: null, f4: 42 });
@@ -295,7 +300,12 @@ describe('formula properties', () => {
       prop('b', 'formula', { expression: '1 > 0' }, 'B'),
     ];
     const snapshot = new FormulaCache().apply(
-      { properties, views: [], rows: [makeRow('r', {})], meta: { hideEmptyProperties: false } },
+      {
+        properties,
+        views: [],
+        rows: [makeRow('r', {})],
+        meta: { hideEmptyProperties: false, subItems: null, dependencies: null },
+      },
       ctx,
     );
     expect(snapshot.rows[0]!.values).toEqual({ d: { start: '2026-10-05' }, b: true });

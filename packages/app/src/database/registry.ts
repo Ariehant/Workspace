@@ -1,16 +1,21 @@
 import {
   TRASH_RETENTION_MS,
   createPage,
+  getPage,
   listPages,
   setPageKind,
   type DocClient,
   type PageId,
 } from '@workspace/core';
 import {
+  ComputedCache,
   DatabaseHandle,
   emptyRowTrashBefore,
   hasRow,
   initDatabase,
+  type DatabaseSnapshot,
+  type DisplayContext,
+  type DocResolver,
   type Row,
 } from '@workspace/database';
 import type * as Y from 'yjs';
@@ -66,6 +71,47 @@ export class DatabaseRegistry {
     this.entries.set(databaseId, entry);
     return entry.ready;
   }
+
+  /** Whether a database page exists (so a relation's target can be loaded). */
+  exists(databaseId: string): boolean {
+    const page = getPage(this.workspace, databaseId);
+    return page?.kind === 'database';
+  }
+
+  private readonly computedCaches = new WeakMap<DatabaseHandle, ComputedCache>();
+
+  /**
+   * A database snapshot with relations, rollups and formulas computed. Related
+   * databases load in the background (subscribers hear when they arrive).
+   */
+  computed(databaseId: string, ctx: DisplayContext): DatabaseSnapshot | null {
+    const visiting = new Set<string>();
+    const resolve = (id: string, compute: boolean): DatabaseSnapshot | undefined => {
+      const handle = this.get(id);
+      if (!handle) {
+        if (this.exists(id)) void this.load(id).catch(() => {});
+        return undefined;
+      }
+      const raw = handle.snapshot();
+      // A cycle of rollups reads the stored values of the database it started from.
+      if (!compute || visiting.has(id)) return raw;
+      let cache = this.computedCaches.get(handle);
+      if (!cache) {
+        cache = new ComputedCache();
+        this.computedCaches.set(handle, cache);
+      }
+      visiting.add(id);
+      try {
+        return cache.apply(raw, ctx, resolve, id);
+      } finally {
+        visiting.delete(id);
+      }
+    };
+    return resolve(databaseId, true) ?? null;
+  }
+
+  /** Loaded database docs, for relation edits that touch both sides. */
+  readonly resolveDoc: DocResolver = (id) => this.get(id)?.doc;
 
   /** The handle, if the database is loaded. */
   get(databaseId: string): DatabaseHandle | null {

@@ -32,7 +32,12 @@ export const rowsMap = (doc: Y.Doc) => doc.getMap<YMap>(ROWS_MAP);
 export const metaMap = (doc: Y.Doc) => doc.getMap<unknown>(META_MAP);
 
 export function readMeta(doc: Y.Doc): DatabaseMeta {
-  return { hideEmptyProperties: metaMap(doc).get('hideEmptyProperties') === true };
+  const meta = metaMap(doc);
+  return {
+    hideEmptyProperties: meta.get('hideEmptyProperties') === true,
+    subItems: (meta.get('subItems') as DatabaseMeta['subItems'] | undefined) ?? null,
+    dependencies: (meta.get('dependencies') as DatabaseMeta['dependencies'] | undefined) ?? null,
+  };
 }
 
 export function setMeta(doc: Y.Doc, changes: Partial<DatabaseMeta>): void {
@@ -254,6 +259,8 @@ export function changePropertyType(
   id: string,
   type: PropertyType,
   ctx: DisplayContext,
+  /** The new type's settings (default: the type's defaults). */
+  config?: PropertyConfig,
 ): void {
   if (id === TITLE_PROPERTY_ID) throw new Error('The title property keeps its type');
   const from = readProperty(getPropertyMap(doc, id));
@@ -272,7 +279,7 @@ export function changePropertyType(
                 type === 'status' ? { ...o, group: o.group ?? 'todo' } : o,
               ),
             }
-          : kind.defaultConfig(),
+          : (config ?? kind.defaultConfig()),
     };
     const rows = Array.from(rowsMap(doc).values());
     for (const rowMap of rows) {
@@ -331,13 +338,18 @@ export function duplicateProperty(doc: Y.Doc, id: string): string {
     copy = addProperty(doc, {
       name: newPropertyName(doc, from.name),
       type: from.type,
-      config: structuredClone(from.config),
+      // A copied relation is one-way (the other side stays synced with the original).
+      config:
+        from.type === 'relation'
+          ? { ...structuredClone(from.config), syncedPropertyId: null }
+          : structuredClone(from.config),
       afterId: id,
     });
     for (const rowMap of rowsMap(doc).values()) {
       const values = rowMap.get(RowField.values);
       if (values instanceof Y.Map && values.has(id)) {
-        values.set(copy, structuredClone(values.get(id)));
+        const value = values.get(id);
+        values.set(copy, value instanceof Y.AbstractType ? value.toJSON() : structuredClone(value));
       }
     }
   });

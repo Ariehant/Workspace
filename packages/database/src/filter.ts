@@ -1,6 +1,6 @@
 import { newId } from '@workspace/core';
 import { dateFromString, dayOffset } from './format';
-import { cellValue, effectiveType, isDateValue, propertyKind } from './properties';
+import { cellValue, effectiveType, isDateValue, propertyKind, relationIds } from './properties';
 import type {
   DisplayContext,
   Filter,
@@ -145,6 +145,12 @@ const OPERATORS: Record<PropertyType, OperatorInfo[]> = {
   files: EMPTY_OPS,
   // Formulas use the operators of their result type (see `effectiveType`).
   formula: TEXT_OPS,
+  rollup: TEXT_OPS,
+  relation: [
+    { id: 'contains', label: 'Contains', value: 'text' },
+    { id: 'doesNotContain', label: 'Does not contain', value: 'text' },
+    ...EMPTY_OPS,
+  ],
 };
 
 /** Operators for a property (or a property type); formulas by their result type. */
@@ -357,6 +363,12 @@ function matchesRule(row: Row, rule: FilterRule, property: Property, ctx: Displa
     }
     case 'checkbox':
       return (value === true) === rule.value;
+    case 'relation': {
+      // Matches the titles of the linked pages.
+      const q = lower(rule.value);
+      const has = relationIds(value).some((id) => lower(ctx.pages?.get(id)?.title).includes(q));
+      return op === 'doesNotContain' ? !has : has;
+    }
     case 'date':
     case 'createdTime':
     case 'lastEditedTime': {

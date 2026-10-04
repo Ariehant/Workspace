@@ -1,5 +1,5 @@
 import { dateFromString } from '../format';
-import { cellValue, isDateValue, optionsOf } from '../properties';
+import { cellValue, isDateValue, optionsOf, relationIds } from '../properties';
 import type {
   DatabaseSnapshot,
   DateValue,
@@ -33,6 +33,19 @@ export function propertyFType(property: Property): FType {
     case 'createdBy':
     case 'lastEditedBy':
       return T.person;
+    case 'relation':
+      return T.list(T.page);
+    case 'rollup':
+      switch (property.config.resultType) {
+        case 'number':
+          return T.number;
+        case 'date':
+          return T.date;
+        case 'boolean':
+          return T.boolean;
+        default:
+          return T.text;
+      }
     default:
       return T.text;
   }
@@ -79,6 +92,23 @@ export function propertyFValue(row: Row, property: Property, ctx: DisplayContext
     case 'createdBy':
     case 'lastEditedBy':
       return typeof value === 'string' ? person(value) : null;
+    case 'relation':
+      return relationIds(value).map((id) => ({
+        kind: 'page' as const,
+        id,
+        title: ctx.pages?.get(id)?.title ?? '',
+      }));
+    case 'rollup':
+      switch (property.config.resultType) {
+        case 'number':
+          return typeof value === 'number' ? value : null;
+        case 'boolean':
+          return value === true;
+        case 'date':
+          return propertyFValue(row, { ...property, type: 'date' }, ctx);
+        default:
+          return typeof value === 'string' ? value : null;
+      }
     default:
       return typeof value === 'string' ? value : null;
   }
@@ -258,15 +288,29 @@ export class FormulaCache {
   private rows = new WeakMap<Row, Row>();
   private compiled: CompiledFormulas | null = null;
   private properties: readonly Property[] | null = null;
+  private output: Property[] = [];
   private key = '';
 
   /** The snapshot with formula values in `row.values` and result types in configs. */
   apply(snapshot: DatabaseSnapshot, ctx: DisplayContext): DatabaseSnapshot {
     if (!snapshot.properties.some((p) => p.type === 'formula')) return snapshot;
     if (this.properties !== snapshot.properties) {
+      const compiled = compileFormulas(snapshot.properties);
       this.properties = snapshot.properties;
-      this.compiled = compileFormulas(snapshot.properties);
+      this.compiled = compiled;
       this.key = '';
+      this.output = snapshot.properties.map((p) => {
+        const entry = compiled.byId.get(p.id);
+        if (!entry) return p;
+        return {
+          ...p,
+          config: {
+            ...p.config,
+            resultType: resultTypeOf(entry.type),
+            formulaError: entry.error ?? undefined,
+          },
+        };
+      });
     }
     const compiled = this.compiled!;
     const minute = compiled.usesNow ? Math.floor((ctx.now ?? Date.now()) / 60_000) : 0;
@@ -277,18 +321,7 @@ export class FormulaCache {
       this.rows = new WeakMap();
     }
 
-    const properties = snapshot.properties.map((p) => {
-      const entry = compiled.byId.get(p.id);
-      if (!entry) return p;
-      return {
-        ...p,
-        config: {
-          ...p.config,
-          resultType: resultTypeOf(entry.type),
-          formulaError: entry.error ?? undefined,
-        },
-      };
-    });
+    const properties = this.output;
     const types = new Map(
       properties.flatMap((p) => (p.config.resultType ? [[p.id, p.config.resultType]] : [])),
     );

@@ -11,8 +11,12 @@ import {
   nextOptionColor,
   optionsOf,
   propertyKind,
+  readRelation,
+  relationIds,
   reminderOptions,
   setCell,
+  setRelation,
+  addRow,
   updateOption,
   type DatabaseHandle,
   type DateValue,
@@ -49,10 +53,16 @@ import {
   UserCircle,
   Users,
   X,
+  Search,
+  Plus,
+  ArrowUpRight as RelationIcon,
   type LucideIcon,
 } from 'lucide-react';
+import { PageIcon } from '@workspace/editor';
 import { useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../context';
+import { useNavigation } from '../navigation';
+import { useDatabase } from './hooks';
 
 // --- Icons and pills -------------------------------------------------------------------
 
@@ -76,6 +86,8 @@ const ICONS: Record<PropertyType, LucideIcon> = {
   lastEditedBy: UserCircle,
   uniqueId: Fingerprint,
   formula: Sigma,
+  relation: RelationIcon,
+  rollup: Search,
 };
 
 export function PropertyIcon({ type, size = 14 }: { type: PropertyType; size?: number }) {
@@ -161,7 +173,7 @@ export function CellDisplay({
   const kind = propertyKind(property.type);
   const lines = wrap ? 'whitespace-pre-wrap break-words' : 'truncate';
 
-  if (property.type === 'formula') {
+  if (property.type === 'formula' || property.type === 'rollup') {
     // A computed value, shown as its result type (and not editable).
     const type = effectiveType(property);
     if (type === 'checkbox') {
@@ -253,6 +265,8 @@ export function CellDisplay({
         </span>
       );
     }
+    case 'relation':
+      return <RelationPages ids={relationIds(value)} property={property} ctx={ctx} wrap={wrap} />;
     case 'files':
       return (
         <span className={cn('flex min-w-0 gap-1.5', wrap ? 'flex-wrap' : 'overflow-hidden')}>
@@ -341,6 +355,7 @@ export const POPOVER_TYPES: readonly PropertyType[] = [
   'date',
   'person',
   'files',
+  'relation',
 ];
 
 export const isEditable = (type: PropertyType) =>
@@ -427,6 +442,8 @@ export function PopoverCellEditor({ anchor, ...props }: CellEditorProps & { anch
         className="w-[300px]"
         data-testid="cell-popover"
         onKeyDown={(e) => e.stopPropagation()}
+        // Clicks bubble through the portal to the cell, which would take focus back.
+        onClick={(e) => e.stopPropagation()}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <PopoverBody {...props} />
@@ -447,6 +464,8 @@ function PopoverBody(props: CellEditorProps) {
       return <PersonEditor {...props} />;
     case 'files':
       return <FilesEditor {...props} />;
+    case 'relation':
+      return <RelationEditor {...props} />;
     default:
       return null;
   }
@@ -926,6 +945,165 @@ function FilesEditor({ handle, row, property }: CellEditorProps) {
           Add
         </button>
       </form>
+    </div>
+  );
+}
+
+// --- Relations -------------------------------------------------------------------------
+
+/** Linked pages as chips (icon and underlined title); a chip opens its page. */
+function RelationPages({
+  ids,
+  property,
+  ctx,
+  wrap,
+}: {
+  ids: string[];
+  property: Property;
+  ctx: DisplayContext;
+  wrap?: boolean;
+}) {
+  const { platform } = useApp();
+  const { openRow } = useNavigation();
+  return (
+    <span className={cn('flex min-w-0 gap-2', wrap ? 'flex-wrap' : 'overflow-hidden')}>
+      {ids.map((id) => {
+        const page = ctx.pages?.get(id);
+        return (
+          <button
+            key={id}
+            type="button"
+            data-testid="relation-page"
+            onClick={(e) => {
+              e.stopPropagation();
+              openRow(id, page?.databaseId ?? property.config.databaseId ?? '', 'sidePeek');
+            }}
+            className="flex max-w-60 shrink-0 items-center gap-1 rounded px-0.5 hover:bg-hover"
+          >
+            <PageIcon
+              icon={page?.icon ?? null}
+              size={14}
+              fileUrl={platform.fileUrl}
+              className="shrink-0 text-muted"
+            />
+            <span className="truncate underline decoration-faint underline-offset-2">
+              {page?.title || 'Untitled'}
+            </span>
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+/** Pick the pages a row links to: search the related database, add, remove, create. */
+function RelationEditor({ handle, row, property }: CellEditorProps) {
+  const { databases, user, platform } = useApp();
+  const targetId = property.config.databaseId ?? '';
+  const target = useDatabase(targetId);
+  const [query, setQuery] = useState('');
+  if (!databases.exists(targetId)) {
+    return <p className="px-3 py-2 text-muted">The related database no longer exists.</p>;
+  }
+  if (!target) return <div className="h-16" aria-busy="true" />;
+  const live = new Map(
+    target.snapshot.rows.filter((r) => r.trashedAt === null).map((r) => [r.id, r]),
+  );
+  const linked = readRelation(handle.doc, row.id, property.id).filter((id) => live.has(id));
+  const q = query.trim().toLowerCase();
+  const candidates = [...live.values()].filter(
+    (r) =>
+      !linked.includes(r.id) &&
+      // A page doesn't link to itself.
+      r.id !== row.id &&
+      (r.title || 'Untitled').toLowerCase().includes(q),
+  );
+  const write = (ids: string[]) =>
+    setRelation(databases.resolveDoc, handle.id, row.id, property.id, ids, user.id);
+  const add = (id: string) => {
+    write(property.config.limitOne ? [id] : [...linked, id]);
+    setQuery('');
+  };
+  const create = () => {
+    const id = addRow(target.handle.doc, { actor: user.id, title: query.trim() });
+    add(id);
+  };
+  const exact = [...live.values()].some((r) => r.title.toLowerCase() === q);
+  const pageRow = (r: Row, action: ReactNode, onClick?: () => void) => (
+    <div
+      key={r.id}
+      role={onClick ? 'option' : undefined}
+      aria-selected={onClick ? false : undefined}
+      onClick={onClick}
+      // Keep focus in the search box (the list changes under the pointer).
+      onMouseDown={(e) => e.preventDefault()}
+      className={cn(
+        'group/page flex h-8 items-center gap-2 rounded px-2',
+        onClick && 'cursor-pointer hover:bg-hover',
+      )}
+    >
+      <PageIcon icon={r.icon} size={16} fileUrl={platform.fileUrl} className="text-muted" />
+      <span className="flex-1 truncate">{r.title || 'Untitled'}</span>
+      {action}
+    </div>
+  );
+  return (
+    <div data-testid="relation-editor">
+      <input
+        autoFocus
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && q) {
+            e.preventDefault();
+            if (candidates[0]) add(candidates[0].id);
+            else if (!exact) create();
+          }
+        }}
+        placeholder="Search for a page…"
+        aria-label="Search pages"
+        className="h-9 w-full border-b border-line bg-transparent px-3 outline-none"
+      />
+      <div className="max-h-80 overflow-y-auto p-1">
+        {linked.length > 0 && (
+          <>
+            <p className="px-2 py-1 text-xs text-muted">
+              {property.config.limitOne ? 'Linked page' : `${linked.length} linked`}
+            </p>
+            {linked.map((id) =>
+              pageRow(
+                live.get(id)!,
+                <IconButton
+                  label={`Remove ${live.get(id)!.title || 'Untitled'}`}
+                  size="sm"
+                  onClick={() => write(linked.filter((l) => l !== id))}
+                >
+                  <X size={12} />
+                </IconButton>,
+              ),
+            )}
+          </>
+        )}
+        <p className="px-2 py-1 text-xs text-muted">
+          {property.config.limitOne && linked.length ? 'Replace with' : 'Link another page'}
+        </p>
+        <div role="listbox" aria-label="Pages">
+          {candidates.slice(0, 50).map((r) => pageRow(r, null, () => add(r.id)))}
+        </div>
+        {q && !exact && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={create}
+            className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-hover"
+          >
+            <Plus size={14} className="text-muted" /> New page “{query.trim()}”
+          </button>
+        )}
+        {!q && candidates.length === 0 && (
+          <p className="px-2 py-1.5 text-muted">No more pages to link</p>
+        )}
+      </div>
     </div>
   );
 }

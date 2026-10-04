@@ -10,3 +10,6 @@ export * from './filter';
 export * from './group';
 export * from './reminders';
 export * from './formula';
+export * from './relations';
+export * from './rollup';
+export * from './computed';

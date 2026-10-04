@@ -47,7 +47,9 @@ export type PropertyType =
   | 'lastEditedTime'
   | 'lastEditedBy'
   | 'uniqueId'
-  | 'formula';
+  | 'formula'
+  | 'relation'
+  | 'rollup';
 
 /** Notion's option palette (also used for text colors). */
 export const OPTION_COLORS = [
@@ -111,7 +113,42 @@ export interface PropertyConfig {
    */
   resultType?: FormulaResultType;
   formulaError?: string;
+  /** relation: the database it links to (may be this database). */
+  databaseId?: string;
+  /** relation: the synced property in the other database (two-way relations). */
+  syncedPropertyId?: string | null;
+  /** relation: at most one linked page. */
+  limitOne?: boolean;
+  /** rollup: the relation it goes through and the property it reads there. */
+  relationId?: string;
+  targetPropertyId?: string;
+  calculation?: RollupCalculation;
 }
+
+/** What a rollup computes over the related pages' values. */
+export type RollupCalculation =
+  | 'showOriginal'
+  | 'showUnique'
+  | 'countAll'
+  | 'countValues'
+  | 'countUnique'
+  | 'countEmpty'
+  | 'countNotEmpty'
+  | 'percentEmpty'
+  | 'percentNotEmpty'
+  | 'sum'
+  | 'average'
+  | 'median'
+  | 'min'
+  | 'max'
+  | 'range'
+  | 'earliest'
+  | 'latest'
+  | 'dateRange'
+  | 'checked'
+  | 'unchecked'
+  | 'percentChecked'
+  | 'percentUnchecked';
 
 /** What a formula's result is shown and filtered as. */
 export type FormulaResultType = 'number' | 'text' | 'boolean' | 'date';
@@ -289,6 +326,8 @@ export interface DatabaseSnapshot {
   /** Every row including trashed ones, in manual order. */
   rows: Row[];
   meta: DatabaseMeta;
+  /** Pages of related databases (set on computed snapshots). */
+  related?: ReadonlyMap<string, RelatedPage>;
 }
 
 /** Lookups that turn stored values into display text (and evaluate filters). */
@@ -299,12 +338,26 @@ export interface DisplayContext {
   me?: string;
   /** "Now" for relative dates (defaults to the clock). */
   now?: number;
+  /** Pages that relations point at (title, icon), for display, filters and formulas. */
+  pages?: ReadonlyMap<string, RelatedPage>;
+}
+
+/** A page a relation links to (a row of the related database). */
+export interface RelatedPage {
+  id: string;
+  title: string;
+  icon: string | null;
+  databaseId: string;
 }
 
 /** Database-wide settings, in the doc's `meta` map. */
 export interface DatabaseMeta {
   /** Row pages fold empty properties away under "N more properties". */
   hideEmptyProperties: boolean;
+  /** Sub-items: the self-relation pair that links a row to its parent and children. */
+  subItems: { parentId: string; childrenId: string } | null;
+  /** Dependencies: the self-relation pair "Blocked by" / "Blocking". */
+  dependencies: { blockedById: string; blockingId: string } | null;
 }
 
 export const META_MAP = 'meta';

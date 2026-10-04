@@ -18,6 +18,11 @@ import {
   type FilterRule,
   type OpenPagesIn,
   type View,
+  enableSubItems,
+  disableSubItems,
+  enableDependencies,
+  disableDependencies,
+  type DatabaseMeta,
 } from '@workspace/database';
 import { PageIcon } from '@workspace/editor';
 import {
@@ -55,6 +60,8 @@ import {
   Trash2,
   WrapText,
   X,
+  ListTree,
+  GitBranch,
 } from 'lucide-react';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../context';
@@ -129,7 +136,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
   const views = snapshot ? viewsOf(snapshot, viewSet) : [];
   const view = views.find((v) => v.id === activeId) ?? views[0];
   // (The React compiler memoizes these.)
-  const viewCtx = { ...ctx, me: user.id };
+  const viewCtx = { ...ctx, me: user.id, pages: snapshot?.related };
   const result =
     snapshot && view ? runView(snapshot, view, viewCtx, { search: search ?? '' }) : null;
   if (!loaded || !snapshot) return <div className="h-24" aria-busy="true" />;
@@ -190,6 +197,14 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
             >
               {v.id === view.id ? (
                 <ViewMenu
+                  meta={snapshot.meta}
+                  onMeta={(feature, on, deleteProperties) => {
+                    if (feature === 'subItems') {
+                      if (on) enableSubItems(doc, databaseId);
+                      else disableSubItems(doc, { deleteProperties });
+                    } else if (on) enableDependencies(doc, databaseId);
+                    else disableDependencies(doc, { deleteProperties });
+                  }}
                   view={v}
                   editable={editable}
                   canDelete={views.length > 1}
@@ -455,7 +470,12 @@ function ViewMenu({
   onToggleColumn,
   onDuplicate,
   onDelete,
+  meta,
+  onMeta,
 }: {
+  meta: DatabaseMeta;
+  /** Turn sub-items or dependencies on, or off (optionally deleting their properties). */
+  onMeta(feature: 'subItems' | 'dependencies', on: boolean, deleteProperties?: boolean): void;
   view: View;
   editable: boolean;
   canDelete: boolean;
@@ -548,6 +568,39 @@ function ViewMenu({
             {view.wrap ? 'On' : 'Off'}
           </span>
         </MenuItem>
+        <MenuSeparator />
+        {(
+          [
+            ['subItems', 'Sub-items', ListTree],
+            ['dependencies', 'Dependencies', GitBranch],
+          ] as const
+        ).map(([feature, label, Icon]) =>
+          meta[feature] ? (
+            <MenuSub key={feature}>
+              <MenuSubTrigger icon={<Icon size={14} />}>
+                <span className="flex-1">{label}</span>
+                <span className="text-xs text-accent">On</span>
+              </MenuSubTrigger>
+              <MenuSubContent>
+                <MenuItem onSelect={() => onMeta(feature, false)}>
+                  Turn off, keep properties
+                </MenuItem>
+                <MenuItem danger onSelect={() => onMeta(feature, false, true)}>
+                  Turn off and delete properties
+                </MenuItem>
+              </MenuSubContent>
+            </MenuSub>
+          ) : (
+            <MenuItem
+              key={feature}
+              icon={<Icon size={14} />}
+              onSelect={() => onMeta(feature, true)}
+            >
+              <span className="flex-1">{label}</span>
+              <span className="text-xs text-faint">Off</span>
+            </MenuItem>
+          ),
+        )}
         <MenuSeparator />
         <MenuItem icon={<Copy size={14} />} onSelect={onDuplicate}>
           Duplicate view

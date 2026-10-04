@@ -1,15 +1,11 @@
 import { getUsersMap, listUsers } from '@workspace/core';
 import {
-  FormulaCache,
   type DatabaseHandle,
   type DatabaseSnapshot,
   type DisplayContext,
 } from '@workspace/database';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../context';
-
-/** One formula cache per open database (it keeps results for unchanged rows). */
-const formulaCaches = new WeakMap<DatabaseHandle, FormulaCache>();
 
 const MINUTE = 60_000;
 const subscribeMinute = (onChange: () => void) => {
@@ -23,7 +19,8 @@ function useMinute(): number {
 
 /**
  * Load a database and follow its changes; `null` until loaded. The snapshot has
- * formula values computed (see `FormulaCache`).
+ * relations, rollups and formulas computed (see `DatabaseRegistry.computed`); with
+ * relations it also follows the related databases.
  */
 export function useDatabase(
   databaseId: string,
@@ -31,6 +28,8 @@ export function useDatabase(
   const { databases } = useApp();
   const [handle, setHandle] = useState<DatabaseHandle | null>(() => databases.get(databaseId));
   useEffect(() => {
+    // Relations can point at a database that was deleted.
+    if (!databases.exists(databaseId)) return;
     let active = true;
     databases.load(databaseId).then(
       (h) => active && setHandle(h),
@@ -49,15 +48,15 @@ export function useDatabase(
   const ctx = useDisplayContext();
   const { user } = useApp();
   const now = useMinute();
+  // Relations read other databases: follow every database's changes then.
+  const registryVersion = useRegistryVersion();
+  const related = raw?.properties.some((p) => p.type === 'relation' || p.type === 'rollup');
+  const relatedVersion = related ? registryVersion : 0;
   const snapshot = useMemo(() => {
     if (!current || !raw) return null;
-    let cache = formulaCaches.get(current);
-    if (!cache) {
-      cache = new FormulaCache();
-      formulaCaches.set(current, cache);
-    }
-    return cache.apply(raw, { ...ctx, me: user.id, now });
-  }, [current, raw, ctx, user.id, now]);
+    void relatedVersion;
+    return databases.computed(current.id, { ...ctx, me: user.id, now });
+  }, [databases, current, raw, ctx, user.id, now, relatedVersion]);
   return current && snapshot ? { handle: current, snapshot } : null;
 }
 

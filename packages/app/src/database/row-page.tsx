@@ -41,6 +41,7 @@ import {
 import { PageMenu } from '../page-menu';
 import { duplicateRowWithContent } from './actions';
 import { FormulaEditor } from './formula-editor';
+import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup';
 import {
   CellDisplay,
   PopoverCellEditor,
@@ -118,10 +119,12 @@ export function PropertiesPanel({
   row: Row;
   editable: boolean;
 }) {
-  const ctx = useDisplayContext();
+  const base = useDisplayContext();
+  const ctx = { ...base, pages: snapshot.related };
   const [editing, setEditing] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [formulaFor, setFormulaFor] = useState<string | null>(null);
+  const [setup, setSetup] = useState<SetupRequest | null>(null);
   const all = snapshot.properties.filter((p) => p.id !== TITLE_PROPERTY_ID);
   const hideEmpty = snapshot.meta.hideEmptyProperties;
   // Empty properties fold away (unless being edited) when the database asks for it.
@@ -156,6 +159,17 @@ export function PropertiesPanel({
           onClose={() => setFormulaFor(null)}
         />
       )}
+      {setup?.kind === 'relation' && (
+        <RelationSetup handle={handle} request={setup} ctx={ctx} onClose={() => setSetup(null)} />
+      )}
+      {setup?.kind === 'rollup' && (
+        <RollupSetup
+          handle={handle}
+          properties={snapshot.properties}
+          propertyId={setup.propertyId}
+          onClose={() => setSetup(null)}
+        />
+      )}
       {hidden.length > 0 && (
         <button
           type="button"
@@ -182,12 +196,18 @@ export function PropertiesPanel({
                 <MenuItem
                   key={type}
                   icon={<PropertyIcon type={type} />}
-                  onSelect={() =>
-                    addProperty(handle.doc, {
+                  onSelect={() => {
+                    if (type === 'relation') {
+                      setSetup({ kind: 'relation', mode: 'add' });
+                      return;
+                    }
+                    const id = addProperty(handle.doc, {
                       name: newPropertyName(handle.doc, propertyKind(type).label),
                       type,
-                    })
-                  }
+                    });
+                    if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
+                    if (type === 'formula') setFormulaFor(id);
+                  }}
                 >
                   {propertyKind(type).label}
                 </MenuItem>
@@ -311,7 +331,7 @@ function RowContent({
 }
 
 function RowMenu({ rowId, databaseId }: { rowId: string; databaseId: string }) {
-  const { client, user } = useApp();
+  const { client, user, databases } = useApp();
   const { navigate } = useNavigation();
   const found = useRow(rowId, databaseId);
   const { pageDoc } = usePageBody(rowId);
@@ -323,7 +343,7 @@ function RowMenu({ rowId, databaseId }: { rowId: string; databaseId: string }) {
       pageDoc={pageDoc}
       onOptions={model.setOptions}
       onDuplicate={() =>
-        void duplicateRowWithContent(client, handle, rowId, user.id).then(navigate)
+        void duplicateRowWithContent(client, databases, handle, rowId, user.id).then(navigate)
       }
       onCopyLink={() => void navigator.clipboard.writeText(pageUrl(rowId))}
       onTrash={() => trashRow(handle.doc, rowId)}
