@@ -51,6 +51,23 @@ export function readBlocks(doc: Y.Doc): Block[] {
     .map(readElement);
 }
 
+/** The first image block in a page (for card previews): its stored file or its URL. */
+export function firstImage(doc: Y.Doc): { fileId?: string; src?: string } | null {
+  const find = (blocks: Block[]): { fileId?: string; src?: string } | null => {
+    for (const block of blocks) {
+      if (block.type === 'image') {
+        const { fileId, src } = block.props;
+        if (typeof fileId === 'string' && fileId) return { fileId };
+        if (typeof src === 'string' && src) return { src };
+      }
+      const inner = find(block.children);
+      if (inner) return inner;
+    }
+    return null;
+  };
+  return find(readBlocks(doc));
+}
+
 /** All text in a page, one line per block, for search indexing. */
 export function pageText(doc: Y.Doc): string {
   const lines: string[] = [];

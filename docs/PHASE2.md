@@ -1,6 +1,6 @@
 # Phase 2: Databases
 
-**Status:** M1–M4 done. M5 next.
+**Status:** M1–M5 done. M6 next.
 
 ## Context
 
@@ -287,7 +287,7 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - There's no "include sub-items/parents" filter option.
   - Formulas can't read other properties of related pages (`current.prop("…")`).
 
-### M5: board, list and gallery views
+### M5: board, list and gallery views ✅
 
 - **Board:**
   - grouped by select, status, person, checkbox, relation and the other groupable types; sub-groups as swimlanes
@@ -300,6 +300,35 @@ The table is a custom grid rather than TanStack Table: the query engine already 
 - **List view:** a compact list showing the title and the properties you choose.
 - **Gallery view:** a responsive grid of cards.
 - All three are virtualized for large databases.
+
+**M5 notes:**
+
+- **Model:** a view's `type` is table, board, list or gallery. Views now also store `cardPreview` (none, page cover, page content, or a files property), `fitImage`, `cardSize` and `colorColumns`.
+  - New boards, lists and galleries show only the title at first. Properties added later stay off their cards until picked under Properties.
+  - A new board (or a view switched to board) groups by the first status, select, multi-select, person or checkbox property. If there is none, it adds a Status property.
+  - Galleries start with the page content as the preview.
+- **Board** (`board.tsx`, with `boardLayout` in the database package):
+  - columns are the view's groups and swimlanes are its sub-groups
+  - dragging a card to another column sets the property with `groupMoveValue`, which swaps only the dragged-from value on multi-select and person
+  - with no sort set, dropping also reorders the card (`moveRow` / the new `moveRowAfter`)
+  - columns can be collapsed or hidden (hidden ones are listed under "Hidden groups") and tinted with their option color
+  - "+ New" per column (and lane) adds a card with that value and starts typing its title
+  - long columns render only the cards in view
+- **List and gallery** (`list.tsx`, `gallery.tsx`): they share a line model (group headers, content, "+ New" per group) that is virtualized from 100 lines.
+  - The gallery is a responsive grid whose column count follows the card size.
+  - Both support groups and sub-groups.
+- **Cards** (`cards.tsx`):
+  - the preview shows the cover, the first image in the page (`firstImage` in core; a page's content is only loaded while its card is rendered) or the first image of a files property, either cropped or fitted
+  - below it come the icon and title, then the non-empty picked properties
+- **View menu:**
+  - Layout (switch the type)
+  - Card preview, Fit image and Card size for boards and galleries, and Color columns for boards
+  - "Add a view" asks which type to add
+- **Not done:**
+  - board columns can't be reordered by dragging
+  - cards can't be edited in place (they open the page)
+  - gallery and list rows can't be reordered by dragging
+  - virtualization is only exercised by hand, not by an E2E test with hundreds of cards
 
 ### M6: calendar, timeline and chart views
 

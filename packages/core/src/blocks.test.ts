@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { getPageContent, pageText, readBlocks, readReminders } from './index';
+import { firstImage, getPageContent, pageText, readBlocks, readReminders } from './index';
 
 function paragraph(text: string): Y.XmlElement {
   const el = new Y.XmlElement('paragraph');
@@ -95,5 +95,20 @@ describe('blocks', () => {
     expect(readReminders(doc)).toEqual([
       { blockId: 'block-7', date: '2026-10-05', text: 'Order servos' },
     ]);
+  });
+});
+
+describe('firstImage', () => {
+  it('finds the first image block, nested ones included', () => {
+    const doc = new Y.Doc();
+    expect(firstImage(doc)).toBeNull();
+    const column = new Y.XmlElement('column');
+    const image = new Y.XmlElement('image');
+    image.setAttribute('src', 'https://example.com/a.png');
+    column.insert(0, [image]);
+    const later = new Y.XmlElement('image');
+    later.setAttribute('fileId', 'f1');
+    getPageContent(doc).insert(0, [paragraph('intro'), column, later]);
+    expect(firstImage(doc)).toEqual({ src: 'https://example.com/a.png' });
   });
 });

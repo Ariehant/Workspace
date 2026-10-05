@@ -259,6 +259,7 @@ test('view tabs: add, rename, duplicate, reorder, delete; each keeps its own set
 
   // A second view with its own filter.
   await db(window).getByRole('button', { name: 'Add a view' }).click();
+  await window.getByTestId('add-view-menu').getByRole('menuitem', { name: 'Table' }).click();
   await expect(tabs()).toHaveText(['Table', 'Table 2']);
   await toolbar(window, 'Filter').click();
   await pickProperty(window, 'Stage');

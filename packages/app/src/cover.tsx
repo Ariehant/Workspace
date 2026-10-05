@@ -32,7 +32,7 @@ export function randomCover(): PageCover {
   return { kind: 'gradient', value: ids[Math.floor(Math.random() * ids.length)]!, positionY: 50 };
 }
 
-function coverStyle(cover: PageCover, fileUrl: (id: string) => string): CSSProperties {
+export function coverStyle(cover: PageCover, fileUrl: (id: string) => string): CSSProperties {
   if (cover.kind === 'file') {
     return {
       backgroundImage: `url("${fileUrl(cover.value)}")`,

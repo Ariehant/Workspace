@@ -323,3 +323,23 @@ export function groupRows(
   if (groupBy.hideEmpty) list = list.filter((g) => g.rows.length > 0);
   return list;
 }
+
+/**
+ * The value a row gets when it is moved from one group to another (a board card
+ * dragged between columns), or `undefined` when the group can't be set. Multi-value
+ * properties swap the old group's value for the new one and keep the rest.
+ */
+export function groupMoveValue(
+  row: Row,
+  property: Property,
+  from: GroupInfo | null,
+  to: GroupInfo,
+): unknown {
+  if (to.value === undefined) return undefined;
+  if (property.type !== 'multiSelect' && property.type !== 'person') return to.value;
+  const current = (cellValue(row, property) as string[] | null) ?? [];
+  const kept = current.filter((id) => id !== from?.key);
+  const added = (to.value as string[] | null) ?? [];
+  const next = [...kept, ...added.filter((id) => !kept.includes(id))];
+  return next.length ? next : null;
+}

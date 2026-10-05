@@ -13,3 +13,4 @@ export * from './formula';
 export * from './relations';
 export * from './rollup';
 export * from './computed';
+export * from './board';

@@ -23,6 +23,11 @@ import {
   enableDependencies,
   disableDependencies,
   type DatabaseMeta,
+  VIEW_TYPES,
+  setViewType,
+  type CardPreview,
+  type CardSize,
+  type ViewType,
 } from '@workspace/database';
 import { PageIcon } from '@workspace/editor';
 import {
@@ -57,6 +62,14 @@ import {
   Plus,
   Search,
   Table2,
+  SquareKanban,
+  List as ListIcon,
+  LayoutGrid,
+  Image as ImageIcon,
+  Maximize,
+  Palette,
+  Ruler,
+  type LucideIcon,
   Trash2,
   WrapText,
   X,
@@ -69,6 +82,21 @@ import { useDocVersion } from '../hooks';
 import { useNavigation } from '../navigation';
 import { PropertyIcon } from './cells';
 import { useDatabase, useDisplayContext } from './hooks';
+import { BoardView } from './board';
+import { GalleryView } from './gallery';
+import { ListView } from './list';
+
+const VIEW_ICONS: Record<ViewType, LucideIcon> = {
+  table: Table2,
+  board: SquareKanban,
+  list: ListIcon,
+  gallery: LayoutGrid,
+};
+
+export function ViewIcon({ type, size = 14 }: { type: ViewType; size?: number }) {
+  const Icon = VIEW_ICONS[type];
+  return <Icon size={size} />;
+}
 import { TableView } from './table';
 import {
   FilterGroupEditor,
@@ -206,6 +234,8 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
                     else disableDependencies(doc, { deleteProperties });
                   }}
                   view={v}
+                  filesProperties={properties.filter((p) => p.type === 'files')}
+                  onLayout={(type) => setViewType(doc, v.id, type)}
                   editable={editable}
                   canDelete={views.length > 1}
                   onChange={(changes) => updateView(doc, v.id, changes)}
@@ -229,28 +259,40 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
                   onClick={() => setActiveId(v.id)}
                   className="flex h-7 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
                 >
-                  <Table2 size={14} /> {v.name}
+                  <ViewIcon type={v.type} /> {v.name}
                 </button>
               )}
             </div>
           ))}
           {editable && (
-            <IconButton
-              label="Add a view"
-              onClick={() =>
-                setActiveId(
-                  addView(doc, {
-                    viewSet,
-                    name: views.some((v) => v.name === 'Table')
-                      ? `Table ${views.length + 1}`
-                      : 'Table',
-                    type: 'table',
-                  }),
-                )
-              }
-            >
-              <Plus size={15} />
-            </IconButton>
+            <Menu>
+              <MenuTrigger asChild>
+                <IconButton label="Add a view">
+                  <Plus size={15} />
+                </IconButton>
+              </MenuTrigger>
+              <MenuContent data-testid="add-view-menu">
+                {VIEW_TYPES.map(({ type, label }) => (
+                  <MenuItem
+                    key={type}
+                    icon={<ViewIcon type={type} />}
+                    onSelect={() =>
+                      setActiveId(
+                        addView(doc, {
+                          viewSet,
+                          name: views.some((v) => v.name === label)
+                            ? `${label} ${views.length + 1}`
+                            : label,
+                          type,
+                        }),
+                      )
+                    }
+                  >
+                    {label}
+                  </MenuItem>
+                ))}
+              </MenuContent>
+            </Menu>
           )}
         </div>
 
@@ -452,6 +494,21 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
           onFilter={addFilter}
         />
       )}
+      {view.type !== 'table' &&
+        (() => {
+          const props = {
+            handle,
+            snapshot,
+            view,
+            result,
+            ctx: viewCtx,
+            editable,
+            onOpenRow: open,
+          };
+          if (view.type === 'board') return <BoardView {...props} />;
+          if (view.type === 'list') return <ListView {...props} />;
+          return <GalleryView {...props} />;
+        })()}
       {result.rows.length === 0 && (ruleCount > 0 || search) && (
         <p className="py-3 text-sm text-faint" data-testid="no-results">
           No results
@@ -459,6 +516,17 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
       )}
     </div>
   );
+}
+
+const previewKey = (p: CardPreview) =>
+  p.kind === 'property' ? `property:${p.propertyId}` : p.kind;
+const previewFromKey = (key: string): CardPreview =>
+  key.startsWith('property:')
+    ? { kind: 'property', propertyId: key.slice('property:'.length) }
+    : { kind: key as 'none' | 'cover' | 'content' };
+function previewLabel(p: CardPreview, files: { id: string; name: string }[]): string {
+  if (p.kind === 'property') return files.find((f) => f.id === p.propertyId)?.name ?? 'None';
+  return { none: 'None', cover: 'Page cover', content: 'Page content' }[p.kind];
 }
 
 function ViewMenu({
@@ -472,7 +540,12 @@ function ViewMenu({
   onDelete,
   meta,
   onMeta,
+  onLayout,
+  filesProperties,
 }: {
+  onLayout(type: ViewType): void;
+  /** Files properties a card preview can use. */
+  filesProperties: { id: string; name: string }[];
   meta: DatabaseMeta;
   /** Turn sub-items or dependencies on, or off (optionally deleting their properties). */
   onMeta(feature: 'subItems' | 'dependencies', on: boolean, deleteProperties?: boolean): void;
@@ -504,7 +577,7 @@ function ViewMenu({
           aria-selected
           className="flex h-7 items-center gap-1.5 rounded px-2 font-medium text-fg hover:bg-hover"
         >
-          <Table2 size={14} /> {view.name}
+          <ViewIcon type={view.type} /> {view.name}
         </button>
       </MenuTrigger>
       <MenuContent className="w-64" data-testid="view-menu">
@@ -517,6 +590,92 @@ function ViewMenu({
           />
         </div>
         <MenuSeparator />
+        <MenuSub>
+          <MenuSubTrigger icon={<ViewIcon type={view.type} />}>
+            <span className="flex-1">Layout</span>
+            <span className="text-xs text-faint">
+              {VIEW_TYPES.find((t) => t.type === view.type)?.label}
+            </span>
+          </MenuSubTrigger>
+          <MenuSubContent>
+            <MenuRadioGroup value={view.type} onValueChange={(t) => onLayout(t as ViewType)}>
+              {VIEW_TYPES.map((t) => (
+                <MenuRadioItem key={t.type} value={t.type}>
+                  {t.label}
+                </MenuRadioItem>
+              ))}
+            </MenuRadioGroup>
+          </MenuSubContent>
+        </MenuSub>
+        {(view.type === 'board' || view.type === 'gallery') && (
+          <>
+            <MenuSub>
+              <MenuSubTrigger icon={<ImageIcon size={14} />}>
+                <span className="flex-1">Card preview</span>
+                <span className="truncate text-xs text-faint">
+                  {previewLabel(view.cardPreview, filesProperties)}
+                </span>
+              </MenuSubTrigger>
+              <MenuSubContent>
+                <MenuRadioGroup
+                  value={previewKey(view.cardPreview)}
+                  onValueChange={(key) => onChange({ cardPreview: previewFromKey(key) })}
+                >
+                  <MenuRadioItem value="none">None</MenuRadioItem>
+                  <MenuRadioItem value="cover">Page cover</MenuRadioItem>
+                  <MenuRadioItem value="content">Page content</MenuRadioItem>
+                  {filesProperties.map((p) => (
+                    <MenuRadioItem key={p.id} value={`property:${p.id}`}>
+                      {p.name}
+                    </MenuRadioItem>
+                  ))}
+                </MenuRadioGroup>
+              </MenuSubContent>
+            </MenuSub>
+            <MenuItem
+              icon={<Maximize size={14} />}
+              onSelect={(e) => {
+                e.preventDefault();
+                onChange({ fitImage: !view.fitImage });
+              }}
+            >
+              <span className="flex-1">Fit image</span>
+              <span className={cn('text-xs', view.fitImage ? 'text-accent' : 'text-faint')}>
+                {view.fitImage ? 'On' : 'Off'}
+              </span>
+            </MenuItem>
+            <MenuSub>
+              <MenuSubTrigger icon={<Ruler size={14} />}>
+                <span className="flex-1">Card size</span>
+                <span className="text-xs text-faint capitalize">{view.cardSize}</span>
+              </MenuSubTrigger>
+              <MenuSubContent>
+                <MenuRadioGroup
+                  value={view.cardSize}
+                  onValueChange={(size) => onChange({ cardSize: size as CardSize })}
+                >
+                  <MenuRadioItem value="small">Small</MenuRadioItem>
+                  <MenuRadioItem value="medium">Medium</MenuRadioItem>
+                  <MenuRadioItem value="large">Large</MenuRadioItem>
+                </MenuRadioGroup>
+              </MenuSubContent>
+            </MenuSub>
+          </>
+        )}
+        {view.type === 'board' && (
+          <MenuItem
+            icon={<Palette size={14} />}
+            onSelect={(e) => {
+              e.preventDefault();
+              onChange({ colorColumns: !view.colorColumns });
+            }}
+          >
+            <span className="flex-1">Color columns</span>
+            <span className={cn('text-xs', view.colorColumns ? 'text-accent' : 'text-faint')}>
+              {view.colorColumns ? 'On' : 'Off'}
+            </span>
+          </MenuItem>
+        )}
         <MenuSub>
           <MenuSubTrigger icon={<PanelRight size={14} />}>
             <span className="flex-1">Open pages in</span>

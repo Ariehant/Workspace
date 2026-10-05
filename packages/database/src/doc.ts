@@ -13,6 +13,7 @@ import {
   VIEWS_MAP,
   type DatabaseMeta,
   type DatabaseSnapshot,
+  type GroupBy,
   type DisplayContext,
   type Property,
   type PropertyConfig,
@@ -95,6 +96,10 @@ export function readView(map: YMap): View {
     calculations: get('calculations'),
     openPagesIn: get('openPagesIn'),
     wrap: get('wrap'),
+    cardPreview: get('cardPreview'),
+    fitImage: get('fitImage'),
+    cardSize: get('cardSize'),
+    colorColumns: get('colorColumns'),
   };
 }
 
@@ -212,7 +217,8 @@ export function addProperty(doc: Y.Doc, options: AddPropertyOptions): string {
     for (const view of readViews(doc)) {
       const columns = viewColumns(view, properties);
       const at = options.afterId ? columns.findIndex((c) => c.id === options.afterId) + 1 : 0;
-      columns.splice(at > 0 ? at : columns.length, 0, { id, visible: true });
+      // Cards and lists only show the properties picked for them.
+      columns.splice(at > 0 ? at : columns.length, 0, { id, visible: view.type === 'table' });
       getViewMap(doc, view.id).set('properties', columns);
     }
   });
@@ -558,6 +564,14 @@ export function moveRow(doc: Y.Doc, rowId: string, beforeId: string | null): voi
   getRowMap(doc, rowId).set(PageField.sortKey, keyAt(rows, at < 0 ? rows.length : at));
 }
 
+/** Move a row in the manual order to just after `afterId` (first when `null`). */
+export function moveRowAfter(doc: Y.Doc, rowId: string, afterId: string | null): void {
+  if (rowId === afterId) return;
+  const rows = liveRowsByKey(doc).filter((r) => r.id !== rowId);
+  const at = afterId ? rows.findIndex((r) => r.id === afterId) + 1 : 0;
+  getRowMap(doc, rowId).set(PageField.sortKey, keyAt(rows, at));
+}
+
 /** Copy a row's properties (not its content; see `copyPageContent`), right after it. */
 export function duplicateRow(doc: Y.Doc, rowId: string, actor: string | null): string {
   const row = readRow(getRowMap(doc, rowId));
@@ -594,14 +608,67 @@ export function addView(doc: Y.Doc, options: AddViewOptions): string {
     map.set('name', options.name);
     map.set('type', options.type);
     map.set('sortKey', keyAt(views, views.length));
-    const config = { ...DEFAULT_VIEW_CONFIG, ...options.config };
+    const config = {
+      ...DEFAULT_VIEW_CONFIG,
+      ...viewTypeDefaults(doc, options.type),
+      ...options.config,
+    };
     if (config.properties.length === 0) {
-      config.properties = readProperties(doc).map((p) => ({ id: p.id, visible: true }));
+      // Boards, lists and galleries start with just the title, like Notion.
+      config.properties = readProperties(doc).map((p) => ({
+        id: p.id,
+        visible: options.type === 'table' || p.id === TITLE_PROPERTY_ID,
+      }));
     }
     for (const [key, value] of Object.entries(config)) map.set(key, value);
     viewsMap(doc).set(id, map);
   });
   return id;
+}
+
+/** Settings a new view of this type starts with. */
+function viewTypeDefaults(doc: Y.Doc, type: ViewType): Partial<ViewConfig> {
+  if (type === 'gallery') return { cardPreview: { kind: 'content' } };
+  if (type === 'board') return { groupBy: defaultBoardGroupBy(doc) };
+  return {};
+}
+
+const BOARD_TYPES: readonly PropertyType[] = [
+  'status',
+  'select',
+  'multiSelect',
+  'person',
+  'checkbox',
+];
+
+/**
+ * What a new board groups by: the first status, select, multi-select, person or
+ * checkbox property; a new Status property when there is none.
+ */
+export function defaultBoardGroupBy(doc: Y.Doc): GroupBy {
+  const properties = readProperties(doc);
+  for (const type of BOARD_TYPES) {
+    const property = properties.find((p) => p.type === type);
+    if (property) return { propertyId: property.id };
+  }
+  const id = addProperty(doc, {
+    name: newPropertyName(doc, 'Status'),
+    type: 'status',
+  });
+  return { propertyId: id };
+}
+
+/** Change a view's layout; a board needs something to group by. */
+export function setViewType(doc: Y.Doc, id: string, type: ViewType): void {
+  doc.transact(() => {
+    const map = getViewMap(doc, id);
+    const view = readView(map);
+    map.set('type', type);
+    if (type === 'board' && !view.groupBy) map.set('groupBy', defaultBoardGroupBy(doc));
+    if (type === 'gallery' && view.cardPreview.kind === 'none') {
+      map.set('cardPreview', { kind: 'content' });
+    }
+  });
 }
 
 export function updateView(

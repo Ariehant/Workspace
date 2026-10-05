@@ -185,7 +185,23 @@ export interface FileValue {
   mime?: string;
 }
 
-export type ViewType = 'table';
+export type ViewType = 'table' | 'board' | 'list' | 'gallery';
+
+export const VIEW_TYPES: { type: ViewType; label: string }[] = [
+  { type: 'table', label: 'Table' },
+  { type: 'board', label: 'Board' },
+  { type: 'list', label: 'List' },
+  { type: 'gallery', label: 'Gallery' },
+];
+
+/** What a board or gallery card shows above its title. */
+export type CardPreview =
+  | { kind: 'none' }
+  | { kind: 'cover' }
+  | { kind: 'content' }
+  | { kind: 'property'; propertyId: string };
+
+export type CardSize = 'small' | 'medium' | 'large';
 
 export type OpenPagesIn = 'sidePeek' | 'center' | 'fullPage';
 
@@ -283,6 +299,12 @@ export interface ViewConfig {
   openPagesIn: OpenPagesIn;
   /** Wrap long cell content instead of cutting it off. */
   wrap: boolean;
+  /** Board and gallery: the image on cards, fit inside (or cropped to) the preview area. */
+  cardPreview: CardPreview;
+  fitImage: boolean;
+  cardSize: CardSize;
+  /** Board: tint columns with their group's color. */
+  colorColumns: boolean;
 }
 
 export interface View extends ViewConfig {
@@ -371,4 +393,8 @@ export const DEFAULT_VIEW_CONFIG: ViewConfig = {
   calculations: {},
   openPagesIn: 'sidePeek',
   wrap: false,
+  cardPreview: { kind: 'none' },
+  fitImage: false,
+  cardSize: 'medium',
+  colorColumns: true,
 };
