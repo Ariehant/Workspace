@@ -100,6 +100,17 @@ export function readView(map: YMap): View {
     fitImage: get('fitImage'),
     cardSize: get('cardSize'),
     colorColumns: get('colorColumns'),
+    dateProperty: get('dateProperty'),
+    endDateProperty: get('endDateProperty'),
+    calendarMode: get('calendarMode'),
+    weekStart: get('weekStart'),
+    timelineZoom: get('timelineZoom'),
+    timelineTable: get('timelineTable'),
+    showDependencies: get('showDependencies'),
+    chart: {
+      ...DEFAULT_VIEW_CONFIG.chart,
+      ...((map.get('chart') as ViewConfig['chart'] | undefined) ?? {}),
+    },
   };
 }
 
@@ -630,7 +641,27 @@ export function addView(doc: Y.Doc, options: AddViewOptions): string {
 function viewTypeDefaults(doc: Y.Doc, type: ViewType): Partial<ViewConfig> {
   if (type === 'gallery') return { cardPreview: { kind: 'content' } };
   if (type === 'board') return { groupBy: defaultBoardGroupBy(doc) };
+  if (type === 'calendar' || type === 'timeline') return { dateProperty: defaultDateProperty(doc) };
+  if (type === 'chart') return { chart: { ...DEFAULT_VIEW_CONFIG.chart, x: defaultChartX(doc) } };
   return {};
+}
+
+/** What a new chart's X axis groups by: a select-like property, a date by month, or the title. */
+function defaultChartX(doc: Y.Doc): GroupBy {
+  const properties = readProperties(doc);
+  for (const type of BOARD_TYPES) {
+    const property = properties.find((p) => p.type === type);
+    if (property) return { propertyId: property.id };
+  }
+  const date = properties.find((p) => p.type === 'date' || p.type === 'createdTime');
+  if (date) return { propertyId: date.id, dateBucket: 'month' };
+  return { propertyId: TITLE_PROPERTY_ID };
+}
+
+/** The date property a calendar or timeline uses: the first one, or a new "Date". */
+export function defaultDateProperty(doc: Y.Doc): string {
+  const date = readProperties(doc).find((p) => p.type === 'date');
+  return date ? date.id : addProperty(doc, { name: newPropertyName(doc, 'Date'), type: 'date' });
 }
 
 const BOARD_TYPES: readonly PropertyType[] = [
@@ -665,6 +696,12 @@ export function setViewType(doc: Y.Doc, id: string, type: ViewType): void {
     const view = readView(map);
     map.set('type', type);
     if (type === 'board' && !view.groupBy) map.set('groupBy', defaultBoardGroupBy(doc));
+    if ((type === 'calendar' || type === 'timeline') && !view.dateProperty) {
+      map.set('dateProperty', defaultDateProperty(doc));
+    }
+    if (type === 'chart' && !view.chart.x) {
+      map.set('chart', { ...view.chart, x: defaultChartX(doc) });
+    }
     if (type === 'gallery' && view.cardPreview.kind === 'none') {
       map.set('cardPreview', { kind: 'content' });
     }

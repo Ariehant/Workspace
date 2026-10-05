@@ -14,3 +14,6 @@ export * from './relations';
 export * from './rollup';
 export * from './computed';
 export * from './board';
+export * from './calendar';
+export * from './timeline';
+export * from './chart';

@@ -69,6 +69,9 @@ import {
   Maximize,
   Palette,
   Ruler,
+  CalendarDays,
+  GanttChart,
+  BarChart3,
   type LucideIcon,
   Trash2,
   WrapText,
@@ -76,7 +79,7 @@ import {
   ListTree,
   GitBranch,
 } from 'lucide-react';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../context';
 import { useDocVersion } from '../hooks';
 import { useNavigation } from '../navigation';
@@ -85,12 +88,20 @@ import { useDatabase, useDisplayContext } from './hooks';
 import { BoardView } from './board';
 import { GalleryView } from './gallery';
 import { ListView } from './list';
+import { CalendarView, dateProperties } from './calendar';
+import { TimelineView } from './timeline';
+
+// recharts is large: load it when a chart is shown.
+const ChartView = lazy(() => import('./chart'));
 
 const VIEW_ICONS: Record<ViewType, LucideIcon> = {
   table: Table2,
   board: SquareKanban,
   list: ListIcon,
   gallery: LayoutGrid,
+  calendar: CalendarDays,
+  timeline: GanttChart,
+  chart: BarChart3,
 };
 
 export function ViewIcon({ type, size = 14 }: { type: ViewType; size?: number }) {
@@ -235,6 +246,8 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
                   }}
                   view={v}
                   filesProperties={properties.filter((p) => p.type === 'files')}
+                  dateProperties={dateProperties(properties)}
+                  hasDependencies={snapshot.meta.dependencies !== null}
                   onLayout={(type) => setViewType(doc, v.id, type)}
                   editable={editable}
                   canDelete={views.length > 1}
@@ -507,6 +520,15 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
           };
           if (view.type === 'board') return <BoardView {...props} />;
           if (view.type === 'list') return <ListView {...props} />;
+          if (view.type === 'calendar') return <CalendarView {...props} />;
+          if (view.type === 'timeline') return <TimelineView {...props} />;
+          if (view.type === 'chart') {
+            return (
+              <Suspense fallback={<div className="h-[400px]" aria-busy="true" />}>
+                <ChartView {...props} />
+              </Suspense>
+            );
+          }
           return <GalleryView {...props} />;
         })()}
       {result.rows.length === 0 && (ruleCount > 0 || search) && (
@@ -542,7 +564,12 @@ function ViewMenu({
   onMeta,
   onLayout,
   filesProperties,
+  dateProperties: dates,
+  hasDependencies,
 }: {
+  /** Date properties calendars and timelines can be shown by. */
+  dateProperties: { id: string; name: string; type: string }[];
+  hasDependencies: boolean;
   onLayout(type: ViewType): void;
   /** Files properties a card preview can use. */
   filesProperties: { id: string; name: string }[];
@@ -662,6 +689,90 @@ function ViewMenu({
             </MenuSub>
           </>
         )}
+        {(view.type === 'calendar' || view.type === 'timeline') && (
+          <MenuSub>
+            <MenuSubTrigger icon={<CalendarDays size={14} />}>
+              <span className="flex-1">
+                {view.type === 'calendar' ? 'Show calendar by' : 'Show timeline by'}
+              </span>
+              <span className="truncate text-xs text-faint">
+                {(dates.find((d) => d.id === view.dateProperty) ?? dates[0])?.name}
+              </span>
+            </MenuSubTrigger>
+            <MenuSubContent>
+              <MenuRadioGroup
+                value={view.dateProperty ?? dates[0]?.id ?? ''}
+                onValueChange={(id) => onChange({ dateProperty: id })}
+              >
+                {dates.map((d) => (
+                  <MenuRadioItem key={d.id} value={d.id}>
+                    {d.name}
+                  </MenuRadioItem>
+                ))}
+              </MenuRadioGroup>
+            </MenuSubContent>
+          </MenuSub>
+        )}
+        {view.type === 'timeline' && (
+          <MenuSub>
+            <MenuSubTrigger icon={<CalendarDays size={14} />}>
+              <span className="flex-1">End date</span>
+              <span className="truncate text-xs text-faint">
+                {dates.find((d) => d.id === view.endDateProperty)?.name ?? 'Same property'}
+              </span>
+            </MenuSubTrigger>
+            <MenuSubContent>
+              <MenuRadioGroup
+                value={view.endDateProperty ?? ''}
+                onValueChange={(id) => onChange({ endDateProperty: id || null })}
+              >
+                <MenuRadioItem value="">Same property</MenuRadioItem>
+                {dates
+                  .filter((d) => d.type === 'date' && d.id !== view.dateProperty)
+                  .map((d) => (
+                    <MenuRadioItem key={d.id} value={d.id}>
+                      {d.name}
+                    </MenuRadioItem>
+                  ))}
+              </MenuRadioGroup>
+            </MenuSubContent>
+          </MenuSub>
+        )}
+        {view.type === 'calendar' && (
+          <MenuItem
+            icon={<CalendarDays size={14} />}
+            onSelect={(e) => {
+              e.preventDefault();
+              onChange({ weekStart: view.weekStart === 1 ? 0 : 1 });
+            }}
+          >
+            <span className="flex-1">Start week on Monday</span>
+            <span className={cn('text-xs', view.weekStart === 1 ? 'text-accent' : 'text-faint')}>
+              {view.weekStart === 1 ? 'On' : 'Off'}
+            </span>
+          </MenuItem>
+        )}
+        {view.type === 'timeline' &&
+          (
+            [
+              ['timelineTable', 'Show table'],
+              ...(hasDependencies ? [['showDependencies', 'Show dependencies'] as const] : []),
+            ] as const
+          ).map(([key, label]) => (
+            <MenuItem
+              key={key}
+              icon={<GanttChart size={14} />}
+              onSelect={(e) => {
+                e.preventDefault();
+                onChange({ [key]: !view[key] });
+              }}
+            >
+              <span className="flex-1">{label}</span>
+              <span className={cn('text-xs', view[key] ? 'text-accent' : 'text-faint')}>
+                {view[key] ? 'On' : 'Off'}
+              </span>
+            </MenuItem>
+          ))}
         {view.type === 'board' && (
           <MenuItem
             icon={<Palette size={14} />}

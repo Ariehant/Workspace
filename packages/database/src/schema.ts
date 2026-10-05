@@ -185,14 +185,40 @@ export interface FileValue {
   mime?: string;
 }
 
-export type ViewType = 'table' | 'board' | 'list' | 'gallery';
+export type ViewType = 'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'chart';
 
 export const VIEW_TYPES: { type: ViewType; label: string }[] = [
   { type: 'table', label: 'Table' },
   { type: 'board', label: 'Board' },
   { type: 'list', label: 'List' },
   { type: 'gallery', label: 'Gallery' },
+  { type: 'calendar', label: 'Calendar' },
+  { type: 'timeline', label: 'Timeline' },
+  { type: 'chart', label: 'Chart' },
 ];
+
+export type TimelineZoom = 'hours' | 'day' | 'week' | 'biweek' | 'month' | 'quarter' | 'year';
+
+export type ChartType = 'bar' | 'horizontalBar' | 'line' | 'pie' | 'donut';
+
+/** Chart view settings: what the X axis groups by and what the Y axis measures. */
+export interface ChartConfig {
+  type: ChartType;
+  /** Property the X axis (or pie slices) groups by; with its buckets. */
+  x: GroupBy | null;
+  /** Count rows, or a calculation over a number property. */
+  y:
+    | { kind: 'count' }
+    | { kind: 'property'; propertyId: string; calc: 'sum' | 'average' | 'median' | 'min' | 'max' };
+  /** Split each bar / line into series by another property. */
+  series: GroupBy | null;
+  stacked: boolean;
+  sort: 'manual' | 'xAsc' | 'xDesc' | 'yAsc' | 'yDesc';
+  legend: boolean;
+  labels: boolean;
+  /** Leave out categories without rows. */
+  hideEmpty: boolean;
+}
 
 /** What a board or gallery card shows above its title. */
 export type CardPreview =
@@ -305,6 +331,21 @@ export interface ViewConfig {
   cardSize: CardSize;
   /** Board: tint columns with their group's color. */
   colorColumns: boolean;
+  /**
+   * Calendar and timeline: the date property rows are placed by (default: the first
+   * date property). Timelines can take the end from another date property.
+   */
+  dateProperty: string | null;
+  endDateProperty: string | null;
+  calendarMode: 'month' | 'week';
+  /** 0 = Sunday, 1 = Monday. */
+  weekStart: 0 | 1;
+  timelineZoom: TimelineZoom;
+  /** Timeline: the table of rows on the left. */
+  timelineTable: boolean;
+  /** Timeline: arrows between dependent rows (see `DatabaseMeta.dependencies`). */
+  showDependencies: boolean;
+  chart: ChartConfig;
 }
 
 export interface View extends ViewConfig {
@@ -397,4 +438,22 @@ export const DEFAULT_VIEW_CONFIG: ViewConfig = {
   fitImage: false,
   cardSize: 'medium',
   colorColumns: true,
+  dateProperty: null,
+  endDateProperty: null,
+  calendarMode: 'month',
+  weekStart: 0,
+  timelineZoom: 'week',
+  timelineTable: true,
+  showDependencies: true,
+  chart: {
+    type: 'bar',
+    x: null,
+    y: { kind: 'count' },
+    series: null,
+    stacked: true,
+    sort: 'manual',
+    legend: true,
+    labels: false,
+    hideEmpty: false,
+  },
 };

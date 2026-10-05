@@ -16,6 +16,7 @@
     "@workspace/editor": "workspace:*",
     "@workspace/ui": "workspace:*",
     "lucide-react": "^1.49.0",
+    "recharts": "^3.10.1",
     "yjs": "^13.6.27"
   },
   "peerDependencies": {

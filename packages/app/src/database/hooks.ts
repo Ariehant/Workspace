@@ -13,7 +13,7 @@ const subscribeMinute = (onChange: () => void) => {
   return () => clearInterval(timer);
 };
 /** The current minute, re-rendering as it changes (for `now()` in formulas). */
-function useMinute(): number {
+export function useMinute(): number {
   return useSyncExternalStore(subscribeMinute, () => Math.floor(Date.now() / MINUTE) * MINUTE);
 }
 

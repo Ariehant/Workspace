@@ -1,6 +1,6 @@
 # Phase 2: Databases
 
-**Status:** M1–M5 done. M6 next.
+**Status:** M1–M6 done. M7 next.
 
 ## Context
 
@@ -330,7 +330,7 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - gallery and list rows can't be reordered by dragging
   - virtualization is only exercised by hand, not by an E2E test with hundreds of cards
 
-### M6: calendar, timeline and chart views
+### M6: calendar, timeline and chart views ✅
 
 - **Calendar:**
   - month and week layouts, shown by any date property (multi-day ranges span days)
@@ -346,6 +346,37 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - the X axis groups by a property; the Y axis is a count or a calculation over a property
   - sorting, colors, legend and data labels; built on recharts, lazy-loaded
   - charts embed inline like any view
+
+**M6 notes:**
+
+- **Model:** views add `dateProperty` and `endDateProperty`, `calendarMode`, `weekStart`, `timelineZoom`, `timelineTable`, `showDependencies` and a `chart` config. A new calendar or timeline picks the first date property, or adds a "Date" property. A new chart groups by the first select-like property, else a date by month, else the title.
+- **Calendar** (`calendar.ts`, `calendar.tsx`):
+  - Day math uses day indices (whole local days, safe across DST).
+  - `layoutWeek` stacks multi-day bars in lanes, longest first.
+  - Drag a bar to another day to move it (times and range length are kept). Drag its right edge to change the end day.
+  - Drops are handled on the whole week row, so dropping onto a day covered by bars works.
+  - "No date" panel: drag a page onto a day to give it a date.
+  - Hover a day and press "+" to add a page on it.
+  - Month and week layouts; the week can start on Sunday or Monday.
+- **Timeline** (`timeline.ts`, `timeline.tsx`):
+  - Seven zoom levels, from hours to year.
+  - Bars come from a date range, or from separate start and end properties.
+  - Drag a bar or its edges with pointer events; changes snap to days, or to hours in the hours zoom.
+  - Drag the dot after a bar onto another bar to draw a dependency (when dependencies are on). Arrows go from the blocking row's end to the blocked row's start, in red when they overlap.
+  - Optional table on the left, grouping, a "today" line, and "Today" and "Jump to" controls.
+- **Chart** (`chart.ts`, `chart.tsx`):
+  - `chartData` groups the X axis with the same buckets as grouping (option order, date buckets, number ranges).
+  - The Y axis is a count, or the sum, average, median, min or max of a number property (formulas and rollups with number results included).
+  - Optional series split by a second property, plus sorting, legend, data labels and hiding empty groups.
+  - Vertical and horizontal bars (stacked or grouped), line, pie and donut, with option colors resolved from the theme.
+  - recharts is in a separate chunk (about 420 KB) that loads the first time a chart is shown.
+  - Charts work inline like any other view.
+- **Not done:**
+  - Calendar and timeline aren't virtualized.
+  - The calendar has no "+N more" overflow: weeks grow taller instead.
+  - Timeline rows without dates can't be given dates by drawing on the timeline.
+  - Clicking a chart bar doesn't open the matching rows.
+  - Chart colors are fixed to the option palette.
 
 ### M7: templates, linked views and the rest of the database surface
 

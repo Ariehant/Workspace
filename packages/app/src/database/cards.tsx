@@ -293,7 +293,7 @@ export function Card(props: CardProps) {
         if (e.key === 'Enter' && e.target === e.currentTarget) props.onOpen();
       }}
       className={cn(
-        'overflow-hidden rounded-md bg-surface text-left text-sm shadow-[0_0_0_1px_var(--ws-line),0_2px_4px_rgba(0,0,0,0.04)] outline-none hover:bg-hover/60 focus-visible:ring-2 focus-visible:ring-accent',
+        'overflow-hidden rounded-md bg-surface text-left text-sm shadow-[0_0_0_1px_var(--ws-border),0_2px_4px_rgba(0,0,0,0.04)] outline-none hover:bg-hover/60 focus-visible:ring-2 focus-visible:ring-accent',
         props.dragging && 'opacity-50',
       )}
     >

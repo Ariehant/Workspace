@@ -7,7 +7,8 @@ The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Ph
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) are complete. Phase 2
 (databases, see [docs/PHASE2.md](docs/PHASE2.md)) is in progress: the table view (M1),
 views, filters, sorts, groups and calculations (M2), formulas (M3), relations and rollups
-(M4) and board, list and gallery views (M5) are done.
+(M4), board, list and gallery views (M5) and calendar, timeline and chart views (M6) are
+done.
 
 ## What works today
 
@@ -51,6 +52,8 @@ views, filters, sorts, groups and calculations (M2), formulas (M3), relations an
     rollups with Notion's calculations, sub-items nested in the table, and dependencies.
   - Board (drag cards between columns, swimlanes, hidden and colored columns), list and gallery
     views, with card previews (cover, first image, files) and card sizes.
+  - Calendar (month/week, drag to reschedule and resize), timeline (zoom levels, draggable
+    bars, dependency arrows) and chart views (bar, line, pie, donut).
   - Rows are pages: open them in a side peek, a center peek or full page, with their properties
     above the content. Rows show up in quick find (including their property text), can be
     linked to, and go to the Trash when deleted.
