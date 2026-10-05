@@ -239,7 +239,7 @@ export function TimelineView(props: LayoutViewProps) {
         <select
           aria-label="Zoom"
           value={zoom}
-          disabled={!editable}
+          disabled={!editable || snapshot.meta.lockViews}
           onChange={(e) =>
             updateView(handle.doc, view.id, { timelineZoom: e.target.value as TimelineZoom })
           }

@@ -1,4 +1,5 @@
 import { matchesFilter } from './filter';
+import { isLiveRow } from './templates';
 import { groupRows, type GroupInfo } from './group';
 import { cellText, cellValue, propertyKind } from './properties';
 import type { DatabaseSnapshot, DisplayContext, Property, Row, Sort, View } from './schema';
@@ -58,9 +59,7 @@ export function runView(
   options: RunViewOptions = {},
 ): ViewResult {
   const byId = new Map(snapshot.properties.map((p) => [p.id, p]));
-  let rows = snapshot.rows.filter(
-    (r) => r.trashedAt === null && matchesFilter(r, view.filter, byId, ctx),
-  );
+  let rows = snapshot.rows.filter((r) => isLiveRow(r) && matchesFilter(r, view.filter, byId, ctx));
 
   const q = options.search?.trim().toLowerCase();
   if (q) {

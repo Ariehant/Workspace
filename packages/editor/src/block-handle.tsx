@@ -11,7 +11,17 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from '@workspace/ui';
-import { Copy, GripVertical, Link, Palette, Plus, Repeat2, Trash2 } from 'lucide-react';
+import {
+  Copy,
+  Database,
+  GripVertical,
+  Link,
+  Palette,
+  Plus,
+  Repeat2,
+  Table2,
+  Trash2,
+} from 'lucide-react';
 import { pageUrl } from '@workspace/core';
 import { useRef, useState } from 'react';
 import {
@@ -23,6 +33,8 @@ import {
 import { CONVERTIBLE_BLOCKS } from './blocks/registry';
 import { COLOR_CHOICES, ColorSwatch } from './color-menu';
 import type { ColorValue } from './nodes/colors';
+import { replaceBlock, tableCells, tableNode } from './nodes/table-convert';
+import { useEditorServices } from './services';
 
 /**
  * Must keep its identity across renders: DragHandle re-registers its plugin when this
@@ -58,9 +70,13 @@ export interface BlockHandleProps {
 export function BlockHandle({ editor, pageId }: BlockHandleProps) {
   const target = useRef<Target | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The type of the block the menu is open for (tables and databases convert).
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const services = useEditorServices();
 
   const setOpen = (open: boolean) => {
     setMenuOpen(open);
+    if (open) setMenuFor(target.current?.node.type.name ?? null);
     // Keep the handle on this block while its menu is open. (The React DragHandle
     // registers only the plugin, which reads this meta; the lock*/unlock* commands
     // belong to the separate DragHandle extension.)
@@ -129,6 +145,46 @@ export function BlockHandle({ editor, pageId }: BlockHandleProps) {
                 ))}
               </MenuSubContent>
             </MenuSub>
+            {menuFor === 'table' && (
+              <MenuItem
+                icon={<Database size={14} />}
+                onSelect={() =>
+                  act((t) => {
+                    const { cells, header } = tableCells(t.node);
+                    void services.tableToDatabase(cells, header).then((pageId) => {
+                      const node = editor.state.doc.nodeAt(t.pos);
+                      if (node?.type.name !== 'table') return;
+                      replaceBlock(
+                        editor,
+                        t.pos,
+                        node,
+                        editor.schema.nodes.database!.create({ pageId }),
+                      );
+                    });
+                  })
+                }
+              >
+                Turn into database
+              </MenuItem>
+            )}
+            {menuFor === 'database' && (
+              <MenuItem
+                icon={<Table2 size={14} />}
+                onSelect={() =>
+                  act((t) => {
+                    const id = t.node.attrs.pageId as string | null;
+                    if (!id) return;
+                    void services.databaseToTable(id).then((cells) => {
+                      const node = editor.state.doc.nodeAt(t.pos);
+                      if (node?.type.name !== 'database') return;
+                      replaceBlock(editor, t.pos, node, tableNode(editor.schema, cells));
+                    });
+                  })
+                }
+              >
+                Turn into simple table
+              </MenuItem>
+            )}
             <MenuSub>
               <MenuSubTrigger icon={<Palette size={14} />}>Color</MenuSubTrigger>
               <MenuSubContent className="max-h-96 overflow-y-auto">

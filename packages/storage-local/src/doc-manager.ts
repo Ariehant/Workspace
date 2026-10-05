@@ -211,7 +211,8 @@ export class DocManager {
       title: row.title,
       icon: row.icon,
       sortKey: row.sortKey,
-      inTrash: row.trashedAt !== null,
+      // Templates stay indexed (so their content is kept) but don't show in search.
+      inTrash: row.trashedAt !== null || row.isTemplate,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       props: rowPropertiesText(row, db.properties, { users }),

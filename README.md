@@ -4,11 +4,8 @@ An offline-first replacement for Notion's core features (pages, rich text, datab
 and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI features are out of scope.
 
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
-Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) are complete. Phase 2
-(databases, see [docs/PHASE2.md](docs/PHASE2.md)) is in progress: the table view (M1),
-views, filters, sorts, groups and calculations (M2), formulas (M3), relations and rollups
-(M4), board, list and gallery views (M5) and calendar, timeline and chart views (M6) are
-done.
+Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
+see [docs/PHASE2.md](docs/PHASE2.md)) are complete.
 
 ## What works today
 
@@ -54,6 +51,8 @@ done.
     views, with card previews (cover, first image, files) and card sizes.
   - Calendar (month/week, drag to reschedule and resize), timeline (zoom levels, draggable
     bars, dependency arrows) and chart views (bar, line, pie, donut).
+  - Database templates (default per database or view), linked views of a database in any
+    page, simple tables turned into databases and back, locked views and properties.
   - Rows are pages: open them in a side peek, a center peek or full page, with their properties
     above the content. Rows show up in quick find (including their property text), can be
     linked to, and go to the Trash when deleted.

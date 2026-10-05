@@ -1,6 +1,6 @@
 # Phase 2: Databases
 
-**Status:** M1–M6 done. M7 next.
+**Status:** M1–M7 done: Phase 2 is complete.
 
 ## Context
 
@@ -378,7 +378,7 @@ The table is a custom grid rather than TanStack Table: the query engine already 
   - Clicking a chart bar doesn't open the matching rows.
   - Chart colors are fixed to the option palette.
 
-### M7: templates, linked views and the rest of the database surface
+### M7: templates, linked views and the rest of the database surface ✅
 
 - **Database templates:**
   - create and edit templates (property values plus body content)
@@ -390,6 +390,39 @@ The table is a custom grid rather than TanStack Table: the query engine already 
 - Duplicate a database, with its rows and their bodies.
 - Database page settings: title, description, icon, full width, and the default "Open pages in" mode.
 - **Exit check:** rebuild Notion's own templates as E2E fixtures: Tasks + Projects (relations, rollups, status, board, timeline), a reading list (gallery, select, rating formula), a habit tracker (checkboxes, calculations, chart), a simple CRM (relations, rollups, calendar) and a content calendar (calendar, person, status). Restart, and check that every view renders the same data.
+
+**M7 notes:**
+
+- **Templates** (`templates.ts`):
+  - A template is a row with a `template` flag. The row page edits it with a banner (properties, icon, cover and content), and views, relations, rollups, reminders and quick find leave it out. The search index keeps templates, hidden, so their content docs aren't dropped.
+  - `addRowFromTemplate` copies title, icon, cover and values; the group a row is added in wins. The app then copies the page content (`copyTemplateContent`).
+  - The default template is set for the database (`meta.defaultTemplateId`) or per view (`view.defaultTemplateId`, where `'none'` means an empty page). Every "New" path uses it: the toolbar button, "+ New" rows, board and list/gallery groups, and calendar days.
+  - The "Choose a template" dropdown next to "New" lists templates. Each can be set as default for this view or all views, edited, duplicated or deleted. It also offers "Empty page" and "New template".
+  - An empty row page shows "Start from a template", which applies one (values the row doesn't have, the title if empty, and content).
+- **Linked views:**
+  - `/linked view` picks a database (the page picker can filter to databases) and inserts a `linkedDatabase` block with its own `viewSet` id.
+  - The first time it's shown, the block gets a copy of the source's first view (`ensureViewSet`). Its views, filters and sorts are then its own, while its rows are the source's.
+- **Turn into:** the block menu turns a simple table into an inline database, and a database block back into a simple table.
+  - Table to database (`fillFromTable`): the first column becomes the title and the other columns text properties; a header row names them.
+  - Database to table (`tableCells`): the first view's visible columns become cells, and the database goes to the trash.
+- **Lock database** (Database options menu):
+  - **Lock views** hides adding views and disables view menus, Filter/Sort/Group, column reorder/resize/hide, calculations, board column options, the calendar layout switch, timeline zoom and chart settings.
+  - **Lock properties** hides adding properties and the header items that change the schema; the name becomes read-only.
+  - Data stays editable either way.
+- **Database settings:** the title, icon, cover, full width and lock come from the page as before. New: a description under the title, and how new views open pages (`meta.openPagesIn`). Duplicating a database copies its rows, bodies and templates (the existing `duplicatePage`).
+- **Exit check** (`fixtures.test.ts`): Notion's Tasks + Projects, Reading list, Habit tracker, Simple CRM and Content calendar templates, rebuilt as databases.
+  - Every view is rendered to plain data (table rows, board columns, calendar days, timeline spans, chart totals) with relations, rollups and formulas computed.
+  - The docs then go through Yjs encoding, which is what storage keeps (i.e. a restart), and must render the same.
+  - Spot checks: a rollup's percent done, euro pipeline sums, a ★ rating formula, weekly habit totals, and a "me" person filter.
+  - These run below the UI. The E2E specs cover each view type, relations, rollups, templates and restarts through the app itself.
+- **Test stability:**
+  - Two editor tests were already flaky (they also fail intermittently on M6 code). TipTap's deferred `focus()` rewrites the selection a frame after a toolbar action or paste, so they now wait a frame first (`settle`).
+  - Copy-link tests clear the clipboard and wait for the asynchronous write.
+  - `launch` focuses the window, since xvfb has no window manager.
+- **Not done:**
+  - Template values can't be "today"/"me" placeholders yet.
+  - Duplicating a page with a linked view block shares that block's views with the copy.
+  - A simple table converted from a database keeps text only (no types).
 
 ## Critical files
 

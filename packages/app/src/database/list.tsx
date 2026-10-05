@@ -1,5 +1,4 @@
 import {
-  addRow,
   isCellEmpty,
   type GroupInfo,
   type Row,
@@ -12,6 +11,7 @@ import { cn } from '@workspace/ui';
 import { Plus } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useApp } from '../context';
+import { newRow } from './actions';
 import { CellDisplay, TextCellEditor } from './cells';
 import {
   SectionHeader,
@@ -115,13 +115,16 @@ export function Lines<T>({
 /** Group header, collapse/hide and "+ New" handling shared by list and gallery. */
 export function useLayoutGroups(props: LayoutViewProps) {
   const { handle, view, snapshot } = props;
-  const { user } = useApp();
+  const { user, client } = useApp();
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const levels = [view.groupBy, view.subGroupBy];
   const property = (depth: number) =>
     snapshot.properties.find((p) => p.id === levels[depth]?.propertyId);
   const add = (infos: GroupInfo[]) => {
-    const id = addRow(handle.doc, { actor: user.id, values: groupValues(view, infos) });
+    const id = newRow(client, handle, snapshot, view, {
+      actor: user.id,
+      values: groupValues(view, infos),
+    });
     setEditingTitle(id);
   };
   const canAdd = (view: View, infos: GroupInfo[]) =>

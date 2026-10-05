@@ -23,6 +23,8 @@ export const RowField = {
   updatedBy: 'updatedBy',
   uid: 'uid',
   values: 'values',
+  /** Set on template rows: pages new rows are made from, hidden from views. */
+  template: 'template',
 } as const;
 
 /** The title property: every database has exactly one, and it can't be deleted. */
@@ -346,6 +348,11 @@ export interface ViewConfig {
   /** Timeline: arrows between dependent rows (see `DatabaseMeta.dependencies`). */
   showDependencies: boolean;
   chart: ChartConfig;
+  /**
+   * The template "New" uses in this view: a template id, `'none'` for an empty page,
+   * or null for the database's default.
+   */
+  defaultTemplateId: string | null;
 }
 
 export interface View extends ViewConfig {
@@ -378,6 +385,8 @@ export interface Row {
   smallText: boolean;
   font: PageFont;
   locked: boolean;
+  /** A template, not a row: new rows can start from it; views don't show it. */
+  isTemplate: boolean;
   /** Stored property values by property id (computed properties aren't stored). */
   values: Readonly<Record<string, unknown>>;
 }
@@ -421,6 +430,15 @@ export interface DatabaseMeta {
   subItems: { parentId: string; childrenId: string } | null;
   /** Dependencies: the self-relation pair "Blocked by" / "Blocking". */
   dependencies: { blockedById: string; blockingId: string } | null;
+  /** The template new rows start from (views can choose another). */
+  defaultTemplateId: string | null;
+  /** Shown under the database title. */
+  description: string;
+  /** Locked views can't be added, removed or reconfigured; locked properties can't change. */
+  lockViews: boolean;
+  lockProperties: boolean;
+  /** How new views open pages. */
+  openPagesIn: OpenPagesIn;
 }
 
 export const META_MAP = 'meta';
@@ -456,4 +474,5 @@ export const DEFAULT_VIEW_CONFIG: ViewConfig = {
     labels: false,
     hideEmpty: false,
   },
+  defaultTemplateId: null,
 };

@@ -1,6 +1,7 @@
 import { getAncestorIds, getPage, isInTrash, listPages, type PageId } from '@workspace/core';
 import type { PageRef } from '@workspace/editor';
 import type * as Y from 'yjs';
+import { isLiveRow } from '@workspace/database';
 import type { DatabaseRegistry } from './database/registry';
 
 /**
@@ -17,7 +18,13 @@ export class PageDirectory {
   get(id: PageId): PageRef | null {
     const page = getPage(this.workspace, id);
     if (page)
-      return { id, title: page.title, icon: page.icon, inTrash: isInTrash(this.workspace, id) };
+      return {
+        id,
+        title: page.title,
+        icon: page.icon,
+        inTrash: isInTrash(this.workspace, id),
+        isDatabase: page.kind === 'database',
+      };
     const found = this.databases.row(id);
     if (!found) return null;
     const { row, databaseId } = found;
@@ -62,7 +69,7 @@ export class PageDirectory {
     const rows = this.databases.loaded().flatMap((handle) =>
       handle
         .snapshot()
-        .rows.filter((r) => r.trashedAt === null)
+        .rows.filter(isLiveRow)
         .map((r) => ({ id: r.id, title: r.title, icon: r.icon, inTrash: false })),
     );
     return [...pages, ...rows];

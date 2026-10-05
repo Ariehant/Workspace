@@ -25,6 +25,7 @@ const row = (values: Record<string, unknown>, extra: Partial<Row> = {}): Row => 
   smallText: false,
   font: 'default',
   locked: false,
+  isTemplate: false,
   values,
   ...extra,
 });

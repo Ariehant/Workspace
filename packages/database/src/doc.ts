@@ -38,6 +38,11 @@ export function readMeta(doc: Y.Doc): DatabaseMeta {
     hideEmptyProperties: meta.get('hideEmptyProperties') === true,
     subItems: (meta.get('subItems') as DatabaseMeta['subItems'] | undefined) ?? null,
     dependencies: (meta.get('dependencies') as DatabaseMeta['dependencies'] | undefined) ?? null,
+    defaultTemplateId: (meta.get('defaultTemplateId') as string | null | undefined) ?? null,
+    description: (meta.get('description') as string | undefined) ?? '',
+    lockViews: meta.get('lockViews') === true,
+    lockProperties: meta.get('lockProperties') === true,
+    openPagesIn: (meta.get('openPagesIn') as DatabaseMeta['openPagesIn'] | undefined) ?? 'sidePeek',
   };
 }
 
@@ -107,6 +112,7 @@ export function readView(map: YMap): View {
     timelineZoom: get('timelineZoom'),
     timelineTable: get('timelineTable'),
     showDependencies: get('showDependencies'),
+    defaultTemplateId: get('defaultTemplateId'),
     chart: {
       ...DEFAULT_VIEW_CONFIG.chart,
       ...((map.get('chart') as ViewConfig['chart'] | undefined) ?? {}),
@@ -133,6 +139,7 @@ export function readRow(map: YMap): Row {
     smallText: map.get(PageField.smallText) === true,
     font: (map.get(PageField.font) as Row['font'] | undefined) ?? 'default',
     locked: map.get(PageField.locked) === true,
+    isTemplate: map.get(RowField.template) === true,
     values: values instanceof Y.Map ? (values.toJSON() as Record<string, unknown>) : {},
   };
 }
@@ -596,6 +603,8 @@ export function duplicateRow(doc: Y.Doc, rowId: string, actor: string | null): s
     });
     const { icon, cover, fullWidth, smallText, font, locked } = row;
     setRowPageFields(doc, id, { icon, cover, fullWidth, smallText, font, locked }, actor);
+    // A copy of a template is a template.
+    if (row.isTemplate) getRowMap(doc, id).set(RowField.template, true);
   });
   return id;
 }
@@ -621,6 +630,7 @@ export function addView(doc: Y.Doc, options: AddViewOptions): string {
     map.set('sortKey', keyAt(views, views.length));
     const config = {
       ...DEFAULT_VIEW_CONFIG,
+      openPagesIn: readMeta(doc).openPagesIn,
       ...viewTypeDefaults(doc, options.type),
       ...options.config,
     };

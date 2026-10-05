@@ -204,10 +204,14 @@ test('workspace:// links open pages and blocks; open in new window', async ({ la
   const blockId = await block.getAttribute('data-id');
   expect(blockId).toBeTruthy();
 
+  await app.evaluate(({ clipboard }) => clipboard.clear());
   await window.getByRole('button', { name: 'Page options' }).click();
   await window.getByRole('menuitem', { name: 'Copy link' }).click();
+  // The clipboard is written asynchronously.
+  await expect
+    .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+    .toMatch(/^workspace:\/\/page\/[0-9a-f-]+$/);
   const link = await app.evaluate(({ clipboard }) => clipboard.readText());
-  expect(link).toMatch(/^workspace:\/\/page\/[0-9a-f-]+$/);
 
   await newPage(window, 'Elsewhere');
   // Links reach the main process the way a clicked link in a page does.

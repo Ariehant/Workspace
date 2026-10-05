@@ -35,6 +35,7 @@ import {
 import { insertBlockEquation, insertInlineEquation } from '../nodes/math';
 import type { ToggleLevel } from '../nodes/toggle';
 import { replaceCurrentBlock } from './commands';
+import { newId } from '@workspace/core';
 
 export type BlockGroup = 'basic' | 'database' | 'media' | 'advanced' | 'layout' | 'inline';
 
@@ -316,6 +317,22 @@ export const BLOCKS: readonly BlockDefinition[] = [
     },
     apply: (chain, { pageId }) =>
       chain.command(replaceCurrentBlock({ type: 'database', attrs: { pageId } })),
+    ...insertOnly,
+  },
+  {
+    id: 'database-linked',
+    title: 'Linked view of database',
+    description: 'Show a database from elsewhere, with its own views.',
+    keywords: ['linked view', 'linked database', 'view', 'database', 'db'],
+    icon: Database,
+    group: 'database',
+    prepare: async (editor) => {
+      const page = await editor.storage.uiBridge.ref.current.pickPage?.(cursorRect(editor), {
+        databasesOnly: true,
+      });
+      return page ? { databaseId: page.id, viewSet: newId() } : null;
+    },
+    apply: (chain, attrs) => chain.command(replaceCurrentBlock({ type: 'linkedDatabase', attrs })),
     ...insertOnly,
   },
   {

@@ -95,7 +95,7 @@ export class ComputedCache {
           : (resolve(databaseId, true) ?? raw);
       const rows = new Map<string, Row>();
       for (const row of target.rows) {
-        if (row.trashedAt !== null) continue;
+        if (row.trashedAt !== null || row.isTemplate) continue;
         rows.set(row.id, row);
         related.set(row.id, { id: row.id, title: row.title, icon: row.icon, databaseId });
       }

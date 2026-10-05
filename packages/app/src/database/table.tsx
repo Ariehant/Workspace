@@ -92,7 +92,13 @@ import {
   type ReactNode,
 } from 'react';
 import { useApp } from '../context';
-import { detachRelation, duplicateRowWithContent, removeProperty, writeCell } from './actions';
+import {
+  detachRelation,
+  duplicateRowWithContent,
+  newRow,
+  removeProperty,
+  writeCell,
+} from './actions';
 import { FormulaEditor } from './formula-editor';
 import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup';
 import {
@@ -280,7 +286,7 @@ export function TableView({
       else next.delete(id);
       return next;
     });
-  const { databases } = useApp();
+  const { databases, client } = useApp();
   const subItems = snapshot.meta.subItems;
   const [resizing, setResizing] = useState<{ id: string; width: number } | null>(null);
 
@@ -447,7 +453,7 @@ export function TableView({
     const values = Object.fromEntries(
       item.values.filter((v) => v.value !== undefined).map((v) => [v.propertyId, v.value]),
     );
-    const id = addRow(doc, { actor: user.id, values });
+    const id = newRow(client, handle, snapshot, view, { actor: user.id, values });
     const prefix = item.key.slice('new:'.length);
     setEditing({ key: `${prefix}${id}`, rowId: id, propertyId: TITLE_PROPERTY_ID });
   };
@@ -608,7 +614,7 @@ export function TableView({
                 width={widthOf(property.id, width)}
                 calc={view.calculations[property.id] ?? null}
                 ctx={ctx}
-                editable={editable}
+                editable={editable && !snapshot.meta.lockViews}
                 onChange={(calc) => {
                   const calculations = { ...view.calculations };
                   if (calc) calculations[property.id] = calc;
@@ -749,6 +755,7 @@ export function TableView({
               ctx={ctx}
               width={widthOf(property.id, width)}
               editable={editable}
+              locks={{ views: snapshot.meta.lockViews, properties: snapshot.meta.lockProperties }}
               menuOpen={headerMenu === property.id}
               onMenuOpenChange={(open) => setHeaderMenu(open ? property.id : null)}
               onResize={(w) => setResizing(w === null ? null : { id: property.id, width: w })}
@@ -789,7 +796,7 @@ export function TableView({
               onSetup={setSetup}
             />
           ))}
-          {editable && (
+          {editable && !snapshot.meta.lockProperties && (
             <AddPropertyButton
               onAdd={(type) => {
                 // Relations are set up before they are added.
@@ -1239,6 +1246,8 @@ interface HeaderCellProps {
   ctx: DisplayContext;
   width: number;
   editable: boolean;
+  /** Locked views (no reorder, resize, hide, sort or filter) and properties (no edits). */
+  locks: { views: boolean; properties: boolean };
   menuOpen: boolean;
   onMenuOpenChange(open: boolean): void;
   onResize(width: number | null): void;
@@ -1260,6 +1269,8 @@ function HeaderCell(props: HeaderCellProps) {
   const doc = handle.doc;
   const { databases } = useApp();
   const isTitle = property.type === 'title';
+  const schema = !props.locks.properties;
+  const viewOps = !props.locks.views;
   const missingTarget =
     property.type === 'relation' && !databases.exists(property.config.databaseId ?? '');
   const resize = useRef<{ x: number; width: number } | null>(null);
@@ -1284,7 +1295,7 @@ function HeaderCell(props: HeaderCellProps) {
       data-testid="column-header"
       data-property-id={property.id}
       style={{ width }}
-      draggable={editable && !isTitle}
+      draggable={editable && viewOps && !isTitle}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', property.name);
@@ -1311,7 +1322,7 @@ function HeaderCell(props: HeaderCellProps) {
         open={menuOpen}
         onOpenChange={(open) => {
           if (open) setName(property.name);
-          else if (name.trim() && name !== property.name)
+          else if (schema && name.trim() && name !== property.name)
             renameProperty(doc, property.id, name.trim());
           onMenuOpenChange(open);
         }}
@@ -1322,7 +1333,7 @@ function HeaderCell(props: HeaderCellProps) {
         </MenuTrigger>
         <button
           type="button"
-          disabled={!editable}
+          disabled={!editable || (!schema && !viewOps)}
           onClick={() => {
             setName(property.name);
             onMenuOpenChange(true);
@@ -1355,6 +1366,7 @@ function HeaderCell(props: HeaderCellProps) {
             <input
               ref={nameRef}
               value={name}
+              readOnly={!schema}
               aria-label="Property name"
               onChange={(e) => setName(e.target.value)}
               onFocus={(e) => e.currentTarget.select()}
@@ -1370,7 +1382,7 @@ function HeaderCell(props: HeaderCellProps) {
               className="h-7 w-full rounded border border-line bg-surface px-2 outline-none focus:border-accent"
             />
           </div>
-          {!isTitle && (
+          {!isTitle && schema && (
             <MenuSub>
               <MenuSubTrigger icon={<Repeat2 size={14} />}>
                 <span className="flex-1">Type</span>
@@ -1406,12 +1418,12 @@ function HeaderCell(props: HeaderCellProps) {
               </MenuSubContent>
             </MenuSub>
           )}
-          {property.type === 'formula' && (
+          {property.type === 'formula' && schema && (
             <MenuItem icon={<Sigma size={14} />} onSelect={props.onEditFormula}>
               Edit formula
             </MenuItem>
           )}
-          {property.type === 'relation' && (
+          {property.type === 'relation' && schema && (
             <MenuItem
               icon={<ArrowUpRight size={14} />}
               onSelect={() =>
@@ -1421,7 +1433,7 @@ function HeaderCell(props: HeaderCellProps) {
               Edit relation
             </MenuItem>
           )}
-          {property.type === 'rollup' && (
+          {property.type === 'rollup' && schema && (
             <MenuItem
               icon={<Search size={14} />}
               onSelect={() => props.onSetup({ kind: 'rollup', propertyId: property.id })}
@@ -1429,35 +1441,44 @@ function HeaderCell(props: HeaderCellProps) {
               Edit rollup
             </MenuItem>
           )}
-          <PropertyFormatMenu handle={handle} property={property} />
-          <MenuSeparator />
-          <MenuItem icon={<ListFilter size={14} />} onSelect={props.onFilter}>
-            Filter
-          </MenuItem>
-          <MenuItem icon={<ArrowUp size={14} />} onSelect={() => sort('asc')}>
-            Sort ascending
-          </MenuItem>
-          <MenuItem icon={<ArrowDown size={14} />} onSelect={() => sort('desc')}>
-            Sort descending
-          </MenuItem>
-          {!isTitle && (
-            <MenuItem
-              icon={<EyeOff size={14} />}
-              onSelect={() => updateViewColumn(doc, view.id, property.id, { visible: false })}
-            >
-              Hide in view
-            </MenuItem>
+          {schema && <PropertyFormatMenu handle={handle} property={property} />}
+          {viewOps && (
+            <>
+              <MenuSeparator />
+              <MenuItem icon={<ListFilter size={14} />} onSelect={props.onFilter}>
+                Filter
+              </MenuItem>
+              <MenuItem icon={<ArrowUp size={14} />} onSelect={() => sort('asc')}>
+                Sort ascending
+              </MenuItem>
+              <MenuItem icon={<ArrowDown size={14} />} onSelect={() => sort('desc')}>
+                Sort descending
+              </MenuItem>
+              {!isTitle && (
+                <MenuItem
+                  icon={<EyeOff size={14} />}
+                  onSelect={() => updateViewColumn(doc, view.id, property.id, { visible: false })}
+                >
+                  Hide in view
+                </MenuItem>
+              )}
+            </>
           )}
-          <MenuSeparator />
-          {!isTitle && (
+          {schema && <MenuSeparator />}
+          {!isTitle && schema && (
             <MenuItem icon={<ArrowLeftToLine size={14} />} onSelect={() => props.onInsert('left')}>
               Insert left
             </MenuItem>
           )}
-          <MenuItem icon={<ArrowRightToLine size={14} />} onSelect={() => props.onInsert('right')}>
-            Insert right
-          </MenuItem>
-          {!isTitle && (
+          {schema && (
+            <MenuItem
+              icon={<ArrowRightToLine size={14} />}
+              onSelect={() => props.onInsert('right')}
+            >
+              Insert right
+            </MenuItem>
+          )}
+          {!isTitle && schema && (
             <>
               <MenuItem
                 icon={<Copy size={14} />}
@@ -1476,7 +1497,7 @@ function HeaderCell(props: HeaderCellProps) {
           )}
         </MenuContent>
       </Menu>
-      {editable && (
+      {editable && viewOps && (
         <div
           role="separator"
           aria-orientation="vertical"

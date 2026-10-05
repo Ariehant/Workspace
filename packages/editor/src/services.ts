@@ -8,6 +8,8 @@ export interface PageRef {
   icon: string | null;
   /** The page or an ancestor is in the trash. */
   inTrash: boolean;
+  /** A database page (linked views can show it). */
+  isDatabase?: boolean;
 }
 
 /** An attachment stored in the workspace. */
@@ -51,6 +53,12 @@ export interface EditorServices {
   createDatabase(inline: boolean): Promise<string>;
   /** The UI of an inline database block (database views live in the app). */
   renderDatabase(databaseId: string): ReactNode;
+  /** Turn a simple table's cells into a new inline database; resolves its id. */
+  tableToDatabase(cells: string[][], header: boolean): Promise<string>;
+  /** A database's first view as simple-table cells; the database goes to the trash. */
+  databaseToTable(databaseId: string): Promise<string[][]>;
+  /** A linked view of a database: its own views (`viewSet`) over the source's rows. */
+  renderLinkedDatabase(databaseId: string, viewSet: string): ReactNode;
   /** Called whenever any page metadata changes. */
   subscribe(listener: () => void): () => void;
   /** Store a file (pasted, dropped or picked) in the workspace. */
@@ -98,7 +106,8 @@ export interface UiBridge {
   /** Offer to turn a just-pasted link at [from, to) into a bookmark or embed. */
   pastedUrl: ((url: string, from: number, to: number) => void) | null;
   /** Ask the user to pick a page; resolves with `null` if they cancel. */
-  pickPage: ((anchor: DOMRect) => Promise<PageRef | null>) | null;
+  pickPage:
+    ((anchor: DOMRect, options?: { databasesOnly?: boolean }) => Promise<PageRef | null>) | null;
   /** Open the equation editor for the math node at `pos`. */
   editMath: ((node: PMNode, pos: number) => void) | null;
   openFind: (() => void) | null;

@@ -55,6 +55,10 @@ export const test = base.extend<{ dataDir: string; launch: () => Promise<Launche
       const window = await app.firstWindow();
       window.on('pageerror', (error) => console.error(`[renderer] ${error.stack ?? error}`));
       await window.getByRole('tree', { name: 'Pages' }).waitFor();
+      // Without a window manager (xvfb) a new window isn't always focused, and the
+      // editor's selection toolbar and caret placement need a focused window.
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.focus());
+      await window.bringToFront();
       return { app, window };
     });
     await Promise.all(apps.map((app) => app.close().catch(() => {})));
@@ -73,4 +77,15 @@ export async function waitForIndexed(page: Page, text: string) {
   await expect
     .poll(() => page.evaluate((q) => window.workspace.search(q), text), { timeout: 10_000 })
     .not.toEqual([]);
+}
+
+/**
+ * Let two animation frames pass. TipTap's `chain().focus()` (toolbar buttons, paste)
+ * rewrites the selection a frame later, which would undo a key pressed in between;
+ * people don't type that fast, tests do.
+ */
+export async function settle(page: Page) {
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
 }

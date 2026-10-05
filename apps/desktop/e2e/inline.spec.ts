@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { editor, expect, quit, test, waitForIndexed } from './helpers';
+import { editor, expect, quit, settle, test, waitForIndexed } from './helpers';
 
 async function newPage(window: Page, title: string) {
   await window.getByRole('button', { name: 'New page' }).click();
@@ -154,8 +154,11 @@ test('pasting Markdown makes blocks; copying gives Markdown', async ({ launch })
   await editor(window).locator(':scope > p').last().click();
   await paste(window, '## Notes', '<div style="color:#ccc"><span>## Notes</span></div>');
   await expect(editor(window).locator('h2')).toHaveText('Notes');
-  // ...but plain prose stays prose.
+  await settle(window);
+  // ...but plain prose stays prose. (Ctrl+End: the caret goes to the empty last
+  // paragraph even if the previous paste is still settling.)
   await editor(window).locator(':scope > p').last().click();
+  await window.keyboard.press('Control+End');
   await paste(window, 'Just a sentence.');
   await expect(editor(window).locator(':scope > p', { hasText: 'Just a sentence.' })).toHaveCount(
     1,

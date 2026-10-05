@@ -1,4 +1,15 @@
-import { isInTrash, pageMapTitle, pageUrl, restorePage, type PageMeta } from '@workspace/core';
+import {
+  getPage,
+  isInTrash,
+  pageMapTitle,
+  pageUrl,
+  readBlocks,
+  restorePage,
+  type PageMeta,
+} from '@workspace/core';
+import { PageIcon } from '@workspace/editor';
+import type * as Y from 'yjs';
+import { useDocVersion } from '../hooks';
 import {
   TITLE_PROPERTY_ID,
   PROPERTY_TYPES,
@@ -12,6 +23,7 @@ import {
   setMeta,
   setRowPageFields,
   setRowTitle,
+  templatesOf,
   trashRow,
   type DatabaseHandle,
   type DatabaseSnapshot,
@@ -39,7 +51,7 @@ import {
   type PageModel,
 } from '../page-view';
 import { PageMenu } from '../page-menu';
-import { duplicateRowWithContent } from './actions';
+import { applyTemplateToRow, duplicateRowWithContent } from './actions';
 import { FormulaEditor } from './formula-editor';
 import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup';
 import {
@@ -181,7 +193,7 @@ export function PropertiesPanel({
         </button>
       )}
       <div className="flex flex-wrap items-center gap-1">
-        {editable && (
+        {editable && !snapshot.meta.lockProperties && (
           <Menu>
             <MenuTrigger asChild>
               <button
@@ -310,6 +322,7 @@ function RowContent({
   blockTarget?: BlockTarget | null;
 }) {
   const found = useRow(rowId, databaseId);
+  const { workspace } = useApp();
   const { pageDoc, onEditor, focusBody } = usePageBody(rowId);
   const articleRef = useRef<HTMLElement>(null);
   useScrollToBlock(articleRef, pageDoc ? (blockTarget ?? null) : null);
@@ -318,15 +331,65 @@ function RowContent({
   const editable = !row.locked && !model.trashed;
   return (
     <>
+      {row.isTemplate && (
+        <div
+          className="flex h-9 items-center justify-center bg-accent/10 text-sm text-accent"
+          data-testid="template-banner"
+        >
+          You’re editing a template in {getPage(workspace, databaseId)?.title || 'Untitled'}
+        </div>
+      )}
       <HeroCover model={model} editable={editable} />
       <article ref={articleRef} {...articleProps(model.meta)}>
         <PageHero model={model} editable={editable} onEnter={focusBody} />
         <PropertiesPanel handle={handle} snapshot={snapshot} row={row} editable={editable} />
+        {editable && !row.isTemplate && pageDoc && (
+          <TemplatePicker handle={handle} snapshot={snapshot} rowId={rowId} pageDoc={pageDoc} />
+        )}
         <div className="mt-4">
           <PageBody pageId={rowId} pageDoc={pageDoc} editable={editable} onEditor={onEditor} />
         </div>
       </article>
     </>
+  );
+}
+
+/** On an empty row page: start it from one of the database's templates. */
+function TemplatePicker({
+  handle,
+  snapshot,
+  rowId,
+  pageDoc,
+}: {
+  handle: DatabaseHandle;
+  snapshot: DatabaseSnapshot;
+  rowId: string;
+  pageDoc: Y.Doc;
+}) {
+  const { client, user, platform } = useApp();
+  useDocVersion(pageDoc);
+  const templates = templatesOf(snapshot);
+  const empty = readBlocks(pageDoc).every(
+    (b) => b.type === 'paragraph' && !b.text && b.children.length === 0,
+  );
+  if (!empty || templates.length === 0) return null;
+  return (
+    <div className="mt-4 text-sm" data-testid="template-picker">
+      <p className="mb-1 text-muted">Start from a template</p>
+      <div className="flex flex-wrap gap-1.5">
+        {templates.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => void applyTemplateToRow(client, handle, rowId, t.id, user.id)}
+            className="flex h-8 items-center gap-1.5 rounded border border-line px-2 hover:bg-hover"
+          >
+            <PageIcon icon={t.icon} size={14} fileUrl={platform.fileUrl} className="text-muted" />
+            {t.title || 'Untitled'}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

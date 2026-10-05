@@ -1,5 +1,8 @@
 import { copyPageContent, type DocClient } from '@workspace/core';
 import {
+  addRowFromTemplate,
+  applyTemplate,
+  defaultTemplate,
   deleteProperty,
   deleteRelation,
   duplicateRow,
@@ -9,7 +12,10 @@ import {
   syncTwoWayLinks,
   updateRelation,
   type DatabaseHandle,
+  type DatabaseSnapshot,
+  type NewRowOptions,
   type Property,
+  type View,
 } from '@workspace/database';
 import type { DatabaseRegistry } from './registry';
 
@@ -71,4 +77,53 @@ export function detachRelation(
   if (property.type === 'relation' && property.config.syncedPropertyId) {
     updateRelation(databases.resolveDoc, handle.id, property.id, { twoWay: null });
   }
+}
+
+/** Copy a template's page content into a row's page. */
+export async function copyTemplateContent(
+  client: DocClient,
+  templateId: string,
+  rowId: string,
+): Promise<void> {
+  const from = client.acquire(templateId);
+  const to = client.acquire(rowId);
+  try {
+    await Promise.all([from.ready, to.ready]);
+    copyPageContent(from.doc, to.doc);
+  } finally {
+    from.release();
+    to.release();
+  }
+}
+
+/**
+ * Add a row the way "New" does: from the view's default template (or `templateId`;
+ * null for an empty page), copying the template's content too. Returns the row id.
+ */
+export function newRow(
+  client: DocClient,
+  handle: DatabaseHandle,
+  snapshot: DatabaseSnapshot,
+  view: View | null,
+  options: NewRowOptions & { templateId?: string | null },
+): string {
+  const templateId =
+    options.templateId !== undefined
+      ? options.templateId
+      : (defaultTemplate(snapshot, view)?.id ?? null);
+  const id = addRowFromTemplate(handle.doc, templateId, options);
+  if (templateId) void copyTemplateContent(client, templateId, id);
+  return id;
+}
+
+/** Apply a template to an existing (empty) row: values, icon, title and content. */
+export async function applyTemplateToRow(
+  client: DocClient,
+  handle: DatabaseHandle,
+  rowId: string,
+  templateId: string,
+  actor: string,
+): Promise<void> {
+  applyTemplate(handle.doc, rowId, templateId, actor);
+  await copyTemplateContent(client, templateId, rowId);
 }

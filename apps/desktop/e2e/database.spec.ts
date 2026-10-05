@@ -329,10 +329,14 @@ test('rows in quick find, links to rows, and inline databases', async ({ launch 
   await expect(window.getByTestId('row-page').getByLabel('Page title')).toHaveValue('Spot');
 
   // Copy link from the row page, then follow it from another page.
+  await app.evaluate(({ clipboard }) => clipboard.clear());
   await window.getByRole('button', { name: 'Page options' }).click();
   await window.getByRole('menuitem', { name: 'Copy link' }).click();
+  // The clipboard is written asynchronously.
+  await expect
+    .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+    .toMatch(/^workspace:\/\/page\/[0-9a-f-]+$/);
   const link = await app.evaluate(({ clipboard }) => clipboard.readText());
-  expect(link).toMatch(/^workspace:\/\/page\/[0-9a-f-]+$/);
 
   // An inline database from the slash menu, inside a normal page.
   await window.getByRole('button', { name: 'New page' }).click();

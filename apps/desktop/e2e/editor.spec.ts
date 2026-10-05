@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { editor, expect, quit, test, waitForIndexed } from './helpers';
+import { editor, expect, quit, settle, test, waitForIndexed } from './helpers';
 
 /** Create a page and leave the cursor in its (empty) body. */
 async function newPage(window: Page, title = 'Editor test') {
@@ -137,6 +137,7 @@ test('selection toolbar formats text, links it and turns the block into a headin
   // (rightly) hides the toolbar; take it back first.
   await window.bringToFront();
   await expect(editor(window)).toBeFocused();
+  await settle(window);
   await window.keyboard.press('End');
   await expect(toolbar).toBeHidden();
   await window.keyboard.press('Shift+Home');

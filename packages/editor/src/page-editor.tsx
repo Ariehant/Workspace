@@ -29,6 +29,7 @@ export interface PageEditorProps {
 interface PickRequest {
   anchor: DOMRect;
   resolve(page: PageRef | null): void;
+  databasesOnly?: boolean;
 }
 
 /**
@@ -47,7 +48,10 @@ export function PageEditor({ doc, services, editable = true, onEditor }: PageEdi
     bridge.set({
       services,
       pastedUrl: (url, from, to) => setPasted({ url, from, to }),
-      pickPage: (anchor) => new Promise((resolve) => setPick({ anchor, resolve })),
+      pickPage: (anchor, options) =>
+        new Promise((resolve) =>
+          setPick({ anchor, resolve, databasesOnly: options?.databasesOnly }),
+        ),
       editMath: (node, pos) => setMath({ node, pos }),
       openFind: () => setFindOpen(true),
     });
@@ -106,6 +110,7 @@ export function PageEditor({ doc, services, editable = true, onEditor }: PageEdi
         <PagePicker
           services={services}
           anchor={pick.anchor}
+          databasesOnly={pick.databasesOnly}
           onPick={(page) => {
             pick.resolve(page);
             setPick(null);

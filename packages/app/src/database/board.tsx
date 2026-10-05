@@ -1,6 +1,5 @@
 import {
   NO_VALUE,
-  addRow,
   boardLayout,
   groupMoveValue,
   moveRow,
@@ -15,7 +14,7 @@ import { IconButton, Menu, MenuContent, MenuItem, MenuTrigger, cn } from '@works
 import { ChevronRight, ChevronsLeftRight, Eye, EyeOff, MoreHorizontal, Plus } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 import { useApp } from '../context';
-import { writeCell } from './actions';
+import { newRow, writeCell } from './actions';
 import {
   Card,
   GroupLabel,
@@ -51,7 +50,7 @@ const tint = (info: GroupInfo, on: boolean) =>
 /** Board: a column per group (and a swimlane per sub-group); drag cards between them. */
 export function BoardView(props: LayoutViewProps) {
   const { handle, snapshot, view, result, ctx, editable, onOpenRow } = props;
-  const { user, databases } = useApp();
+  const { user, databases, client } = useApp();
   const doc = handle.doc;
   const byId = new Map(snapshot.properties.map((p) => [p.id, p]));
   const groupProperty = byId.get(view.groupBy?.propertyId ?? '');
@@ -76,7 +75,10 @@ export function BoardView(props: LayoutViewProps) {
   const canReorder = view.sorts.length === 0;
 
   const addCard = (column: GroupInfo, lane: GroupInfo | null) => {
-    const id = addRow(doc, { actor: user.id, values: groupValues(view, [column, lane]) });
+    const id = newRow(client, handle, snapshot, view, {
+      actor: user.id,
+      values: groupValues(view, [column, lane]),
+    });
     setEditingTitle(id);
   };
 
@@ -119,7 +121,7 @@ export function BoardView(props: LayoutViewProps) {
         </span>
       </span>
       <span className="ml-auto flex items-center opacity-0 group-hover/col:opacity-100 focus-within:opacity-100">
-        {editable && (
+        {editable && !snapshot.meta.lockViews && (
           <Menu>
             <MenuTrigger asChild>
               <IconButton label={`${column.info.label} options`} size="sm">

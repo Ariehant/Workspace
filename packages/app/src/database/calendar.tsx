@@ -1,5 +1,4 @@
 import {
-  addRow,
   calendarWeeks,
   cellValue,
   dateOfDay,
@@ -20,7 +19,7 @@ import { Button, IconButton, cn } from '@workspace/ui';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 import { useApp } from '../context';
-import { writeCell } from './actions';
+import { newRow, writeCell } from './actions';
 import type { LayoutViewProps } from './cards';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -64,7 +63,7 @@ interface Drag {
 /** Calendar: rows on the days of their date (ranges span days), by month or week. */
 export function CalendarView(props: LayoutViewProps) {
   const { handle, snapshot, view, result, editable, onOpenRow } = props;
-  const { user, databases, platform } = useApp();
+  const { user, databases, platform, client } = useApp();
   const [anchor, setAnchor] = useState(() => new Date());
   const [drag, setDrag] = useState<Drag | null>(null);
   const [over, setOver] = useState<number | null>(null);
@@ -112,7 +111,7 @@ export function CalendarView(props: LayoutViewProps) {
     else if (day !== current.grabDay) write(row, shiftDateValue(value, day - current.grabDay));
   };
   const newOn = (day: number) => {
-    const id = addRow(handle.doc, {
+    const id = newRow(client, handle, snapshot, view, {
       actor: user.id,
       values: property.type === 'date' ? { [property.id]: { start: isoOfDay(day) } } : {},
     });
@@ -141,7 +140,7 @@ export function CalendarView(props: LayoutViewProps) {
                 key={mode}
                 type="button"
                 aria-pressed={view.calendarMode === mode}
-                disabled={!editable}
+                disabled={!editable || snapshot.meta.lockViews}
                 onClick={() => updateView(handle.doc, view.id, { calendarMode: mode })}
                 className={cn(
                   'h-7 px-2 capitalize',

@@ -174,7 +174,7 @@ export default function ChartView({
   return (
     <div data-testid="chart-view" data-chart-type={config.type} className="pt-2 pb-4 text-sm">
       <div className="flex h-10 items-center justify-end">
-        {editable && <ChartSettings {...{ handle, snapshot, view }} />}
+        {editable && !snapshot.meta.lockViews && <ChartSettings {...{ handle, snapshot, view }} />}
       </div>
       <div className="h-[360px] w-full" data-testid="chart-canvas">
         {data.categories.length === 0 ? (

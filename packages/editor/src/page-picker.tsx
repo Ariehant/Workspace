@@ -8,11 +8,13 @@ import type { EditorServices, PageRef } from './services';
 export interface PagePickerProps {
   services: EditorServices;
   anchor: DOMRect;
+  /** Only offer database pages (for linked views). */
+  databasesOnly?: boolean;
   onPick(page: PageRef | null): void;
 }
 
 /** Search-as-you-type list of pages, anchored at the cursor. */
-export function PagePicker({ services, anchor, onPick }: PagePickerProps) {
+export function PagePicker({ services, anchor, databasesOnly, onPick }: PagePickerProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
@@ -21,9 +23,10 @@ export function PagePicker({ services, anchor, onPick }: PagePickerProps) {
     const q = query.trim().toLowerCase();
     return services
       .listPages()
-      .filter((p) => !p.inTrash && (!q || (p.title || 'untitled').toLowerCase().includes(q)))
+      .filter((p) => !p.inTrash && (!databasesOnly || p.isDatabase))
+      .filter((p) => !q || (p.title || 'untitled').toLowerCase().includes(q))
       .slice(0, 50);
-  }, [services, query]);
+  }, [services, query, databasesOnly]);
 
   useLayoutEffect(() => {
     const el = ref.current;

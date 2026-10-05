@@ -1,6 +1,7 @@
 import { getPage, getPageTitleText, isInTrash, setPageTitle } from '@workspace/core';
 import {
-  addRow,
+  setMeta,
+  ensureViewSet,
   addView,
   countRules,
   deleteView,
@@ -23,6 +24,7 @@ import {
   enableDependencies,
   disableDependencies,
   type DatabaseMeta,
+  type DatabaseHandle,
   VIEW_TYPES,
   setViewType,
   type CardPreview,
@@ -72,6 +74,10 @@ import {
   CalendarDays,
   GanttChart,
   BarChart3,
+  Lock,
+  ArrowUpRight,
+  MoreHorizontal,
+  AlignLeft,
   type LucideIcon,
   Trash2,
   WrapText,
@@ -90,6 +96,7 @@ import { GalleryView } from './gallery';
 import { ListView } from './list';
 import { CalendarView, dateProperties } from './calendar';
 import { TimelineView } from './timeline';
+import { NewButton } from './templates-menu';
 
 // recharts is large: load it when a chart is shown.
 const ChartView = lazy(() => import('./chart'));
@@ -163,17 +170,24 @@ function useActiveView(viewSet: string): [string | null, (id: string) => void] {
 export function DatabaseView({ databaseId, viewSet = databaseId, editable }: DatabaseViewProps) {
   const loaded = useDatabase(databaseId);
   const ctx = useDisplayContext();
-  const { user } = useApp();
+  const { user, workspace } = useApp();
+  const databaseTitle = getPage(workspace, databaseId)?.title || 'Untitled';
   const { openRow } = useNavigation();
   const [activeId, setActiveId] = useActiveView(viewSet);
   const [panel, setPanel] = useState<Panel>(null);
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [search, setSearch] = useState<string | null>(null);
   const [dragTab, setDragTab] = useState<string | null>(null);
+  const [editingDescription, setEditingDescription] = useState(false);
 
   const snapshot = loaded?.snapshot;
   const views = snapshot ? viewsOf(snapshot, viewSet) : [];
   const view = views.find((v) => v.id === activeId) ?? views[0];
+  // A linked view block gets its own first view (a copy of the source's) when shown.
+  const needsViews = !!loaded && viewSet !== databaseId && views.length === 0 && editable;
+  useEffect(() => {
+    if (needsViews && loaded) ensureViewSet(loaded.handle.doc, viewSet, databaseId);
+  }, [needsViews, loaded, viewSet, databaseId]);
   // (The React compiler memoizes these.)
   const viewCtx = { ...ctx, me: user.id, pages: snapshot?.related };
   const result =
@@ -203,6 +217,9 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
   const sortNames = view.sorts.map((s) => byId.get(s.propertyId)?.name).filter(Boolean);
   const showBar = ruleCount > 0 || view.sorts.length > 0;
 
+  // A locked database keeps its data editable but not its views or properties.
+  const viewsEditable = editable && !snapshot.meta.lockViews;
+
   const toolbarButton = (active: boolean) =>
     cn(
       'flex h-7 items-center gap-1 rounded px-1.5 text-sm hover:bg-hover',
@@ -211,6 +228,17 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
 
   return (
     <div data-testid="database-view" data-database-id={databaseId}>
+      {(snapshot.meta.description || editingDescription) && (
+        <DatabaseDescription
+          value={snapshot.meta.description}
+          editable={editable}
+          autoFocus={editingDescription}
+          onChange={(description) => {
+            setMeta(doc, { description });
+            setEditingDescription(false);
+          }}
+        />
+      )}
       <div className="flex h-10 items-center gap-1 border-b border-line text-sm">
         <div
           className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
@@ -220,7 +248,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
           {views.map((v) => (
             <div
               key={v.id}
-              draggable={editable}
+              draggable={viewsEditable}
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = 'move';
                 e.dataTransfer.setData('text/plain', v.name);
@@ -249,7 +277,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
                   dateProperties={dateProperties(properties)}
                   hasDependencies={snapshot.meta.dependencies !== null}
                   onLayout={(type) => setViewType(doc, v.id, type)}
-                  editable={editable}
+                  editable={viewsEditable}
                   canDelete={views.length > 1}
                   onChange={(changes) => updateView(doc, v.id, changes)}
                   columns={viewColumns(v, properties).map((c) => ({
@@ -277,7 +305,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
               )}
             </div>
           ))}
-          {editable && (
+          {viewsEditable && (
             <Menu>
               <MenuTrigger asChild>
                 <IconButton label="Add a view">
@@ -318,6 +346,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
             <button
               type="button"
               className={toolbarButton(ruleCount > 0)}
+              disabled={!viewsEditable}
               onClick={() => setPanel(advanced ? 'advanced' : panel === 'filter' ? null : 'filter')}
             >
               <ListFilter size={15} /> <span className="max-md:hidden">Filter</span>
@@ -349,6 +378,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
             <button
               type="button"
               className={toolbarButton(view.sorts.length > 0)}
+              disabled={!viewsEditable}
               onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
             >
               <ArrowUpDown size={15} /> <span className="max-md:hidden">Sort</span>
@@ -377,6 +407,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
             <button
               type="button"
               className={toolbarButton(view.groupBy !== null)}
+              disabled={!viewsEditable}
               onClick={() => setPanel(panel === 'group' ? null : 'group')}
             >
               <Layers size={15} /> <span className="max-md:hidden">Group</span>
@@ -417,13 +448,20 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
           </span>
         )}
         {editable && (
-          <button
-            type="button"
-            onClick={() => open(addRow(doc, { actor: user.id }))}
-            className="ml-1 flex h-7 items-center rounded-md bg-accent px-2.5 text-sm font-medium text-accent-fg hover:opacity-90"
-          >
-            New
-          </button>
+          <DatabaseOptions
+            handle={handle}
+            meta={snapshot.meta}
+            onEditDescription={() => setEditingDescription(true)}
+          />
+        )}
+        {editable && (
+          <NewButton
+            handle={handle}
+            snapshot={snapshot}
+            view={view}
+            databaseTitle={databaseTitle}
+            onOpenRow={open}
+          />
         )}
       </div>
 
@@ -537,6 +575,102 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
         </p>
       )}
     </div>
+  );
+}
+
+/** The database's description, under its title; edited in place. */
+function DatabaseDescription({
+  value,
+  editable,
+  autoFocus,
+  onChange,
+}: {
+  value: string;
+  editable: boolean;
+  autoFocus: boolean;
+  onChange(value: string): void;
+}) {
+  const [text, setText] = useState(value);
+  return (
+    <textarea
+      aria-label="Database description"
+      data-testid="database-description"
+      value={text}
+      readOnly={!editable}
+      autoFocus={autoFocus}
+      rows={1}
+      placeholder="Add a description…"
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => (text !== value || autoFocus ? onChange(text.trim()) : undefined)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+      }}
+      className="mb-1 w-full resize-none bg-transparent text-sm text-muted outline-none [field-sizing:content] placeholder:text-faint"
+    />
+  );
+}
+
+/** Database-wide settings: locks, description, how new views open pages. */
+function DatabaseOptions({
+  handle,
+  meta,
+  onEditDescription,
+}: {
+  handle: DatabaseHandle;
+  meta: DatabaseMeta;
+  onEditDescription(): void;
+}) {
+  const toggle = (key: 'lockViews' | 'lockProperties', label: string) => (
+    <MenuItem
+      icon={<Lock size={14} />}
+      onSelect={(e) => {
+        e.preventDefault();
+        setMeta(handle.doc, { [key]: !meta[key] });
+      }}
+    >
+      <span className="flex-1">{label}</span>
+      <span className={cn('text-xs', meta[key] ? 'text-accent' : 'text-faint')}>
+        {meta[key] ? 'On' : 'Off'}
+      </span>
+    </MenuItem>
+  );
+  const locked = meta.lockViews || meta.lockProperties;
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <IconButton label="Database options" className={cn(locked && 'text-accent')}>
+          {locked ? <Lock size={15} /> : <MoreHorizontal size={15} />}
+        </IconButton>
+      </MenuTrigger>
+      <MenuContent align="end" className="w-64" data-testid="database-options">
+        {toggle('lockViews', 'Lock views')}
+        {toggle('lockProperties', 'Lock properties')}
+        <MenuSeparator />
+        <MenuItem icon={<AlignLeft size={14} />} onSelect={onEditDescription}>
+          {meta.description ? 'Edit description' : 'Add description'}
+        </MenuItem>
+        <MenuSub>
+          <MenuSubTrigger icon={<PanelRight size={14} />}>
+            <span className="flex-1">New views open pages in</span>
+          </MenuSubTrigger>
+          <MenuSubContent>
+            <MenuRadioGroup
+              value={meta.openPagesIn}
+              onValueChange={(mode) => setMeta(handle.doc, { openPagesIn: mode as OpenPagesIn })}
+            >
+              {OPEN_MODES.map((m) => (
+                <MenuRadioItem key={m.mode} value={m.mode}>
+                  {m.label}
+                </MenuRadioItem>
+              ))}
+            </MenuRadioGroup>
+          </MenuSubContent>
+        </MenuSub>
+      </MenuContent>
+    </Menu>
   );
 }
 
@@ -886,7 +1020,7 @@ function ViewMenu({
 }
 
 /** An inline database inside a page: its title (open as full page) above the views. */
-export function InlineDatabase({ databaseId }: { databaseId: string }) {
+export function InlineDatabase({ databaseId, viewSet }: { databaseId: string; viewSet?: string }) {
   const { workspace, platform } = useApp();
   const { navigate } = useNavigation();
   useDocVersion(workspace); // title, icon and trash state
@@ -897,9 +1031,18 @@ export function InlineDatabase({ databaseId }: { databaseId: string }) {
   const trashed = isInTrash(workspace, databaseId);
   return (
     <div className="my-2" data-testid="inline-database">
-      <div className="group flex items-center gap-2 pb-1">
+      <div className="group flex items-center gap-2 pb-1" data-testid="inline-database-title">
         {page.icon && <PageIcon icon={page.icon} size={20} fileUrl={platform.fileUrl} />}
         <DatabaseTitle databaseId={databaseId} readOnly={trashed} />
+        {viewSet && (
+          <span
+            className="flex items-center gap-0.5 text-xs text-faint"
+            title="A linked view: its views are its own, the rows are the source database's"
+            data-testid="linked-badge"
+          >
+            <ArrowUpRight size={12} /> Linked
+          </span>
+        )}
         <IconButton
           label="Open as full page"
           className="opacity-0 group-hover:opacity-100"
@@ -911,7 +1054,7 @@ export function InlineDatabase({ databaseId }: { databaseId: string }) {
       {trashed ? (
         <p className="py-2 text-faint">This database is in Trash.</p>
       ) : (
-        <DatabaseView databaseId={databaseId} editable />
+        <DatabaseView databaseId={databaseId} viewSet={viewSet} editable />
       )}
     </div>
   );

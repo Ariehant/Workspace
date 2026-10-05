@@ -28,6 +28,7 @@ export const row = (
   smallText: false,
   font: 'default',
   locked: false,
+  isTemplate: false,
   values,
   ...extra,
 });

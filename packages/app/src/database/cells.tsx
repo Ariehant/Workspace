@@ -12,6 +12,7 @@ import {
   optionsOf,
   propertyKind,
   readRelation,
+  isLiveRow,
   relationIds,
   reminderOptions,
   setCell,
@@ -1006,9 +1007,7 @@ function RelationEditor({ handle, row, property }: CellEditorProps) {
     return <p className="px-3 py-2 text-muted">The related database no longer exists.</p>;
   }
   if (!target) return <div className="h-16" aria-busy="true" />;
-  const live = new Map(
-    target.snapshot.rows.filter((r) => r.trashedAt === null).map((r) => [r.id, r]),
-  );
+  const live = new Map(target.snapshot.rows.filter(isLiveRow).map((r) => [r.id, r]));
   const linked = readRelation(handle.doc, row.id, property.id).filter((id) => live.has(id));
   const q = query.trim().toLowerCase();
   const candidates = [...live.values()].filter(

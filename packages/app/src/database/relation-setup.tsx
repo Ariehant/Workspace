@@ -3,6 +3,7 @@ import {
   changePropertyType,
   createRelation,
   readProperties,
+  isLiveRow,
   renameProperty,
   rollupCalculationsFor,
   setPropertyConfig,
@@ -105,7 +106,7 @@ export function RelationSetup({
         const target = databases.get(targetId)!.snapshot();
         const pages = new Map<string, RelatedPage>(
           target.rows
-            .filter((r) => r.trashedAt === null)
+            .filter(isLiveRow)
             .map((r) => [r.id, { id: r.id, title: r.title, icon: r.icon, databaseId: targetId }]),
         );
         changePropertyType(

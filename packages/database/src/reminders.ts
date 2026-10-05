@@ -60,7 +60,7 @@ export interface PropertyReminder {
 export function readDateReminders(snapshot: DatabaseSnapshot): PropertyReminder[] {
   const dates = snapshot.properties.filter((p) => p.type === 'date');
   return snapshot.rows
-    .filter((row) => row.trashedAt === null)
+    .filter((row) => row.trashedAt === null && !row.isTemplate)
     .flatMap((row) =>
       dates.flatMap((property) => {
         const value = row.values[property.id];
