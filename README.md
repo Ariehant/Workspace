@@ -7,7 +7,7 @@ The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Ph
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
 except its last check, importing a real Notion export. Phase 4 (sync server, see
-[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server foundation (M1) is done.
+[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server foundation (M1) and accounts (M2) are done.
 
 ## What works today
 
@@ -148,6 +148,18 @@ cd infra
 cp .env.example .env   # set DOMAIN and the passwords
 docker compose up -d
 ```
+
+The first account created becomes the server admin. After that, `SIGNUP` decides who can join:
+`open`, `invite` (the default) or `disabled`. Admins manage accounts from the command line:
+
+```sh
+docker compose exec server workspace-admin create-invite [email]
+docker compose exec server workspace-admin create-user ada@example.com "Ada" [--admin]
+docker compose exec server workspace-admin help      # all commands
+```
+
+Single sign-on works with any OpenID Connect provider (GitLab, Google, Keycloak, Authentik…).
+Set `OIDC_*` in `.env` (see `.env.example`).
 
 `infra/workspace.service` runs it under systemd and `infra/backup.sh` backs it up. Syncing
 devices arrives in the next milestones of Phase 4.

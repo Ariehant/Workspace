@@ -23,6 +23,19 @@ export interface Config {
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   /** Built web app to serve at `/` (when present). */
   webDir: string | null;
+  /** Single sign-on providers (OpenID Connect), shown as "Continue with …". */
+  oidc: OidcProvider[];
+  /** Allow OIDC providers over plain http (local testing only). */
+  oidcAllowInsecure: boolean;
+}
+
+export interface OidcProvider {
+  /** Used in URLs: `/api/auth/oidc/<id>/callback` is the redirect URI to register. */
+  id: string;
+  name: string;
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
 }
 
 export class ConfigError extends Error {}
@@ -75,6 +88,28 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
           forcePathStyle: (env.S3_FORCE_PATH_STYLE ?? 'true') !== 'false',
         }
       : { driver, dir: get('FILES_DIR', './data/files') };
+  const oidc: OidcProvider[] = [];
+  for (const id of (env.OIDC_PROVIDERS ?? '').split(',').map((p) => p.trim().toLowerCase())) {
+    if (!id) continue;
+    if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(id)) {
+      problems.push(`OIDC_PROVIDERS: "${id}" must be letters, digits and dashes`);
+      continue;
+    }
+    const prefix = `OIDC_${id.toUpperCase().replaceAll('-', '_')}_`;
+    const issuer = get(`${prefix}ISSUER`);
+    try {
+      if (issuer) new URL(issuer);
+    } catch {
+      problems.push(`${prefix}ISSUER must be a URL`);
+    }
+    oidc.push({
+      id,
+      name: env[`${prefix}NAME`]?.trim() || id.charAt(0).toUpperCase() + id.slice(1),
+      issuer,
+      clientId: get(`${prefix}CLIENT_ID`),
+      clientSecret: get(`${prefix}CLIENT_SECRET`),
+    });
+  }
   const config: Config = {
     host: get('HOST', '0.0.0.0'),
     port,
@@ -85,6 +120,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     signup: oneOf('SIGNUP', ['open', 'invite', 'disabled'] as const, 'invite'),
     logLevel: oneOf('LOG_LEVEL', LOG_LEVELS, 'info'),
     webDir: env.WEB_DIR?.trim() || null,
+    oidc,
+    oidcAllowInsecure: env.OIDC_ALLOW_INSECURE === 'true',
   };
   if (problems.length) throw new ConfigError(`Invalid configuration:\n- ${problems.join('\n- ')}`);
   return config;

@@ -25,6 +25,10 @@ services:
       dockerfile: apps/server/Dockerfile
     image: workspace-server:latest
     restart: unless-stopped
+    # Single sign-on settings (OIDC_*) come from .env; the ones below take precedence.
+    env_file:
+      - path: .env
+        required: false
     environment:
       PUBLIC_URL: https://${DOMAIN}
       DATABASE_URL: postgres://workspace:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/workspace

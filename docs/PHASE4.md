@@ -1,6 +1,6 @@
 # Phase 4: Sync server
 
-**Status:** M1 done. M2 next.
+**Status:** M1 and M2 done. M3 next.
 
 ## Context
 
@@ -123,7 +123,7 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
   - CI's new `server` job repeats the image build and stack smoke test.
 - **Tests:** the store (migrations, ordered and concurrent appends, workspace isolation, compaction, files), config validation, health and readiness (including the database down), and the file drivers, including path-escape attempts.
 
-### M2: accounts and auth
+### M2: accounts and auth ✅
 
 - **Email and password:**
   - Sign up, sign in and sign out. Passwords are hashed with Node's `scrypt` (no native module). A rate limit applies per IP and per account.
@@ -137,6 +137,55 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
   - Identities are linked to accounts by verified email.
 - **Workspaces:** create, list and rename. The creator is the owner.
 - **Tests:** API tests for every flow, including expiry, revocation, the rate limit, and OIDC against a small fake provider started in the test.
+
+**M2 notes:**
+
+- **Storage** (`Accounts`, at `store.accounts`). Migration 2 adds three tables:
+  - `invites`
+  - `oidc_states` (sign-ins in progress)
+  - `auth_codes` (the desktop's one-time codes)
+
+  Session tokens, invite codes and one-time codes are 256-bit random values. Only their SHA-256 is stored. Emails are stored lower-cased and trimmed. Sign-ups are serialized by an advisory lock, so two people racing on a fresh server can't both become the admin.
+
+- **Passwords:**
+  - Stored as `scrypt$N$r$p$salt$hash` with N=2^15, so the parameters can change later.
+  - A sign-in for an unknown email still runs a hash, so timing doesn't reveal which accounts exist.
+  - Minimum 8 characters.
+- **Sessions:**
+  - Web sessions last 30 days and desktop sessions 180 days, sliding: each use extends them, written back at most every 5 minutes.
+  - Disabling an account, or changing its password, ends its other sessions.
+- **CSRF:**
+  - The cookie is `ws_session` (HttpOnly, `SameSite=Strict`, `Secure` when `PUBLIC_URL` is https).
+  - Every `/api/` request that isn't a GET must carry an `X-Workspace-Client` header, unless it authenticates with `Authorization: Bearer`. A page on another site can't set that header without CORS, which the server doesn't allow. Sign-in and sign-up need it too, which blocks login CSRF.
+- **Rate limits:**
+  - 20 requests per minute per IP on the sign-in endpoints (`@fastify/rate-limit`). The client IP comes from `X-Forwarded-For` (the server trusts its proxy), so don't expose the server's port directly. The compose stack only exposes Caddy.
+  - After 10 failed password sign-ins in 15 minutes, an account refuses password sign-in for the rest of the window, even with the right password. This is counted in memory.
+- **API:**
+  - `GET /api/auth/config` returns the sign-up policy, whether the server needs its first account, and the SSO providers.
+  - `POST /api/auth/signup`, `/login` and `/logout`. Pass `client: "desktop"` to get a token instead of a cookie.
+  - `GET` and `PATCH /api/auth/me`.
+  - `POST /api/auth/password`. An SSO-only account can set a password without a current one.
+  - `GET /api/auth/sessions` and `DELETE /api/auth/sessions/:id`.
+  - `GET`, `POST` and `PATCH /api/workspaces`. Renaming needs the owner or admin role, and non-members get a 404.
+  - Admin only: `GET /api/admin/users`, `POST /api/admin/invites` and `POST /api/admin/users/:id/disabled`.
+  - Errors are always `{ error, message }`.
+- **OIDC:**
+  - Providers are configured with `OIDC_PROVIDERS=gitlab,…` and `OIDC_<ID>_ISSUER/CLIENT_ID/CLIENT_SECRET/NAME`. The redirect URI to register is `<PUBLIC_URL>/api/auth/oidc/<id>/callback`.
+  - `openid-client` v6 handles the code flow. Authorization is S256 PKCE, and state, nonce and the ID token signature are all checked. Each pending sign-in lives in Postgres for 10 minutes and can be used once.
+  - An identity is matched by provider and subject first, then by email, but only when the provider says that email is verified.
+  - A new account follows the sign-up policy. An invite can be passed to `start?invite=`.
+- **Desktop SSO** (RFC 8252 style):
+  - `start?client=desktop&port=<loopback port>&challenge=<S256 of a verifier>`.
+  - The callback redirects to `http://127.0.0.1:<port>/callback?code=…`, or `?error=…`.
+  - The app posts the code with its verifier to `/api/auth/desktop/exchange` and gets a token. The code is valid for 2 minutes and works once, and is useless to another local app that doesn't have the verifier.
+  - The desktop side (`safeStorage`, sign-in UI) comes in M4.
+- **`workspace-admin`:** create-user (prints a generated password), reset-password, create-invite, list-users, disable-user, enable-user, make-admin and list-workspaces.
+- **Docker:** compose passes `.env` to the server (`env_file`, optional), so `OIDC_*` settings go there. See `.env.example`.
+- **Tests:**
+  - 6 storage tests: users and the admin race, sessions, invites, identities, states and codes.
+  - 15 API tests, covering every flow above: sign-up policies, cookie and token sign-in, CSRF, listing, revoking and expiring sessions, password change, account lockout and the per-IP limit, disabled accounts, workspaces, and SSO.
+  - The SSO tests run against a fake OIDC provider started in the test (discovery, authorize, token with PKCE checks, and JWKS, with RS256 ID tokens from `jose`). They cover first sign-in, linking only through a verified email, the sign-up policy, the desktop loopback and exchange, and replayed, cancelled and tampered callbacks.
+  - 3 admin CLI tests.
 
 ### M3: the sync protocol
 

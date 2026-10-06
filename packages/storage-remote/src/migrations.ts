@@ -82,6 +82,45 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (workspace_id, id)
   );
   `,
+  `
+  -- Invites for sign-up when it's invite-only: the code is stored only as a hash.
+  CREATE TABLE invites (
+    id uuid PRIMARY KEY,
+    code_hash bytea NOT NULL UNIQUE,
+    email text,
+    created_by uuid REFERENCES users ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz NOT NULL,
+    used_by uuid REFERENCES users ON DELETE SET NULL,
+    used_at timestamptz
+  );
+
+  -- An OIDC sign-in in progress (between leaving for the provider and coming back).
+  CREATE TABLE oidc_states (
+    state text PRIMARY KEY,
+    provider text NOT NULL,
+    code_verifier text NOT NULL,
+    nonce text NOT NULL,
+    client text NOT NULL CHECK (client IN ('web', 'desktop')),
+    -- The desktop's loopback port, to send the one-time code to.
+    desktop_port int,
+    device_name text NOT NULL DEFAULT '',
+    -- S256 challenge from the desktop app: only it can exchange the one-time code.
+    desktop_challenge text,
+    -- An invite to use if this sign-in creates the account.
+    invite text,
+    expires_at timestamptz NOT NULL
+  );
+
+  -- One-time codes the desktop exchanges for a session after signing in in the browser.
+  CREATE TABLE auth_codes (
+    code_hash bytea PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+    device_name text NOT NULL DEFAULT '',
+    challenge text NOT NULL,
+    expires_at timestamptz NOT NULL
+  );
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

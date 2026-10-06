@@ -49,4 +49,38 @@ describe('config', () => {
       }
     }
   });
+
+  it('reads OIDC providers', () => {
+    const config = loadConfig({
+      DATABASE_URL: 'postgres://db/w',
+      OIDC_PROVIDERS: 'gitlab, my-idp',
+      OIDC_GITLAB_ISSUER: 'https://gitlab.com',
+      OIDC_GITLAB_CLIENT_ID: 'id',
+      OIDC_GITLAB_CLIENT_SECRET: 'secret',
+      OIDC_MY_IDP_ISSUER: 'https://idp.lab.io/realms/lab',
+      OIDC_MY_IDP_CLIENT_ID: 'ws',
+      OIDC_MY_IDP_CLIENT_SECRET: 's2',
+      OIDC_MY_IDP_NAME: 'Lab SSO',
+    });
+    expect(config.oidc).toEqual([
+      {
+        id: 'gitlab',
+        name: 'Gitlab',
+        issuer: 'https://gitlab.com',
+        clientId: 'id',
+        clientSecret: 'secret',
+      },
+      {
+        id: 'my-idp',
+        name: 'Lab SSO',
+        issuer: 'https://idp.lab.io/realms/lab',
+        clientId: 'ws',
+        clientSecret: 's2',
+      },
+    ]);
+    expect(config.oidcAllowInsecure).toBe(false);
+    expect(() =>
+      loadConfig({ DATABASE_URL: 'x', OIDC_PROVIDERS: 'gitlab', OIDC_GITLAB_ISSUER: 'nope' }),
+    ).toThrow(/OIDC_GITLAB_ISSUER must be a URL[\s\S]*OIDC_GITLAB_CLIENT_ID is required/);
+  });
 });

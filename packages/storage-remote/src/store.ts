@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import * as Y from 'yjs';
+import { Accounts } from './accounts';
 import { migrate } from './migrations';
 
 /** One stored update of the workspace log. */
@@ -42,11 +43,13 @@ const toBytes = (data: Buffer) => new Uint8Array(data.buffer, data.byteOffset, d
  */
 export class PgStore {
   readonly pool: pg.Pool;
+  readonly accounts: Accounts;
 
   constructor(connectionString: string, options: { max?: number } = {}) {
     this.pool = new pg.Pool({ connectionString, max: options.max ?? 10 });
     // A dropped connection must not crash the server; the pool replaces it.
     this.pool.on('error', () => {});
+    this.accounts = new Accounts(this.pool);
   }
 
   migrate(): Promise<number> {
