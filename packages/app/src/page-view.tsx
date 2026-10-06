@@ -397,6 +397,7 @@ export interface PageViewProps {
   onToggleFavorite(): void;
   onDuplicate(id: PageId): void;
   onSaveAsTemplate(id: PageId): void;
+  onExport(id: PageId): void;
   onMove(id: PageId): void;
   onTrash(id: PageId): void;
 }
@@ -426,6 +427,7 @@ export function PageView({
   onToggleFavorite,
   onDuplicate,
   onSaveAsTemplate,
+  onExport,
   onMove,
   onTrash,
 }: PageViewProps) {
@@ -457,6 +459,7 @@ export function PageView({
             onMove={() => onMove(pageId)}
             onCopyLink={() => void navigator.clipboard.writeText(pageUrl(pageId))}
             onSaveAsTemplate={() => onSaveAsTemplate(pageId)}
+            onExport={() => onExport(pageId)}
             onTrash={() => onTrash(pageId)}
           />
         }

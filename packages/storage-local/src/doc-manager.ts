@@ -179,6 +179,29 @@ export class DocManager {
     this.store.addVersion(docId, Y.encodeStateAsUpdate(doc), 'edit', this.now());
   }
 
+  /**
+   * Rebuild the search index, links and reminders from every stored doc (after a
+   * restore). Databases go first, so their rows are known when row pages are indexed.
+   */
+  reindexAll(): void {
+    this.indexWorkspace();
+    const later: string[] = [];
+    const indexOne = (docId: string, onlyDatabases: boolean) => {
+      const open = this.docs.has(docId);
+      const doc = open ? this.docs.get(docId)!.doc : this.load(docId);
+      if (!onlyDatabases || isDatabaseDoc(doc)) this.index(docId);
+      else later.push(docId);
+      if (!open) {
+        this.docs.get(docId)!.refs = 1;
+        this.release(docId);
+      }
+    };
+    for (const docId of this.store.listDocIds()) {
+      if (docId !== WORKSPACE_DOC_ID) indexOne(docId, true);
+    }
+    for (const docId of later) indexOne(docId, false);
+  }
+
   /** Write any debounced index updates now. Call before quitting. */
   flush(docId?: string): void {
     const ids = docId === undefined ? [...this.pending.keys()] : [docId];

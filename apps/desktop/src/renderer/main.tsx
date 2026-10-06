@@ -33,6 +33,12 @@ const platform: Platform = {
   listVersions: (docId) => api.history.list(docId),
   getVersion: (id) => api.history.get(id),
   snapshot: (docId, reason) => api.history.snapshot(docId, reason),
+  startExport: (request) => api.exports.start(request),
+  cancelExport: () => api.exports.cancel(),
+  onExportStatus: (listener) => api.exports.onStatus(listener),
+  provideDiagrams: (render) => api.exports.onMermaid(render),
+  restoreBackup: () => api.exports.restoreBackup(),
+  printReady: () => api.exports.printReady(),
 };
 
 createRoot(document.getElementById('root')!).render(

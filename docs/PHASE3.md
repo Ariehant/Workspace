@@ -1,6 +1,6 @@
 # Phase 3: Power features
 
-**Status:** M1–M4 done. M5 next.
+**Status:** M1–M5 done. M6 next.
 
 ## Context
 
@@ -201,7 +201,7 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - E2E: Mermaid render, error and modes, kept after restart. Code blocks: indent and outdent of selected lines, line numbers, caption, Copy, and a lazily loaded language highlighted after a restart. Equations: live errors, workspace macros used across pages, Copy LaTeX.
 - **Moved to M5:** exporting diagrams as SVG. `renderMermaid` is exported from the editor package for the exporter.
 
-### M5: export
+### M5: export ✅
 
 - **Formats:**
   - **Markdown + CSV, in Notion's layout:** pages become `.md` files named `Title <id>.md`, sub-pages go in folders, databases become a `.csv` plus one `.md` per row, and attachments are copied next to the pages that use them. Choosing this layout lets our own importer (M6) round-trip it, and makes exports readable wherever Notion exports are.
@@ -210,6 +210,43 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - **Workspace backup:** a `.zip` holding the raw Yjs state of every doc, the file store and a manifest. "Restore from backup" restores into an empty data dir. This is the lossless format; the others are for people and other apps.
 - **Where to start an export:** "Export" in the page menu (this page, optionally with sub-pages), and Settings → "Export all workspace content". Exports run in a worker thread in the main process, with progress and cancel.
 - **Shared code:** `packages/exporters` turns blocks into Markdown and HTML and database snapshots into CSV, reusing `readBlocks` and `cellText`.
+
+**M5 notes:**
+
+- **`packages/exporters`:**
+  - `readContent` reads a page as a block tree with formatted inline text: marks, links, mentions, inline equations.
+  - `blocksMarkdown` and `blocksHtml` cover every block type:
+    - Callouts become `<aside>` and toggles become indented list items, as in Notion's Markdown.
+    - Tables become GFM tables, columns are written one after the other, and synced blocks are written inline.
+    - Buttons, breadcrumbs and tables of contents are left out.
+  - `databaseCsv` writes every property (title first) with displayed values, including formulas, relations and rollups, with a BOM for spreadsheet apps.
+  - `exportPages` plans the whole export first, so links between exported pages become relative paths, and links to anything else become `workspace://` links.
+- **Layout (Notion's):**
+  - `Title <32-hex id>.md`, with sub-pages and attachments in a `Title <id>/` folder next to it.
+  - A database is `Title <id>.csv`, with one `Row <id>.md` per row in its folder. A row page starts with `Property: value` lines, as Notion's do.
+  - HTML uses the same layout. Each page is a standalone file with the styles inlined. A database is an `.html` table whose titles link to the row pages.
+  - Pages in the trash are left out.
+- **Mermaid:**
+  - HTML exports embed each diagram as SVG, with its source folded under it. The worker has no DOM, so it asks the window that started the export to draw the diagrams.
+  - Markdown keeps the ` ```mermaid ` source, which GitHub and most editors render.
+  - PDFs show diagrams as they look in the app.
+- **Running exports:**
+  - Markdown and HTML zips, and backups, run in a worker thread. It has its own connection to the database (the main thread writes every update as it happens) and streams the zip (fflate) to disk.
+  - Progress shows in a card at the bottom right, with Cancel. A cancelled or failed export deletes its partial file.
+  - PDFs print a hidden window that renders the page read-only, in light colors, with sub-pages each starting a new sheet. It waits for images and diagrams, then `printToPDF` with A4/Letter and 50–150% scale.
+- **Where:**
+  - "Export…" in the page menu (pages; database rows are exported with their database).
+  - The workspace menu (click "Workspace" at the top of the sidebar) has "Export all workspace content…", "Back up workspace…" and "Restore from backup…". This stands in for the planned Settings screen, which doesn't exist yet.
+- **Backup:**
+  - A `.zip` with `manifest.json`, `docs/<id>.ydoc` (each doc's merged Yjs state), `files/` and `settings.json`. Page-history versions aren't included.
+  - Restore checks the manifest first, then closes the windows. It moves the current database and files into `before-restore-<time>/` inside the data folder, restores into the now-empty workspace and rebuilds the search index, links and reminders (`DocManager.reindexAll`). Then the app restarts.
+  - If the restore fails, the old workspace is put back.
+- **Tests:**
+  - Unit: Markdown and HTML for every block kind, the layout (names, relative links, CSV quoting, rows, attachments copied once, trashed pages left out, one page without sub-pages), and backup → restore → re-index.
+  - E2E: Markdown export of a page with and without sub-pages; HTML export of the workspace (database table, row page, SVG diagram); PDF export and cancel; back up, change, restore, then restart with the restored pages and search.
+- **Not done:**
+  - File icons (uploaded images) aren't exported, and emoji icons only appear in HTML.
+  - Linked database views link to their source database instead of being exported again.
 
 ### M6: import
 

@@ -7,7 +7,7 @@ The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Ph
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is in
 progress: synced blocks and buttons (M1), backlinks and page history (M2), tabs and the
-templates gallery (M3), and diagrams and code (M4) are done.
+templates gallery (M3), diagrams and code (M4), and export (M5) are done.
 
 ## What works today
 
@@ -66,6 +66,9 @@ templates gallery (M3), and diagrams and code (M4) are done.
     linked to, and go to the Trash when deleted.
 - Synced blocks: the same content in several places, edited anywhere.
 - Backlinks under every page title, and page history with preview and restore.
+- Export a page (`···` → Export…) or the whole workspace (click "Workspace" at the top of the
+  sidebar) as Markdown & CSV in Notion's layout, HTML, or PDF; back up the workspace to a
+  `.zip` and restore it.
 - Templates gallery (sidebar → Templates): built-in templates for personal use, projects,
   engineering and a robotics lab, with previews. "Save as template" in a page's `···` menu adds
   your own.

@@ -13,10 +13,13 @@ import {
   type ThemePreference,
 } from '@workspace/ui';
 import {
+  Archive,
+  ArchiveRestore,
   ChevronRight,
   ChevronsLeft,
   Copy,
   CornerUpRight,
+  Download,
   LayoutTemplate,
   MoreHorizontal,
   Palette,
@@ -59,6 +62,9 @@ export interface SidebarProps {
   onToggleFavorite(id: PageId): void;
   onSearch(): void;
   onTemplates(): void;
+  onExportAll(): void;
+  onBackup(): void;
+  onRestore(): void;
   onResize(width: number): void;
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
@@ -93,10 +99,32 @@ export function Sidebar(props: SidebarProps) {
       className="relative flex h-full shrink-0 flex-col border-r border-line bg-sidebar select-none"
     >
       <div className="group flex h-11 items-center gap-2 px-3">
-        <div className="flex size-5 items-center justify-center rounded bg-active text-xs font-semibold">
-          W
-        </div>
-        <span className="flex-1 truncate text-sm font-medium">Workspace</span>
+        <Menu>
+          <MenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Workspace menu"
+              className="-mx-1 flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 hover:bg-hover"
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center rounded bg-active text-xs font-semibold">
+                W
+              </span>
+              <span className="truncate text-sm font-medium">Workspace</span>
+            </button>
+          </MenuTrigger>
+          <MenuContent align="start" className="w-60">
+            <MenuItem icon={<Download size={14} />} onSelect={props.onExportAll}>
+              Export all workspace content…
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem icon={<Archive size={14} />} onSelect={props.onBackup}>
+              Back up workspace…
+            </MenuItem>
+            <MenuItem icon={<ArchiveRestore size={14} />} onSelect={props.onRestore}>
+              Restore from backup…
+            </MenuItem>
+          </MenuContent>
+        </Menu>
         <IconButton
           label="Close sidebar (Ctrl+\)"
           size="sm"

@@ -1,10 +1,18 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LINK_SCHEME, parsePageUrl } from '@workspace/core';
-import { DocManager, FileStore, SqliteStore } from '@workspace/storage-local';
+import {
+  DocManager,
+  FileStore,
+  SqliteStore,
+  readBackupManifest,
+  restoreBackup,
+} from '@workspace/storage-local';
+import { unzipSync } from 'fflate';
 import { BrowserWindow, Menu, app, nativeTheme, shell } from 'electron';
 import type { ThemeSource } from '../shared/ipc';
+import { asideDir, registerExport } from './export';
 import { registerFileScheme, registerFiles } from './files';
 import { registerIpc } from './ipc';
 import { openPage } from './reminders';
@@ -37,7 +45,8 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
-const store = new SqliteStore(join(dataDir, 'workspace.db'));
+const dbPath = join(dataDir, 'workspace.db');
+const store = new SqliteStore(dbPath);
 const reminders = new ReminderScheduler(store);
 // Tests shorten the page-history session so versions appear within a test.
 const versionInterval = Number(process.env.WORKSPACE_VERSION_INTERVAL_MS);
@@ -100,10 +109,72 @@ function createWindow(pageId?: string): BrowserWindow {
   };
   window.on('close', saveBounds);
 
-  const hash = pageId ? `page=${encodeURIComponent(pageId)}` : '';
+  loadRenderer(window, pageId ? `page=${encodeURIComponent(pageId)}` : '');
+  return window;
+}
+
+function loadRenderer(window: BrowserWindow, hash: string): void {
   if (isDev) void window.loadURL(`${process.env.ELECTRON_RENDERER_URL!}${hash ? `#${hash}` : ''}`);
   else void window.loadFile(rendererPath, hash ? { hash } : undefined);
+}
+
+/** A hidden window that renders a page for printing to PDF. */
+function createPrintWindow(hash: string): BrowserWindow {
+  const window = new BrowserWindow({
+    show: false,
+    width: 900,
+    height: 1200,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      preload: preloadPath,
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  loadRenderer(window, hash);
   return window;
+}
+
+let restoring = false;
+
+/**
+ * Replace the workspace with a backup: close everything, move the current database and
+ * files aside (into the data dir), restore into the now-empty workspace, rebuild the
+ * search index, and restart. If anything fails, the old workspace is put back.
+ */
+function restoreWorkspace(path: string): void {
+  const entries = new Map(Object.entries(unzipSync(readFileSync(path))));
+  readBackupManifest(entries); // a readable error before anything is touched
+  restoring = true;
+  reminders.stop();
+  for (const window of BrowserWindow.getAllWindows()) window.destroy();
+  manager.close();
+  store.close();
+  const aside = asideDir(dataDir);
+  mkdirSync(aside, { recursive: true });
+  const moved = ['workspace.db', 'workspace.db-wal', 'workspace.db-shm', 'files'].filter((name) =>
+    existsSync(join(dataDir, name)),
+  );
+  for (const name of moved) renameSync(join(dataDir, name), join(aside, name));
+  try {
+    const fresh = new SqliteStore(dbPath);
+    const freshFiles = new FileStore(dataDir, fresh);
+    restoreBackup(entries, fresh, freshFiles.dir);
+    const indexer = new DocManager(fresh);
+    indexer.reindexAll();
+    indexer.close();
+    fresh.close();
+  } catch (error) {
+    console.error('Restore failed; putting the workspace back', error);
+    for (const name of ['workspace.db', 'workspace.db-wal', 'workspace.db-shm', 'files']) {
+      rmSync(join(dataDir, name), { recursive: true, force: true });
+    }
+    for (const name of moved) renameSync(join(aside, name), join(dataDir, name));
+  }
+  // Tests launch the app again themselves.
+  if (!process.env.WORKSPACE_E2E) app.relaunch();
+  app.exit(0);
 }
 
 /** Show the page a `workspace://` link points to; `false` if it isn't one. */
@@ -140,6 +211,13 @@ function onRendererReady(): void {
 }
 
 registerIpc(manager, store, onRendererReady, (pageId) => createWindow(pageId));
+registerExport({
+  manager,
+  dbPath,
+  filesDir: files.dir,
+  createPrintWindow,
+  restore: restoreWorkspace,
+});
 
 // A second launch (e.g. the desktop opening a workspace:// link) hands over to us.
 app.on('second-instance', (_event, argv) => {
@@ -169,7 +247,9 @@ app.whenReady().then(() => {
   }
 });
 
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {
+  if (!restoring) app.quit();
+});
 
 app.on('will-quit', () => {
   reminders.stop();

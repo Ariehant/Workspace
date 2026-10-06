@@ -25,7 +25,33 @@ export const IPC = {
   /** main -> renderer: show this page (and block), e.g. from a link or notification. */
   navigate: 'app:navigate',
   ready: 'app:ready',
+  exportStart: 'export:start',
+  exportCancel: 'export:cancel',
+  /** main -> renderer: how an export is going. */
+  exportStatus: 'export:status',
+  /** main -> renderer: render these Mermaid diagrams to SVG (for HTML exports). */
+  exportMermaid: 'export:mermaid',
+  exportMermaidResult: 'export:mermaid-result',
+  backupRestore: 'backup:restore',
+  /** print window -> main: the page is rendered, print it. */
+  printReady: 'print:ready',
 } as const;
+
+export type ExportFormat = 'markdown' | 'html' | 'pdf' | 'backup';
+
+export interface ExportRequest {
+  format: ExportFormat;
+  /** The page to export; without it, the whole workspace. */
+  pageId?: string;
+  includeSubpages?: boolean;
+  pdf?: { pageSize: 'A4' | 'Letter'; scale: number };
+}
+
+export type ExportStatus =
+  | { state: 'running'; done: number; total: number }
+  | { state: 'done'; path: string }
+  | { state: 'cancelled' }
+  | { state: 'failed'; error: string };
 
 export type ThemeSource = 'system' | 'light' | 'dark';
 

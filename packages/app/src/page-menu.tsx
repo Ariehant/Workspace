@@ -16,6 +16,7 @@ import {
 import {
   ArrowUpLeft,
   Copy,
+  Download,
   CornerUpRight,
   History,
   LayoutTemplate,
@@ -40,6 +41,8 @@ export interface PageMenuProps {
   onCopyLink(): void;
   /** Omitted for database rows. */
   onSaveAsTemplate?(): void;
+  /** Omitted for database rows. */
+  onExport?(): void;
   onTrash(): void;
 }
 
@@ -90,6 +93,7 @@ export function PageMenu({
   onMove,
   onCopyLink,
   onSaveAsTemplate,
+  onExport,
   onTrash,
 }: PageMenuProps) {
   // Computed when the menu opens rather than on every render of the page.
@@ -194,6 +198,11 @@ export function PageMenu({
           <MenuItem icon={<Link2 size={14} />} onSelect={onCopyLink}>
             Copy link
           </MenuItem>
+          {onExport && (
+            <MenuItem icon={<Download size={14} />} onSelect={onExport}>
+              Export…
+            </MenuItem>
+          )}
           {onSaveAsTemplate && (
             <MenuItem icon={<LayoutTemplate size={14} />} onSelect={onSaveAsTemplate}>
               Save as template

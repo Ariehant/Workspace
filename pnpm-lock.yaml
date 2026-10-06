@@ -65,6 +65,9 @@ importers:
       '@workspace/editor':
         specifier: workspace:*
         version: link:../../packages/editor
+      '@workspace/exporters':
+        specifier: workspace:*
+        version: link:../../packages/exporters
       '@workspace/storage-local':
         specifier: workspace:*
         version: link:../../packages/storage-local
@@ -80,6 +83,9 @@ importers:
       electron-vite:
         specifier: ^5.0.0
         version: 5.0.0(vite@7.3.6(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.33.0))
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       react:
         specifier: ^19.3.0
         version: 19.3.0
@@ -283,6 +289,18 @@ importers:
       vite:
         specifier: 7.3.6
         version: 7.3.6(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.33.0)
+
+  packages/exporters:
+    dependencies:
+      '@workspace/core':
+        specifier: workspace:*
+        version: link:../core
+      '@workspace/database':
+        specifier: workspace:*
+        version: link:../database
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.33
 
   packages/storage-local:
     dependencies:
@@ -2824,6 +2842,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   file-entry-cache@11.1.5:
     resolution: {integrity: sha512-+PFTHITI08JIGhnNpGNI8T8inUpgZfk3GNEqfT9R2zZV2iFXg3CvqzSl/uEhs7TSGujYRELEANyDvS8Fj7+S7Q==}
@@ -6757,6 +6778,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fflate@0.8.3: {}
 
   file-entry-cache@11.1.5:
     dependencies:

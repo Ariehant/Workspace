@@ -51,6 +51,8 @@ import { TabBar } from './tab-bar';
 import { useNewTabIntent, useTabScroll } from './tabs';
 import { TemplatesGallery } from './templates/gallery';
 import { saveAsTemplate } from './templates/store';
+import { ExportDialog, ExportProgress, useDiagramProvider } from './export-dialog';
+import { PrintView, printFromLocation } from './print-view';
 
 const SETTING = {
   theme: 'ui.theme',
@@ -123,6 +125,11 @@ export function App({ platform }: { platform: Platform }) {
   const workspace = useDoc(client, WORKSPACE_DOC_ID);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  // A window that only renders a page for printing (PDF export), always in light colors.
+  const [print] = useState(printFromLocation);
+  useEffect(() => {
+    if (print) document.documentElement.dataset.theme = 'light';
+  }, [print]);
 
   useEffect(() => {
     loadSettings(platform).then(setSettings, (error: unknown) => {
@@ -152,6 +159,13 @@ export function App({ platform }: { platform: Platform }) {
   }, [workspace, user]);
 
   if (!workspace || !settings || !context) return null;
+  if (print) {
+    return (
+      <AppContext.Provider value={context}>
+        <PrintView pageId={print.pageId} subpages={print.subpages} />
+      </AppContext.Provider>
+    );
+  }
   return (
     <AppContext.Provider value={context}>
       <Shell platform={platform} client={client} workspace={workspace} initial={settings} />
@@ -200,6 +214,9 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(initial.sidebarWidth);
   const [finding, setFinding] = useState(false);
   const [templates, setTemplates] = useState(false);
+  // The export dialog: for a page, or (null) the whole workspace.
+  const [exporting, setExporting] = useState<PageId | null | undefined>(undefined);
+  useDiagramProvider(platform);
   const [blockTarget, setBlockTarget] = useState<BlockTarget | null>(null);
   const [peek, setPeek] = useState<{
     rowId: string;
@@ -491,6 +508,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
       onDuplicate={duplicate}
       onSaveAsTemplate={saveTemplate}
+      onExport={setExporting}
       onMove={setMoving}
       onTrash={trash}
       isFavorite={favorites.includes(currentPageId)}
@@ -531,6 +549,17 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onToggleFavorite={toggleFavorite}
             onSearch={() => setFinding(true)}
             onTemplates={() => setTemplates(true)}
+            onExportAll={() => setExporting(null)}
+            onBackup={() =>
+              void platform
+                .startExport({ format: 'backup' })
+                .catch((error: unknown) => console.error('Backup failed', error))
+            }
+            onRestore={() =>
+              void platform
+                .restoreBackup()
+                .catch((error: unknown) => window.alert(`Restore failed: ${String(error)}`))
+            }
             onResize={setSidebarWidth}
             fileUrl={platform.fileUrl}
             onThemeChange={changeTheme}
@@ -575,6 +604,10 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
           />
         )}
         <ButtonEditorHost />
+        <ExportProgress />
+        {exporting !== undefined && (
+          <ExportDialog pageId={exporting} onClose={() => setExporting(undefined)} />
+        )}
         {templates && <TemplatesGallery onUse={navigate} onClose={() => setTemplates(false)} />}
         {finding && (
           <QuickFind

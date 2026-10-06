@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, type FileRef, type LinkPreview, type ThemeSource } from '../shared/ipc';
+import {
+  IPC,
+  type ExportRequest,
+  type ExportStatus,
+  type FileRef,
+  type LinkPreview,
+  type ThemeSource,
+} from '../shared/ipc';
 
 type Unsubscribe = () => void;
 
@@ -69,6 +76,23 @@ const api = {
   onNavigate: (listener: (pageId: string, blockId: string | null) => void): Unsubscribe =>
     on(IPC.navigate, listener),
   openWindow: (pageId: string): void => ipcRenderer.send(IPC.windowOpen, pageId),
+  exports: {
+    start: (request: ExportRequest): Promise<boolean> =>
+      ipcRenderer.invoke(IPC.exportStart, request),
+    cancel: (): void => ipcRenderer.send(IPC.exportCancel),
+    onStatus: (listener: (status: ExportStatus) => void): Unsubscribe =>
+      on(IPC.exportStatus, listener),
+    /** Render Mermaid sources to SVG for the main process (HTML exports). */
+    onMermaid: (render: (sources: string[]) => Promise<Record<string, string>>): Unsubscribe =>
+      on(IPC.exportMermaid, (sources: string[]) => {
+        void render(sources).then(
+          (svgs) => ipcRenderer.send(IPC.exportMermaidResult, svgs),
+          () => ipcRenderer.send(IPC.exportMermaidResult, {}),
+        );
+      }),
+    restoreBackup: (): Promise<boolean> => ipcRenderer.invoke(IPC.backupRestore),
+    printReady: (): void => ipcRenderer.send(IPC.printReady),
+  },
   ready: (): void => ipcRenderer.send(IPC.ready),
 };
 

@@ -68,7 +68,33 @@ export interface Platform {
   getVersion(id: number): Promise<Uint8Array | null>;
   /** Save the current state of a doc as a version (before a restore, a template…). */
   snapshot(docId: string, reason: string): Promise<number | null>;
+  /** Export pages or the workspace; asks where to save. Resolves false if cancelled. */
+  startExport(request: ExportRequest): Promise<boolean>;
+  cancelExport(): void;
+  onExportStatus(listener: (status: ExportStatus) => void): () => void;
+  /** Render Mermaid diagrams to SVG when an export asks (source → SVG). */
+  provideDiagrams(render: (sources: string[]) => Promise<Record<string, string>>): () => void;
+  /** Replace the workspace with a backup (asks for the file and confirms first). */
+  restoreBackup(): Promise<boolean>;
+  /** A print view has finished rendering. */
+  printReady(): void;
 }
+
+export type ExportFormat = 'markdown' | 'html' | 'pdf' | 'backup';
+
+export interface ExportRequest {
+  format: ExportFormat;
+  /** The page to export; without it, the whole workspace. */
+  pageId?: string;
+  includeSubpages?: boolean;
+  pdf?: { pageSize: 'A4' | 'Letter'; scale: number };
+}
+
+export type ExportStatus =
+  | { state: 'running'; done: number; total: number }
+  | { state: 'done'; path: string }
+  | { state: 'cancelled' }
+  | { state: 'failed'; error: string };
 
 export interface Backlink {
   id: string;

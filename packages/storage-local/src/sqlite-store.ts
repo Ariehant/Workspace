@@ -574,6 +574,23 @@ export class SqliteStore {
       : null;
   }
 
+  listFileRecords(): FileRecord[] {
+    const rows = this.db.prepare('SELECT * FROM files ORDER BY created_at').all() as {
+      id: string;
+      name: string;
+      mime: string;
+      size: number;
+      created_at: number;
+    }[];
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      mime: row.mime,
+      size: row.size,
+      createdAt: row.created_at,
+    }));
+  }
+
   getLinkPreview<T>(url: string, maxAgeMs: number): T | null {
     const row = this.db
       .prepare('SELECT data, fetched_at FROM link_previews WHERE url = ?')
@@ -722,6 +739,15 @@ export class SqliteStore {
         'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
       )
       .run(key, JSON.stringify(value));
+  }
+
+  /** Every setting, for backups. */
+  listSettings(): Record<string, unknown> {
+    const rows = this.db.prepare('SELECT key, value FROM settings').all() as {
+      key: string;
+      value: string;
+    }[];
+    return Object.fromEntries(rows.map((row) => [row.key, JSON.parse(row.value) as unknown]));
   }
 
   close(): void {
