@@ -3,6 +3,7 @@ import {
   IPC,
   type ExportRequest,
   type ExportStatus,
+  type ImportStatus,
   type FileRef,
   type LinkPreview,
   type ThemeSource,
@@ -92,6 +93,12 @@ const api = {
       }),
     restoreBackup: (): Promise<boolean> => ipcRenderer.invoke(IPC.backupRestore),
     printReady: (): void => ipcRenderer.send(IPC.printReady),
+  },
+  imports: {
+    start: (): Promise<boolean> => ipcRenderer.invoke(IPC.importStart),
+    cancel: (): void => ipcRenderer.send(IPC.importCancel),
+    onStatus: (listener: (status: ImportStatus) => void): Unsubscribe =>
+      on(IPC.importStatus, listener),
   },
   ready: (): void => ipcRenderer.send(IPC.ready),
 };

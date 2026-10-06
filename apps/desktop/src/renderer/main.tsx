@@ -39,6 +39,9 @@ const platform: Platform = {
   provideDiagrams: (render) => api.exports.onMermaid(render),
   restoreBackup: () => api.exports.restoreBackup(),
   printReady: () => api.exports.printReady(),
+  startImport: () => api.imports.start(),
+  cancelImport: () => api.imports.cancel(),
+  onImportStatus: (listener) => api.imports.onStatus(listener),
 };
 
 createRoot(document.getElementById('root')!).render(

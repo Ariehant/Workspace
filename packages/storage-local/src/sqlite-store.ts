@@ -214,7 +214,8 @@ export class SqliteStore {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     this.db.exec(
-      'PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;',
+      // Workers (exports, imports) open their own connections: wait for a writer, don't fail.
+      'PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;',
     );
     this.migrate();
   }

@@ -59,6 +59,12 @@ describe('workspace backup', () => {
     const restored = new SqliteStore(join(b, 'workspace.db'));
     const restoredFiles = new FileStore(b, restored);
     expect(restoreBackup(entries, restored, restoredFiles.dir)).toEqual({ docs: 2, files: 1 });
+    // Byte for byte, at the Yjs level.
+    for (const id of [WORKSPACE_DOC_ID, pageId]) {
+      expect(Y.mergeUpdates(restored.getUpdates(id))).toEqual(
+        entries.get(`docs/${encodeURIComponent(id)}.ydoc`),
+      );
+    }
     // Search isn't in the backup: it's rebuilt.
     expect(restored.search('parallel')).toHaveLength(0);
     const next = new DocManager(restored);

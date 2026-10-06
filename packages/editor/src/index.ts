@@ -5,5 +5,6 @@ export type { EditorServices, FileRef, LinkPreview, PageRef } from './services';
 export type { Editor } from '@tiptap/react';
 export { PageIcon, type PageIconProps } from './page-icon';
 export { searchEmoji, EMOJI } from './nodes/emoji';
-export { appendContent, type ContentPart } from './content';
+export { appendContent, parseMarkdown, type ContentPart } from './content';
 export { renderMermaid, svgWidth } from './nodes/mermaid';
+export type { JSONContent } from '@tiptap/core';

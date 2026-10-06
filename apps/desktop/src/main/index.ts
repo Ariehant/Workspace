@@ -14,6 +14,7 @@ import { BrowserWindow, Menu, app, nativeTheme, shell } from 'electron';
 import type { ThemeSource } from '../shared/ipc';
 import { asideDir, registerExport } from './export';
 import { registerFileScheme, registerFiles } from './files';
+import { registerImport } from './import';
 import { registerIpc } from './ipc';
 import { openPage } from './reminders';
 import { ReminderScheduler } from './reminders';
@@ -218,6 +219,7 @@ registerExport({
   createPrintWindow,
   restore: restoreWorkspace,
 });
+registerImport({ manager, dbPath, dataDir });
 
 // A second launch (e.g. the desktop opening a workspace:// link) hands over to us.
 app.on('second-instance', (_event, argv) => {

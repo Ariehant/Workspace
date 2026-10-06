@@ -1,6 +1,6 @@
 # Phase 3: Power features
 
-**Status:** M1–M5 done. M6 next.
+**Status:** M1–M6 done. The exit check's last step, a real Notion export, is still to run.
 
 ## Context
 
@@ -248,7 +248,7 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - File icons (uploaded images) aren't exported, and emoji icons only appear in HTML.
   - Linked database views link to their source database instead of being exported again.
 
-### M6: import
+### M6: import ✅
 
 - **Notion export zip**, both the "Markdown & CSV" and the "HTML" variants. `packages/importers` handles it in four steps:
   1. **Read the zip** (streaming; exports can be gigabytes) and build a tree of pages from the paths and the ids in the file names.
@@ -257,6 +257,49 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   4. **Links:** links between pages (`../Other%20page%20<id>.md`) are rewritten to `workspace://` links and mentions once every page has its new id. Attachments go into the file store.
 - **Other formats:** Markdown files or folders, CSV (into a new database, with type inference), HTML, plain text.
 - **How it runs:** "Import" in the sidebar shows a picker, then a progress dialog with a cancel button and a report at the end. The report lists what couldn't be mapped (unsupported blocks, unresolved relations, formulas kept as text). Imports go into a new top-level page named after the zip, so nothing existing is touched; a page snapshot is taken first if importing into an existing page.
+
+**M6 notes:**
+
+- **`packages/importers`** (plain TypeScript; runs in a worker):
+  - **Tree:** the tree comes from Notion's names (`Title <32 hex>.md`, `_all.csv`) and folders. Folders without a page become pages, and pages in a database's folder become its rows.
+  - **Link names:** a link may name a database by any of its files. Notion links `Title id.csv` even when the export only has `_all.csv`.
+  - **Wrapping folders:** one wrapping folder without an id is ignored.
+  - **Markdown:** it goes through the editor's own parser (`parseMarkdown`), plus Notion's dialect:
+    - `<aside>` callouts, with the icon taken from the first emoji
+    - lines that are only an image or a file link become media blocks, and `<br>` becomes a line break
+    - a paragraph that is only a link becomes a link-to-page block, or an inline database if it points at a database
+    - an inline link whose text is the page's title becomes a mention; other links to pages become `workspace://` links
+    - row files' `Property: value` lines are skipped, because the values come from the CSV
+  - **HTML** (Notion's export, and ours) is read with parse5:
+    - headings, lists, to-dos, toggles (including toggle headings), callouts with icon and color, quotes, code with language, equations (from KaTeX's TeX annotation), images with captions, files, link-to-page, bookmarks, columns, simple tables
+    - text and block colors, bold/italic/underline/strike/code, inline equations
+    - page icons and covers
+  - **Databases:**
+    - A CSV parser (RFC 4180) reads the rows. Types come from Notion's property icons (HTML) or are inferred from the values: checkbox (Yes/No), number, date (Notion's "October 6, 2026" and ranges, ISO; strict, since `Date` accepts almost anything), URL, email, select, multi-select, else text.
+    - Select and status options keep their colors from HTML.
+    - Rows are matched with their pages by link (HTML) or title, in order.
+    - Relations are found when every value is a row of another imported database and either the cell has Notion's `Title (path.md)` form, the column is named after that database, or that database has a column named after this one. A pair of such columns becomes one two-way relation, placed where the column was.
+    - Formula and rollup columns (known in HTML) are imported as text, with a note in the report.
+  - **Attachments** go into the file store once each, and links to them become image, video, audio, PDF or file blocks.
+  - Blocks the schema rejects are dropped and counted, never stored broken (`appendContent` checks every block).
+- **Running it:**
+  - "Import" in the sidebar opens a file picker. It takes a Notion zip (Markdown & CSV or HTML; zips inside, like `Part-1.zip`, are unpacked), or Markdown, HTML, CSV and text files.
+  - A worker builds every doc and stores attachments, using its own database connection. The main thread then applies the updates through `DocManager`: the workspace first, then databases, rows and pages, so open windows and the search index see them like any other edit.
+  - Progress shows with Cancel. Nothing changes in the workspace until the worker is done, apart from attachments already stored.
+  - Everything goes under a new top-level page named after the file, which links to the imported top-level pages. A report lists the counts and what wasn't imported exactly.
+- **Tests:**
+  - Unit: names, paths and CSV; type inference; a Notion Markdown & CSV fixture (`_all.csv`, relations with paths, a row page, callout, image, code, equation, `<br>`, a missing link); a Notion HTML fixture (every block above, colors, icon, a database with typed columns and select colors, a formula column); plain files; and **export → import round trip** of a workspace with sub-pages, mentions, a callout, lists, code, an equation, a table, an image, an inline database and two related databases (text, structure, links, files, property types and values, two-way relations, row pages).
+  - E2E: import a Notion export zip (nested zip, real PNG) and check the pages, callout, image, mention, inline database, relation, search, and that it's all still there after a restart. Also export a page to Markdown and import it back.
+- **Different from the plan:**
+  - Zips are read into memory with fflate (not streamed with yauzl). That's fine for typical exports; very large ones need enough RAM.
+  - The CSV parser is our own (no papaparse).
+  - Imports always create a new page, so there's no "import into this page" yet (and no snapshot needed).
+- **Not done or lossy:**
+  - Notion's Markdown can't tell toggles from nested bullets, so they import as lists (HTML keeps them).
+  - Date mentions in Markdown import as text.
+  - Person and files properties import as text.
+  - Database views (beyond the default table) aren't restored.
+- **Exit check:** every item below passes against generated fixtures, our own exports, and a byte-identical backup round trip, except "Real samples". That needs a real export from a current Notion workspace, both variants. Run the importer on it and fix what it finds before Phase 3 is signed off.
 
 ## Exit check
 

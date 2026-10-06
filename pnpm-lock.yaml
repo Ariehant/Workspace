@@ -62,12 +62,18 @@ importers:
       '@workspace/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@workspace/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@workspace/editor':
         specifier: workspace:*
         version: link:../../packages/editor
       '@workspace/exporters':
         specifier: workspace:*
         version: link:../../packages/exporters
+      '@workspace/importers':
+        specifier: workspace:*
+        version: link:../../packages/importers
       '@workspace/storage-local':
         specifier: workspace:*
         version: link:../../packages/storage-local
@@ -301,6 +307,34 @@ importers:
       yjs:
         specifier: ^13.6.27
         version: 13.6.33
+
+  packages/importers:
+    dependencies:
+      '@workspace/core':
+        specifier: workspace:*
+        version: link:../core
+      '@workspace/database':
+        specifier: workspace:*
+        version: link:../database
+      '@workspace/editor':
+        specifier: workspace:*
+        version: link:../editor
+      parse5:
+        specifier: ^8.0.1
+        version: 8.0.1
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.33
+    devDependencies:
+      '@workspace/exporters':
+        specifier: workspace:*
+        version: link:../exporters
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
+      vite:
+        specifier: 7.3.6
+        version: 7.3.6(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.33.0)
 
   packages/storage-local:
     dependencies:
@@ -2703,6 +2737,10 @@ packages:
     resolution: {integrity: sha512-9vhedylFonb2YGogzUKX6+Ja72gOJbN1QHAqdrvqLwhdl/QWbKopzoUC9EbQNVsAns/bx/4uyqalrQAoy1IByw==}
     engines: {node: '>=10.13.0'}
 
+  entities@8.1.0:
+    resolution: {integrity: sha512-kxL7msIffSuh9aaFAMD7rxAIuTRMAHMeBtgHW2yUdWw732ZNh4MehkF2gdjvtdmikkaIP9bFDDJOPlsvm7avrA==}
+    engines: {node: '>=20.19.0'}
+
   env-paths@2.2.1:
     resolution: {integrity: sha512-+h1lkLKhZMTYjog1VEpJNG7NZJWcuc2DDk/qsqSTRRCOXiLjeQ1d1/udrUGhqMxUgAlwKNZ0cf2uqan5GLuS2A==}
     engines: {node: '>=6'}
@@ -3505,6 +3543,9 @@ packages:
 
   package-manager-detector@1.9.0:
     resolution: {integrity: sha512-zAMfbta9nPA8AKkA4WdmNAT8R8s6Dk0/xwPsqNnRidMFcLo1YkLuPDTgs2f64XdzS8vbLNnoJ+uUIkgbz7oRHA==}
+
+  parse5@8.0.1:
+    resolution: {integrity: sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==}
 
   path-data-parser@0.1.0:
     resolution: {integrity: sha512-NOnmBpt5Y2RWbuv0LMzsayp3lVylAHLPUTut412ZA3l+C4uw4ZVkQbjShYCQ8TCpUMdPapr4YjUqLYD6v68j+w==}
@@ -6588,6 +6629,8 @@ snapshots:
       graceful-fs: 4.2.11
       tapable: 2.3.3
 
+  entities@8.1.0: {}
+
   env-paths@2.2.1: {}
 
   env-paths@3.0.0: {}
@@ -7397,6 +7440,10 @@ snapshots:
       p-limit: 3.1.0
 
   package-manager-detector@1.9.0: {}
+
+  parse5@8.0.1:
+    dependencies:
+      entities: 8.1.0
 
   path-data-parser@0.1.0: {}
 

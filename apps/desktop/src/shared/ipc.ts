@@ -33,6 +33,10 @@ export const IPC = {
   exportMermaid: 'export:mermaid',
   exportMermaidResult: 'export:mermaid-result',
   backupRestore: 'backup:restore',
+  importStart: 'import:start',
+  importCancel: 'import:cancel',
+  /** main -> renderer: how an import is going, and its report. */
+  importStatus: 'import:status',
   /** print window -> main: the page is rendered, print it. */
   printReady: 'print:ready',
 } as const;
@@ -71,3 +75,19 @@ export interface LinkPreview {
   icon: string | null;
   siteName: string | null;
 }
+
+export interface ImportReportInfo {
+  /** The page holding the import. */
+  rootId: string;
+  pages: number;
+  databases: number;
+  rows: number;
+  files: number;
+  warnings: string[];
+}
+
+export type ImportStatus =
+  | { state: 'running'; done: number; total: number }
+  | { state: 'done'; report: ImportReportInfo }
+  | { state: 'cancelled' }
+  | { state: 'failed'; error: string };

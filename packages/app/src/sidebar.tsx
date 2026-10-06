@@ -20,6 +20,7 @@ import {
   Copy,
   CornerUpRight,
   Download,
+  FileInput,
   LayoutTemplate,
   MoreHorizontal,
   Palette,
@@ -62,6 +63,7 @@ export interface SidebarProps {
   onToggleFavorite(id: PageId): void;
   onSearch(): void;
   onTemplates(): void;
+  onImport(): void;
   onExportAll(): void;
   onBackup(): void;
   onRestore(): void;
@@ -209,6 +211,14 @@ export function Sidebar(props: SidebarProps) {
         >
           <LayoutTemplate size={16} />
           Templates
+        </button>
+        <button
+          type="button"
+          onClick={props.onImport}
+          className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover"
+        >
+          <FileInput size={16} />
+          Import
         </button>
         <Trash workspace={workspace} fileUrl={fileUrl} onOpen={onSelect}>
           <button

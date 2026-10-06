@@ -38,7 +38,8 @@ const csp = (): Plugin => ({
 export default defineConfig({
   main: {
     build: {
-      rollupOptions: { external: ['node:sqlite'] },
+      // The import worker uses the editor's schema, never its Mermaid preview: keep that out.
+      rollupOptions: { external: ['node:sqlite', 'mermaid'] },
     },
   },
   preload: {

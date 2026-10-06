@@ -1,6 +1,6 @@
 import { getSchema, resolveExtensions, type JSONContent } from '@tiptap/core';
 import { MarkdownManager } from '@tiptap/markdown';
-import { Node as PMNode, type Schema } from '@tiptap/pm/model';
+import type { Node as PMNode, Schema } from '@tiptap/pm/model';
 import { prosemirrorToYXmlFragment } from '@tiptap/y-tiptap';
 import { PAGE_CONTENT_FIELD, newId } from '@workspace/core';
 import * as Y from 'yjs';
@@ -37,16 +37,54 @@ function withIds(node: JSONContent): JSONContent {
 /** Blocks of a page: Markdown, or editor JSON for blocks Markdown can't express. */
 export type ContentPart = string | JSONContent;
 
+/** Markdown as editor JSON blocks, with the editor's own parser (no ids yet). */
+export function parseMarkdown(markdown: string): JSONContent[] {
+  return pageSchema().markdown.parse(markdown).content ?? [];
+}
+
 /**
- * Append blocks to a page doc's content (templates and other generated pages). Markdown
- * goes through the editor's own parser, so it reads exactly like pasted Markdown.
+ * Turn JSON blocks into checked editor nodes: loose inline content is wrapped in
+ * paragraphs, and blocks the schema can't take are left out (and counted).
  */
-export function appendContent(doc: Y.Doc, parts: readonly ContentPart[]): void {
-  const { schema, markdown } = pageSchema();
-  const blocks = parts.flatMap((part) =>
-    typeof part === 'string' ? (markdown.parse(part).content ?? []) : [part],
-  );
-  const root = PMNode.fromJSON(schema, { type: 'doc', content: blocks.map(withIds) });
+function toNodes(blocks: readonly JSONContent[], schema: Schema) {
+  const nodes: PMNode[] = [];
+  const dropped: string[] = [];
+  let inline: JSONContent[] = [];
+  const flush = () => {
+    if (inline.length) add({ type: 'paragraph', content: inline });
+    inline = [];
+  };
+  const add = (block: JSONContent) => {
+    try {
+      const node = schema.nodeFromJSON(withIds(block));
+      node.check();
+      nodes.push(node);
+    } catch {
+      dropped.push(block.type ?? 'unknown');
+    }
+  };
+  for (const block of blocks) {
+    const type = block.type ? schema.nodes[block.type] : undefined;
+    if (block.type === 'text' || type?.isInline) inline.push(block);
+    else {
+      flush();
+      add(block);
+    }
+  }
+  flush();
+  return { nodes, dropped };
+}
+
+/**
+ * Append blocks to a page doc's content (templates, imports and other generated pages).
+ * Markdown goes through the editor's own parser, so it reads exactly like pasted
+ * Markdown. Returns the types of blocks that couldn't be added.
+ */
+export function appendContent(doc: Y.Doc, parts: readonly ContentPart[]): string[] {
+  const { schema } = pageSchema();
+  const blocks = parts.flatMap((part) => (typeof part === 'string' ? parseMarkdown(part) : [part]));
+  const { nodes, dropped } = toNodes(blocks, schema);
+  const root = schema.topNodeType.create(null, nodes);
   // Build into a scratch doc, then copy over: the y-tiptap helper fills a whole fragment.
   const scratch = new Y.Doc();
   prosemirrorToYXmlFragment(root, scratch.getXmlFragment(PAGE_CONTENT_FIELD));
@@ -61,4 +99,5 @@ export function appendContent(doc: Y.Doc, parts: readonly ContentPart[]): void {
     );
   });
   scratch.destroy();
+  return dropped;
 }

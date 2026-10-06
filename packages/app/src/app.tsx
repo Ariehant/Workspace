@@ -53,6 +53,7 @@ import { TemplatesGallery } from './templates/gallery';
 import { saveAsTemplate } from './templates/store';
 import { ExportDialog, ExportProgress, useDiagramProvider } from './export-dialog';
 import { PrintView, printFromLocation } from './print-view';
+import { ImportProgress } from './import-dialog';
 
 const SETTING = {
   theme: 'ui.theme',
@@ -549,6 +550,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onToggleFavorite={toggleFavorite}
             onSearch={() => setFinding(true)}
             onTemplates={() => setTemplates(true)}
+            onImport={() =>
+              void platform
+                .startImport()
+                .catch((error: unknown) => console.error('Import failed', error))
+            }
             onExportAll={() => setExporting(null)}
             onBackup={() =>
               void platform
@@ -605,6 +611,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
         )}
         <ButtonEditorHost />
         <ExportProgress />
+        <ImportProgress onOpen={navigate} />
         {exporting !== undefined && (
           <ExportDialog pageId={exporting} onClose={() => setExporting(undefined)} />
         )}

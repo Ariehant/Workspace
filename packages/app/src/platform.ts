@@ -78,7 +78,27 @@ export interface Platform {
   restoreBackup(): Promise<boolean>;
   /** A print view has finished rendering. */
   printReady(): void;
+  /** Import files (asks which); pages go under a new top-level page. */
+  startImport(): Promise<boolean>;
+  cancelImport(): void;
+  onImportStatus(listener: (status: ImportStatus) => void): () => void;
 }
+
+export interface ImportReport {
+  /** The page holding the import. */
+  rootId: string;
+  pages: number;
+  databases: number;
+  rows: number;
+  files: number;
+  warnings: string[];
+}
+
+export type ImportStatus =
+  | { state: 'running'; done: number; total: number }
+  | { state: 'done'; report: ImportReport }
+  | { state: 'cancelled' }
+  | { state: 'failed'; error: string };
 
 export type ExportFormat = 'markdown' | 'html' | 'pdf' | 'backup';
 
