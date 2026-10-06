@@ -381,7 +381,9 @@ function TemplatePicker({
           <button
             key={t.id}
             type="button"
-            onClick={() => void applyTemplateToRow(client, handle, rowId, t.id, user.id)}
+            onClick={() =>
+              void applyTemplateToRow(client, handle, rowId, t.id, user.id, platform.snapshot)
+            }
             className="flex h-8 items-center gap-1.5 rounded border border-line px-2 hover:bg-hover"
           >
             <PageIcon icon={t.icon} size={14} fileUrl={platform.fileUrl} className="text-muted" />

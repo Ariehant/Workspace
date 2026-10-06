@@ -92,6 +92,26 @@ export function registerIpc(
     isDocId(id) ? store.locatePage(id) : null,
   );
 
+  // Backlinks: what the index knows (pages are indexed shortly after each edit).
+  ipcMain.handle(IPC.backlinks, (_event, id: unknown) =>
+    isDocId(id) ? store.backlinks(id, ['mention', 'link', 'pageLink', 'relation']) : [],
+  );
+  ipcMain.handle(IPC.syncedPlaces, (_event, id: unknown) =>
+    isDocId(id) ? store.syncedPlaces(id) : 0,
+  );
+
+  ipcMain.handle(IPC.historyList, (_event, docId: unknown) =>
+    isDocId(docId) ? manager.versions(docId) : [],
+  );
+  ipcMain.handle(IPC.historyGet, (_event, id: unknown) =>
+    typeof id === 'number' && Number.isInteger(id) ? manager.versionState(id) : null,
+  );
+  ipcMain.handle(IPC.historySnapshot, (_event, docId: unknown, reason: unknown) =>
+    isDocId(docId) && typeof reason === 'string' && /^[a-z-]{1,32}$/.test(reason)
+      ? manager.snapshot(docId, reason)
+      : null,
+  );
+
   // The local user: an id kept for this install, named after the OS account.
   ipcMain.handle(IPC.user, () => {
     let id = store.getSetting<string>('app.userId');

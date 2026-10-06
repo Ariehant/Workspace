@@ -123,7 +123,10 @@ export async function applyTemplateToRow(
   rowId: string,
   templateId: string,
   actor: string,
+  /** Saves the row page's current state first (page history). */
+  snapshot?: (docId: string, reason: string) => Promise<unknown>,
 ): Promise<void> {
+  await snapshot?.(rowId, 'template');
   applyTemplate(handle.doc, rowId, templateId, actor);
   await copyTemplateContent(client, templateId, rowId);
 }

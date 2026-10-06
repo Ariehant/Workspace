@@ -40,6 +40,30 @@ const api = {
   },
   linkPreview: (url: string): Promise<LinkPreview | null> =>
     ipcRenderer.invoke(IPC.linkPreview, url),
+  links: {
+    backlinks: (
+      pageId: string,
+    ): Promise<
+      {
+        id: string;
+        title: string;
+        icon: string | null;
+        databaseId: string | null;
+        blockId: string | null;
+        kind: string;
+        snippet: string;
+      }[]
+    > => ipcRenderer.invoke(IPC.backlinks, pageId),
+    syncedPlaces: (syncedId: string): Promise<number> =>
+      ipcRenderer.invoke(IPC.syncedPlaces, syncedId),
+  },
+  history: {
+    list: (docId: string): Promise<{ id: number; createdAt: number; reason: string }[]> =>
+      ipcRenderer.invoke(IPC.historyList, docId),
+    get: (id: number): Promise<Uint8Array | null> => ipcRenderer.invoke(IPC.historyGet, id),
+    snapshot: (docId: string, reason: string): Promise<number | null> =>
+      ipcRenderer.invoke(IPC.historySnapshot, docId, reason),
+  },
   setTheme: (theme: ThemeSource): void => ipcRenderer.send(IPC.themeSet, theme),
   onCommand: (listener: (command: string) => void): Unsubscribe => on(IPC.command, listener),
   onNavigate: (listener: (pageId: string, blockId: string | null) => void): Unsubscribe =>

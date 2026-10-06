@@ -157,3 +157,36 @@ export function copyPageContent(
     clones.forEach(fix);
   });
 }
+
+/**
+ * Make a page's content a copy of another doc's (page history restore). Runs as one
+ * transaction on the live doc, so it syncs and merges like any other edit. Block ids
+ * are kept, so links to blocks still work after a restore.
+ */
+export function replacePageContent(target: Y.Doc, source: Y.Doc, origin?: unknown): void {
+  const to = getPageContent(target);
+  target.transact(() => {
+    to.delete(0, to.length);
+    to.insert(
+      0,
+      getPageContent(source)
+        .toArray()
+        .filter((node): node is Y.XmlElement | Y.XmlText => !(node instanceof Y.XmlHook))
+        .map((node) => node.clone()),
+    );
+  }, origin);
+}
+
+/** Text of every block with an id, by id (page history compares versions with it). */
+export function blockTexts(doc: Y.Doc): Map<string, string> {
+  const texts = new Map<string, string>();
+  const walk = (blocks: Block[]) => {
+    for (const block of blocks) {
+      const id = block.props.id;
+      if (typeof id === 'string') texts.set(id, `${block.type}\u0000${block.text}`);
+      walk(block.children);
+    }
+  };
+  walk(readBlocks(doc));
+  return texts;
+}

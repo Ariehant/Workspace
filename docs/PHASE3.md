@@ -1,6 +1,6 @@
 # Phase 3: Power features
 
-**Status:** M1 done. M2 next.
+**Status:** M1–M2 done. M3 next.
 
 ## Context
 
@@ -74,7 +74,7 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - Each button step runs in its own transaction per doc, so undoing a multi-step button takes more than one undo.
   - Export of synced content comes with M5.
 
-### M2: backlinks and page history
+### M2: backlinks and page history ✅
 
 - **Backlinks:**
   - A `links` table in SQLite (from page or row, to page or row, block id) is filled by the indexer from page mentions, link-to-page blocks, `workspace://` links and relation values. It is rebuilt incrementally whenever a doc is re-indexed.
@@ -86,6 +86,34 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - Page menu → "Page history" opens a dialog: a list of versions on the left, a read-only rendering of the selected version on the right, and the blocks added or removed since then highlighted.
   - "Restore" replaces the page content with the version's inside one transaction on the live doc, so it merges correctly and can be undone. It takes a snapshot first.
   - Database rows' pages have history too. Database docs (schema, views, rows) get a simpler "Restore deleted property/view" list rather than a full diff view.
+
+**M2 notes:**
+
+- **Links index** (SQLite migration 5, `links` table):
+  - `readLinks` (core) finds page mentions, link-to-page blocks, `workspace://` links, synced blocks and linked database views in a page's content, each with its block id and the block's text as a snippet.
+  - The indexer replaces a page's content links whenever it re-indexes the page, and each row's relation links whenever it indexes the database.
+  - Links from trashed pages (or rows of trashed databases) are left out of results, and permanently deleted pages lose theirs.
+- **Backlinks:**
+  - "N backlinks" sits under the title of every page and row: one entry per linking page, with up to two snippets. Relations are marked "relation".
+  - Clicking an entry opens that page scrolled to the linking block (`navigateToBlock`).
+  - The list refreshes when pages change, because the index writes happen right after each edit is indexed.
+  - "Show backlinks" in the page menu sets Expanded, As a popover (the default) or Off. It's stored per page as an app setting, so it applies to this device only, not across devices.
+- **Synced places:** the original synced block now reads "Editing in N places" (from the links index, refreshed on hover). This closes the M1 gap.
+- **Page history** (`doc_versions` table):
+  - `DocManager` saves a doc's state before applying an edit when its newest version is older than 10 minutes. So every editing session starts from a saved version, and a long session gets one every 10 minutes.
+  - Empty docs aren't saved.
+  - Explicit snapshots are taken before a restore and before applying a template to a row.
+  - Retention runs at startup: everything from the last 7 days, then the newest version per day, up to 90 days.
+  - Compaction of the update log doesn't affect history, since versions are stored separately.
+- **History dialog** (page menu → "Page history", for pages and rows):
+  - The version list shows the time and the reason.
+  - The selected version is rendered read-only, with the blocks that read differently now in yellow and the blocks that are gone now in red, plus counts of changed, removed and added blocks.
+  - "Restore this version" saves the current state, then replaces the content in one transaction on the live doc (`replacePageContent`, keeping block ids), so it syncs to other windows. "Undo restore" puts back what was there.
+- **Tests:** E2E sessions use a 1.5-second version interval (`WORKSPACE_VERSION_INTERVAL_MS`).
+- **Not done:**
+  - Restore covers page content, not the title, icon or properties.
+  - There's no "restore deleted property/view" list for database docs yet. Their states are saved as versions, but there's no UI for them.
+  - Backlinks from inside synced blocks are counted on the synced block's doc, not on each page showing it.
 
 ### M3: tabs and the templates gallery
 

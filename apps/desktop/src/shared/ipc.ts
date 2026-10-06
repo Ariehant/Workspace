@@ -15,6 +15,11 @@ export const IPC = {
   fileImport: 'file:import',
   fileOpen: 'file:open',
   linkPreview: 'link:preview',
+  backlinks: 'links:backlinks',
+  syncedPlaces: 'links:synced',
+  historyList: 'history:list',
+  historyGet: 'history:get',
+  historySnapshot: 'history:snapshot',
   /** main -> renderer: a menu command. */
   command: 'app:command',
   /** main -> renderer: show this page (and block), e.g. from a link or notification. */

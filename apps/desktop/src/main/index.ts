@@ -39,7 +39,13 @@ if (!app.requestSingleInstanceLock()) {
 
 const store = new SqliteStore(join(dataDir, 'workspace.db'));
 const reminders = new ReminderScheduler(store);
-const manager = new DocManager(store, { onRemindersChanged: () => reminders.check() });
+// Tests shorten the page-history session so versions appear within a test.
+const versionInterval = Number(process.env.WORKSPACE_VERSION_INTERVAL_MS);
+const manager = new DocManager(store, {
+  onRemindersChanged: () => reminders.check(),
+  versionIntervalMs:
+    Number.isFinite(versionInterval) && versionInterval > 0 ? versionInterval : undefined,
+});
 const files = new FileStore(dataDir, store);
 registerFileScheme();
 

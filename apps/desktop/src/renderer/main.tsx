@@ -28,6 +28,11 @@ const platform: Platform = {
   fileUrl: (id) => `ws-file://${id}`,
   openFile: (id) => void api.files.open(id),
   linkPreview: (url) => api.linkPreview(url),
+  backlinks: (id) => api.links.backlinks(id),
+  syncedPlaces: (id) => api.links.syncedPlaces(id),
+  listVersions: (docId) => api.history.list(docId),
+  getVersion: (id) => api.history.get(id),
+  snapshot: (docId, reason) => api.history.snapshot(docId, reason),
 };
 
 createRoot(document.getElementById('root')!).render(

@@ -37,6 +37,7 @@ import {
 import type * as Y from 'yjs';
 import type { BlockTarget } from './app';
 import { useApp } from './context';
+import { Backlinks } from './backlinks';
 import { Cover, randomCover } from './cover';
 import { DatabaseView } from './database/database-view';
 import { convertToDatabase } from './database/registry';
@@ -249,6 +250,7 @@ export function PageHero({
           readOnly={!editable}
           onEnter={onEnter}
         />
+        <Backlinks pageId={model.id} />
       </div>
     </>
   );

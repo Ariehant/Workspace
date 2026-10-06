@@ -24,6 +24,7 @@ export function useEditorServices(pageId: PageId): EditorServices {
       createDatabase: () => createDatabase(client, workspace, { parentId: pages.hostOf(pageId) }),
       renderDatabase: (id) => <InlineDatabase databaseId={id} />,
       renderLinkedDatabase: (id, viewSet) => <InlineDatabase databaseId={id} viewSet={viewSet} />,
+      syncedPlaces: (id) => platform.syncedPlaces(id),
       acquireDoc: (id) => {
         const handle = client.acquire(id);
         return { ready: handle.ready.then(() => handle.doc), release: () => handle.release() };

@@ -7,6 +7,8 @@ export interface Navigation {
   navigate(id: PageId): void;
   /** Open a database row the way its view asks (side peek, center or full page). */
   openRow(rowId: string, databaseId: string, mode: OpenPagesIn): void;
+  /** Show a page scrolled to one of its blocks (backlinks, block links). */
+  navigateToBlock(pageId: PageId, blockId: string | null): void;
 }
 
 export const NavigationContext = createContext<Navigation | null>(null);

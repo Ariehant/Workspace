@@ -57,12 +57,22 @@ function SyncedBlockView({ node, editor }: ReactNodeViewProps) {
   const original = !source || source === services.pageId;
   const sourcePage = usePageRef(original ? null : source);
   const loops = id !== null && ancestors.includes(id);
+  // Refreshed on hover, when the label shows (the index follows edits).
+  const [places, setPlaces] = useState(0);
+  const countPlaces = () => {
+    if (id) void services.syncedPlaces(id).then(setPlaces);
+  };
   return (
-    <NodeViewWrapper data-testid="synced-block" data-synced-id={id} className="ws-synced-block">
+    <NodeViewWrapper
+      data-testid="synced-block"
+      data-synced-id={id}
+      className="ws-synced-block"
+      onMouseEnter={countPlaces}
+    >
       <div contentEditable={false} className="ws-synced-label" data-testid="synced-label">
         <RefreshCw size={11} />
         {original ? (
-          <span>Synced block</span>
+          <span>{places > 1 ? `Editing in ${places} places` : 'Synced block'}</span>
         ) : (
           <button type="button" onClick={() => source && services.navigate(source)}>
             Synced from {sourcePage?.title || 'Untitled'}

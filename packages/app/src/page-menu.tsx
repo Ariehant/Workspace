@@ -3,12 +3,28 @@ import {
   Menu,
   MenuContent,
   MenuItem,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSub,
+  MenuSubContent,
+  MenuSubTrigger,
   MenuSeparator,
   MenuTrigger,
   IconButton,
   cn,
 } from '@workspace/ui';
-import { Copy, CornerUpRight, Link2, Lock, MoreHorizontal, Trash2 } from 'lucide-react';
+import {
+  ArrowUpLeft,
+  Copy,
+  CornerUpRight,
+  History,
+  Link2,
+  Lock,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react';
+import { useBacklinksMode, type BacklinksMode } from './backlinks';
+import { HistoryDialog } from './history-dialog';
 import { useState } from 'react';
 import type * as Y from 'yjs';
 
@@ -74,91 +90,118 @@ export function PageMenu({
 }: PageMenuProps) {
   // Computed when the menu opens rather than on every render of the page.
   const [stats, setStats] = useState<{ words: number; now: number } | null>(null);
+  const [history, setHistory] = useState(false);
+  const [backlinks, setBacklinks] = useBacklinksMode(page.id);
 
   return (
-    <Menu
-      modal={false}
-      onOpenChange={(open) =>
-        setStats(
-          open ? { words: pageDoc ? countWords(pageText(pageDoc)) : 0, now: Date.now() } : null,
-        )
-      }
-    >
-      <MenuTrigger asChild>
-        <IconButton label="Page options">
-          <MoreHorizontal size={18} />
-        </IconButton>
-      </MenuTrigger>
-      <MenuContent align="end" className="w-64" aria-label="Page options" data-testid="page-menu">
-        <div className="grid grid-cols-3 gap-1 p-1" role="group" aria-label="Font">
-          {FONTS.map(({ font, label, sample }) => (
-            <button
-              key={font}
-              type="button"
-              aria-pressed={page.font === font}
-              onClick={() => onOptions({ font })}
-              className={cn(
-                'flex flex-col items-center gap-0.5 rounded-md py-1.5 hover:bg-hover',
-                page.font === font && 'text-accent',
-              )}
-            >
-              <span className={cn('text-xl', sample)}>Ag</span>
-              <span className="text-xs text-muted">{label}</span>
-            </button>
-          ))}
-        </div>
-        <MenuSeparator />
-        <MenuItem
-          onSelect={(e) => {
-            e.preventDefault();
-            onOptions({ smallText: !page.smallText });
-          }}
-        >
-          <span className="flex-1">Small text</span>
-          <Toggle on={page.smallText} />
-        </MenuItem>
-        <MenuItem
-          onSelect={(e) => {
-            e.preventDefault();
-            onOptions({ fullWidth: !page.fullWidth });
-          }}
-        >
-          <span className="flex-1">Full width</span>
-          <Toggle on={page.fullWidth} />
-        </MenuItem>
-        <MenuItem
-          icon={<Lock size={14} />}
-          onSelect={(e) => {
-            e.preventDefault();
-            onOptions({ locked: !page.locked });
-          }}
-        >
-          <span className="flex-1">Lock page</span>
-          <Toggle on={page.locked} />
-        </MenuItem>
-        <MenuSeparator />
-        <MenuItem icon={<Copy size={14} />} onSelect={onDuplicate}>
-          Duplicate
-        </MenuItem>
-        {onMove && (
-          <MenuItem icon={<CornerUpRight size={14} />} onSelect={onMove}>
-            Move to
-          </MenuItem>
-        )}
-        <MenuItem icon={<Link2 size={14} />} onSelect={onCopyLink}>
-          Copy link
-        </MenuItem>
-        <MenuSeparator />
-        <MenuItem icon={<Trash2 size={14} />} danger onSelect={onTrash}>
-          Move to Trash
-        </MenuItem>
-        {stats && (
-          <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-xs text-muted">
-            <div data-testid="word-count">Word count: {stats.words.toLocaleString('en-US')}</div>
-            <div>Last edited {timeAgo(page.updatedAt, stats.now)}</div>
+    <>
+      {history && pageDoc && (
+        <HistoryDialog docId={page.id} pageDoc={pageDoc} onClose={() => setHistory(false)} />
+      )}
+      <Menu
+        modal={false}
+        onOpenChange={(open) =>
+          setStats(
+            open ? { words: pageDoc ? countWords(pageText(pageDoc)) : 0, now: Date.now() } : null,
+          )
+        }
+      >
+        <MenuTrigger asChild>
+          <IconButton label="Page options">
+            <MoreHorizontal size={18} />
+          </IconButton>
+        </MenuTrigger>
+        <MenuContent align="end" className="w-64" aria-label="Page options" data-testid="page-menu">
+          <div className="grid grid-cols-3 gap-1 p-1" role="group" aria-label="Font">
+            {FONTS.map(({ font, label, sample }) => (
+              <button
+                key={font}
+                type="button"
+                aria-pressed={page.font === font}
+                onClick={() => onOptions({ font })}
+                className={cn(
+                  'flex flex-col items-center gap-0.5 rounded-md py-1.5 hover:bg-hover',
+                  page.font === font && 'text-accent',
+                )}
+              >
+                <span className={cn('text-xl', sample)}>Ag</span>
+                <span className="text-xs text-muted">{label}</span>
+              </button>
+            ))}
           </div>
-        )}
-      </MenuContent>
-    </Menu>
+          <MenuSeparator />
+          <MenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              onOptions({ smallText: !page.smallText });
+            }}
+          >
+            <span className="flex-1">Small text</span>
+            <Toggle on={page.smallText} />
+          </MenuItem>
+          <MenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              onOptions({ fullWidth: !page.fullWidth });
+            }}
+          >
+            <span className="flex-1">Full width</span>
+            <Toggle on={page.fullWidth} />
+          </MenuItem>
+          <MenuItem
+            icon={<Lock size={14} />}
+            onSelect={(e) => {
+              e.preventDefault();
+              onOptions({ locked: !page.locked });
+            }}
+          >
+            <span className="flex-1">Lock page</span>
+            <Toggle on={page.locked} />
+          </MenuItem>
+          <MenuSub>
+            <MenuSubTrigger icon={<ArrowUpLeft size={14} />}>
+              <span className="flex-1">Show backlinks</span>
+            </MenuSubTrigger>
+            <MenuSubContent>
+              <MenuRadioGroup
+                value={backlinks}
+                onValueChange={(mode) => setBacklinks(mode as BacklinksMode)}
+              >
+                <MenuRadioItem value="expanded">Expanded</MenuRadioItem>
+                <MenuRadioItem value="popover">As a popover</MenuRadioItem>
+                <MenuRadioItem value="off">Off</MenuRadioItem>
+              </MenuRadioGroup>
+            </MenuSubContent>
+          </MenuSub>
+          {pageDoc && (
+            <MenuItem icon={<History size={14} />} onSelect={() => setHistory(true)}>
+              Page history
+            </MenuItem>
+          )}
+          <MenuSeparator />
+          <MenuItem icon={<Copy size={14} />} onSelect={onDuplicate}>
+            Duplicate
+          </MenuItem>
+          {onMove && (
+            <MenuItem icon={<CornerUpRight size={14} />} onSelect={onMove}>
+              Move to
+            </MenuItem>
+          )}
+          <MenuItem icon={<Link2 size={14} />} onSelect={onCopyLink}>
+            Copy link
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem icon={<Trash2 size={14} />} danger onSelect={onTrash}>
+            Move to Trash
+          </MenuItem>
+          {stats && (
+            <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-xs text-muted">
+              <div data-testid="word-count">Word count: {stats.words.toLocaleString('en-US')}</div>
+              <div>Last edited {timeAgo(page.updatedAt, stats.now)}</div>
+            </div>
+          )}
+        </MenuContent>
+      </Menu>
+    </>
   );
 }

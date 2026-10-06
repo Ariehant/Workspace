@@ -6,7 +6,7 @@ and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI featu
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is in
-progress: synced blocks and buttons (M1) are done.
+progress: synced blocks and buttons (M1) and backlinks and page history (M2) are done.
 
 ## What works today
 
@@ -60,6 +60,7 @@ progress: synced blocks and buttons (M1) are done.
     above the content. Rows show up in quick find (including their property text), can be
     linked to, and go to the Trash when deleted.
 - Synced blocks: the same content in several places, edited anywhere.
+- Backlinks under every page title, and page history with preview and restore.
 - Every block has a stable id, ready for block links, comments and sync later.
 - Everything is saved locally as you type and survives restarts, including the last open page and
   which sidebar items are expanded.

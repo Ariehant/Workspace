@@ -59,6 +59,8 @@ export interface EditorServices {
   tableToDatabase(cells: string[][], header: boolean): Promise<string>;
   /** A database's first view as simple-table cells; the database goes to the trash. */
   databaseToTable(databaseId: string): Promise<string[][]>;
+  /** How many pages show a synced block (from the search index). */
+  syncedPlaces(syncedId: string): Promise<number>;
   /** Load another doc (synced block content, button templates) while it's shown. */
   acquireDoc(id: string): { ready: Promise<Y.Doc>; release(): void };
   /** Run a button's steps; `insertBlocks` puts its template blocks in the page. */

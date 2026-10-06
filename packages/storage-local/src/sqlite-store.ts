@@ -95,7 +95,56 @@ export const MIGRATIONS: string[] = [
   DROP TABLE page_fts;
   ALTER TABLE page_fts_v4 RENAME TO page_fts;
   `,
+  // 5: links between pages (backlinks) and page history snapshots (Phase 3 M2).
+  `
+  CREATE TABLE links (
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    block_id TEXT,
+    snippet TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX links_target ON links (target_id);
+  CREATE INDEX links_source ON links (source_id);
+
+  CREATE TABLE doc_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    state BLOB NOT NULL
+  );
+  CREATE INDEX doc_versions_doc ON doc_versions (doc_id, created_at);
+  `,
 ];
+
+/** A reference from one page to another, as stored for backlinks. */
+export interface LinkRow {
+  target: string;
+  kind: string;
+  blockId: string | null;
+  snippet: string;
+}
+
+/** A page linking here, with where (block) and how. */
+export interface Backlink {
+  id: string;
+  title: string;
+  icon: string | null;
+  databaseId: string | null;
+  blockId: string | null;
+  kind: string;
+  snippet: string;
+}
+
+/** A saved state of a doc (page history). */
+export interface DocVersion {
+  id: number;
+  docId: string;
+  createdAt: number;
+  /** Why it was taken: `edit` (an editing session), `restore`, `template`, … */
+  reason: string;
+}
 
 export interface PageIndexRow {
   id: string;
@@ -345,6 +394,127 @@ export class SqliteStore {
   removePageIndex(id: string): void {
     this.db.prepare('DELETE FROM pages WHERE id = ?').run(id);
     this.db.prepare('DELETE FROM page_fts WHERE page_id = ?').run(id);
+    this.db.prepare('DELETE FROM links WHERE source_id = ?').run(id);
+  }
+
+  // --- Links (backlinks) ------------------------------------------------------
+
+  /** Replace the links of `kinds` that `sourceId` makes (others are kept). */
+  replaceLinks(sourceId: string, kinds: readonly string[], links: readonly LinkRow[]): void {
+    this.transaction(() => {
+      const placeholders = kinds.map(() => '?').join(',');
+      this.db
+        .prepare(`DELETE FROM links WHERE source_id = ? AND kind IN (${placeholders})`)
+        .run(sourceId, ...kinds);
+      const insert = this.db.prepare(
+        'INSERT INTO links (source_id, target_id, kind, block_id, snippet) VALUES (?, ?, ?, ?, ?)',
+      );
+      for (const link of links) {
+        if (link.target === sourceId) continue;
+        insert.run(sourceId, link.target, link.kind, link.blockId, link.snippet);
+      }
+    });
+  }
+
+  /** Live pages and rows that link to `targetId` (one entry per linking block). */
+  backlinks(targetId: string, kinds: readonly string[]): Backlink[] {
+    const placeholders = kinds.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(
+        `SELECT p.id, p.title, p.icon, p.database_id AS databaseId,
+                l.block_id AS blockId, l.kind, l.snippet
+         FROM links l
+         JOIN pages p ON p.id = l.source_id
+         LEFT JOIN pages d ON d.id = p.database_id
+         WHERE l.target_id = ? AND l.kind IN (${placeholders})
+           AND p.in_trash = 0 AND COALESCE(d.in_trash, 0) = 0
+         ORDER BY p.updated_at DESC`,
+      )
+      .all(targetId, ...kinds) as unknown as Backlink[];
+    return rows.map((r) => ({ ...r }));
+  }
+
+  /** How many live pages show a synced block (its original included). */
+  syncedPlaces(syncedId: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(DISTINCT l.source_id) AS n FROM links l
+         JOIN pages p ON p.id = l.source_id
+         WHERE l.target_id = ? AND l.kind = 'synced' AND p.in_trash = 0`,
+      )
+      .get(syncedId) as { n: number };
+    return row.n;
+  }
+
+  // --- Page history -----------------------------------------------------------
+
+  addVersion(docId: string, state: Uint8Array, reason: string, now = Date.now()): number {
+    const result = this.db
+      .prepare('INSERT INTO doc_versions (doc_id, created_at, reason, state) VALUES (?, ?, ?, ?)')
+      .run(docId, now, reason, state);
+    return Number(result.lastInsertRowid);
+  }
+
+  /** A doc's versions, newest first. */
+  listVersions(docId: string): DocVersion[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT id, doc_id AS docId, created_at AS createdAt, reason FROM doc_versions
+           WHERE doc_id = ? ORDER BY created_at DESC, id DESC`,
+        )
+        .all(docId) as unknown as DocVersion[]
+    ).map((r) => ({ ...r }));
+  }
+
+  lastVersionTime(docId: string): number | null {
+    const row = this.db
+      .prepare('SELECT MAX(created_at) AS t FROM doc_versions WHERE doc_id = ?')
+      .get(docId) as { t: number | null };
+    return row.t;
+  }
+
+  getVersionState(id: number): { docId: string; state: Uint8Array } | null {
+    const row = this.db
+      .prepare('SELECT doc_id AS docId, state FROM doc_versions WHERE id = ?')
+      .get(id) as { docId: string; state: Uint8Array } | undefined;
+    return row ? { docId: row.docId, state: row.state } : null;
+  }
+
+  /**
+   * Keep every version from the last `keepAllDays`, then the newest one per day for
+   * up to `maxDays`; delete the rest. Returns how many were deleted.
+   */
+  pruneVersions(now = Date.now(), keepAllDays = 7, maxDays = 90): number {
+    const day = 86_400_000;
+    let deleted = 0;
+    this.transaction(() => {
+      deleted += Number(
+        this.db.prepare('DELETE FROM doc_versions WHERE created_at < ?').run(now - maxDays * day)
+          .changes,
+      );
+      // Older than a week: keep the newest version of each doc per day.
+      deleted += Number(
+        this.db
+          .prepare(
+            `DELETE FROM doc_versions WHERE created_at < ? AND id NOT IN (
+               SELECT id FROM (
+                 SELECT id, ROW_NUMBER() OVER (
+                   PARTITION BY doc_id, created_at / ${day}
+                   ORDER BY created_at DESC, id DESC
+                 ) AS n
+                 FROM doc_versions WHERE created_at < ?
+               ) WHERE n = 1
+             )`,
+          )
+          .run(now - keepAllDays * day, now - keepAllDays * day).changes,
+      );
+    });
+    return deleted;
+  }
+
+  deleteVersions(docId: string): void {
+    this.db.prepare('DELETE FROM doc_versions WHERE doc_id = ?').run(docId);
   }
 
   getPageIndex(id: string): PageIndexRow | null {

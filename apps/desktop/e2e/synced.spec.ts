@@ -84,8 +84,14 @@ test('synced blocks: edit in one place, see it everywhere; unsync; kept after re
   await window.keyboard.type(' max');
   await openPage(window, 'Arm spec');
   await expect(synced(window).getByTestId('page-editor')).toHaveText('Torque limit: 2 Nm max');
-  await synced(window).hover();
-  await expect(synced(window).getByTestId('synced-label')).toHaveText('Synced block');
+  // The original counts the places it's shown in (from the index).
+  await expect(async () => {
+    await page(window).click({ position: { x: 5, y: 5 } });
+    await synced(window).hover();
+    await expect(synced(window).getByTestId('synced-label')).toHaveText('Editing in 2 places', {
+      timeout: 500,
+    });
+  }).toPass();
 
   // Unsync the copy: it becomes ordinary blocks and stops following.
   await openPage(window, 'Base spec');

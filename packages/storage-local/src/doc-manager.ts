@@ -9,12 +9,14 @@ import {
   reminderTime,
   touchPage,
   syncedBlockIds,
+  readLinks,
 } from '@workspace/core';
 import {
   hasRow,
   isDatabaseDoc,
   readDatabase,
   readDateReminders,
+  relationIds,
   rowPropertiesText,
   touchRow,
 } from '@workspace/database';
@@ -30,7 +32,17 @@ export interface DocManagerOptions {
   indexDelayMs?: number;
   /** Called after a page's reminders were re-indexed (to reschedule notifications). */
   onRemindersChanged?: () => void;
+  /**
+   * Page history: a snapshot is taken before an edit when the last one is older than
+   * this (so every editing session starts from a saved version).
+   */
+  versionIntervalMs?: number;
+  /** The clock (tests). */
+  now?: () => number;
 }
+
+/** Links found in page content (relations are indexed from databases). */
+const CONTENT_LINK_KINDS = ['mention', 'link', 'pageLink', 'synced', 'linkedDatabase'] as const;
 
 /** Origin for changes the manager makes itself (e.g. bumping `updatedAt`). */
 export const MAIN_ORIGIN = Symbol('main');
@@ -56,6 +68,10 @@ export class DocManager {
   private readonly compactThreshold: number;
   private readonly indexDelayMs: number;
   private readonly onRemindersChanged: () => void;
+  private readonly versionIntervalMs: number;
+  private readonly now: () => number;
+  /** Time of each doc's newest version (cached from the store). */
+  private readonly lastVersion = new Map<string, number>();
 
   constructor(
     private readonly store: SqliteStore,
@@ -64,6 +80,9 @@ export class DocManager {
     this.compactThreshold = options.compactThreshold ?? 200;
     this.indexDelayMs = options.indexDelayMs ?? 750;
     this.onRemindersChanged = options.onRemindersChanged ?? (() => {});
+    this.versionIntervalMs = options.versionIntervalMs ?? 10 * 60_000;
+    this.now = options.now ?? Date.now;
+    this.store.pruneVersions(this.now());
     this.workspace = this.load(WORKSPACE_DOC_ID);
     this.docs.get(WORKSPACE_DOC_ID)!.refs = Infinity; // never unloaded
 
@@ -105,14 +124,59 @@ export class DocManager {
   applyUpdate(docId: string, update: Uint8Array, origin: unknown): void {
     const entry = this.docs.get(docId);
     if (entry) {
+      this.maybeSnapshot(docId, entry.doc);
       Y.applyUpdate(entry.doc, update, origin);
       return;
     }
     // An update for a doc nobody has open (e.g. a late update from a closing window).
     const doc = this.load(docId);
+    this.maybeSnapshot(docId, doc);
     Y.applyUpdate(doc, update, origin);
     this.docs.get(docId)!.refs = 0;
     this.release(docId);
+  }
+
+  // --- Page history ------------------------------------------------------------
+
+  /** Save a doc's current state as a version (if it has any content). */
+  snapshot(docId: string, reason: string): number | null {
+    if (docId === WORKSPACE_DOC_ID) return null;
+    const open = this.docs.get(docId);
+    const doc = open?.doc ?? this.load(docId);
+    try {
+      // An empty doc (a page nobody has typed in yet) has nothing to go back to.
+      if (Y.encodeStateVector(doc).length <= 1) return null;
+      const now = this.now();
+      this.lastVersion.set(docId, now);
+      return this.store.addVersion(docId, Y.encodeStateAsUpdate(doc), reason, now);
+    } finally {
+      if (!open) {
+        this.docs.get(docId)!.refs = 0;
+        this.release(docId);
+      }
+    }
+  }
+
+  versions(docId: string) {
+    return this.store.listVersions(docId);
+  }
+
+  versionState(id: number): Uint8Array | null {
+    return this.store.getVersionState(id)?.state ?? null;
+  }
+
+  /** Before an edit: snapshot when the last version is older than the interval. */
+  private maybeSnapshot(docId: string, doc: Y.Doc): void {
+    if (docId === WORKSPACE_DOC_ID) return;
+    let last = this.lastVersion.get(docId);
+    if (last === undefined) {
+      last = this.store.lastVersionTime(docId) ?? -Infinity;
+      this.lastVersion.set(docId, last);
+    }
+    if (this.now() - last < this.versionIntervalMs) return;
+    if (Y.encodeStateVector(doc).length <= 1) return;
+    this.lastVersion.set(docId, this.now());
+    this.store.addVersion(docId, Y.encodeStateAsUpdate(doc), 'edit', this.now());
   }
 
   /** Write any debounced index updates now. Call before quitting. */
@@ -223,6 +287,7 @@ export class DocManager {
       if (!hosts) this.syncedHosts.set(id, (hosts = new Set()));
       hosts.add(docId);
     }
+    this.store.replaceLinks(docId, CONTENT_LINK_KINDS, readLinks(doc));
     const text = [pageText(doc), ...synced.map((id) => this.docText(id))]
       .filter(Boolean)
       .join('\n');
@@ -254,6 +319,23 @@ export class DocManager {
       props: rowPropertiesText(row, db.properties, { users }),
     }));
     const { added, removed } = this.store.syncRowIndex(databaseId, rows);
+    // Relations count as links from a row to the pages it relates to.
+    const relations = db.properties.filter((p) => p.type === 'relation');
+    for (const row of db.rows) {
+      if (row.isTemplate) continue;
+      this.store.replaceLinks(
+        row.id,
+        ['relation'],
+        relations.flatMap((p) =>
+          relationIds(row.values[p.id]).map((target) => ({
+            target,
+            kind: 'relation',
+            blockId: null,
+            snippet: p.name,
+          })),
+        ),
+      );
+    }
     this.store.replacePropertyReminders(databaseId, readDateReminders(db));
     this.onRemindersChanged();
     // Content typed before the row reached the index.
@@ -299,5 +381,7 @@ export class DocManager {
     }
     this.store.deleteDoc(pageId);
     this.store.deleteReminders(pageId);
+    this.store.deleteVersions(pageId);
+    this.lastVersion.delete(pageId);
   }
 }

@@ -227,12 +227,17 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     [show],
   );
 
+  const blockNonce = useRef(0);
   const navigation = useMemo<Navigation>(
     () => ({
       navigate,
       openRow: (rowId, databaseId, mode) => {
         if (mode === 'fullPage') navigate(rowId);
         else setPeek({ rowId, databaseId, mode });
+      },
+      navigateToBlock: (pageId, blockId) => {
+        navigate(pageId);
+        if (blockId) setBlockTarget({ pageId, blockId, nonce: ++blockNonce.current });
       },
     }),
     [navigate],

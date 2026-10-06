@@ -49,4 +49,31 @@ export interface Platform {
   openFile(id: string): void;
   /** Title, description and image for a web bookmark. */
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /** Pages and rows that link to a page (mentions, links, link-to-page, relations). */
+  backlinks(pageId: string): Promise<Backlink[]>;
+  /** How many pages show a synced block. */
+  syncedPlaces(syncedId: string): Promise<number>;
+  /** Page history: saved versions of a doc, newest first. */
+  listVersions(docId: string): Promise<DocVersionInfo[]>;
+  /** The saved Yjs state of a version. */
+  getVersion(id: number): Promise<Uint8Array | null>;
+  /** Save the current state of a doc as a version (before a restore, a template…). */
+  snapshot(docId: string, reason: string): Promise<number | null>;
+}
+
+export interface Backlink {
+  id: string;
+  title: string;
+  icon: string | null;
+  databaseId: string | null;
+  /** The block the link is in. */
+  blockId: string | null;
+  kind: string;
+  snippet: string;
+}
+
+export interface DocVersionInfo {
+  id: number;
+  createdAt: number;
+  reason: string;
 }
