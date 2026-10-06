@@ -1,0 +1,19 @@
+# systemd unit for the Compose stack.
+#   sudo cp -r infra /opt/workspace && sudo cp infra/workspace.service /etc/systemd/system/
+#   sudo systemctl enable --now workspace
+[Unit]
+Description=Workspace sync server (Docker Compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/workspace
+ExecStart=/usr/bin/docker compose --env-file .env up -d --remove-orphans
+ExecStop=/usr/bin/docker compose --env-file .env down
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

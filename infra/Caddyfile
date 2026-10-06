@@ -1,0 +1,11 @@
+# Automatic HTTPS for $DOMAIN (Let's Encrypt; a local CA for `localhost`).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy server:3000
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

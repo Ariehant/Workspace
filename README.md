@@ -6,8 +6,8 @@ and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI featu
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
-except its last check, importing a real Notion export. Phase 4 (sync server) is planned in
-[docs/PHASE4.md](docs/PHASE4.md).
+except its last check, importing a real Notion export. Phase 4 (sync server, see
+[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server foundation (M1) is done.
 
 ## What works today
 
@@ -138,6 +138,20 @@ place, prefer the `.deb`.
 Back up the workspace by copying `workspace.db` and the `files/` folder while the app is closed. Set `WORKSPACE_DATA_DIR`
 to use a different directory, for example to keep separate workspaces.
 
+## Self-hosting the sync server (in progress)
+
+The server runs with Docker Compose on Ubuntu 24.04: Caddy (automatic HTTPS), the server and
+Postgres 16, with attachments on a volume (or in S3 with `docker-compose.s3.yml`).
+
+```sh
+cd infra
+cp .env.example .env   # set DOMAIN and the passwords
+docker compose up -d
+```
+
+`infra/workspace.service` runs it under systemd and `infra/backup.sh` backs it up. Syncing
+devices arrives in the next milestones of Phase 4.
+
 ## Architecture
 
 ```
@@ -149,6 +163,9 @@ packages/
   editor/           TipTap editor bound to a page's Yjs document
   ui/               Design tokens (Tailwind), themes, buttons, menus
   app/              Shared React screens: sidebar, page view, app shell
+  storage-remote/   Postgres store for the sync server (migrations, update log, files)
+apps/server/        Sync server (Fastify), bundled with esbuild; Dockerfile
+infra/              Docker Compose stack, Caddyfile, systemd unit, backup script
 ```
 
 - **All data is Yjs CRDT documents.** One _workspace doc_ holds every page's metadata (title, icon,

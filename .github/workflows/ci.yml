@@ -89,3 +89,29 @@ jobs:
             apps/desktop/dist/*.deb
             apps/desktop/dist/*.AppImage
           retention-days: 14
+
+  server:
+    name: Server image and Compose stack
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the server image
+        run: docker build -f apps/server/Dockerfile -t workspace-server:latest .
+      - name: Start the stack (attachments in S3 via SeaweedFS)
+        working-directory: infra
+        run: |
+          printf 'DOMAIN=localhost\nSIGNUP=open\nPOSTGRES_PASSWORD=ci-password\nS3_ACCESS_KEY_ID=workspace\nS3_SECRET_ACCESS_KEY=ci-secret-key\n' > .env
+          docker compose -f docker-compose.yml -f docker-compose.s3.yml up -d --no-build --wait
+      - name: Smoke-test through Caddy (HTTPS)
+        run: |
+          for i in $(seq 1 30); do curl -skf https://localhost/api/ready && break; sleep 2; done
+          curl -skf https://localhost/api/ready | grep '"ok":true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/health)" = 308
+      - name: Admin CLI
+        working-directory: infra
+        run: docker compose -f docker-compose.yml -f docker-compose.s3.yml exec -T server workspace-admin migrate
+      - name: Logs
+        if: failure()
+        working-directory: infra
+        run: docker compose -f docker-compose.yml -f docker-compose.s3.yml logs

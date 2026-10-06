@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+**/out
+**/.turbo
+**/test-results
+apps/desktop
+.git

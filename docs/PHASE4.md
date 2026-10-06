@@ -1,6 +1,6 @@
 # Phase 4: Sync server
 
-**Status:** planned.
+**Status:** M1 done. M2 next.
 
 ## Context
 
@@ -67,7 +67,7 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
 
 ## Milestones
 
-### M1: server foundation
+### M1: server foundation ✅
 
 - **`apps/server`:**
   - Node 22 + Fastify, with `ws` for the sync endpoint, `pino` logs and config from the environment (validated at start).
@@ -88,6 +88,40 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
 - **Tests:**
   - Integration tests run against a throwaway Postgres cluster (`initdb` in a temp dir), with no Docker needed.
   - CI builds the image and runs `docker compose up` with a smoke test.
+
+**M1 notes:**
+
+- **`packages/storage-remote` (`PgStore`):**
+  - Migrations are versioned SQL in `schema_migrations`, behind an advisory lock so several servers can start at once.
+  - The first migration creates every Phase 4 table. The workspace's log counter (`last_seq`) sits on the `workspaces` row.
+  - `appendUpdates` takes that row's lock while it hands out sequence numbers. Concurrent appends therefore get distinct, gapless numbers, and they become visible in that order, so a device reading "everything after N" never skips one.
+  - `compactDoc` merges a doc's updates under a new number, so a device that's behind still gets everything.
+  - `@workspace/storage-remote/testing` starts a throwaway cluster from the installed binaries (as `postgres` when running as root), or uses `WORKSPACE_TEST_PG_URL`. Each test file gets its own database.
+- **`apps/server`:**
+  - Fastify with `pino` logs. Authorization and cookie headers are redacted from the logs.
+  - `loadConfig` reports every problem in the environment at once.
+  - `/api/health` (liveness) and `/api/ready` (database and file storage) endpoints.
+  - Graceful shutdown on SIGTERM/SIGINT, with a 10-second limit.
+  - esbuild bundles the server, workspace packages included, into `dist/main.js`. The image needs no `node_modules` (338 MB on `node:22-bookworm-slim`).
+  - `workspace-admin` (in the image) runs `migrate` and `compact`.
+  - The `ws` sync endpoint comes in M3, with the protocol.
+- **Files:**
+  - The `FileStorage` interface: keys are `<workspace id>/<file id>`, checked against the content-hash format so nothing can escape its folder or bucket.
+  - `FsStorage` writes atomically through a temp file.
+  - `S3Storage` uses the AWS SDK and creates its bucket on the first readiness check.
+- **Docker** (differs from the plan):
+  - The default stack is Caddy, the server and Postgres 16, with attachments on a volume. It's the simplest install and needs no extra service.
+  - S3 is an overlay (`docker-compose.s3.yml`). It bundles SeaweedFS's S3 gateway (Apache-2.0, one node), or can point at any S3 (MinIO, AWS, Backblaze…).
+  - MinIO isn't bundled, because its community images are no longer published on Docker Hub.
+  - `backup.sh` dumps Postgres and copies the files volume. `workspace.service` runs the stack under systemd.
+- **Verified here:**
+  - The image builds.
+  - Both stacks start healthy with `docker compose up`.
+  - HTTPS through Caddy (its local CA for `localhost`) and the HTTP→HTTPS redirect both work.
+  - The admin CLI runs in the container, and the backup script runs.
+  - The S3 driver passes against the SeaweedFS container (`S3_TEST_ENDPOINT`).
+  - CI's new `server` job repeats the image build and stack smoke test.
+- **Tests:** the store (migrations, ordered and concurrent appends, workspace isolation, compaction, files), config validation, health and readiness (including the database down), and the file drivers, including path-escape attempts.
 
 ### M2: accounts and auth
 
