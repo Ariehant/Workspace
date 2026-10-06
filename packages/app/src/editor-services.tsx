@@ -6,11 +6,13 @@ import { useApp } from './context';
 import { InlineDatabase } from './database/database-view';
 import { createDatabase } from './database/registry';
 import { useNavigation } from './navigation';
+import { editButton } from './buttons/button-dialog';
+import { runButton } from './buttons/run-button';
 
 /** What the editor of page (or row) `pageId` needs from the app. */
 export function useEditorServices(pageId: PageId): EditorServices {
   const { workspace, platform, client, pages, databases, user } = useApp();
-  const { navigate } = useNavigation();
+  const { navigate, openRow } = useNavigation();
   return useMemo(
     () => ({
       pageId,
@@ -22,6 +24,19 @@ export function useEditorServices(pageId: PageId): EditorServices {
       createDatabase: () => createDatabase(client, workspace, { parentId: pages.hostOf(pageId) }),
       renderDatabase: (id) => <InlineDatabase databaseId={id} />,
       renderLinkedDatabase: (id, viewSet) => <InlineDatabase databaseId={id} viewSet={viewSet} />,
+      acquireDoc: (id) => {
+        const handle = client.acquire(id);
+        return { ready: handle.ready.then(() => handle.doc), release: () => handle.release() };
+      },
+      runButton: (config, hooks) =>
+        runButton(config, {
+          app: { databases, workspace, user, pages },
+          navigate,
+          openRow: (rowId, databaseId) => openRow(rowId, databaseId, 'sidePeek'),
+          insertBlocks: hooks.insertBlocks,
+        }),
+      editButton: (config, buttonId) =>
+        editButton({ config, mode: 'block', buttonId, hostPageId: pageId }),
       tableToDatabase: async (cells, header) => {
         const id = await createDatabase(client, workspace, { parentId: pages.hostOf(pageId) });
         const handle = await databases.load(id);
@@ -41,6 +56,6 @@ export function useEditorServices(pageId: PageId): EditorServices {
       openFile: (id) => platform.openFile(id),
       linkPreview: (url) => platform.linkPreview(url),
     }),
-    [workspace, platform, client, pages, databases, user.id, pageId, navigate],
+    [workspace, platform, client, pages, databases, user, pageId, navigate, openRow],
   );
 }

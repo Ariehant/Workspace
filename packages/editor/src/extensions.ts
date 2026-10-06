@@ -21,6 +21,8 @@ import { MediaBlocks } from './nodes/media';
 import { PasteAndDrop } from './nodes/paste-drop';
 import { Breadcrumb, PageLink, TableOfContents } from './nodes/page-blocks';
 import { DatabaseBlock, LinkedDatabaseBlock } from './nodes/database';
+import { SyncedBlock } from './nodes/synced-block';
+import { ButtonBlock } from './nodes/button';
 import { Quote } from './nodes/quote';
 import { Table } from './nodes/table';
 import { TodoItem, TodoList } from './nodes/todo';
@@ -49,6 +51,8 @@ export const BLOCK_NODE_TYPES = [
   'pageLink',
   'database',
   'linkedDatabase',
+  'syncedBlock',
+  'button',
   'breadcrumb',
   'tableOfContents',
   'image',
@@ -132,6 +136,8 @@ export function pageExtensions(doc: Y.Doc, bridge: UiBridgeHandle) {
     PageLink,
     DatabaseBlock,
     LinkedDatabaseBlock,
+    SyncedBlock,
+    ButtonBlock,
     Breadcrumb,
     TableOfContents,
     ...MediaBlocks,

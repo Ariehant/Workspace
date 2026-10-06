@@ -1,3 +1,5 @@
+import type { ButtonConfig } from '@workspace/core';
+import type * as Y from 'yjs';
 import { Extension } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react';
@@ -57,6 +59,15 @@ export interface EditorServices {
   tableToDatabase(cells: string[][], header: boolean): Promise<string>;
   /** A database's first view as simple-table cells; the database goes to the trash. */
   databaseToTable(databaseId: string): Promise<string[][]>;
+  /** Load another doc (synced block content, button templates) while it's shown. */
+  acquireDoc(id: string): { ready: Promise<Y.Doc>; release(): void };
+  /** Run a button's steps; `insertBlocks` puts its template blocks in the page. */
+  runButton(
+    config: ButtonConfig,
+    hooks: { insertBlocks(placement: 'above' | 'below'): Promise<void> },
+  ): Promise<void>;
+  /** Edit a button (label, color, steps); resolves null when cancelled. */
+  editButton(config: ButtonConfig, buttonId: string): Promise<ButtonConfig | null>;
   /** A linked view of a database: its own views (`viewSet`) over the source's rows. */
   renderLinkedDatabase(databaseId: string, viewSet: string): ReactNode;
   /** Called whenever any page metadata changes. */

@@ -1,4 +1,4 @@
-import { newId, parseDate, toIsoDate } from '@workspace/core';
+import { ME, TODAY, newId, parseDate, toIsoDate } from '@workspace/core';
 import { formatDateString, formatNumber, formatTimestamp } from './format';
 import {
   OPTION_COLORS,
@@ -218,11 +218,13 @@ const KINDS: PropertyKind[] = [
     label: 'Date',
     computed: false,
     defaultConfig: () => ({}),
-    isEmpty: (v) => !isDateValue(v),
+    // Templates and buttons can hold `@today`, filled in when they are used.
+    isEmpty: (v) => !isDateValue(v) && (v as DateValue | null)?.start !== TODAY,
     text: (v, p, ctx) => {
       const d = v as DateValue;
       const now = new Date(ctx.now ?? Date.now());
-      const one = (s: string) => formatDateString(s, p.config, now);
+      const one = (s: string) =>
+        s === TODAY ? 'Today (when used)' : formatDateString(s, p.config, now);
       return d.end ? `${one(d.start)} → ${one(d.end)}` : one(d.start);
     },
     compare: (a, b) => compareText((a as DateValue).start, (b as DateValue).start),
@@ -274,7 +276,7 @@ const KINDS: PropertyKind[] = [
     isEmpty: emptyList,
     text: (v, _p, ctx) =>
       (v as string[])
-        .map((id) => ctx.users.get(id) ?? '')
+        .map((id) => (id === ME ? 'Me (when used)' : (ctx.users.get(id) ?? '')))
         .filter(Boolean)
         .join(', '),
     compare: (a, b, _p, ctx) =>
@@ -402,6 +404,18 @@ KINDS.push(
     parse: () => ({ value: null }),
   },
 );
+
+KINDS.push({
+  type: 'button',
+  label: 'Button',
+  // Nothing is stored: the cell is a button that runs `config.button`.
+  computed: true,
+  defaultConfig: () => ({ button: { label: '', color: 'default', steps: [] } }),
+  isEmpty: () => true,
+  text: () => '',
+  compare: () => 0,
+  parse: () => ({ value: null }),
+});
 
 const BY_TYPE = new Map(KINDS.map((k) => [k.type, k]));
 

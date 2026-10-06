@@ -98,7 +98,7 @@ test('block handle: duplicate, turn into, delete and add below', async ({ launch
 
   await hoverBlock(window, 'Alpha');
   await window.getByRole('button', { name: 'Drag to move, click to open menu' }).click();
-  await window.getByRole('menuitem', { name: 'Turn into' }).click();
+  await window.getByRole('menuitem', { name: /^Turn into ›/ }).click();
   await window.getByRole('menuitem', { name: 'Heading 1', exact: true }).click();
   await expect(editor(window).locator('h1')).toHaveText('Alpha');
 

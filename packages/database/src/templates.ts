@@ -6,11 +6,13 @@ import {
   duplicateRow,
   getRowMap,
   readMeta,
+  readProperties,
   readRow,
   rowsMap,
   setMeta,
   setRowPageFields,
 } from './doc';
+import { resolvePlaceholders } from './placeholders';
 import { RowField, type DatabaseSnapshot, type Row, type View } from './schema';
 
 /** A row a view shows: not trashed and not a template. */
@@ -66,6 +68,8 @@ export interface NewRowOptions {
   values?: Record<string, unknown>;
   afterId?: string;
   beforeId?: string;
+  /** Fills `@today` and `@me` in the template's values (see `resolvePlaceholders`). */
+  context?: { me: string | null; now?: number };
 }
 
 /** Add a row, starting from a template's title, icon, cover and values when given. */
@@ -81,7 +85,11 @@ export function addRowFromTemplate(
     id = addRow(doc, {
       actor: options.actor,
       title: template?.title,
-      values: { ...(template ? structuredClone(template.values) : {}), ...options.values },
+      values: resolvePlaceholders(
+        { ...(template ? structuredClone(template.values) : {}), ...options.values },
+        readProperties(doc),
+        options.context ?? { me: options.actor },
+      ),
       afterId: options.afterId,
       beforeId: options.beforeId,
     });
@@ -110,7 +118,8 @@ export function applyTemplate(
     const values = map.get(RowField.values);
     const target = (values instanceof Y.Map ? values : new Y.Map()) as Y.Map<unknown>;
     if (!(values instanceof Y.Map)) map.set(RowField.values, target);
-    for (const [key, value] of Object.entries(template.values)) {
+    const filled = resolvePlaceholders(template.values, readProperties(doc), { me: actor });
+    for (const [key, value] of Object.entries(filled)) {
       if (!target.has(key)) target.set(key, structuredClone(value));
     }
     const fields: Parameters<typeof setRowPageFields>[2] = {};

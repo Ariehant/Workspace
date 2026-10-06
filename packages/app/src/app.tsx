@@ -35,6 +35,7 @@ import { useDoc, useDocVersion } from './hooks';
 import { PageView } from './page-view';
 import type { AppCommand, Platform } from './platform';
 import { QuickFind } from './quick-find';
+import { ButtonEditorHost } from './buttons/button-dialog';
 import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
 import { MoveDialog } from './move-dialog';
 import { duplicatePage } from './page-actions';
@@ -451,6 +452,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onClose={() => setMoving(null)}
           />
         )}
+        <ButtonEditorHost />
         {finding && (
           <QuickFind
             workspace={workspace}

@@ -30,12 +30,15 @@ import {
   Table2,
   Database,
   Type,
+  RefreshCw,
+  MousePointerClick,
   type LucideIcon,
 } from 'lucide-react';
 import { insertBlockEquation, insertInlineEquation } from '../nodes/math';
 import type { ToggleLevel } from '../nodes/toggle';
 import { replaceCurrentBlock } from './commands';
 import { newId } from '@workspace/core';
+import { createSyncedDoc } from '../nodes/synced-block';
 
 export type BlockGroup = 'basic' | 'database' | 'media' | 'advanced' | 'layout' | 'inline';
 
@@ -398,6 +401,47 @@ export const BLOCKS: readonly BlockDefinition[] = [
   ),
 
   // --- Advanced blocks ---
+  {
+    id: 'syncedBlock',
+    title: 'Synced block',
+    description: 'Content that stays the same everywhere you paste it.',
+    keywords: ['sync', 'synced', 'mirror', 'reuse', 'transclusion'],
+    icon: RefreshCw,
+    group: 'advanced',
+    prepare: async (editor) => {
+      const services = editor.storage.uiBridge.ref.current.services;
+      return services ? { syncedId: await createSyncedDoc(editor, services) } : null;
+    },
+    apply: (chain, attrs) => chain.command(replaceCurrentBlock({ type: 'syncedBlock', attrs })),
+    ...insertOnly,
+  },
+  {
+    id: 'button',
+    title: 'Button',
+    description: 'Insert blocks, add or edit database pages with a click.',
+    keywords: ['button', 'template button', 'action', 'automation'],
+    icon: MousePointerClick,
+    group: 'advanced',
+    prepare: async () => ({ buttonId: newId(), label: 'New button', color: 'default', steps: [] }),
+    apply: (chain, attrs) => chain.command(replaceCurrentBlock({ type: 'button', attrs })),
+    // Set it up right away, as in Notion.
+    after: (editor, attrs) => {
+      const services = editor.storage.uiBridge.ref.current.services;
+      void services
+        ?.editButton({ label: 'New button', color: 'default', steps: [] }, attrs.buttonId as string)
+        .then((config) => {
+          if (!config) return;
+          editor.state.doc.descendants((node, pos) => {
+            if (node.type.name === 'button' && node.attrs.buttonId === attrs.buttonId) {
+              editor.view.dispatch(
+                editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...config }),
+              );
+            }
+          });
+        });
+    },
+    ...insertOnly,
+  },
   {
     id: 'tableOfContents',
     title: 'Table of contents',

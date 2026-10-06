@@ -19,3 +19,5 @@ export * from './timeline';
 export * from './chart';
 export * from './templates';
 export * from './conversions';
+export * from './placeholders';
+export * from './buttons';

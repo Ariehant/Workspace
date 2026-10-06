@@ -9,6 +9,7 @@ import {
   changePropertyType,
   duplicateProperty,
   relationIds,
+  readProperties,
   setRelation,
   moveRow,
   moveViewColumn,
@@ -78,6 +79,7 @@ import {
   Repeat2,
   Search,
   Sigma,
+  MousePointerClick,
   CornerDownRight,
   ArrowUpRight,
   Trash2,
@@ -100,6 +102,7 @@ import {
   writeCell,
 } from './actions';
 import { FormulaEditor } from './formula-editor';
+import { editButton } from '../buttons/button-dialog';
 import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup';
 import {
   CellDisplay,
@@ -812,7 +815,10 @@ export function TableView({
                 // A new formula opens straight in the formula editor, as in Notion.
                 if (type === 'formula') setFormulaFor(id);
                 else if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
-                else setHeaderMenu(id);
+                else if (type === 'button') {
+                  const added = readProperties(doc).find((p) => p.id === id);
+                  if (added) void editPropertyButton(handle, added);
+                } else setHeaderMenu(id);
               }}
             />
           )}
@@ -1433,6 +1439,14 @@ function HeaderCell(props: HeaderCellProps) {
               Edit relation
             </MenuItem>
           )}
+          {property.type === 'button' && schema && (
+            <MenuItem
+              icon={<MousePointerClick size={14} />}
+              onSelect={() => void editPropertyButton(handle, property)}
+            >
+              Edit button
+            </MenuItem>
+          )}
           {property.type === 'rollup' && schema && (
             <MenuItem
               icon={<Search size={14} />}
@@ -1636,4 +1650,17 @@ function PrefixInput({ value, onChange }: { value: string; onChange(prefix: stri
       />
     </div>
   );
+}
+
+/** Edit a button property's steps (saved in its config). */
+async function editPropertyButton(handle: DatabaseHandle, property: Property): Promise<void> {
+  const stored = readProperties(handle.doc).find((p) => p.id === property.id);
+  if (!stored) return;
+  const config = await editButton({
+    config: stored.config.button ?? { label: '', color: 'default', steps: [] },
+    mode: 'property',
+    databaseId: handle.id,
+    hostPageId: handle.id,
+  });
+  if (config) setPropertyConfig(handle.doc, property.id, { ...stored.config, button: config });
 }

@@ -921,3 +921,74 @@
 .ws-option[data-status][data-color='red']::before {
   background-color: var(--ws-red);
 }
+
+/* --- Synced blocks and buttons ------------------------------------------------------- */
+
+.ws-synced-block {
+  position: relative;
+  margin: 2px -8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1.5px transparent;
+  transition: box-shadow 120ms;
+}
+.ws-synced-block:hover,
+.ws-synced-block:focus-within {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ws-red) 55%, transparent);
+}
+.ws-synced-label {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--ws-bg);
+  color: var(--ws-red);
+  font-size: 11px;
+  line-height: 18px;
+}
+.ws-synced-block:hover > .ws-synced-label,
+.ws-synced-block:focus-within > .ws-synced-label {
+  display: flex;
+}
+.ws-synced-label button:hover {
+  text-decoration: underline;
+}
+/* A nested page editor has no page padding of its own. */
+.ws-synced-block .ws-prose {
+  padding: 0;
+  min-height: 1.5em;
+}
+
+.ws-button:not([data-color='default']) {
+  border-color: transparent;
+  background-color: color-mix(in srgb, var(--ws-gray) 20%, var(--ws-gray-bg));
+}
+.ws-button[data-color='brown'] {
+  background-color: color-mix(in srgb, var(--ws-brown) 20%, var(--ws-brown-bg));
+}
+.ws-button[data-color='orange'] {
+  background-color: color-mix(in srgb, var(--ws-orange) 20%, var(--ws-orange-bg));
+}
+.ws-button[data-color='yellow'] {
+  background-color: color-mix(in srgb, var(--ws-yellow) 20%, var(--ws-yellow-bg));
+}
+.ws-button[data-color='green'] {
+  background-color: color-mix(in srgb, var(--ws-green) 20%, var(--ws-green-bg));
+}
+.ws-button[data-color='blue'] {
+  background-color: color-mix(in srgb, var(--ws-blue) 20%, var(--ws-blue-bg));
+}
+.ws-button[data-color='purple'] {
+  background-color: color-mix(in srgb, var(--ws-purple) 20%, var(--ws-purple-bg));
+}
+.ws-button[data-color='pink'] {
+  background-color: color-mix(in srgb, var(--ws-pink) 20%, var(--ws-pink-bg));
+}
+.ws-button[data-color='red'] {
+  background-color: color-mix(in srgb, var(--ws-red) 20%, var(--ws-red-bg));
+}

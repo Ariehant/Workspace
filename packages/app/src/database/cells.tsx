@@ -1,4 +1,4 @@
-import { newId } from '@workspace/core';
+import { ME, TODAY, newId } from '@workspace/core';
 import {
   OPTION_COLORS,
   STATUS_GROUPS,
@@ -55,6 +55,7 @@ import {
   Users,
   X,
   Search,
+  MousePointerClick,
   Plus,
   ArrowUpRight as RelationIcon,
   type LucideIcon,
@@ -64,6 +65,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../context';
 import { useNavigation } from '../navigation';
 import { useDatabase } from './hooks';
+import { runButton } from '../buttons/run-button';
 
 // --- Icons and pills -------------------------------------------------------------------
 
@@ -89,6 +91,7 @@ const ICONS: Record<PropertyType, LucideIcon> = {
   formula: Sigma,
   relation: RelationIcon,
   rollup: Search,
+  button: MousePointerClick,
 };
 
 export function PropertyIcon({ type, size = 14 }: { type: PropertyType; size?: number }) {
@@ -174,6 +177,8 @@ export function CellDisplay({
   const kind = propertyKind(property.type);
   const lines = wrap ? 'whitespace-pre-wrap break-words' : 'truncate';
 
+  if (property.type === 'button') return <ButtonCell row={row} property={property} />;
+
   if (property.type === 'formula' || property.type === 'rollup') {
     // A computed value, shown as its result type (and not editable).
     const type = effectiveType(property);
@@ -250,8 +255,10 @@ export function CellDisplay({
         <span className={cn('flex min-w-0 gap-2', wrap ? 'flex-wrap' : 'overflow-hidden')}>
           {(value as string[]).map((id) => (
             <span key={id} className="flex min-w-0 items-center gap-1.5">
-              <Avatar name={ctx.users.get(id) ?? '?'} />
-              <span className="truncate">{ctx.users.get(id) ?? 'Unknown'}</span>
+              <Avatar name={id === ME ? 'Me' : (ctx.users.get(id) ?? '?')} />
+              <span className="truncate">
+                {id === ME ? 'Me (when used)' : (ctx.users.get(id) ?? 'Unknown')}
+              </span>
             </span>
           ))}
         </span>
@@ -775,8 +782,19 @@ function DateEditor({ handle, row, property }: CellEditorProps) {
     />
   );
 
+  const relative = (stored as DateValue | null)?.start === TODAY;
   return (
     <div className="flex flex-col gap-1 p-2" data-testid="date-editor">
+      {row.isTemplate && (
+        <button
+          type="button"
+          aria-pressed={relative}
+          onClick={() => write(relative ? null : { start: TODAY })}
+          className="flex h-8 items-center justify-between rounded px-2 text-left hover:bg-hover"
+        >
+          Today (when used){relative && <Check size={14} className="text-muted" />}
+        </button>
+      )}
       {input('start')}
       {value?.end !== undefined && value.end !== null && input('end')}
       <div className="mt-1 border-t border-line pt-1">
@@ -828,9 +846,11 @@ function PersonEditor({ handle, row, property, ctx }: CellEditorProps) {
   const { user } = useApp();
   const [query, setQuery] = useState('');
   const selected = (cellValue(row, property) as string[] | null) ?? [];
-  const people = [...ctx.users].filter(([, name]) =>
-    name.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const people = [
+    // Templates can pick whoever uses them.
+    ...(row.isTemplate ? ([[ME, 'Me (when used)']] as [string, string][]) : []),
+    ...[...ctx.users].filter(([, name]) => name.toLowerCase().includes(query.trim().toLowerCase())),
+  ];
   const toggle = (id: string) => {
     const next = selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id];
     setCell(handle.doc, row.id, property.id, next.length ? next : null, user.id);
@@ -1104,5 +1124,38 @@ function RelationEditor({ handle, row, property }: CellEditorProps) {
         )}
       </div>
     </div>
+  );
+}
+
+// --- Buttons ---------------------------------------------------------------------------
+
+/** A database button property: runs its steps for this row. */
+function ButtonCell({ row, property }: { row: Row; property: Property }) {
+  const app = useApp();
+  const { navigate, openRow } = useNavigation();
+  const [running, setRunning] = useState(false);
+  const config = property.config.button ?? { label: '', color: 'default', steps: [] };
+  const databaseId = app.databases.databaseOf(row.id)?.id;
+  return (
+    <button
+      type="button"
+      disabled={running || !databaseId}
+      data-color={config.color}
+      data-testid="button-cell"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!databaseId) return;
+        setRunning(true);
+        void runButton(config, {
+          app,
+          navigate,
+          openRow: (rowId, db) => openRow(rowId, db, 'sidePeek'),
+          row: { databaseId, rowId: row.id },
+        }).finally(() => setRunning(false));
+      }}
+      className="ws-button inline-flex h-6 max-w-full items-center truncate rounded border border-line px-2 text-xs font-medium hover:bg-hover disabled:opacity-60"
+    >
+      {config.label || property.name}
+    </button>
   );
 }

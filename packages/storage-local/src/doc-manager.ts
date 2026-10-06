@@ -8,6 +8,7 @@ import {
   readReminders,
   reminderTime,
   touchPage,
+  syncedBlockIds,
 } from '@workspace/core';
 import {
   hasRow,
@@ -176,7 +177,14 @@ export class DocManager {
     }
     const isPage = getPagesMap(this.workspace).has(docId);
     const databaseId = isPage ? null : this.store.locatePage(docId)?.databaseId;
-    if (!isPage && !databaseId) return;
+    if (!isPage && !databaseId) {
+      // A synced block's doc: re-index the pages that show it.
+      for (const host of this.syncedHosts.get(docId) ?? []) {
+        const hostDoc = this.docs.get(host)?.doc;
+        if (hostDoc) this.indexContent(host, hostDoc);
+      }
+      return;
+    }
     this.indexContent(docId, entry.doc);
     if (databaseId) {
       // A row's page: "last edited" lives in its database doc (if it's open).
@@ -188,9 +196,37 @@ export class DocManager {
     this.indexWorkspace();
   }
 
+  /** Pages that show each synced block (filled as pages are indexed). */
+  private readonly syncedHosts = new Map<string, Set<string>>();
+
+  /** Text of a doc that may not be open: from memory, or from its stored updates. */
+  private docText(docId: string): string {
+    const open = this.docs.get(docId)?.doc;
+    if (open) return pageText(open);
+    const updates = this.store.getUpdates(docId);
+    if (updates.length === 0) return '';
+    const doc = new Y.Doc();
+    try {
+      Y.applyUpdate(doc, Y.mergeUpdates(updates));
+      return pageText(doc);
+    } finally {
+      doc.destroy();
+    }
+  }
+
   /** Search text and reminders of a page's (or row's) content. */
   private indexContent(docId: string, doc: Y.Doc): void {
-    this.store.setPageBody(docId, pageText(doc));
+    // Synced blocks' content is searchable on every page that shows it.
+    const synced = syncedBlockIds(doc);
+    for (const id of synced) {
+      let hosts = this.syncedHosts.get(id);
+      if (!hosts) this.syncedHosts.set(id, (hosts = new Set()));
+      hosts.add(docId);
+    }
+    const text = [pageText(doc), ...synced.map((id) => this.docText(id))]
+      .filter(Boolean)
+      .join('\n');
+    this.store.setPageBody(docId, text);
     this.store.replaceReminders(
       docId,
       readReminders(doc).flatMap(({ blockId, date, text }, index) => {

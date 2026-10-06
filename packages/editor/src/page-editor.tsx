@@ -24,6 +24,8 @@ export interface PageEditorProps {
   editable?: boolean;
   /** Called with the editor once it is ready, and with `null` on teardown. */
   onEditor?: (editor: Editor | null) => void;
+  /** Inside another editor (a synced block): the outer page's block handle is used. */
+  nested?: boolean;
 }
 
 interface PickRequest {
@@ -37,7 +39,7 @@ interface PickRequest {
  * becomes a Yjs update, so persistence and (later) live collaboration need no extra
  * wiring. Undo history comes from Yjs, so it only undoes this user's own edits.
  */
-export function PageEditor({ doc, services, editable = true, onEditor }: PageEditorProps) {
+export function PageEditor({ doc, services, editable = true, onEditor, nested }: PageEditorProps) {
   const [bridge] = useState(() => new UiBridgeHandle());
   const [pick, setPick] = useState<PickRequest | null>(null);
   const [math, setMath] = useState<MathTarget | null>(null);
@@ -71,6 +73,8 @@ export function PageEditor({ doc, services, editable = true, onEditor }: PageEdi
 
   // Ctrl+F also works when focus is outside the editor (e.g. in the page title).
   useEffect(() => {
+    // The outer page's find bar covers nested editors.
+    if (nested) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         (event.ctrlKey || event.metaKey) &&
@@ -84,7 +88,7 @@ export function PageEditor({ doc, services, editable = true, onEditor }: PageEdi
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [nested]);
 
   useEffect(() => {
     if (editor && editor.isEditable !== editable) editor.setEditable(editable);
@@ -98,7 +102,7 @@ export function PageEditor({ doc, services, editable = true, onEditor }: PageEdi
   return (
     <EditorServicesContext.Provider value={services}>
       <EditorContent editor={editor} />
-      {editor && <BlockHandle editor={editor} pageId={doc.guid} />}
+      {editor && !nested && <BlockHandle editor={editor} pageId={doc.guid} />}
       {editor && <SelectionToolbar editor={editor} />}
       {editor && <TableMenu editor={editor} />}
       {editor && math && <MathEditor editor={editor} target={math} onClose={() => setMath(null)} />}

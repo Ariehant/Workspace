@@ -1,3 +1,4 @@
+import type { ButtonConfig } from '@workspace/core';
 import type { PageCover, PageFont } from '@workspace/core';
 
 /**
@@ -51,7 +52,8 @@ export type PropertyType =
   | 'uniqueId'
   | 'formula'
   | 'relation'
-  | 'rollup';
+  | 'rollup'
+  | 'button';
 
 /** Notion's option palette (also used for text colors). */
 export const OPTION_COLORS = [
@@ -121,6 +123,8 @@ export interface PropertyConfig {
   syncedPropertyId?: string | null;
   /** relation: at most one linked page. */
   limitOne?: boolean;
+  /** button: what clicking it does (per row). */
+  button?: ButtonConfig;
   /** rollup: the relation it goes through and the property it reads there. */
   relationId?: string;
   targetPropertyId?: string;

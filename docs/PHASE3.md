@@ -1,6 +1,6 @@
 # Phase 3: Power features
 
-**Status:** planned. M1 next.
+**Status:** M1 done. M2 next.
 
 ## Context
 
@@ -36,7 +36,7 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
 
 ## Milestones
 
-### M1: synced blocks and buttons
+### M1: synced blocks and buttons ✅
 
 - **Synced blocks:**
   - "Copy and sync" in the block menu, or `/synced block`, makes a synced block. Pasting one elsewhere (or "Paste and sync") shows the same content in the other place, and an edit in either place edits both.
@@ -49,6 +49,30 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - **Button property** on databases: the same steps, run per row, plus "edit this row".
   - Steps run as one Yjs transaction per doc, so a single undo reverts them.
   - "@today" and "@me" placeholders work in step values, and in database templates too (which closes the M7 gap).
+
+**M1 notes:**
+
+- **Synced blocks** (`packages/editor/src/nodes/synced-block.tsx`):
+  - The content lives in its own Yjs doc (guid = the synced block id) under the same content field as pages. Each `syncedBlock` node renders a nested `PageEditor` bound to that doc. Edits appear everywhere the block is shown, in every window, through `DocManager` like any other doc.
+  - The doc records the page it was made in (`syncedSource`). The original's label reads "Synced block"; copies read "Synced from <page>" and link back.
+  - Ways to make one: `/synced block`, or "Turn into synced block" in the block menu, which moves the block's content into a new synced doc.
+  - "Copy and sync" puts the block on the clipboard as HTML, and pasting it anywhere makes another copy. A normal copy of a synced block pastes as a synced copy too, as in Notion.
+  - "Unsync" replaces a copy with ordinary blocks (fresh block ids).
+  - A synced block can't show itself inside itself.
+  - Nested editors don't render their own block handle or find bar; the page's are used.
+  - **Search:** a page's indexed text includes the content of the synced blocks it shows, and editing a synced block re-indexes the pages showing it (`DocManager.syncedHosts`).
+- **Buttons:**
+  - Step types (`ButtonStep` in core): insert blocks, add a page to a database, edit pages in a database (optionally only those matching a filter rule), edit this page (button property only), open a page, and show a confirmation (declining stops the rest).
+  - **Button block** (`nodes/button.tsx`): its template blocks live in a doc with the button's id, edited in the button editor with a nested editor. Inserted copies get fresh block ids. `/button` opens the editor right away.
+  - **Button property:** a computed property type whose cell is a button. It runs per row, and "Edit this page" sets values on that row. Its steps are edited from "Edit button" in the column menu, or right after adding it.
+  - **Running steps:** database steps run in `runDatabaseStep` (database package), so relations stay two-way. The app loads the databases involved first (`runButton`).
+  - **Value editor:** values are typed per property. `@today` and `@me` are accepted; options are matched by name, and new ones are created.
+- **Placeholders:** `resolvePlaceholders` fills `@today` (a date's start or end) and `@me` (in a person list) when a button runs or a template is used (`addRowFromTemplate`, `applyTemplate`). While editing a template, the date editor offers "Today (when used)" and the person editor "Me (when used)". This closes the Phase 2 M7 gap.
+- **Not done:**
+  - The original synced block doesn't yet say "Editing in N places". It needs the links index from M2.
+  - Deleting the original doesn't ask first; copies keep working because the content has its own doc.
+  - Each button step runs in its own transaction per doc, so undoing a multi-step button takes more than one undo.
+  - Export of synced content comes with M5.
 
 ### M2: backlinks and page history
 

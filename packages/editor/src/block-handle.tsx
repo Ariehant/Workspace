@@ -19,6 +19,8 @@ import {
   Palette,
   Plus,
   Repeat2,
+  RefreshCw,
+  Unlink,
   Table2,
   Trash2,
 } from 'lucide-react';
@@ -35,6 +37,7 @@ import { COLOR_CHOICES, ColorSwatch } from './color-menu';
 import type { ColorValue } from './nodes/colors';
 import { replaceBlock, tableCells, tableNode } from './nodes/table-convert';
 import { useEditorServices } from './services';
+import { createSyncedDoc, docContent, syncedBlockHtml } from './nodes/synced-block';
 
 /**
  * Must keep its identity across renders: DragHandle re-registers its plugin when this
@@ -145,6 +148,64 @@ export function BlockHandle({ editor, pageId }: BlockHandleProps) {
                 ))}
               </MenuSubContent>
             </MenuSub>
+            {menuFor === 'syncedBlock' ? (
+              <>
+                <MenuItem
+                  icon={<Copy size={14} />}
+                  onSelect={() =>
+                    act((t) => {
+                      const id = t.node.attrs.syncedId as string;
+                      const html = syncedBlockHtml(id);
+                      void navigator.clipboard.write([
+                        new ClipboardItem({
+                          'text/html': new Blob([html], { type: 'text/html' }),
+                          'text/plain': new Blob([''], { type: 'text/plain' }),
+                        }),
+                      ]);
+                    })
+                  }
+                >
+                  Copy and sync
+                </MenuItem>
+                <MenuItem
+                  icon={<Unlink size={14} />}
+                  onSelect={() =>
+                    act((t) => {
+                      const id = t.node.attrs.syncedId as string;
+                      void docContent(editor, services, id).then((nodes) => {
+                        const node = editor.state.doc.nodeAt(t.pos);
+                        if (node?.type.name !== 'syncedBlock') return;
+                        editor.view.dispatch(
+                          editor.state.tr.replaceWith(t.pos, t.pos + node.nodeSize, nodes),
+                        );
+                      });
+                    })
+                  }
+                >
+                  Unsync
+                </MenuItem>
+              </>
+            ) : (
+              <MenuItem
+                icon={<RefreshCw size={14} />}
+                onSelect={() =>
+                  act((t) => {
+                    void createSyncedDoc(editor, services, [t.node]).then((syncedId) => {
+                      const node = editor.state.doc.nodeAt(t.pos);
+                      if (!node || node.type !== t.node.type) return;
+                      replaceBlock(
+                        editor,
+                        t.pos,
+                        node,
+                        editor.schema.nodes.syncedBlock!.create({ syncedId }),
+                      );
+                    });
+                  })
+                }
+              >
+                Turn into synced block
+              </MenuItem>
+            )}
             {menuFor === 'table' && (
               <MenuItem
                 icon={<Database size={14} />}

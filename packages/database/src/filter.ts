@@ -146,6 +146,7 @@ const OPERATORS: Record<PropertyType, OperatorInfo[]> = {
   // Formulas use the operators of their result type (see `effectiveType`).
   formula: TEXT_OPS,
   rollup: TEXT_OPS,
+  button: [],
   relation: [
     { id: 'contains', label: 'Contains', value: 'text' },
     { id: 'doesNotContain', label: 'Does not contain', value: 'text' },
