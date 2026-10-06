@@ -3,7 +3,16 @@ import type { FileRef, LinkPreview } from '@workspace/editor';
 import type { ThemePreference } from '@workspace/ui';
 
 /** Commands the host (e.g. the Electron menu) can send to the UI. */
-export type AppCommand = 'new-page' | 'toggle-sidebar' | 'quick-find' | 'go-back' | 'go-forward';
+export type AppCommand =
+  | 'new-page'
+  | 'toggle-sidebar'
+  | 'quick-find'
+  | 'go-back'
+  | 'go-forward'
+  | 'new-tab'
+  | 'close-tab'
+  | 'next-tab'
+  | 'prev-tab';
 
 export interface SearchHit {
   id: string;

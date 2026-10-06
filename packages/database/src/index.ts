@@ -21,3 +21,4 @@ export * from './templates';
 export * from './conversions';
 export * from './placeholders';
 export * from './buttons';
+export * from './bundle';

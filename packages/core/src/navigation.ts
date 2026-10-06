@@ -1,4 +1,5 @@
 import type { PageId, PageMeta } from './schema';
+import { newId } from './ids';
 import { compareSiblings, deletePagePermanently, getAncestorIds, listPages } from './workspace';
 import type * as Y from 'yjs';
 
@@ -87,4 +88,97 @@ export function emptyTrashBefore(doc: Y.Doc, cutoff: number): PageId[] {
     }
   }
   return deleted;
+}
+
+// --- Tabs -----------------------------------------------------------------------------
+
+/** One tab of a window: its own back/forward history. */
+export interface Tab {
+  id: string;
+  history: NavHistory;
+}
+
+export interface TabsState {
+  tabs: readonly Tab[];
+  /** Index of the active tab. */
+  active: number;
+}
+
+const MAX_TABS = 30;
+
+export function newTab(pageId: PageId | null): Tab {
+  return { id: newId(), history: pageId ? pushHistory(EMPTY_HISTORY, pageId) : EMPTY_HISTORY };
+}
+
+export function tabsWith(pageId: PageId | null): TabsState {
+  return { tabs: [newTab(pageId)], active: 0 };
+}
+
+/** The active tab's history, changed by `update`. */
+export function updateActiveTab(
+  state: TabsState,
+  update: (history: NavHistory) => NavHistory,
+): TabsState {
+  const tab = state.tabs[state.active]!;
+  const history = update(tab.history);
+  if (history === tab.history) return state;
+  const tabs = state.tabs.slice();
+  tabs[state.active] = { ...tab, history };
+  return { ...state, tabs };
+}
+
+/** Open a tab right after the active one; it becomes active unless `background`. */
+export function openTab(
+  state: TabsState,
+  pageId: PageId | null,
+  options: { background?: boolean } = {},
+): TabsState {
+  if (state.tabs.length >= MAX_TABS) return state;
+  const at = state.active + 1;
+  const tabs = [...state.tabs.slice(0, at), newTab(pageId), ...state.tabs.slice(at)];
+  return { tabs, active: options.background ? state.active : at };
+}
+
+/** Close a tab; the one to its right (else left) becomes active. The last tab stays. */
+export function closeTab(state: TabsState, index: number): TabsState {
+  if (state.tabs.length <= 1 || index < 0 || index >= state.tabs.length) return state;
+  const tabs = state.tabs.filter((_, i) => i !== index);
+  let active = state.active;
+  if (index < active) active--;
+  else if (index === active) active = Math.min(index, tabs.length - 1);
+  return { tabs, active };
+}
+
+/** Move a tab to another position, keeping the same tab active. */
+export function moveTab(state: TabsState, from: number, to: number): TabsState {
+  if (from === to || from < 0 || from >= state.tabs.length) return state;
+  const activeId = state.tabs[state.active]!.id;
+  const tabs = state.tabs.slice();
+  const [tab] = tabs.splice(from, 1);
+  tabs.splice(Math.max(0, Math.min(to, tabs.length)), 0, tab!);
+  return { tabs, active: tabs.findIndex((t) => t.id === activeId) };
+}
+
+/** Switch to the next (1) or previous (-1) tab, wrapping around. */
+export function cycleTab(state: TabsState, direction: 1 | -1): TabsState {
+  const n = state.tabs.length;
+  return { ...state, active: (state.active + direction + n) % n };
+}
+
+/** Tabs read back from settings (dropping anything malformed). */
+export function parseTabs(value: unknown): TabsState | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as { tabs?: unknown; active?: unknown };
+  if (!Array.isArray(raw.tabs)) return null;
+  const tabs = raw.tabs.flatMap((t): Tab[] => {
+    const h = (t as { history?: NavHistory } | null)?.history;
+    if (!h || !Array.isArray(h.entries) || typeof h.index !== 'number') return [];
+    const entries = h.entries.filter((e): e is string => typeof e === 'string');
+    const index = Math.max(entries.length ? 0 : -1, Math.min(h.index, entries.length - 1));
+    return [{ id: newId(), history: { entries, index } }];
+  });
+  if (tabs.length === 0) return null;
+  const active =
+    typeof raw.active === 'number' ? Math.min(Math.max(0, raw.active), tabs.length - 1) : 0;
+  return { tabs: tabs.slice(0, MAX_TABS), active: Math.min(active, MAX_TABS - 1) };
 }

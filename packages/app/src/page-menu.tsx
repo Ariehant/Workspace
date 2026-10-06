@@ -18,6 +18,7 @@ import {
   Copy,
   CornerUpRight,
   History,
+  LayoutTemplate,
   Link2,
   Lock,
   MoreHorizontal,
@@ -37,6 +38,8 @@ export interface PageMenuProps {
   /** Omitted where pages can't be moved (database rows). */
   onMove?(): void;
   onCopyLink(): void;
+  /** Omitted for database rows. */
+  onSaveAsTemplate?(): void;
   onTrash(): void;
 }
 
@@ -86,6 +89,7 @@ export function PageMenu({
   onDuplicate,
   onMove,
   onCopyLink,
+  onSaveAsTemplate,
   onTrash,
 }: PageMenuProps) {
   // Computed when the menu opens rather than on every render of the page.
@@ -190,6 +194,11 @@ export function PageMenu({
           <MenuItem icon={<Link2 size={14} />} onSelect={onCopyLink}>
             Copy link
           </MenuItem>
+          {onSaveAsTemplate && (
+            <MenuItem icon={<LayoutTemplate size={14} />} onSelect={onSaveAsTemplate}>
+              Save as template
+            </MenuItem>
+          )}
           <MenuSeparator />
           <MenuItem icon={<Trash2 size={14} />} danger onSelect={onTrash}>
             Move to Trash

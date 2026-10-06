@@ -6,7 +6,8 @@ and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI featu
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is in
-progress: synced blocks and buttons (M1) and backlinks and page history (M2) are done.
+progress: synced blocks and buttons (M1), backlinks and page history (M2), and tabs and the
+templates gallery (M3) are done.
 
 ## What works today
 
@@ -15,6 +16,9 @@ progress: synced blocks and buttons (M1) and backlinks and page history (M2) are
   automatically after 30 days.
 - Quick find (`Ctrl+K` / `Ctrl+P`) over titles and content, with recent pages; `Ctrl+Enter` opens
   the result in a new window. Back and forward with `Alt+←`/`Alt+→` or the mouse's side buttons.
+- Tabs: `Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`; Ctrl+click or middle-click anything that opens a page to
+  open it in a new tab. Drag tabs to reorder them or out of the window. Tabs, with their
+  history, come back after a restart.
 - `workspace://page/…` links to pages and blocks open in the app, including from other apps.
 - Rich-text page editor (TipTap/ProseMirror):
   - `/` opens a filterable block menu: text, headings, to-do, bulleted/numbered and toggle lists,
@@ -61,6 +65,9 @@ progress: synced blocks and buttons (M1) and backlinks and page history (M2) are
     linked to, and go to the Trash when deleted.
 - Synced blocks: the same content in several places, edited anywhere.
 - Backlinks under every page title, and page history with preview and restore.
+- Templates gallery (sidebar → Templates): built-in templates for personal use, projects,
+  engineering and a robotics lab, with previews. "Save as template" in a page's `···` menu adds
+  your own.
 - Every block has a stable id, ready for block links, comments and sync later.
 - Everything is saved locally as you type and survives restarts, including the last open page and
   which sidebar items are expanded.

@@ -1,6 +1,6 @@
 # Phase 3: Power features
 
-**Status:** M1–M2 done. M3 next.
+**Status:** M1–M3 done. M4 next.
 
 ## Context
 
@@ -115,7 +115,7 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - There's no "restore deleted property/view" list for database docs yet. Their states are saved as versions, but there's no UI for them.
   - Backlinks from inside synced blocks are counted on the synced block's doc, not on each page showing it.
 
-### M3: tabs and the templates gallery
+### M3: tabs and the templates gallery ✅
 
 - **Tabs:**
   - Each window has a tab bar. Ctrl+T opens a new tab, Ctrl+W closes one, and Ctrl+Tab / Ctrl+Shift+Tab switch between them.
@@ -127,6 +127,44 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - "Templates" in the sidebar opens a gallery of built-in page templates grouped by category (Personal, Projects, Engineering, Robotics lab), each with a preview. "Use template" copies it into the workspace.
   - The built-in templates are ordinary workspace pages exported to the app's own JSON format (from M5) and bundled with the app. This includes the five Phase 2 exit-check databases (Tasks + Projects, reading list, habit tracker, CRM, content calendar) and a few page templates (meeting notes, weekly review, design doc, experiment log).
   - "Save as template" in the page menu adds a page (with its sub-pages and databases) to a local "My templates" category.
+
+**M3 notes:**
+
+- **Tabs model** (core, `navigation.ts`): `TabsState` holds the tabs (each its own back/forward history) and the active index. `openTab` inserts after the active tab, `closeTab` keeps the last tab and activates the right neighbour (else the left), `moveTab` keeps the same tab active, `cycleTab` wraps around, and `parseTabs` reads saved tabs back, dropping malformed ones. A window has at most 30 tabs.
+- **Tab bar:**
+  - It appears once a window has two or more tabs, like a browser set to hide a single tab. Each tab shows the page's icon and live title, with a close button.
+  - Middle-click closes a tab. Drag to reorder. Dropping a tab outside the window opens its page in a new window and closes the tab (detected from the drag's screen position).
+- **Shortcuts:**
+  - The renderer handles Ctrl+T, Ctrl+W, Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PageDown / PageUp, so they also work in the web build. The File and Go menus list them.
+  - Close Window moves to Ctrl+Shift+W. Ctrl+W on the last tab does nothing rather than closing the window.
+  - Ctrl+T opens a new tab with quick find open, so you can pick the page straight away.
+- **New-tab clicks:** a capture-phase listener notes Ctrl+click (or Cmd+click), and any navigation in that same click opens a new tab. This covers sidebar items, mentions, link-to-page blocks, breadcrumbs, backlinks and quick find results without touching each one. Middle-clicks on links and buttons are replayed as Ctrl+clicks. In quick find, Shift+click and Ctrl+Enter open a new window.
+- **Per-tab state:**
+  - Each tab's scroll position is saved when you leave it and restored once its page has loaded far enough.
+  - The main window's tabs (with their histories) are saved in settings (`ui.tabs`) and restored on start. Windows opened on a page (`#page=`) start with one tab and aren't saved.
+- **Page bundles** (database package, `bundle.ts`):
+  - `captureBundle` packs a page, its sub-pages (not trashed ones), its databases and their rows' pages as Yjs states.
+  - `instantiateBundle` copies a bundle into the workspace with fresh ids. Links, inline databases and relations between the bundle's own databases point at the copies, and two-way relations stay two-way: `copyDatabase` gained shared database and row id maps.
+  - `copyDatabase` now also remaps default templates (database and view), which fixes duplicating a database that has one.
+- **Built-in templates** (app, `templates/builtin.ts`):
+  - Nine templates in four categories:
+    - **Personal:** reading list, habit tracker, weekly review.
+    - **Projects:** tasks and projects (two related databases with a board and a timeline), meeting notes, contacts (CRM), content calendar.
+    - **Engineering:** design doc.
+    - **Robotics lab:** experiment log (protocol page, runs database, setup sub-page).
+  - They are built in code with the same builders a workspace uses (`TemplateBuilder`), then packed as bundles the first time they're previewed. Sample dates are relative to today.
+  - Page text is written as Markdown and parsed by the editor's own schema (`appendContent` in the editor package), so it reads exactly like pasted Markdown.
+  - Once M5's JSON export exists, these can be shipped as exported files instead; the bundle format is what both produce.
+- **Gallery:** "Templates" sits at the bottom of the sidebar. The gallery shows categories, the templates in each, and a read-only preview: the top page rendered by the editor, with databases shown as tables of their first rows. "Use template" adds the copy at the top level and opens it.
+- **My templates:** "Save as template" (page menu, pages only) stores the bundle in a `templates` doc, which syncs like any other doc once sync exists. Saved templates can be previewed, used and deleted.
+- **Tests:**
+  - Unit: the tabs model, bundles (relations both ways, links, trashed sub-pages left out), every built-in template building and copying, and `appendContent`.
+  - E2E: open tabs (Ctrl+click, middle-click, Ctrl+T), switch, per-tab history, reorder by drag, close, restore after a restart, and per-tab scroll position. Use built-in templates and check the copy, including relations. Save as template, then use and delete it.
+- **Not done:**
+  - Dragging a tab out of the window isn't covered by E2E, because xvfb can't drag outside the window.
+  - Linked database views (`linkedDatabase` blocks) inside a template still point at the original database.
+  - Synced blocks inside a saved template stay synced with the original.
+  - Secondary windows don't save their tabs.
 
 ### M4: diagrams and code
 

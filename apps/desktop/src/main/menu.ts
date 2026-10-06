@@ -17,6 +17,13 @@ export function buildMenu(createWindow: () => BrowserWindow, isDev: boolean): Me
       label: '&File',
       submenu: [
         { label: 'New Page', click: send('new-page') },
+        // The renderer handles the tab shortcuts itself, so the menu only shows them.
+        {
+          label: 'New Tab',
+          accelerator: 'CmdOrCtrl+T',
+          registerAccelerator: false,
+          click: send('new-tab'),
+        },
         {
           id: 'new-window',
           label: 'New Window',
@@ -24,7 +31,13 @@ export function buildMenu(createWindow: () => BrowserWindow, isDev: boolean): Me
           click: () => createWindow(),
         },
         { type: 'separator' },
-        { role: 'close' },
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          registerAccelerator: false,
+          click: send('close-tab'),
+        },
+        { role: 'close', label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W' },
         { role: 'quit' },
       ],
     },
@@ -70,6 +83,19 @@ export function buildMenu(createWindow: () => BrowserWindow, isDev: boolean): Me
           accelerator: 'Alt+Right',
           registerAccelerator: false,
           click: send('go-forward'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Next Tab',
+          accelerator: 'Ctrl+Tab',
+          registerAccelerator: false,
+          click: send('next-tab'),
+        },
+        {
+          label: 'Previous Tab',
+          accelerator: 'Ctrl+Shift+Tab',
+          registerAccelerator: false,
+          click: send('prev-tab'),
         },
       ],
     },

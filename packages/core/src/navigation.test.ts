@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import {
   EMPTY_HISTORY,
+  type TabsState,
+  closeTab,
+  cycleTab,
+  moveTab,
+  openTab,
+  parseTabs,
+  tabsWith,
+  updateActiveTab,
   buildPageTree,
   createPage,
   emptyTrashBefore,
@@ -92,5 +100,69 @@ describe('trash', () => {
         .map((p) => p.title)
         .sort(),
     ).toEqual(['Kept', 'Recent']);
+  });
+});
+
+describe('tabs', () => {
+  const pages = (s: TabsState) => s.tabs.map((t) => t.history.entries[t.history.index] ?? null);
+
+  it('opens a tab after the active one, in front or in the background', () => {
+    let s = tabsWith('a');
+    s = openTab(s, 'b');
+    expect(pages(s)).toEqual(['a', 'b']);
+    expect(s.active).toBe(1);
+    s = { ...s, active: 0 };
+    s = openTab(s, 'c', { background: true });
+    expect(pages(s)).toEqual(['a', 'c', 'b']);
+    expect(s.active).toBe(0);
+  });
+
+  it('navigates inside the active tab only', () => {
+    let s = openTab(tabsWith('a'), 'b');
+    s = updateActiveTab(s, (h) => pushHistory(h, 'c'));
+    expect(pages(s)).toEqual(['a', 'c']);
+    expect(s.tabs[1]!.history.entries).toEqual(['b', 'c']);
+    expect(updateActiveTab(s, (h) => h)).toBe(s);
+  });
+
+  it('closes tabs: the right neighbour becomes active, the last tab stays', () => {
+    let s = openTab(openTab(tabsWith('a'), 'b'), 'c');
+    s = { ...s, active: 1 };
+    s = closeTab(s, 1);
+    expect(pages(s)).toEqual(['a', 'c']);
+    expect(s.active).toBe(1);
+    s = closeTab(s, 1);
+    expect(pages(s)).toEqual(['a']);
+    expect(s.active).toBe(0);
+    expect(closeTab(s, 0)).toBe(s);
+  });
+
+  it('closing a tab left of the active one keeps the same tab active', () => {
+    const s = openTab(openTab(tabsWith('a'), 'b'), 'c');
+    const closed = closeTab(s, 0);
+    expect(pages(closed)).toEqual(['b', 'c']);
+    expect(closed.active).toBe(1);
+  });
+
+  it('moves tabs and cycles through them', () => {
+    let s = openTab(openTab(tabsWith('a'), 'b'), 'c');
+    s = { ...s, active: 0 };
+    s = moveTab(s, 0, 2);
+    expect(pages(s)).toEqual(['b', 'c', 'a']);
+    expect(s.active).toBe(2);
+    expect(cycleTab(s, 1).active).toBe(0);
+    expect(cycleTab({ ...s, active: 0 }, -1).active).toBe(2);
+  });
+
+  it('reads tabs back from settings, dropping malformed ones', () => {
+    const s = parseTabs({
+      tabs: [{ history: { entries: ['a', 'b'], index: 9 } }, null, { history: 'x' }],
+      active: 4,
+    });
+    expect(s?.tabs).toHaveLength(1);
+    expect(s?.tabs[0]!.history).toEqual({ entries: ['a', 'b'], index: 1 });
+    expect(s?.active).toBe(0);
+    expect(parseTabs({ tabs: [] })).toBeNull();
+    expect(parseTabs('nope')).toBeNull();
   });
 });

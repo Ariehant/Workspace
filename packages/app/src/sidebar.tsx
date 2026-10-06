@@ -17,6 +17,7 @@ import {
   ChevronsLeft,
   Copy,
   CornerUpRight,
+  LayoutTemplate,
   MoreHorizontal,
   Palette,
   Plus,
@@ -57,6 +58,7 @@ export interface SidebarProps {
   onDrop(id: PageId, targetId: PageId | null, zone: DropZone): void;
   onToggleFavorite(id: PageId): void;
   onSearch(): void;
+  onTemplates(): void;
   onResize(width: number): void;
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
@@ -172,6 +174,14 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       <div className="border-t border-line p-1">
+        <button
+          type="button"
+          onClick={props.onTemplates}
+          className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover"
+        >
+          <LayoutTemplate size={16} />
+          Templates
+        </button>
         <Trash workspace={workspace} fileUrl={fileUrl} onOpen={onSelect}>
           <button
             type="button"

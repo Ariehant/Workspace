@@ -2,22 +2,29 @@ import {
   DocClient,
   WORKSPACE_DOC_ID,
   buildPageTree,
-  EMPTY_HISTORY,
   TRASH_RETENTION_MS,
   createPage,
   emptyTrashBefore,
   getAncestorIds,
   getPage,
   listPages,
+  closeTab,
+  cycleTab,
+  moveTab,
   movePage,
+  openTab,
+  parseTabs,
   pushHistory,
   resolveDrop,
   stepHistory,
+  tabsWith,
   trashPage,
+  updateActiveTab,
   type DropZone,
   type NavHistory,
   type PageId,
   type PageTreeNode,
+  type TabsState,
   type User,
   upsertUser,
 } from '@workspace/core';
@@ -40,10 +47,15 @@ import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
 import { MoveDialog } from './move-dialog';
 import { duplicatePage } from './page-actions';
 import { createWelcomePage } from './welcome';
+import { TabBar } from './tab-bar';
+import { useNewTabIntent, useTabScroll } from './tabs';
+import { TemplatesGallery } from './templates/gallery';
+import { saveAsTemplate } from './templates/store';
 
 const SETTING = {
   theme: 'ui.theme',
   lastPage: 'ui.lastPageId',
+  tabs: 'ui.tabs',
   expanded: 'ui.expanded',
   sidebarOpen: 'ui.sidebarOpen',
   sidebarWidth: 'ui.sidebarWidth',
@@ -55,6 +67,7 @@ const SETTING = {
 interface Settings {
   theme: ThemePreference;
   lastPage: PageId | null;
+  tabs: TabsState | null;
   expanded: PageId[];
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -65,10 +78,11 @@ interface Settings {
 
 async function loadSettings(platform: Platform): Promise<Settings> {
   const get = <T,>(key: string) => platform.getSetting<T>(key);
-  const [theme, lastPage, expanded, sidebarOpen, sidebarWidth, favorites, recent, onboarded] =
+  const [theme, lastPage, tabs, expanded, sidebarOpen, sidebarWidth, favorites, recent, onboarded] =
     await Promise.all([
       get<ThemePreference>(SETTING.theme),
       get<PageId>(SETTING.lastPage),
+      get<unknown>(SETTING.tabs),
       get<PageId[]>(SETTING.expanded),
       get<boolean>(SETTING.sidebarOpen),
       get<number>(SETTING.sidebarWidth),
@@ -79,6 +93,7 @@ async function loadSettings(platform: Platform): Promise<Settings> {
   return {
     theme: theme ?? 'system',
     lastPage: lastPage ?? null,
+    tabs: parseTabs(tabs),
     expanded: expanded ?? [],
     sidebarOpen: sidebarOpen ?? true,
     sidebarWidth: sidebarWidth ?? SIDEBAR_WIDTH.default,
@@ -167,16 +182,24 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const exists = useCallback((id: PageId) => pages.exists(id), [pages, registryVersion]);
 
   const [theme, setTheme] = useState(initial.theme);
-  const [history, setHistory] = useState<NavHistory>(() => {
-    const start = pageFromLocation() ?? initial.lastPage;
-    return start ? pushHistory(EMPTY_HISTORY, start) : EMPTY_HISTORY;
-  });
+  // A window opened on a page (`#page=`) starts with that one tab; the main window
+  // gets back the tabs it had.
+  const [ownWindow] = useState(() => pageFromLocation());
+  const [tabs, setTabs] = useState<TabsState>(() =>
+    ownWindow ? tabsWith(ownWindow) : (initial.tabs ?? tabsWith(initial.lastPage)),
+  );
+  const history = tabs.tabs[tabs.active]!.history;
+  const setHistory = useCallback(
+    (next: NavHistory) => setTabs((prev) => updateActiveTab(prev, () => next)),
+    [],
+  );
   const [recent, setRecent] = useState<PageId[]>(initial.recent);
   const [favorites, setFavorites] = useState<PageId[]>(initial.favorites);
   const [expanded, setExpanded] = useState<ReadonlySet<PageId>>(() => new Set(initial.expanded));
   const [sidebarOpen, setSidebarOpen] = useState(initial.sidebarOpen);
   const [sidebarWidth, setSidebarWidth] = useState(initial.sidebarWidth);
   const [finding, setFinding] = useState(false);
+  const [templates, setTemplates] = useState(false);
   const [blockTarget, setBlockTarget] = useState<BlockTarget | null>(null);
   const [peek, setPeek] = useState<{
     rowId: string;
@@ -193,6 +216,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
 
   useEffect(() => platform.setTheme(theme), [platform, theme]);
   useEffect(() => platform.setSetting(SETTING.lastPage, currentPageId), [platform, currentPageId]);
+  useEffect(() => {
+    if (ownWindow) return;
+    const saved = { tabs: tabs.tabs.map((t) => ({ history: t.history })), active: tabs.active };
+    platform.setSetting(SETTING.tabs, saved);
+  }, [platform, ownWindow, tabs]);
   useEffect(() => platform.setSetting(SETTING.expanded, [...expanded]), [platform, expanded]);
   useEffect(() => platform.setSetting(SETTING.sidebarOpen, sidebarOpen), [platform, sidebarOpen]);
   useEffect(() => platform.setSetting(SETTING.favorites, favorites), [platform, favorites]);
@@ -218,13 +246,60 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     [workspace],
   );
 
+  // Ctrl+click (or middle-click) on whatever navigates opens the page in a new tab.
+  const newTabIntent = useNewTabIntent();
+  const scroll = useTabScroll(tabs);
+
   const navigate = useCallback(
     (id: PageId) => {
-      setHistory((prev) => pushHistory(prev, id));
+      if (newTabIntent.take()) {
+        scroll.save();
+        setTabs((prev) => openTab(prev, id));
+      } else {
+        setTabs((prev) => updateActiveTab(prev, (h) => pushHistory(h, id)));
+      }
       setPeek(null);
       show(id);
     },
-    [show],
+    [show, newTabIntent, scroll],
+  );
+
+  const tabPage = useCallback(
+    (index: number) => {
+      const h = tabs.tabs[index]?.history;
+      const id = h?.entries[h.index] ?? null;
+      return id && exists(id) ? id : firstPage(tree);
+    },
+    [tabs, exists, tree],
+  );
+  const changeTabs = useCallback(
+    (update: (prev: TabsState) => TabsState) => {
+      scroll.save();
+      setPeek(null);
+      setTabs(update);
+    },
+    [scroll],
+  );
+  const selectTab = useCallback(
+    (index: number) => changeTabs((prev) => ({ ...prev, active: index })),
+    [changeTabs],
+  );
+  const closeTabAt = useCallback(
+    (index: number) => changeTabs((prev) => closeTab(prev, index)),
+    [changeTabs],
+  );
+  const newTab = useCallback(() => {
+    changeTabs((prev) => openTab(prev, null));
+    setFinding(true);
+  }, [changeTabs]);
+  const detachTab = useCallback(
+    (index: number) => {
+      const id = tabPage(index);
+      if (!id || tabs.tabs.length <= 1) return;
+      platform.openWindow(id);
+      closeTabAt(index);
+    },
+    [platform, tabPage, tabs.tabs.length, closeTabAt],
   );
 
   const blockNonce = useRef(0);
@@ -250,7 +325,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       setHistory(next);
       show(next.entries[next.index]!);
     },
-    [history, exists, show],
+    [history, exists, show, setHistory],
   );
 
   const onboarding = useRef(false);
@@ -297,6 +372,15 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     [client, workspace, navigate],
   );
 
+  const saveTemplate = useCallback(
+    (id: PageId) => {
+      saveAsTemplate(client, workspace, id).catch((error: unknown) =>
+        console.error('Failed to save the template', error),
+      );
+    },
+    [client, workspace],
+  );
+
   const drop = useCallback(
     (id: PageId, targetId: PageId | null, zone: DropZone) => {
       const target = targetId ? resolveDrop(workspace, id, targetId, zone) : { parentId: null };
@@ -327,6 +411,10 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       if (command === 'new-page') create(null);
       else if (command === 'toggle-sidebar') setSidebarOpen((open) => !open);
       else if (command === 'quick-find') setFinding(true);
+      else if (command === 'new-tab') newTab();
+      else if (command === 'close-tab') changeTabs((prev) => closeTab(prev, prev.active));
+      else if (command === 'next-tab') changeTabs((prev) => cycleTab(prev, 1));
+      else if (command === 'prev-tab') changeTabs((prev) => cycleTab(prev, -1));
       else go(command === 'go-back' ? -1 : 1);
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -337,9 +425,19 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
         event.preventDefault();
         return;
       }
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      // Ctrl+Tab / Ctrl+Shift+Tab, and Ctrl+PageDown / Ctrl+PageUp.
+      if (event.key === 'Tab' || event.key === 'PageDown' || event.key === 'PageUp') {
+        const back = event.key === 'PageUp' || (event.key === 'Tab' && event.shiftKey);
+        run(back ? 'prev-tab' : 'next-tab');
+        event.preventDefault();
+        return;
+      }
+      if (event.shiftKey) return;
       const key = event.key.toLowerCase();
       if (key === 'n') run('new-page');
+      else if (key === 't') run('new-tab');
+      else if (key === 'w') run('close-tab');
       else if (key === '\\') run('toggle-sidebar');
       else if (key === 'k' || key === 'p') run('quick-find');
       else return;
@@ -358,7 +456,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       window.removeEventListener('mouseup', onMouseUp);
       unsubscribe();
     };
-  }, [platform, create, go]);
+  }, [platform, create, go, newTab, changeTabs]);
 
   // Links (workspace://page/…) and reminder notifications.
   const nonce = useRef(0);
@@ -384,6 +482,33 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     onGo: go,
   };
 
+  const content = !currentPageId ? (
+    <EmptyState onCreate={() => create(null)} />
+  ) : getPage(workspace, currentPageId) ? (
+    <PageView
+      pageId={currentPageId}
+      chrome={chrome}
+      blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
+      onDuplicate={duplicate}
+      onSaveAsTemplate={saveTemplate}
+      onMove={setMoving}
+      onTrash={trash}
+      isFavorite={favorites.includes(currentPageId)}
+      onToggleFavorite={() => toggleFavorite(currentPageId)}
+    />
+  ) : pages.databaseOf(currentPageId) ? (
+    <RowPageView
+      key={currentPageId}
+      rowId={currentPageId}
+      databaseId={pages.databaseOf(currentPageId)!}
+      chrome={chrome}
+      blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
+    />
+  ) : (
+    // Still looking up a row.
+    <main className="flex-1 bg-surface" aria-busy="true" />
+  );
+
   return (
     <NavigationContext.Provider value={navigation}>
       <div className="flex h-full">
@@ -405,37 +530,29 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onDrop={drop}
             onToggleFavorite={toggleFavorite}
             onSearch={() => setFinding(true)}
+            onTemplates={() => setTemplates(true)}
             onResize={setSidebarWidth}
             fileUrl={platform.fileUrl}
             onThemeChange={changeTheme}
             onCollapse={() => setSidebarOpen(false)}
           />
         )}
-        {!currentPageId ? (
-          <EmptyState onCreate={() => create(null)} />
-        ) : getPage(workspace, currentPageId) ? (
-          <PageView
-            pageId={currentPageId}
-            chrome={chrome}
-            blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
-            onDuplicate={duplicate}
-            onMove={setMoving}
-            onTrash={trash}
-            isFavorite={favorites.includes(currentPageId)}
-            onToggleFavorite={() => toggleFavorite(currentPageId)}
-          />
-        ) : pages.databaseOf(currentPageId) ? (
-          <RowPageView
-            key={currentPageId}
-            rowId={currentPageId}
-            databaseId={pages.databaseOf(currentPageId)!}
-            chrome={chrome}
-            blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
-          />
-        ) : (
-          // Still looking up a row.
-          <main className="flex-1 bg-surface" aria-busy="true" />
-        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {tabs.tabs.length > 1 && (
+            <TabBar
+              state={tabs}
+              pageOf={tabPage}
+              onSelect={selectTab}
+              onClose={closeTabAt}
+              onMove={(from, to) => changeTabs((prev) => moveTab(prev, from, to))}
+              onNew={newTab}
+              onDetach={detachTab}
+            />
+          )}
+          <div className="flex min-h-0 flex-1" key={tabs.tabs[tabs.active]!.id}>
+            {content}
+          </div>
+        </div>
         {peek && (
           <RowPeek
             key={peek.rowId}
@@ -458,6 +575,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
           />
         )}
         <ButtonEditorHost />
+        {templates && <TemplatesGallery onUse={navigate} onClose={() => setTemplates(false)} />}
         {finding && (
           <QuickFind
             workspace={workspace}

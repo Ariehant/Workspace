@@ -158,7 +158,7 @@ export function QuickFind({
               aria-selected={i === index}
               data-testid="quick-find-result"
               onMouseMove={() => i !== index && setSelected(i)}
-              onClick={(event) => choose(i, event.ctrlKey || event.metaKey)}
+              onClick={(event) => choose(i, event.shiftKey)}
               className={cn(
                 'flex w-full items-start gap-2 rounded-md px-3 py-1.5 text-left',
                 i === index && 'bg-hover',
