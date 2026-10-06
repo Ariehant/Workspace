@@ -1,6 +1,6 @@
 # Phase 3: Power features
 
-**Status:** M1–M3 done. M4 next.
+**Status:** M1–M4 done. M5 next.
 
 ## Context
 
@@ -166,7 +166,7 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - Synced blocks inside a saved template stay synced with the original.
   - Secondary windows don't save their tabs.
 
-### M4: diagrams and code
+### M4: diagrams and code ✅
 
 - **Mermaid:** a code block in `mermaid` (or `/mermaid`) shows the rendered diagram with Code / Preview / Split modes. It renders in a sandboxed iframe with mermaid lazy-loaded, so the editor bundle doesn't grow. Render errors show the message under the code. Exports include the diagram as SVG.
 - **Code blocks:**
@@ -175,6 +175,31 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
   - more languages through lowlight's full set, loaded on demand
   - "Copy" keeps the plain text
 - **Equations:** a KaTeX macro set per workspace (`\R`, `\vec` and so on), and better error display while typing. Block equations get a copy-as-LaTeX action.
+
+**M4 notes:**
+
+- **Mermaid:**
+  - A code block in `mermaid` shows the diagram. Insert one with `/mermaid` (it starts with a two-node flowchart) or with ` ```mermaid `.
+  - Code / Preview / Split is stored per block (default Split). Preview hides the source, and Split shows the diagram under it.
+  - The diagram re-renders 250 ms after you stop typing, and again when the theme changes (Mermaid's dark theme in dark mode).
+  - Mermaid (about 650 KB) is loaded the first time a diagram is shown, as its own chunk; the main bundle doesn't include it.
+  - Rendering uses Mermaid's `strict` security level (no scripts or click handlers, sanitized labels). The SVG is shown as an `<img>` instead of the planned sandboxed iframe. An image can't run scripts or load anything either, and it sizes itself without measuring. Labels are plain SVG text, because HTML labels don't render inside an image.
+  - Syntax errors show Mermaid's message under the code, in place of the diagram.
+  - The source is highlighted with a small Mermaid grammar (keywords, arrows, strings, `%%` comments).
+- **Code blocks:**
+  - Line numbers (per block) are widgets at the start of each line. They follow wrapped lines, and copying or "Copy" doesn't include them.
+  - A caption (per block) sits under the code.
+  - Tab and Shift+Tab indent and outdent every line the selection touches by 4 spaces (Shift+Tab also removes a leading tab). Tab at a cursor inserts 4 spaces.
+  - Shift+↑/↓ inside a code block now extends the selection line by line. Block selection starts only from a block's first or last line, which also applies to multi-line paragraphs.
+  - Languages: the ~35 common ones plus Mermaid load up front. The rest of highlight.js's ~190 grammars are listed under "More languages" and each loads as its own small chunk when picked, or when a page with one opens. CMake, GLSL, VHDL, Verilog, MATLAB, Protocol Buffers and ARM/x86 assembly get proper names.
+- **Equations:**
+  - Macros belong to the workspace (stored in the workspace doc, so they'll sync). Open "Macros" in the equation editor and write one per line, for example `\SE \mathrm{SE}`. Lines that aren't macros are reported by number. Every equation on every open page redraws when the macros change.
+  - The equation editor shows a live preview, or KaTeX's error message while the TeX doesn't parse.
+  - "Copy LaTeX" in the equation editor (block and inline).
+- **Tests:**
+  - Unit: line indent/outdent, the language registry and lazy loading, Mermaid highlighting, and macro parsing and storage.
+  - E2E: Mermaid render, error and modes, kept after restart. Code blocks: indent and outdent of selected lines, line numbers, caption, Copy, and a lazily loaded language highlighted after a restart. Equations: live errors, workspace macros used across pages, Copy LaTeX.
+- **Moved to M5:** exporting diagrams as SVG. `renderMermaid` is exported from the editor package for the exporter.
 
 ### M5: export
 

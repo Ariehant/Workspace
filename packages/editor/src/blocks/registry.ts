@@ -32,6 +32,7 @@ import {
   Type,
   RefreshCw,
   MousePointerClick,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 import { insertBlockEquation, insertInlineEquation } from '../nodes/math';
@@ -475,6 +476,23 @@ export const BLOCKS: readonly BlockDefinition[] = [
     apply: (chain) => plain(chain).setCodeBlock(),
     isActive: (editor) => editor.isActive('codeBlock'),
     convertible: true,
+  },
+  {
+    id: 'mermaid',
+    title: 'Mermaid diagram',
+    description: 'Draw a flowchart, sequence or other diagram from text.',
+    keywords: ['diagram', 'flowchart', 'chart', 'graph', 'sequence', 'uml', 'gantt'],
+    icon: Workflow,
+    group: 'advanced',
+    shortcut: '```mermaid',
+    apply: (chain) =>
+      plain(chain)
+        .setCodeBlock({ language: 'mermaid' })
+        .command(({ tr }) => {
+          tr.insertText('graph TD\n  A[Start] --> B[Finish]');
+          return true;
+        }),
+    ...insertOnly,
   },
   {
     id: 'breadcrumb',

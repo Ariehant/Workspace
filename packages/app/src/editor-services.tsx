@@ -1,4 +1,12 @@
-import { createPage, listUsers, trashPage, type PageId } from '@workspace/core';
+import {
+  createPage,
+  getMathMacros,
+  listUsers,
+  observeMathMacros,
+  setMathMacros,
+  trashPage,
+  type PageId,
+} from '@workspace/core';
 import { fillFromTable, tableCells } from '@workspace/database';
 import type { EditorServices } from '@workspace/editor';
 import { useMemo } from 'react';
@@ -56,6 +64,11 @@ export function useEditorServices(pageId: PageId): EditorServices {
       fileUrl: (id) => platform.fileUrl(id),
       openFile: (id) => platform.openFile(id),
       linkPreview: (url) => platform.linkPreview(url),
+      mathMacros: {
+        get: () => getMathMacros(workspace),
+        set: (macros) => setMathMacros(workspace, macros),
+        subscribe: (listener) => observeMathMacros(workspace, listener),
+      },
     }),
     [workspace, platform, client, pages, databases, user, pageId, navigate, openRow],
   );

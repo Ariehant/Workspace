@@ -6,8 +6,8 @@ and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI featu
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is in
-progress: synced blocks and buttons (M1), backlinks and page history (M2), and tabs and the
-templates gallery (M3) are done.
+progress: synced blocks and buttons (M1), backlinks and page history (M2), tabs and the
+templates gallery (M3), and diagrams and code (M4) are done.
 
 ## What works today
 
@@ -22,9 +22,10 @@ templates gallery (M3) are done.
 - `workspace://page/…` links to pages and blocks open in the app, including from other apps.
 - Rich-text page editor (TipTap/ProseMirror):
   - `/` opens a filterable block menu: text, headings, to-do, bulleted/numbered and toggle lists,
-    toggle headings, quote, divider, callout, table, code (syntax highlighting, language picker),
-    block and inline equations (KaTeX), table of contents, breadcrumb, columns, link to page and
-    new sub-page.
+    toggle headings, quote, divider, callout, table, code (syntax highlighting for ~190
+    languages, line numbers, captions, Tab/Shift+Tab on selected lines), Mermaid diagrams,
+    block and inline equations (KaTeX, with workspace macros and live errors), table of
+    contents, breadcrumb, columns, link to page and new sub-page.
   - Markdown shortcuts: `#`, `-`, `1.`, `[]`, `>` (toggle), `"` (quote), ` ``` `, `---`, `$$`,
     `$$x$$` (inline equation).
   - Hover a block for `+` (add below) and `⋮⋮` (drag to move; click for turn into, duplicate,

@@ -1,16 +1,17 @@
 import { Extension } from '@tiptap/core';
 import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration';
-import NodeRange from '@tiptap/extension-node-range';
+import NodeRange, { isNodeRangeSelection } from '@tiptap/extension-node-range';
 import UniqueID from '@tiptap/extension-unique-id';
 import { Placeholder } from '@tiptap/extensions';
-import type { Node as PMNode } from '@tiptap/pm/model';
-import { Plugin } from '@tiptap/pm/state';
+import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
+import { Plugin, TextSelection } from '@tiptap/pm/state';
 import { search } from 'prosemirror-search';
 import StarterKit from '@tiptap/starter-kit';
 import { PAGE_CONTENT_FIELD } from '@workspace/core';
 import type * as Y from 'yjs';
 import { Callout } from './nodes/callout';
 import { CodeBlock } from './nodes/code-block';
+import { lineStarts } from './nodes/code-lines';
 import { Column, ColumnList } from './nodes/columns';
 import { BlockColor, TextColor } from './nodes/colors';
 import { EmojiSuggest } from './nodes/emoji';
@@ -114,6 +115,52 @@ function placeholderFor({ node }: { node: PMNode }): string {
   return "Write, or press '/' for commands…";
 }
 
+/** Position a line above or below `$head` in a code block (same column), or null. */
+function codeLineHead($head: ResolvedPos, direction: 'up' | 'down'): number | null {
+  if ($head.parent.type.name !== 'codeBlock') return null;
+  const text = $head.parent.textContent;
+  const starts = lineStarts(text);
+  const offset = $head.parentOffset;
+  let line = starts.length - 1;
+  while (starts[line]! > offset) line--;
+  const target = line + (direction === 'up' ? -1 : 1);
+  if (target < 0 || target >= starts.length) return null;
+  const end = target + 1 < starts.length ? starts[target + 1]! - 1 : text.length;
+  const column = offset - starts[line]!;
+  return $head.start() + Math.min(starts[target]! + column, end);
+}
+
+/**
+ * Shift+↑/↓ selects whole blocks, but only from a block's first or last line: inside a
+ * multi-line block (a code block, a wrapped paragraph) it extends the text selection.
+ */
+const BlockRange = NodeRange.extend({
+  addKeyboardShortcuts() {
+    const parent = this.parent?.() ?? {};
+    const textFirst =
+      (direction: 'up' | 'down', key: 'Shift-ArrowUp' | 'Shift-ArrowDown') =>
+      (props: Parameters<NonNullable<(typeof parent)[string]>>[0]) => {
+        const { state, view } = props.editor;
+        if (!isNodeRangeSelection(state.selection)) {
+          // In code, move the selection's head a line up or down, keeping the column.
+          const head = codeLineHead(state.selection.$head, direction);
+          if (head !== null) {
+            const { anchor } = state.selection;
+            view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, anchor, head)));
+            return true;
+          }
+          if (!view.endOfTextblock(direction)) return false;
+        }
+        return parent[key]?.(props) ?? false;
+      };
+    return {
+      ...parent,
+      'Shift-ArrowUp': textFirst('up', 'Shift-ArrowUp'),
+      'Shift-ArrowDown': textFirst('down', 'Shift-ArrowDown'),
+    };
+  },
+});
+
 export function pageExtensions(doc: Y.Doc, bridge: UiBridgeHandle) {
   return [
     StarterKit.configure({
@@ -155,7 +202,7 @@ export function pageExtensions(doc: Y.Doc, bridge: UiBridgeHandle) {
       filterTransaction: (transaction) => !isChangeOrigin(transaction),
     }),
     Collaboration.configure({ document: doc, field: PAGE_CONTENT_FIELD }),
-    NodeRange,
+    BlockRange,
     SlashCommand,
     OpenLinkOnModClick,
     uiBridgeExtension(bridge),

@@ -81,6 +81,12 @@ export interface EditorServices {
   /** Open a stored file with the system's default app. */
   openFile(id: string): void;
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /** The workspace's KaTeX macros (`\R` -> `\mathbb{R}`), shared by every page. */
+  mathMacros: {
+    get(): Record<string, string>;
+    set(macros: Record<string, string>): void;
+    subscribe(listener: () => void): () => void;
+  };
 }
 
 export const EditorServicesContext = createContext<EditorServices | null>(null);

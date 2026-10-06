@@ -9,3 +9,4 @@ export * from './text';
 export * from './tree';
 export * from './workspace';
 export * from './synced';
+export * from './math';

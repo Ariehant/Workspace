@@ -6,6 +6,7 @@ import { SelectionToolbar } from './bubble-menu';
 import { pageExtensions } from './extensions';
 import { FindBar } from './find-bar';
 import { MathEditor, type MathTarget } from './math-editor';
+import { setMathMacros } from './nodes/math';
 import { TableMenu } from './nodes/table';
 import { PagePicker } from './page-picker';
 import { PasteUrlMenu, type PastedUrl } from './paste-url-menu';
@@ -93,6 +94,14 @@ export function PageEditor({ doc, services, editable = true, onEditor, nested }:
   useEffect(() => {
     if (editor && editor.isEditable !== editable) editor.setEditable(editable);
   }, [editor, editable]);
+
+  // Equations render with the workspace's macros, and follow changes to them.
+  useEffect(() => {
+    if (!editor) return;
+    const apply = () => setMathMacros(editor, services.mathMacros.get());
+    apply();
+    return services.mathMacros.subscribe(apply);
+  }, [editor, services]);
 
   useEffect(() => {
     onEditor?.(editor);
