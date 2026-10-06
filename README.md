@@ -5,9 +5,9 @@ and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI featu
 
 The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
-see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is in
-progress: synced blocks and buttons (M1), backlinks and page history (M2), tabs and the
-templates gallery (M3), diagrams and code (M4), export (M5), and import (M6) are done.
+see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
+except its last check, importing a real Notion export. Phase 4 (sync server) is planned in
+[docs/PHASE4.md](docs/PHASE4.md).
 
 ## What works today
 
