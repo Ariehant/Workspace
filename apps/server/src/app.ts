@@ -9,6 +9,7 @@ import { authRoutes } from './auth/routes';
 import type { Config } from './config';
 import type { ServerContext } from './context';
 import type { FileStorage } from './files';
+import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { workspaceRoutes } from './workspaces';
 
 export const VERSION = '0.1.0';
@@ -19,10 +20,11 @@ export interface ServerDeps {
   files: FileStorage;
   /** Single sign-on clients (made from the config when not given). */
   oidc?: OidcClients;
+  sync?: SyncOptions;
 }
 
 /** The HTTP server and its routes (listening is up to the caller). */
-export function buildServer({ config, store, files, oidc }: ServerDeps): FastifyInstance {
+export function buildServer({ config, store, files, oidc, sync }: ServerDeps): FastifyInstance {
   const app = Fastify({
     logger:
       config.logLevel === 'silent'
@@ -102,6 +104,7 @@ export function buildServer({ config, store, files, oidc }: ServerDeps): Fastify
     workspaceRoutes(scope, ctx);
     adminRoutes(scope, ctx);
   });
+  syncEndpoint(app, ctx, sync);
 
   return app;
 }

@@ -122,6 +122,9 @@ importers:
       '@workspace/storage-remote':
         specifier: workspace:*
         version: link:../../packages/storage-remote
+      '@workspace/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       fastify:
         specifier: ^5.12.5
         version: 5.12.5
@@ -144,6 +147,9 @@ importers:
       jose:
         specifier: ^6.2.12
         version: 6.2.12
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.33
 
   packages/app:
     dependencies:
@@ -400,6 +406,15 @@ importers:
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
+
+  packages/sync:
+    dependencies:
+      lib0:
+        specifier: ^0.2.119
+        version: 0.2.119
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.33
 
   packages/ui:
     dependencies:

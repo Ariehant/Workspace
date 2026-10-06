@@ -7,7 +7,8 @@ The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Ph
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
 except its last check, importing a real Notion export. Phase 4 (sync server, see
-[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server foundation (M1) and accounts (M2) are done.
+[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server foundation (M1), accounts (M2) and the sync protocol (M3) are
+done; desktop sync (M4) is next.
 
 ## What works today
 
@@ -175,8 +176,9 @@ packages/
   editor/           TipTap editor bound to a page's Yjs document
   ui/               Design tokens (Tailwind), themes, buttons, menus
   app/              Shared React screens: sidebar, page view, app shell
-  storage-remote/   Postgres store for the sync server (migrations, update log, files)
-apps/server/        Sync server (Fastify), bundled with esbuild; Dockerfile
+  storage-remote/   Postgres store for the sync server (migrations, update log, accounts)
+  sync/             Sync protocol: messages, the server hub and the client (no I/O)
+apps/server/        Sync server (Fastify: auth, workspaces, WebSocket sync), bundled with esbuild
 infra/              Docker Compose stack, Caddyfile, systemd unit, backup script
 ```
 

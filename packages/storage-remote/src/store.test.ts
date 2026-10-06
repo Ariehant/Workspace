@@ -37,7 +37,7 @@ describe('PgStore', () => {
     expect(await store.latestSeq(a.id)).toBe(0);
     const seqs = await store.appendUpdates(a.id, [
       { docId: 'page1', data: edit(null, 'title', 'Arm') },
-      { docId: 'page2', data: edit(null, 'title', 'Base') },
+      { docId: 'page2', data: edit(null, 'title', 'Base'), deviceId: 'laptop' },
     ]);
     expect(seqs).toEqual([1, 2]);
     expect(
@@ -48,9 +48,9 @@ describe('PgStore', () => {
     ).toEqual([3]);
 
     const since = await store.updatesSince(a.id, 1);
-    expect(since.map((u) => [u.seq, u.docId])).toEqual([
-      [2, 'page2'],
-      [3, 'page1'],
+    expect(since.map((u) => [u.seq, u.docId, u.deviceId])).toEqual([
+      [2, 'page2', 'laptop'],
+      [3, 'page1', null],
     ]);
     expect(read(await store.docState(a.id, 'page1'))).toEqual({ title: 'Arm', body: 'Two joints' });
     // Workspaces don't see each other's docs.

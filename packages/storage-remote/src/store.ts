@@ -9,6 +9,8 @@ export interface LoggedUpdate {
   seq: number;
   docId: string;
   data: Uint8Array;
+  /** The device that pushed it (null for compacted rows). */
+  deviceId: string | null;
 }
 
 export interface NewUpdate {
@@ -166,12 +168,22 @@ export class PgStore {
 
   /** Updates stored after `cursor`, oldest first (at most `limit`). */
   async updatesSince(workspaceId: string, cursor: number, limit = 500): Promise<LoggedUpdate[]> {
-    const { rows } = await this.pool.query<{ seq: number; doc_id: string; data: Buffer }>(
-      `SELECT seq, doc_id, data FROM doc_updates
+    const { rows } = await this.pool.query<{
+      seq: number;
+      doc_id: string;
+      data: Buffer;
+      device_id: string | null;
+    }>(
+      `SELECT seq, doc_id, data, device_id FROM doc_updates
        WHERE workspace_id = $1 AND seq > $2 ORDER BY seq LIMIT $3`,
       [workspaceId, cursor, limit],
     );
-    return rows.map((r) => ({ seq: r.seq, docId: r.doc_id, data: toBytes(r.data) }));
+    return rows.map((r) => ({
+      seq: r.seq,
+      docId: r.doc_id,
+      data: toBytes(r.data),
+      deviceId: r.device_id,
+    }));
   }
 
   /** The newest seq of a workspace (0 when nothing is stored). */

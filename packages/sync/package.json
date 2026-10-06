@@ -1,0 +1,18 @@
+{
+  "name": "@workspace/sync",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sync protocol: messages, the server hub and the client state machine (no I/O)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "lib0": "^0.2.119",
+    "yjs": "^13.6.27"
+  }
+}

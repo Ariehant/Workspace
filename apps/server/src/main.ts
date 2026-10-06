@@ -10,7 +10,8 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const store = new PgStore(config.databaseUrl);
   const files = createFileStorage(config.files);
-  const app = buildServer({ config, store, files });
+  // Long update logs are merged hourly (docs with more than 500 stored updates).
+  const app = buildServer({ config, store, files, sync: { compactEveryMs: 3_600_000 } });
   const version = await store.migrate();
   app.log.info({ schema: version }, 'database ready');
   await app.listen({ host: config.host, port: config.port });

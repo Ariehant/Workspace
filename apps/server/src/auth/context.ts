@@ -51,11 +51,15 @@ export async function authenticate(
   if (!token) return null;
   const found = await ctx.store.accounts.sessionByToken(token);
   if (!found) return null;
-  const { session } = found;
+  await touch(ctx, found.session);
+  return { ...found, via: fromHeader ? 'bearer' : 'cookie' };
+}
+
+/** Note a session was used, sliding its expiry (written at most every few minutes). */
+export async function touch(ctx: Pick<ServerContext, 'store'>, session: Session): Promise<void> {
   if (Date.now() - session.lastSeenAt.getTime() > TOUCH_EVERY_MS) {
     await ctx.store.accounts.touchSession(session.id, SESSION_TTL_MS[session.kind]);
   }
-  return { ...found, via: fromHeader ? 'bearer' : 'cookie' };
 }
 
 /** preHandler: 401 unless signed in; sets `request.auth`. */

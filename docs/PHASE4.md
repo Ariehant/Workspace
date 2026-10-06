@@ -1,6 +1,6 @@
 # Phase 4: Sync server
 
-**Status:** M1 and M2 done. M3 next.
+**Status:** M1, M2 and M3 done. M4 next.
 
 ## Context
 
@@ -187,7 +187,7 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
   - The SSO tests run against a fake OIDC provider started in the test (discovery, authorize, token with PKCE checks, and JWKS, with RS256 ID tokens from `jose`). They cover first sign-in, linking only through a verified email, the sign-up policy, the desktop loopback and exchange, and replayed, cancelled and tampered callbacks.
   - 3 admin CLI tests.
 
-### M3: the sync protocol
+### M3: the sync protocol ✅
 
 - **`packages/sync`** (no Electron or DOM; used by the desktop, the web app and the server):
   - The message types and their lib0 encoding: `hello{workspace, cursor, device}`, `updates{batch}`, `caught-up{cursor}`, `push{docId, update, localId}`, `ack{localId, seq}`, and `open`/`state` (web).
@@ -202,6 +202,67 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
 - **Tests:**
   - **Convergence:** three in-memory replicas make random edits to random docs, with random disconnects, duplicated and reordered messages and server restarts. Every doc must end identical everywhere.
   - Postgres-backed integration tests: catch-up after compaction, large catch-ups, a rejected cross-workspace push.
+
+**M3 notes:**
+
+- **`packages/sync`** has no I/O. It runs in the server, and later the desktop and browser.
+  - **Messages** are encoded with lib0 varints.
+    - Client to server: `hello{protocol, mode, cursor, device}`, `push{items: localId, doc, update}` and `open`/`close{doc}`.
+    - Server to client: `updates{cursor, items}`, `caught-up{cursor}`, `ack{localId, seq}`, `state{doc, update}` and `error{code, message}`.
+  - **The decoder trusts nothing:**
+    - It checks every length against the message itself (lib0 alone would read past a pooled `Buffer`), along with UTF-8, trailing bytes and unknown types.
+    - Updates are copied out of the message buffer.
+    - Limits: a 16 MB message, an 8 MB update, 500 updates per push, and a 128-character doc id.
+  - **Close codes:** 4401 (sign in again), 4403 (no access), 4400 (protocol error) and 4408 (too slow).
+- **`SyncHub`** (server side) works on a `LogStore` and one `Peer` per socket.
+  - **The pump:** each connection has a `sent` cursor, and a single pump moves it forward in seq order.
+    - New rows come from an in-memory ring of recent appends (2,000 per workspace) when it has the next seq, and from Postgres otherwise. A device that's far behind reads in batches of 500 rows.
+    - Each batch is merged per doc and split into messages of about 4 MB.
+    - The pump waits while the socket has more than 8 MB queued, and closes it if it stays full for a minute.
+    - Appends only wake the pumps, so a slow socket never delays the others, and every socket gets the log in order, without gaps.
+  - **Pushes:** they are validated (`Y.decodeUpdate`), appended in order (serialized per workspace, which keeps the ring in seq order) and acknowledged with their seqs.
+  - **Own updates:** a device's updates aren't sent back to it, but its cursor still moves past them.
+  - **Partial clients** (the web app):
+    - `open` returns a doc's merged state. The doc is registered first and then read, so nothing appended in between is missed.
+    - Only open docs' updates are sent.
+  - **A cursor ahead of the log** (the server was restored from an older backup) restarts the device from 0. Its `caught-up` cursor is then lower than its own, which the client reports (`onServerBehind`). M4 re-uploads the full state in that case.
+  - **`notify(workspace)`** wakes the sockets after a change made outside the hub, such as a compaction.
+- **`SyncClient`** (replica):
+  - The sequence is connect, `hello` with the stored cursor, push the outbox, catch up, live.
+  - Only an `ack` removes an entry from the outbox. Unacknowledged entries are sent again after every reconnect, in pushes of up to 2 MB, with at most 1,000 entries in flight.
+  - Updates and their cursor reach the host's store together, in order.
+  - Reconnects back off exponentially (0.5 s up to 30 s, with jitter) and reset once live.
+  - 4401/4403 stop it as `unauthorized`; a protocol version mismatch stops it as `error`.
+  - An update over the size limit stays in the outbox and is reported (`onOversized`).
+- **Server endpoint** `GET /api/sync/<workspace id>` (`ws`):
+  - **Authentication:** a bearer token from the desktop, or the session cookie, which is only accepted when `Origin` is the server's own (cross-site WebSocket hijacking). Membership is checked, and guests can't push.
+  - **Refusals** complete the upgrade and then close with 4401/4403, because browsers can't see the HTTP status of a failed handshake. An unknown workspace looks the same as someone else's.
+  - **Liveness:** a ping every 30 seconds, and a socket that misses one is dropped. Every 60 seconds each socket's session and membership are checked again, so signing out, disabling an account or removing a member closes the socket.
+  - **Limits:** at most 50 sockets per user. Text frames are refused.
+  - **Session expiry:** a connected socket counts as using its session, so a desktop that only syncs keeps sliding its expiry like any other request.
+  - **Shutdown:** 1001 for every socket, then the server waits up to 2 seconds before cutting the rest.
+  - **Compaction:**
+    - It runs hourly in the server: docs with more than 500 stored updates are merged, and the sockets are notified.
+    - `workspace-admin compact`, from another process, can't notify. Connected devices then get the merged row with the next append.
+  - **Compression:** per-message deflate is off for now.
+- **Tests:**
+  - **Convergence fuzzing:**
+    - Three replicas make random edits to five docs (text and maps) over a simulated network.
+    - The faults are dropped links that lose messages and acks, devices offline for a while that keep editing, duplicated messages, server restarts, and compactions.
+    - After healing, every doc must be identical on every device and on the server, every cursor must be at the end of the log, and no cursor may ever go back.
+    - CI runs 25 seeds of 400 steps each; I also ran 200 seeds here (`SYNC_FUZZ_SEEDS=200`). Injected bugs (dropping some rows, or trimming the outbox before the ack) make it fail.
+    - It found a real bug while being written: a run read from the ring that stopped at a gap (rows appended by another process) was taken as the end of the log. A hub test now covers it.
+  - **Review fix:** a reconnect while an outbox read was still pending could leave the new connection without its push until the next edit. A client test covers it.
+  - **Unit tests:** messages (round trips, every malformed input), the hub (batches, merging, own updates, broadcast, gaps, partial clients, read-only, malformed updates, a restored server, slow sockets) and the client (handshake, outbox and acks, backoff, refusals, old sockets, oversized updates).
+  - **Server integration** (Postgres and real sockets):
+    - authentication on connect: missing, forged, cookie and origin, non-member, unknown and invalid ids
+    - two devices live and after offline edits
+    - a 1,200-update catch-up in batches, and catch-up after compaction from the middle of the log
+    - the compaction timer
+    - workspace isolation
+    - sign-out, guest and removed-member closes
+    - the heartbeat, text and oversized frames, and shutdown
+- **Verified here:** two devices synced over `wss://` through Caddy's TLS (local CA) to the bundled server on Postgres 16. The server image wasn't rebuilt because Docker Hub rate-limited the base image pull. The Dockerfile is unchanged, and its `@workspace/server...` filter picks up `packages/sync`.
 
 ### M4: desktop sync
 
