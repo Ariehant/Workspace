@@ -88,4 +88,29 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
       return { results };
     },
   );
+
+  // Where a page lives (a workspace page, or a row of which database), from the index.
+  app.get<{ Params: { id: string; pageId: string } }>(
+    '/api/workspaces/:id/pages/:pageId/location',
+    {
+      preHandler: signedIn,
+      schema: {
+        params: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            pageId: { type: 'string', minLength: 1, maxLength: 128 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!(await store.roleOf(request.params.id, request.auth!.user.id))) {
+        return fail(reply, 404, 'not_found', 'No such workspace.');
+      }
+      const location = await store.search.locate(request.params.id, request.params.pageId);
+      if (!location) return fail(reply, 404, 'not_found', 'Not indexed (yet).');
+      return location;
+    },
+  );
 }

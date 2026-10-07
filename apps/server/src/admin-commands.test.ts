@@ -76,7 +76,7 @@ describe('workspace-admin', () => {
     const ws = await store.createWorkspace('Lab', owner!.id);
     const { out } = await run('list-workspaces');
     expect(out).toContain(`${ws.id}\tLab\t1 members\t0 updates\t0.0 MB`);
-    expect((await run('migrate')).out).toEqual(['Schema at version 3']);
+    expect((await run('migrate')).out).toEqual(['Schema at version 4']);
     expect((await run('compact')).out).toEqual(['Compacted 0 docs']);
     const unknown = await run('frobnicate');
     expect(unknown.code).toBe(1);

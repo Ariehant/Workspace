@@ -12,6 +12,8 @@ import type { FileStorage } from './files';
 import { Indexer } from './search/indexer';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
+import { settingsRoutes } from './settings-routes';
+import { webApp } from './web';
 import { workspaceRoutes } from './workspaces';
 
 export const VERSION = '0.1.0';
@@ -134,7 +136,9 @@ export function buildServer({
     workspaceRoutes(scope, ctx);
     adminRoutes(scope, ctx);
     fileRoutes(scope, ctx);
+    settingsRoutes(scope, ctx);
   });
+  webApp(app, config.webDir);
   syncEndpoint(app, ctx, sync);
 
   return app;

@@ -85,6 +85,25 @@ export interface Platform {
   onImportStatus(listener: (status: ImportStatus) => void): () => void;
   /** Sync with a server (the desktop; the web app is always on its server). */
   sync?: SyncPlatform;
+  /** What this host can do; a missing feature means yes (the desktop has them all). */
+  features?: Partial<Record<Feature, boolean>>;
+  /** The signed-in account (the web app), shown in the workspace menu. */
+  account?: AccountInfo;
+}
+
+/** Features some hosts don't have (the web app hides them rather than break). */
+export type Feature = 'export' | 'import' | 'backup' | 'history' | 'backlinks';
+
+export const can = (platform: Platform, feature: Feature): boolean =>
+  platform.features?.[feature] !== false;
+
+export interface AccountInfo {
+  name: string;
+  email: string;
+  /** The workspace this window shows. */
+  workspace: string;
+  switchWorkspace(): void;
+  signOut(): void;
 }
 
 /** Where this device's sync stands. */

@@ -1,0 +1,4 @@
+@import '@workspace/ui/styles.css';
+
+/* The web shell's own components (sign-in, workspace picker). */
+@source './';

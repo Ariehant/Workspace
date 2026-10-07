@@ -1,2 +1,11 @@
 export { App } from './app';
-export type { AppCommand, Platform, SearchHit } from './platform';
+export { can } from './platform';
+export type {
+  AccountInfo,
+  AppCommand,
+  Feature,
+  Platform,
+  SearchHit,
+  SyncInfo,
+  SyncPlatform,
+} from './platform';

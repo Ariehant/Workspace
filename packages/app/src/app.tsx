@@ -40,7 +40,7 @@ import { NavigationContext, type Navigation } from './navigation';
 import { PageDirectory } from './pages';
 import { useDoc, useDocVersion } from './hooks';
 import { PageView } from './page-view';
-import type { AppCommand, Platform } from './platform';
+import { can, type AppCommand, type Platform } from './platform';
 import { QuickFind } from './quick-find';
 import { ButtonEditorHost } from './buttons/button-dialog';
 import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
@@ -513,7 +513,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
       onDuplicate={duplicate}
       onSaveAsTemplate={saveTemplate}
-      onExport={setExporting}
+      onExport={can(platform, 'export') ? setExporting : undefined}
       onMove={setMoving}
       onTrash={trash}
       isFavorite={favorites.includes(currentPageId)}
@@ -576,6 +576,12 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onCollapse={() => setSidebarOpen(false)}
             sync={syncInfo}
             onSync={() => setSyncOpen(true)}
+            can={{
+              export: can(platform, 'export'),
+              import: can(platform, 'import'),
+              backup: can(platform, 'backup'),
+            }}
+            account={platform.account}
           />
         )}
         {syncOpen && platform.sync && syncInfo && (

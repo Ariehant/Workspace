@@ -37,6 +37,7 @@ import {
 import type * as Y from 'yjs';
 import type { BlockTarget } from './app';
 import { useApp } from './context';
+import { can } from './platform';
 import { Backlinks } from './backlinks';
 import { Cover, randomCover } from './cover';
 import { DatabaseView } from './database/database-view';
@@ -250,7 +251,7 @@ export function PageHero({
           readOnly={!editable}
           onEnter={onEnter}
         />
-        <Backlinks pageId={model.id} />
+        {can(platform, 'backlinks') && <Backlinks pageId={model.id} />}
       </div>
     </>
   );
@@ -397,7 +398,8 @@ export interface PageViewProps {
   onToggleFavorite(): void;
   onDuplicate(id: PageId): void;
   onSaveAsTemplate(id: PageId): void;
-  onExport(id: PageId): void;
+  /** Absent where the host can't export (the web app). */
+  onExport?(id: PageId): void;
   onMove(id: PageId): void;
   onTrash(id: PageId): void;
 }
@@ -459,7 +461,7 @@ export function PageView({
             onMove={() => onMove(pageId)}
             onCopyLink={() => void navigator.clipboard.writeText(pageUrl(pageId))}
             onSaveAsTemplate={() => onSaveAsTemplate(pageId)}
-            onExport={() => onExport(pageId)}
+            onExport={onExport ? () => onExport(pageId) : undefined}
             onTrash={() => onTrash(pageId)}
           />
         }

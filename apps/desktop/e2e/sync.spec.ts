@@ -4,12 +4,12 @@
  * server's workspace; edits, attachments and offline changes flow between them.
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Page } from '@playwright/test';
+import { chromium, type Page } from '@playwright/test';
 import { createTestDatabase, startTestPostgres } from '@workspace/storage-remote/testing';
 import { startFakeProvider } from '../../server/src/test-oidc-provider';
 import { editor, expect, launchApp, sidebarTitles, test, type Launched } from './helpers';
@@ -17,6 +17,8 @@ import { editor, expect, launchApp, sidebarTitles, test, type Launched } from '.
 test.describe.configure({ mode: 'serial' });
 
 const serverDir = fileURLToPath(new URL('../../server', import.meta.url));
+/** The web app's build (pnpm --filter @workspace/web build), served by the test server. */
+const webDir = fileURLToPath(new URL('../../web/dist', import.meta.url));
 /** Set WORKSPACE_SHOTS=<dir> to save screenshots of the sync UI. */
 const shotsDir = process.env.WORKSPACE_SHOTS;
 
@@ -60,6 +62,7 @@ async function startServer(extraEnv: Record<string, string> = {}) {
       FILES_DIR: join(root, 'server-files'),
       SIGNUP: 'open',
       LOG_LEVEL: 'warn',
+      WEB_DIR: webDir,
     },
     stdio: ['ignore', 'inherit', 'inherit'],
   });
@@ -87,6 +90,9 @@ async function stopServer() {
 
 test.beforeAll(async () => {
   test.setTimeout(120_000);
+  if (!existsSync(join(webDir, 'index.html'))) {
+    throw new Error('Build the web app first: pnpm --filter @workspace/web build');
+  }
   const build = spawnSync('node', ['build.mjs'], { cwd: serverDir, encoding: 'utf8' });
   if (build.status !== 0) throw new Error(`Server build failed: ${build.stderr}`);
   postgres = await startTestPostgres();
@@ -326,5 +332,52 @@ test('a third device signs in with single sign-on and merges its pages', async (
     });
   } finally {
     await idp.stop();
+  }
+});
+
+test('the web app and a desktop edit the same page live', async () => {
+  const A = a!;
+  // CHROMIUM_PATH: a preinstalled Chromium instead of Playwright's download.
+  const browser = await chromium.launch(
+    process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
+  );
+  try {
+    const web = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    web.on('pageerror', (error) => console.error(`[web] ${error.stack ?? error}`));
+    await web.goto(base);
+    await web.getByLabel('Email').fill('ada@lab.io');
+    await web.getByLabel('Password').fill('correct horse battery');
+    await web.getByRole('button', { name: 'Sign in' }).click();
+    await web
+      .getByTestId('workspace-picker')
+      .getByRole('button', { name: /Robotics lab/ })
+      .click();
+    await sidebarTitles(web).filter({ hasText: 'Gripper v2' }).click();
+    await expect(editor(web)).toContainText('After a restart.');
+
+    // Browser → desktop.
+    await editor(web).click();
+    await web.keyboard.press('Control+End');
+    await web.keyboard.press('Enter');
+    await web.keyboard.type('Typed in the browser.');
+    await openPage(A.window, 'Gripper v2');
+    await expect(editor(A.window)).toContainText('Typed in the browser.', { timeout: 10_000 });
+
+    // Desktop → browser, and a new page shows up in the browser's sidebar.
+    await editor(A.window).click();
+    await A.window.keyboard.press('Control+End');
+    await A.window.keyboard.press('Enter');
+    await A.window.keyboard.type('Typed on the desktop.');
+    await expect(editor(web)).toContainText('Typed on the desktop.', { timeout: 10_000 });
+    await A.window.getByRole('button', { name: 'New page' }).click();
+    await A.window.getByLabel('Page title').fill('Calibration');
+    await expect(sidebarTitles(web).filter({ hasText: 'Calibration' })).toHaveCount(1, {
+      timeout: 10_000,
+    });
+    await openPage(A.window, 'Gripper v2');
+    await shot(web, '11-web-app');
+    await shot(A.window, '12-desktop-with-web');
+  } finally {
+    await browser.close();
   }
 });

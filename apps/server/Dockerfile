@@ -5,19 +5,23 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /src
 RUN corepack enable
 # Install only the server and the workspace packages it uses.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages packages
 COPY apps/server apps/server
-RUN pnpm install --frozen-lockfile --filter "@workspace/server..." --ignore-scripts
-RUN pnpm --filter @workspace/server build
+COPY apps/web apps/web
+RUN pnpm install --frozen-lockfile --filter "@workspace/server..." --filter "@workspace/web..." --ignore-scripts
+RUN pnpm --filter @workspace/server build && pnpm --filter @workspace/web build
 
 FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
-    FILES_DIR=/data/files
+    FILES_DIR=/data/files \
+    WEB_DIR=/app/web
 # The bundle has everything; no node_modules needed.
 COPY --from=build /src/apps/server/dist ./dist
+# The web app, served at / (WEB_DIR).
+COPY --from=build /src/apps/web/dist ./web
 RUN mkdir -p /data/files && chown -R node:node /data \
  && printf '#!/bin/sh\nexec node /app/dist/admin.js "$@"\n' > /usr/local/bin/workspace-admin \
  && chmod +x /usr/local/bin/workspace-admin

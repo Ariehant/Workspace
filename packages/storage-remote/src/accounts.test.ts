@@ -168,4 +168,19 @@ describe('Accounts', () => {
     expect(await a.takeAuthCode('code-1')).toBeNull();
     expect(await a.takeAuthCode('code-old')).toBeNull();
   });
+
+  it('keeps per-user settings', async () => {
+    const a = store.accounts;
+    const user = await a.createUser({ email: 'set@lab.io', name: 'S', passwordHash: null });
+    await a.setSetting(user!.id, 'ui.theme', 'dark');
+    await a.setSetting(user!.id, 'w1:ui.tabs', { tabs: [1, 2] });
+    await a.setSetting(user!.id, 'ui.theme', 'light');
+    expect(await a.settings(user!.id)).toEqual({
+      'ui.theme': 'light',
+      'w1:ui.tabs': { tabs: [1, 2] },
+    });
+    await a.setSetting(user!.id, 'ui.theme', null);
+    expect(await a.settings(user!.id)).toEqual({ 'w1:ui.tabs': { tabs: [1, 2] } });
+    expect(await a.settingCount(user!.id)).toBe(1);
+  });
 });

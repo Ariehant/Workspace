@@ -7,8 +7,9 @@ The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Ph
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
 except its last check, importing a real Notion export. Phase 4 (sync server, see
-[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server (M1), accounts (M2), the sync protocol (M3), desktop sync (M4)
-and server-side search and attachments (M5) are done; the web app (M6) is next.
+[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server (M1), accounts (M2), the sync protocol (M3), desktop sync (M4),
+server-side search and attachments (M5) and the web app (M6) are done; the phase's exit check
+is next.
 
 ## What works today
 
@@ -101,16 +102,18 @@ pnpm install
 pnpm dev            # launch the desktop app with hot reload
 ```
 
-| Command          | What it does                                                |
-| ---------------- | ----------------------------------------------------------- |
-| `pnpm dev`       | Run the desktop app in development mode                     |
-| `pnpm build`     | Build all packages                                          |
-| `pnpm typecheck` | Type-check every package                                    |
-| `pnpm test`      | Unit tests (Vitest)                                         |
-| `pnpm test:e2e`  | End-to-end tests driving the real Electron app (Playwright) |
-| `pnpm lint`      | ESLint                                                      |
-| `pnpm format`    | Prettier                                                    |
-| `pnpm package`   | Build `.deb` and AppImage into `apps/desktop/dist/`         |
+| Command             | What it does                                                |
+| ------------------- | ----------------------------------------------------------- |
+| `pnpm dev`          | Run the desktop app in development mode                     |
+| `pnpm build`        | Build all packages                                          |
+| `pnpm typecheck`    | Type-check every package                                    |
+| `pnpm test`         | Unit tests (Vitest)                                         |
+| `pnpm test:e2e`     | End-to-end tests driving the real Electron app (Playwright) |
+| `pnpm test:e2e:web` | The web app's end-to-end tests (Chromium, real server)      |
+| `pnpm dev:web`      | The web app with hot reload (`VITE_SERVER=<server url>`)    |
+| `pnpm lint`         | ESLint                                                      |
+| `pnpm format`       | Prettier                                                    |
+| `pnpm package`      | Build `.deb` and AppImage into `apps/desktop/dist/`         |
 
 E2E tests need a display. On a headless machine, run `pnpm --filter @workspace/desktop build`
 first, then `xvfb-run -a pnpm test:e2e`.
@@ -169,8 +172,12 @@ docker compose exec server workspace-admin help      # all commands
 Single sign-on works with any OpenID Connect provider (GitLab, Google, Keycloak, Authentik…).
 Set `OIDC_*` in `.env` (see `.env.example`).
 
-`infra/workspace.service` runs it under systemd and `infra/backup.sh` backs it up. To sync a
-desktop, open Sync in its sidebar and enter `https://<DOMAIN>`.
+`infra/workspace.service` runs it under systemd and `infra/backup.sh` backs it up.
+
+- **In a browser:** open `https://<DOMAIN>`. The web app is the same UI. It keeps only the pages
+  you open, and works while connected (export, import, backups and page history are desktop
+  features).
+- **On a desktop:** open Sync in the sidebar and enter `https://<DOMAIN>`.
 
 ## Architecture
 
@@ -184,8 +191,9 @@ packages/
   ui/               Design tokens (Tailwind), themes, buttons, menus
   app/              Shared React screens: sidebar, page view, app shell
   storage-remote/   Postgres store for the sync server (migrations, update log, accounts)
-  sync/             Sync protocol: messages, the server hub and the client (no I/O)
-apps/server/        Sync server (Fastify: auth, workspaces, WebSocket sync), bundled with esbuild
+  sync/             Sync protocol: messages, the server hub and the clients (no I/O)
+apps/server/        Sync server (Fastify: auth, workspaces, WebSocket sync, search), bundled with esbuild
+apps/web/           The web app: the shared UI on the server (Vite)
 infra/              Docker Compose stack, Caddyfile, systemd unit, backup script
 ```
 

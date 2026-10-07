@@ -1,6 +1,6 @@
 # Phase 4: Sync server
 
-**Status:** M1–M5 done. M6 (the web app) next.
+**Status:** M1–M6 done. The exit check (two desktops, offline, Docker through Caddy) is next.
 
 ## Context
 
@@ -374,7 +374,7 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
   - **Files:** byte ranges (all forms), 304s, a disguised HTML upload, fake media, and the sniffer itself.
   - **Desktop sync E2E:** after device A uploads, the real server bundle's search finds its page by a word in its content.
 
-### M6: web app
+### M6: web app ✅
 
 - **`apps/web`:** a Vite build of `packages/app` with a `WebPlatform`:
   - `DocTransport` over the sync socket (`open` a doc's state, then its live updates; pushes acknowledged)
@@ -383,6 +383,45 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
 - **Features that need the desktop** (PDF export, import, export, backup, multiple windows, page history, backlinks) are hidden in the web app, not broken. Links and notifications open pages in the browser tab.
 - The server serves the build under `/`, and Caddy puts everything on one origin.
 - **Tests:** Playwright (Chromium) against the server — sign in, edit a page and a database, reload, see the edits.
+
+**M6 notes:**
+
+- **`PartialClient`** (`packages/sync`) is the web app's side of sync:
+  - It opens only the docs on screen. `open` resolves with a doc's merged state, then the doc's updates arrive.
+  - Pushes are kept until acknowledged. After a reconnect every open doc is opened again (its state covers whatever was missed) and unacknowledged pushes are sent again.
+  - Nothing is persisted, so a tab with unsent edits asks before closing and shows "Offline · N unsaved changes. Keep this tab open."
+  - It's tested against the hub, with a replica, offline edits, link cuts and duplicated messages.
+- **`apps/web`** is a Vite build of the same `packages/app` UI, with a `WebPlatform`:
+  - **Docs:** `DocTransport` over `PartialClient`, through `wss://<host>/api/sync/<workspace>` with the session cookie (same origin, checked against `Origin`).
+  - **Search:** `GET /api/workspaces/<id>/search` (M5).
+  - **Rows:** "where is this page" comes from the index (`/pages/<id>/location`).
+  - **Attachments:** hashed in the browser (SHA-256, like the desktop) and uploaded with `PUT`. The id is the content hash, so the same file is stored once across devices.
+  - **Settings** are per user on the server (migration 4, `user_settings`, `GET`/`PUT /api/settings`). Theme and sidebar settings follow the account everywhere; tabs, favorites and the like are kept per workspace.
+  - **Links:** `#page=…` links and "open in new window" open browser tabs.
+- **The shell** (`apps/web/src/main.tsx`, `shell.tsx`):
+  - Sign in, or create an account (the first one on a new server becomes its admin), with "Continue with …" for each SSO provider and invite codes from `?invite=`.
+  - Then a workspace picker (open or create). The app lives at `/w/<workspace id>` and the last workspace opens directly.
+  - The workspace menu shows the account, "Switch workspace…" and "Sign out". A session that ends returns to sign-in.
+- **Hidden in the web app, not broken** (`Platform.features`): export, import, backup and restore, page history and backlinks. They need the desktop's local index and files. Link previews are also off, because fetching other sites from the server would be an SSRF risk.
+- **Serving:**
+  - The server serves the build at `/` when `WEB_DIR` is set (`@fastify/static`).
+  - Hashed assets are cached for good, and `index.html` is sent for every non-API path, with `no-cache` and `X-Frame-Options: DENY`. API 404s stay JSON.
+  - The build's CSP allows only its own scripts, and `connect-src 'self'`.
+  - The Docker image now builds the web app too (`WEB_DIR=/app/web`), so `https://<DOMAIN>` is the web app.
+- **Tests:**
+  - **`apps/web/e2e`** (Playwright, Chromium) against the real server bundle on a throwaway Postgres:
+    - sign up as the first user and create a workspace
+    - write a page, paste an image (uploaded and served back), and add a database with a row
+    - reload and see everything again
+    - quick find on the server by content and by row
+    - a second tab gets edits live in both directions
+    - the theme follows the account after a reload
+    - the desktop-only items are hidden
+    - signing out signs out the other tab too
+  - **The desktop sync E2E** now also drives the web app: a browser edit shows on the desktop and the other way round, and a page created on the desktop appears in the browser's sidebar. That's the exit check's web app item.
+  - **Server:** serving the build (app routes, assets, API 404s, headers), settings (CSRF, size and name limits), and page location.
+  - **CI** builds the web app, installs Chromium and runs both E2E suites. `CHROMIUM_PATH` points the tests at a preinstalled Chromium.
+- **Not verified here:** the Docker image build itself. Docker Hub rate-limited the base image again. The Dockerfile's steps (filtered install, server and web builds) were run on a clean copy of the sources.
 
 ## Exit check
 

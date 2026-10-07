@@ -15,6 +15,8 @@ import {
 import {
   Archive,
   ArchiveRestore,
+  ArrowLeftRight,
+  LogOut,
   ChevronRight,
   ChevronsLeft,
   Copy,
@@ -34,7 +36,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
-import type { SyncInfo } from './platform';
+import type { AccountInfo, SyncInfo } from './platform';
 import { SyncIndicator } from './sync-settings';
 import { Trash } from './trash';
 
@@ -76,12 +78,15 @@ export interface SidebarProps {
   /** Sync status (hosts that sync), and opening Settings → Sync. */
   sync?: SyncInfo | null;
   onSync?(): void;
+  /** What the host can do (hides the rest). */
+  can: { export: boolean; import: boolean; backup: boolean };
+  account?: AccountInfo;
 }
 
 export function Sidebar(props: SidebarProps) {
   const { workspace, tree, favorites, width, onCreate, onCollapse, onSelect, onSearch, onDrop } =
     props;
-  const { theme, onThemeChange, fileUrl } = props;
+  const { theme, onThemeChange, fileUrl, account } = props;
   const [drag, setDrag] = useState<DragState | null>(null);
   const [overEnd, setOverEnd] = useState(false);
 
@@ -116,20 +121,42 @@ export function Sidebar(props: SidebarProps) {
               <span className="flex size-5 shrink-0 items-center justify-center rounded bg-active text-xs font-semibold">
                 W
               </span>
-              <span className="truncate text-sm font-medium">Workspace</span>
+              <span className="truncate text-sm font-medium" data-testid="workspace-name">
+                {account?.workspace ?? 'Workspace'}
+              </span>
             </button>
           </MenuTrigger>
           <MenuContent align="start" className="w-60">
-            <MenuItem icon={<Download size={14} />} onSelect={props.onExportAll}>
-              Export all workspace content…
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem icon={<Archive size={14} />} onSelect={props.onBackup}>
-              Back up workspace…
-            </MenuItem>
-            <MenuItem icon={<ArchiveRestore size={14} />} onSelect={props.onRestore}>
-              Restore from backup…
-            </MenuItem>
+            {account && (
+              <>
+                <div className="px-2 py-1.5 text-xs text-muted">
+                  <div className="truncate font-medium text-fg">{account.name}</div>
+                  <div className="truncate">{account.email}</div>
+                </div>
+                <MenuItem icon={<ArrowLeftRight size={14} />} onSelect={account.switchWorkspace}>
+                  Switch workspace…
+                </MenuItem>
+                <MenuItem icon={<LogOut size={14} />} onSelect={account.signOut}>
+                  Sign out
+                </MenuItem>
+              </>
+            )}
+            {props.can.export && (
+              <MenuItem icon={<Download size={14} />} onSelect={props.onExportAll}>
+                Export all workspace content…
+              </MenuItem>
+            )}
+            {props.can.backup && (
+              <>
+                <MenuSeparator />
+                <MenuItem icon={<Archive size={14} />} onSelect={props.onBackup}>
+                  Back up workspace…
+                </MenuItem>
+                <MenuItem icon={<ArchiveRestore size={14} />} onSelect={props.onRestore}>
+                  Restore from backup…
+                </MenuItem>
+              </>
+            )}
           </MenuContent>
         </Menu>
         <IconButton
@@ -218,14 +245,16 @@ export function Sidebar(props: SidebarProps) {
           <LayoutTemplate size={16} />
           Templates
         </button>
-        <button
-          type="button"
-          onClick={props.onImport}
-          className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover"
-        >
-          <FileInput size={16} />
-          Import
-        </button>
+        {props.can.import && (
+          <button
+            type="button"
+            onClick={props.onImport}
+            className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover"
+          >
+            <FileInput size={16} />
+            Import
+          </button>
+        )}
         <Trash workspace={workspace} fileUrl={fileUrl} onOpen={onSelect}>
           <button
             type="button"

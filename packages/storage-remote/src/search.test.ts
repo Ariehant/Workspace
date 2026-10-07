@@ -55,6 +55,9 @@ describe('search index', () => {
       ['r1', 'db'],
     ]);
     expect((await s.search(ws.id, 'torque 12')).map((h) => h.id)).toEqual(['r1']);
+    expect(await s.locate(ws.id, 'r1')).toEqual({ databaseId: 'db' });
+    expect(await s.locate(ws.id, 'p1')).toEqual({ databaseId: null });
+    expect(await s.locate(ws.id, 'nope')).toBeNull();
     // Every word must match.
     expect(await s.search(ws.id, 'gripper torque')).toEqual([]);
     // A title match ranks above a content match.

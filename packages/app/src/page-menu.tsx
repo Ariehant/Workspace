@@ -26,7 +26,9 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useBacklinksMode, type BacklinksMode } from './backlinks';
+import { useApp } from './context';
 import { HistoryDialog } from './history-dialog';
+import { can } from './platform';
 import { useState } from 'react';
 import type * as Y from 'yjs';
 
@@ -100,6 +102,7 @@ export function PageMenu({
   const [stats, setStats] = useState<{ words: number; now: number } | null>(null);
   const [history, setHistory] = useState(false);
   const [backlinks, setBacklinks] = useBacklinksMode(page.id);
+  const { platform } = useApp();
 
   return (
     <>
@@ -166,22 +169,24 @@ export function PageMenu({
             <span className="flex-1">Lock page</span>
             <Toggle on={page.locked} />
           </MenuItem>
-          <MenuSub>
-            <MenuSubTrigger icon={<ArrowUpLeft size={14} />}>
-              <span className="flex-1">Show backlinks</span>
-            </MenuSubTrigger>
-            <MenuSubContent>
-              <MenuRadioGroup
-                value={backlinks}
-                onValueChange={(mode) => setBacklinks(mode as BacklinksMode)}
-              >
-                <MenuRadioItem value="expanded">Expanded</MenuRadioItem>
-                <MenuRadioItem value="popover">As a popover</MenuRadioItem>
-                <MenuRadioItem value="off">Off</MenuRadioItem>
-              </MenuRadioGroup>
-            </MenuSubContent>
-          </MenuSub>
-          {pageDoc && (
+          {can(platform, 'backlinks') && (
+            <MenuSub>
+              <MenuSubTrigger icon={<ArrowUpLeft size={14} />}>
+                <span className="flex-1">Show backlinks</span>
+              </MenuSubTrigger>
+              <MenuSubContent>
+                <MenuRadioGroup
+                  value={backlinks}
+                  onValueChange={(mode) => setBacklinks(mode as BacklinksMode)}
+                >
+                  <MenuRadioItem value="expanded">Expanded</MenuRadioItem>
+                  <MenuRadioItem value="popover">As a popover</MenuRadioItem>
+                  <MenuRadioItem value="off">Off</MenuRadioItem>
+                </MenuRadioGroup>
+              </MenuSubContent>
+            </MenuSub>
+          )}
+          {pageDoc && can(platform, 'history') && (
             <MenuItem icon={<History size={14} />} onSelect={() => setHistory(true)}>
               Page history
             </MenuItem>

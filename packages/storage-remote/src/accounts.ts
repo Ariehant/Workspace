@@ -393,4 +393,37 @@ export class Accounts {
     const r = rows[0];
     return r ? { userId: r.user_id, deviceName: r.device_name, challenge: r.challenge } : null;
   }
+
+  // --- Settings (the web app's, per user) -----------------------------------------------
+
+  async settings(userId: string): Promise<Record<string, unknown>> {
+    const { rows } = await this.pool.query<{ key: string; value: unknown }>(
+      'SELECT key, value FROM user_settings WHERE user_id = $1',
+      [userId],
+    );
+    return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  }
+
+  async setSetting(userId: string, key: string, value: unknown): Promise<void> {
+    if (value === null || value === undefined) {
+      await this.pool.query('DELETE FROM user_settings WHERE user_id = $1 AND key = $2', [
+        userId,
+        key,
+      ]);
+      return;
+    }
+    await this.pool.query(
+      `INSERT INTO user_settings (user_id, key, value) VALUES ($1, $2, $3::jsonb)
+       ON CONFLICT (user_id, key) DO UPDATE SET value = excluded.value`,
+      [userId, key, JSON.stringify(value)],
+    );
+  }
+
+  async settingCount(userId: string): Promise<number> {
+    const { rows } = await this.pool.query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM user_settings WHERE user_id = $1',
+      [userId],
+    );
+    return rows[0]!.n;
+  }
 }

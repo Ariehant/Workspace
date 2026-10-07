@@ -195,6 +195,16 @@ export class SearchIndex {
     }));
   }
 
+  /** Where a page lives: databaseId null for a workspace page; null if unknown. */
+  async locate(workspaceId: string, id: string): Promise<{ databaseId: string | null } | null> {
+    const { rows } = await this.pool.query<{ kind: string; database_id: string | null }>(
+      'SELECT kind, database_id FROM search_index WHERE workspace_id = $1 AND id = $2 AND kind IS NOT NULL',
+      [workspaceId, id],
+    );
+    const row = rows[0];
+    return row ? { databaseId: row.kind === 'row' ? row.database_id : null } : null;
+  }
+
   /** Forget a workspace's index (to rebuild it). */
   async clear(workspaceId: string): Promise<void> {
     await this.pool.query('DELETE FROM search_index WHERE workspace_id = $1', [workspaceId]);

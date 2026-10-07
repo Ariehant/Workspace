@@ -152,6 +152,15 @@ export const MIGRATIONS: string[] = [
     indexed_seq bigint NOT NULL DEFAULT 0
   );
   `,
+  `
+  -- The web app's settings (theme, sidebar, tabs...), per user.
+  CREATE TABLE user_settings (
+    user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+    key text NOT NULL,
+    value jsonb NOT NULL,
+    PRIMARY KEY (user_id, key)
+  );
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

@@ -47,7 +47,12 @@ jobs:
       - name: Allow user namespaces for the Chromium sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: pnpm --filter @workspace/desktop build
+      # The sync tests serve the web app and drive it in Chromium too.
+      - run: pnpm --filter @workspace/web build
+      - run: pnpm --filter @workspace/web exec playwright install --with-deps chromium
       - run: xvfb-run -a pnpm test:e2e
+      - name: Web app end-to-end (Chromium)
+        run: pnpm test:e2e:web
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -55,6 +60,8 @@ jobs:
           path: |
             apps/desktop/playwright-report
             apps/desktop/test-results
+            apps/web/playwright-report
+            apps/web/test-results
           retention-days: 7
 
   package:

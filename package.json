@@ -15,7 +15,9 @@
     "package": "pnpm --filter @workspace/desktop package",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:e2e:web": "pnpm --filter @workspace/web test:e2e",
+    "dev:web": "pnpm --filter @workspace/web dev"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
