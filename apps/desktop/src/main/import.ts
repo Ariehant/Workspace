@@ -17,6 +17,8 @@ export function registerImport(deps: {
   manager: DocManager;
   dbPath: string;
   dataDir: string;
+  /** Attachments were added (the worker stores them directly). */
+  onFiles: () => void;
 }): void {
   let running: Worker | null = null;
 
@@ -66,6 +68,7 @@ export function registerImport(deps: {
             deps.manager.applyUpdate(id, update, IMPORT_ORIGIN);
           }
           settle({ state: 'done', report: message.report });
+          if (message.report.files > 0) deps.onFiles();
         } catch (error) {
           settle({
             state: 'failed',

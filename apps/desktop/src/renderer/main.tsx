@@ -42,6 +42,7 @@ const platform: Platform = {
   startImport: () => api.imports.start(),
   cancelImport: () => api.imports.cancel(),
   onImportStatus: (listener) => api.imports.onStatus(listener),
+  sync: api.sync,
 };
 
 createRoot(document.getElementById('root')!).render(

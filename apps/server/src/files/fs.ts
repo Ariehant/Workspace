@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { access, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { FileStorage } from './storage';
 
@@ -32,6 +32,15 @@ export class FsStorage implements FileStorage {
     // Write under a temp name first: a crash never leaves a truncated file under its id.
     const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(tmp, bytes);
+    await rename(tmp, path);
+  }
+
+  async putFile(key: string, source: string, _size?: number, _mime?: string): Promise<void> {
+    const path = this.path(key);
+    await mkdir(dirname(path), { recursive: true });
+    // Copy (the source may be on another filesystem), then rename into place.
+    const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+    await copyFile(source, tmp);
     await rename(tmp, path);
   }
 

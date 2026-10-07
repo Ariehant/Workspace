@@ -141,6 +141,29 @@ test('text and block colors, kept after a restart', async ({ launch }) => {
   );
 });
 
+/**
+ * Put the caret in the page's last top-level paragraph, and check it's there: right
+ * after a paste, the editor can still move the selection (a paste's focus lands a frame
+ * or two later), so click again until it stays.
+ */
+async function caretInLastParagraph(window: Page) {
+  await expect
+    .poll(async () => {
+      await settle(window);
+      await editor(window).locator(':scope > p').last().click();
+      await window.keyboard.press('Control+End');
+      await settle(window);
+      return window.evaluate(() => {
+        const node = getSelection()?.anchorNode;
+        const element =
+          node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
+        const block = element?.closest('[data-testid="page-editor"] > *');
+        return block === block?.parentElement?.lastElementChild ? block?.tagName : 'elsewhere';
+      });
+    })
+    .toBe('P');
+}
+
 test('pasting Markdown makes blocks; copying gives Markdown', async ({ launch }) => {
   const { window } = await launch();
   await newPage(window, 'Readme');
@@ -151,14 +174,12 @@ test('pasting Markdown makes blocks; copying gives Markdown', async ({ launch })
   await expect(editor(window).locator('pre code')).toHaveText('make flash');
 
   // Styled lines from a code editor are treated as Markdown too...
-  await editor(window).locator(':scope > p').last().click();
+  await caretInLastParagraph(window);
   await paste(window, '## Notes', '<div style="color:#ccc"><span>## Notes</span></div>');
   await expect(editor(window).locator('h2')).toHaveText('Notes');
   await settle(window);
-  // ...but plain prose stays prose. (Ctrl+End: the caret goes to the empty last
-  // paragraph even if the previous paste is still settling.)
-  await editor(window).locator(':scope > p').last().click();
-  await window.keyboard.press('Control+End');
+  // ...but plain prose stays prose.
+  await caretInLastParagraph(window);
   await paste(window, 'Just a sentence.');
   await expect(editor(window).locator(':scope > p', { hasText: 'Just a sentence.' })).toHaveCount(
     1,

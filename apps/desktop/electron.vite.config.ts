@@ -38,8 +38,17 @@ const csp = (): Plugin => ({
 export default defineConfig({
   main: {
     build: {
-      // The import worker uses the editor's schema, never its Mermaid preview: keep that out.
-      rollupOptions: { external: ['node:sqlite', 'mermaid'] },
+      rollupOptions: {
+        external: [
+          'node:sqlite',
+          // The import worker uses the editor's schema, never its Mermaid preview: keep that out.
+          'mermaid',
+          // ws's optional native helpers: left as real (failing) requires, so ws falls back
+          // to its JavaScript versions. Bundled, they'd become empty objects and break it.
+          'bufferutil',
+          'utf-8-validate',
+        ],
+      },
     },
   },
   preload: {

@@ -39,7 +39,71 @@ export const IPC = {
   importStatus: 'import:status',
   /** print window -> main: the page is rendered, print it. */
   printReady: 'print:ready',
+  syncStatus: 'sync:status',
+  /** main -> renderer: the sync status changed. */
+  syncChanged: 'sync:changed',
+  syncServerInfo: 'sync:server-info',
+  syncSignIn: 'sync:sign-in',
+  syncWorkspaces: 'sync:workspaces',
+  syncEnable: 'sync:enable',
+  syncDisable: 'sync:disable',
+  syncRetry: 'sync:retry',
 } as const;
+
+/** Where this device's sync stands (shown in the sidebar and Settings → Sync). */
+export interface SyncInfo {
+  /** off: not set up; account: signed in, no workspace chosen yet; on: syncing a workspace. */
+  mode: 'off' | 'account' | 'on';
+  server: string | null;
+  account: { email: string; name: string } | null;
+  workspace: { id: string; name: string } | null;
+  state:
+    | 'off'
+    | 'stopped'
+    | 'connecting'
+    | 'catching-up'
+    | 'live'
+    | 'offline'
+    | 'unauthorized'
+    | 'error';
+  reason: string | null;
+  /** When the next reconnect happens (offline). */
+  retryAt: number | null;
+  /** Local changes the server hasn't stored yet. */
+  pending: number;
+  /** Attachments waiting to upload. */
+  files: number;
+  lastSyncedAt: number | null;
+  /** The session token is encrypted with the system keyring. */
+  secureStorage: boolean;
+}
+
+export interface SyncServerInfo {
+  server: string;
+  signup: 'open' | 'invite' | 'disabled';
+  needsSetup: boolean;
+  providers: { id: string; name: string }[];
+}
+
+export type SyncSignIn =
+  | { kind: 'password'; server: string; email: string; password: string }
+  | {
+      kind: 'signup';
+      server: string;
+      email: string;
+      name: string;
+      password: string;
+      invite?: string;
+    }
+  | { kind: 'sso'; server: string; provider: string; invite?: string };
+
+export type SyncEnable =
+  | { mode: 'upload'; name: string }
+  | { mode: 'merge'; workspaceId: string }
+  | { mode: 'replace'; workspaceId: string };
+
+/** IPC results that can fail with a message for the user. */
+export type Result<T = true> = { ok: T } | { error: string };
 
 export type ExportFormat = 'markdown' | 'html' | 'pdf' | 'backup';
 

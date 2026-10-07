@@ -7,8 +7,8 @@ The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Ph
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
 except its last check, importing a real Notion export. Phase 4 (sync server, see
-[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server foundation (M1), accounts (M2) and the sync protocol (M3) are
-done; desktop sync (M4) is next.
+[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server (M1), accounts (M2), the sync protocol (M3) and desktop sync
+(M4) are done.
 
 ## What works today
 
@@ -83,6 +83,9 @@ done; desktop sync (M4) is next.
 - Page icons (emoji or image) and covers (gradients, colors or images, repositionable).
 - Page menu: font (default, serif, mono), small text, full width, lock, duplicate (with
   sub-pages), move to, copy link, word count.
+- Sync between devices through a server you host (sidebar → "Sync is off", or File → Sync…):
+  sign in with a password or single sign-on, upload this workspace or use one from the server,
+  and keep working offline; changes and attachments sync when the connection is back.
 - `.deb` and AppImage packages for Ubuntu.
 
 ## Requirements
@@ -136,10 +139,13 @@ place, prefer the `.deb`.
 | Attachments (images, PDFs, files)    | `~/.local/share/workspace-app/files/`                                  |
 | Chromium profile (caches, GPU state) | `~/.config/Workspace/`                                                 |
 
+With sync on, the database also holds the changes waiting for the server, and the sign-in
+(encrypted with the system keyring when there is one).
+
 Back up the workspace by copying `workspace.db` and the `files/` folder while the app is closed. Set `WORKSPACE_DATA_DIR`
 to use a different directory, for example to keep separate workspaces.
 
-## Self-hosting the sync server (in progress)
+## Self-hosting the sync server
 
 The server runs with Docker Compose on Ubuntu 24.04: Caddy (automatic HTTPS), the server and
 Postgres 16, with attachments on a volume (or in S3 with `docker-compose.s3.yml`).
@@ -162,8 +168,8 @@ docker compose exec server workspace-admin help      # all commands
 Single sign-on works with any OpenID Connect provider (GitLab, Google, Keycloak, Authentik…).
 Set `OIDC_*` in `.env` (see `.env.example`).
 
-`infra/workspace.service` runs it under systemd and `infra/backup.sh` backs it up. Syncing
-devices arrives in the next milestones of Phase 4.
+`infra/workspace.service` runs it under systemd and `infra/backup.sh` backs it up. To sync a
+desktop, open Sync in its sidebar and enter `https://<DOMAIN>`.
 
 ## Architecture
 

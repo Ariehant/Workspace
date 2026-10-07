@@ -10,6 +10,7 @@ import type { Config } from './config';
 import type { ServerContext } from './context';
 import type { FileStorage } from './files';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
+import { fileRoutes } from './files-routes';
 import { workspaceRoutes } from './workspaces';
 
 export const VERSION = '0.1.0';
@@ -103,6 +104,7 @@ export function buildServer({ config, store, files, oidc, sync }: ServerDeps): F
     authRoutes(scope, ctx);
     workspaceRoutes(scope, ctx);
     adminRoutes(scope, ctx);
+    fileRoutes(scope, ctx);
   });
   syncEndpoint(app, ctx, sync);
 

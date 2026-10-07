@@ -1,3 +1,4 @@
+import { createReadStream } from 'node:fs';
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
@@ -53,6 +54,18 @@ export class S3Storage implements FileStorage {
   async put(key: string, bytes: Uint8Array, mime: string): Promise<void> {
     await this.client.send(
       new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: bytes, ContentType: mime }),
+    );
+  }
+
+  async putFile(key: string, path: string, size: number, mime: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: createReadStream(path),
+        ContentLength: size,
+        ContentType: mime,
+      }),
     );
   }
 

@@ -13,6 +13,7 @@
   "dependencies": {
     "@workspace/core": "workspace:*",
     "@workspace/database": "workspace:*",
+    "@workspace/sync": "workspace:*",
     "yjs": "^13.6.27"
   }
 }

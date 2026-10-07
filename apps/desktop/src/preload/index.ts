@@ -6,6 +6,11 @@ import {
   type ImportStatus,
   type FileRef,
   type LinkPreview,
+  type Result,
+  type SyncEnable,
+  type SyncInfo,
+  type SyncServerInfo,
+  type SyncSignIn,
   type ThemeSource,
 } from '../shared/ipc';
 
@@ -99,6 +104,18 @@ const api = {
     cancel: (): void => ipcRenderer.send(IPC.importCancel),
     onStatus: (listener: (status: ImportStatus) => void): Unsubscribe =>
       on(IPC.importStatus, listener),
+  },
+  sync: {
+    status: (): Promise<SyncInfo> => ipcRenderer.invoke(IPC.syncStatus),
+    onChange: (listener: (info: SyncInfo) => void): Unsubscribe => on(IPC.syncChanged, listener),
+    serverInfo: (url: string): Promise<Result<SyncServerInfo>> =>
+      ipcRenderer.invoke(IPC.syncServerInfo, url),
+    signIn: (request: SyncSignIn): Promise<Result> => ipcRenderer.invoke(IPC.syncSignIn, request),
+    workspaces: (): Promise<Result<{ id: string; name: string; role: string }[]>> =>
+      ipcRenderer.invoke(IPC.syncWorkspaces),
+    enable: (request: SyncEnable): Promise<Result> => ipcRenderer.invoke(IPC.syncEnable, request),
+    disable: (): Promise<Result> => ipcRenderer.invoke(IPC.syncDisable),
+    retry: (): void => ipcRenderer.send(IPC.syncRetry),
   },
   ready: (): void => ipcRenderer.send(IPC.ready),
 };

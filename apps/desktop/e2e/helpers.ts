@@ -39,36 +39,51 @@ export const test = base.extend<{ dataDir: string; launch: () => Promise<Launche
   launch: async ({ dataDir }, use) => {
     const apps: ElectronApplication[] = [];
     await use(async () => {
-      const args = [appDir];
-      // Chromium refuses to start its sandbox as root (e.g. in containers).
-      if (process.getuid?.() === 0) args.push('--no-sandbox');
-      const app = await electron.launch({
-        executablePath: electronPath,
-        args,
-        env: {
-          ...process.env,
-          WORKSPACE_DATA_DIR: dataDir,
-          WORKSPACE_E2E: '1',
-          WORKSPACE_VERSION_INTERVAL_MS: '1500',
-        },
-      });
-      apps.push(app);
-      // Surface renderer exceptions in the test output instead of failing silently.
-      app.on('window', (page) =>
-        page.on('pageerror', (error) => console.error(`[renderer] ${error.stack ?? error}`)),
-      );
-      const window = await app.firstWindow();
-      window.on('pageerror', (error) => console.error(`[renderer] ${error.stack ?? error}`));
-      await window.getByRole('tree', { name: 'Pages' }).waitFor();
-      // Without a window manager (xvfb) a new window isn't always focused, and the
-      // editor's selection toolbar and caret placement need a focused window.
-      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.focus());
-      await window.bringToFront();
-      return { app, window };
+      const launched = await launchApp(dataDir);
+      apps.push(launched.app);
+      return launched;
     });
     await Promise.all(apps.map((app) => app.close().catch(() => {})));
   },
 });
+
+/** Start the built app on `dataDir` and wait for its sidebar. */
+export async function launchApp(
+  dataDir: string,
+  env: Record<string, string> = {},
+): Promise<Launched> {
+  const args = [appDir];
+  // Chromium refuses to start its sandbox as root (e.g. in containers).
+  if (process.getuid?.() === 0) args.push('--no-sandbox');
+  const app = await electron.launch({
+    executablePath: electronPath,
+    args,
+    env: {
+      ...process.env,
+      WORKSPACE_DATA_DIR: dataDir,
+      WORKSPACE_E2E: '1',
+      WORKSPACE_VERSION_INTERVAL_MS: '1500',
+      ...env,
+    },
+  });
+  // E2E_MAIN_LOG=1: show the main process's output (warnings, errors).
+  if (process.env.E2E_MAIN_LOG) {
+    app.process().stdout?.on('data', (d: Buffer) => process.stdout.write(`[main] ${d}`));
+    app.process().stderr?.on('data', (d: Buffer) => process.stderr.write(`[main] ${d}`));
+  }
+  // Surface renderer exceptions in the test output instead of failing silently.
+  app.on('window', (page) =>
+    page.on('pageerror', (error) => console.error(`[renderer] ${error.stack ?? error}`)),
+  );
+  const window = await app.firstWindow();
+  window.on('pageerror', (error) => console.error(`[renderer] ${error.stack ?? error}`));
+  await window.getByRole('tree', { name: 'Pages' }).waitFor();
+  // Without a window manager (xvfb) a new window isn't always focused, and the
+  // editor's selection toolbar and caret placement need a focused window.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.focus());
+  await window.bringToFront();
+  return { app, window };
+}
 
 export async function quit(app: ElectronApplication) {
   await app.close();

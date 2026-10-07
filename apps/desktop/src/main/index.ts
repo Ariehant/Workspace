@@ -10,7 +10,7 @@ import {
   restoreBackup,
 } from '@workspace/storage-local';
 import { unzipSync } from 'fflate';
-import { BrowserWindow, Menu, app, nativeTheme, shell } from 'electron';
+import { BrowserWindow, Menu, app, nativeTheme, powerMonitor, shell } from 'electron';
 import type { ThemeSource } from '../shared/ipc';
 import { asideDir, registerExport } from './export';
 import { registerFileScheme, registerFiles } from './files';
@@ -20,6 +20,8 @@ import { openPage } from './reminders';
 import { ReminderScheduler } from './reminders';
 import { buildMenu } from './menu';
 import { resolveDataDir } from './paths';
+import { broadcastSync, registerSyncIpc } from './sync/ipc';
+import { SyncService, type CarrySettings } from './sync/service';
 
 const isDev = !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL);
 /** `--smoke-test`: start, wait for the UI to render, then exit 0 (or 1 on timeout). */
@@ -58,6 +60,18 @@ const manager = new DocManager(store, {
 });
 const files = new FileStore(dataDir, store);
 registerFileScheme();
+const sync = new SyncService({
+  store,
+  manager,
+  files,
+  broadcast: broadcastSync,
+  openExternal: (url) =>
+    // Tests: play the browser's part (follow the sign-in redirects) without a browser.
+    process.env.WORKSPACE_E2E && process.env.WORKSPACE_E2E_FOLLOW_LINKS
+      ? fetch(url).then((response) => void response.body?.cancel())
+      : shell.openExternal(url),
+  replaceWorkspace: (settings) => replaceWorkspace(settings),
+});
 
 interface WindowBounds {
   x?: number;
@@ -178,6 +192,32 @@ function restoreWorkspace(path: string): void {
   app.exit(0);
 }
 
+/**
+ * Take a server's workspace instead of this device's: like a restore, the current
+ * database and files are moved aside (kept in the data dir), and the app restarts on
+ * an empty database that holds only the sync settings; the pages then arrive by sync.
+ */
+function replaceWorkspace(settings: CarrySettings): void {
+  restoring = true;
+  reminders.stop();
+  sync.stop();
+  for (const window of BrowserWindow.getAllWindows()) window.destroy();
+  manager.close();
+  store.close();
+  const aside = asideDir(dataDir);
+  mkdirSync(aside, { recursive: true });
+  for (const name of ['workspace.db', 'workspace.db-wal', 'workspace.db-shm', 'files']) {
+    if (existsSync(join(dataDir, name))) renameSync(join(dataDir, name), join(aside, name));
+  }
+  const fresh = new SqliteStore(dbPath);
+  for (const [key, value] of Object.entries(settings)) {
+    if (value !== null && value !== undefined) fresh.setSetting(key, value);
+  }
+  fresh.close();
+  if (!process.env.WORKSPACE_E2E) app.relaunch();
+  app.exit(0);
+}
+
 /** Show the page a `workspace://` link points to; `false` if it isn't one. */
 function openLink(url: string, target?: BrowserWindow): boolean {
   const link = parsePageUrl(url);
@@ -219,7 +259,8 @@ registerExport({
   createPrintWindow,
   restore: restoreWorkspace,
 });
-registerImport({ manager, dbPath, dataDir });
+registerImport({ manager, dbPath, dataDir, onFiles: () => sync.fileAdded() });
+registerSyncIpc(sync);
 
 // A second launch (e.g. the desktop opening a workspace:// link) hands over to us.
 app.on('second-instance', (_event, argv) => {
@@ -232,7 +273,13 @@ app.on('second-instance', (_event, argv) => {
 });
 
 app.whenReady().then(() => {
-  registerFiles(files, store);
+  registerFiles(files, store, {
+    fetchMissing: (id) => sync.fetchFile(id),
+    onImported: () => sync.fileAdded(),
+  });
+  sync.start();
+  // Back from sleep: reconnect now rather than at the next backoff step.
+  powerMonitor.on('resume', () => sync.retryNow());
   if (!smokeTest) reminders.check();
   nativeTheme.themeSource = store.getSetting<ThemeSource>('ui.theme') ?? 'system';
   Menu.setApplicationMenu(buildMenu(() => createWindow(), isDev));
@@ -255,6 +302,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   reminders.stop();
+  sync.stop();
   manager.close();
   store.close();
 });

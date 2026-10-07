@@ -23,6 +23,8 @@
   --ws-accent: #2383e2;
   --ws-accent-fg: #ffffff;
   --ws-danger: #eb5757;
+  --ws-success: #0f7b6c;
+  --ws-warning: #cb7b37;
   --ws-selection: rgba(35, 131, 226, 0.22);
   --ws-menu: #ffffff;
   --ws-shadow:
@@ -43,6 +45,8 @@
   --ws-accent: #2e8ae6;
   --ws-accent-fg: #ffffff;
   --ws-danger: #ff7369;
+  --ws-success: #4dab9a;
+  --ws-warning: #ffa344;
   --ws-selection: rgba(46, 138, 230, 0.35);
   --ws-menu: #252525;
   --ws-shadow:
@@ -62,6 +66,8 @@
   --color-accent: var(--ws-accent);
   --color-accent-fg: var(--ws-accent-fg);
   --color-danger: var(--ws-danger);
+  --color-success: var(--ws-success);
+  --color-warning: var(--ws-warning);
   --color-menu: var(--ws-menu);
   --shadow-menu: var(--ws-shadow);
   --font-sans:

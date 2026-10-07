@@ -12,7 +12,8 @@ export type AppCommand =
   | 'new-tab'
   | 'close-tab'
   | 'next-tab'
-  | 'prev-tab';
+  | 'prev-tab'
+  | 'sync-settings';
 
 export interface SearchHit {
   id: string;
@@ -82,6 +83,74 @@ export interface Platform {
   startImport(): Promise<boolean>;
   cancelImport(): void;
   onImportStatus(listener: (status: ImportStatus) => void): () => void;
+  /** Sync with a server (the desktop; the web app is always on its server). */
+  sync?: SyncPlatform;
+}
+
+/** Where this device's sync stands. */
+export interface SyncInfo {
+  /** off: not set up; account: signed in, no workspace chosen yet; on: syncing a workspace. */
+  mode: 'off' | 'account' | 'on';
+  server: string | null;
+  account: { email: string; name: string } | null;
+  workspace: { id: string; name: string } | null;
+  state:
+    | 'off'
+    | 'stopped'
+    | 'connecting'
+    | 'catching-up'
+    | 'live'
+    | 'offline'
+    | 'unauthorized'
+    | 'error';
+  reason: string | null;
+  retryAt: number | null;
+  /** Local changes the server hasn't stored yet. */
+  pending: number;
+  /** Attachments waiting to upload. */
+  files: number;
+  lastSyncedAt: number | null;
+  /** The session token is encrypted with the system keyring. */
+  secureStorage: boolean;
+}
+
+export interface SyncServerInfo {
+  server: string;
+  signup: 'open' | 'invite' | 'disabled';
+  needsSetup: boolean;
+  providers: { id: string; name: string }[];
+}
+
+export type SyncResult<T = true> = { ok: T } | { error: string };
+
+export interface SyncPlatform {
+  status(): Promise<SyncInfo>;
+  onChange(listener: (info: SyncInfo) => void): () => void;
+  /** Check a server address and what sign-in it offers. */
+  serverInfo(url: string): Promise<SyncResult<SyncServerInfo>>;
+  signIn(
+    request:
+      | { kind: 'password'; server: string; email: string; password: string }
+      | {
+          kind: 'signup';
+          server: string;
+          email: string;
+          name: string;
+          password: string;
+          invite?: string;
+        }
+      | { kind: 'sso'; server: string; provider: string; invite?: string },
+  ): Promise<SyncResult>;
+  workspaces(): Promise<SyncResult<{ id: string; name: string; role: string }[]>>;
+  enable(
+    request:
+      | { mode: 'upload'; name: string }
+      | { mode: 'merge'; workspaceId: string }
+      | { mode: 'replace'; workspaceId: string },
+  ): Promise<SyncResult>;
+  /** Stop syncing and sign out (the pages stay on this device). */
+  disable(): Promise<SyncResult>;
+  retry(): void;
 }
 
 export interface ImportReport {

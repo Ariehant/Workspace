@@ -64,10 +64,20 @@ async function fetchPreview(url: string): Promise<LinkPreview> {
 }
 
 /** Serve `ws-file://`, and handle attachment and link-preview IPC. Call after ready. */
-export function registerFiles(files: FileStore, store: SqliteStore): void {
+export function registerFiles(
+  files: FileStore,
+  store: SqliteStore,
+  sync: {
+    /** Download an attachment made on another device; true if it's here now. */
+    fetchMissing: (id: string) => Promise<boolean>;
+    /** A new attachment was stored. */
+    onImported: () => void;
+  },
+): void {
   protocol.handle(FILE_SCHEME, async (request) => {
     const id = new URL(request.url).hostname;
-    const path = files.resolve(id);
+    let path = files.resolve(id);
+    if (!path && isFileId(id) && (await sync.fetchMissing(id))) path = files.resolve(id);
     if (!path) return new Response('Not found', { status: 404 });
     // net.fetch on file:// handles Range requests and sets the content type.
     const response = await net.fetch(pathToFileURL(path).href, { headers: request.headers });
@@ -81,11 +91,14 @@ export function registerFiles(files: FileStore, store: SqliteStore): void {
     if (!(bytes instanceof Uint8Array) || bytes.byteLength > MAX_IMPORT_BYTES) {
       throw new Error('File is missing or larger than 512 MB');
     }
-    return files.import(bytes, String(name ?? ''), String(mime ?? ''));
+    const record = files.import(bytes, String(name ?? ''), String(mime ?? ''));
+    sync.onImported();
+    return record;
   });
 
   ipcMain.handle(IPC.fileOpen, async (_event, id: unknown) => {
-    const path = isFileId(id) ? files.resolve(id) : null;
+    let path = isFileId(id) ? files.resolve(id) : null;
+    if (!path && isFileId(id) && (await sync.fetchMissing(id))) path = files.resolve(id);
     if (!path) return false;
     return (await shell.openPath(path)) === '';
   });

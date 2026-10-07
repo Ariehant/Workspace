@@ -52,6 +52,32 @@ export class FileStore {
     return this.store.getFileRecord(id) ?? record;
   }
 
+  /**
+   * Store bytes fetched for a known id (from the sync server): kept only if their hash
+   * is the id's. Returns false when they don't match.
+   */
+  importAs(id: string, bytes: Uint8Array, name: string, mime: string): boolean {
+    if (!isFileId(id)) return false;
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    if (!id.startsWith(hash)) return false;
+    const path = this.pathOf(id);
+    if (!existsSync(path)) {
+      const tmp = `${path}.${process.pid}.tmp`;
+      writeFileSync(tmp, bytes);
+      renameSync(tmp, path);
+    }
+    if (!this.store.getFileRecord(id)) {
+      this.store.putFileRecord({
+        id,
+        name: name.slice(0, 255) || 'Untitled',
+        mime: mime || 'application/octet-stream',
+        size: bytes.byteLength,
+        createdAt: Date.now(),
+      });
+    }
+    return true;
+  }
+
   /** Absolute path of a stored file, or `null` for an invalid or unknown id. */
   resolve(id: string): string | null {
     if (!isFileId(id)) return null;

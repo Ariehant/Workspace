@@ -46,6 +46,7 @@ import { ButtonEditorHost } from './buttons/button-dialog';
 import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
 import { MoveDialog } from './move-dialog';
 import { duplicatePage } from './page-actions';
+import { SyncDialog, useSyncInfo } from './sync-settings';
 import { createWelcomePage } from './welcome';
 import { TabBar } from './tab-bar';
 import { useNewTabIntent, useTabScroll } from './tabs';
@@ -414,6 +415,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   }, []);
 
   const [moving, setMoving] = useState<PageId | null>(null);
+  const syncInfo = useSyncInfo(platform.sync);
+  const [syncOpen, setSyncOpen] = useState(false);
 
   const changeTheme = useCallback(
     (next: ThemePreference) => {
@@ -433,6 +436,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       else if (command === 'close-tab') changeTabs((prev) => closeTab(prev, prev.active));
       else if (command === 'next-tab') changeTabs((prev) => cycleTab(prev, 1));
       else if (command === 'prev-tab') changeTabs((prev) => cycleTab(prev, -1));
+      else if (command === 'sync-settings') setSyncOpen(true);
       else go(command === 'go-back' ? -1 : 1);
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -570,6 +574,20 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             fileUrl={platform.fileUrl}
             onThemeChange={changeTheme}
             onCollapse={() => setSidebarOpen(false)}
+            sync={syncInfo}
+            onSync={() => setSyncOpen(true)}
+          />
+        )}
+        {syncOpen && platform.sync && syncInfo && (
+          <SyncDialog
+            sync={platform.sync}
+            info={syncInfo}
+            onClose={() => setSyncOpen(false)}
+            onBackup={() =>
+              void platform
+                .startExport({ format: 'backup' })
+                .catch((error: unknown) => console.error('Backup failed', error))
+            }
           />
         )}
         <div className="flex min-w-0 flex-1 flex-col">

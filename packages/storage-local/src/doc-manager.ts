@@ -47,6 +47,8 @@ const CONTENT_LINK_KINDS = ['mention', 'link', 'pageLink', 'synced', 'linkedData
 /** Origin for changes the manager makes itself (e.g. bumping `updatedAt`). */
 export const MAIN_ORIGIN = Symbol('main');
 const LOAD_ORIGIN = Symbol('load');
+/** Origin for updates that came from the sync server (never sent back to it). */
+export const SYNC_ORIGIN = Symbol('sync');
 
 interface LoadedDoc {
   doc: Y.Doc;
@@ -72,6 +74,10 @@ export class DocManager {
   private readonly now: () => number;
   /** Time of each doc's newest version (cached from the store). */
   private readonly lastVersion = new Map<string, number>();
+  /** Docs changed on this device since they were last indexed. */
+  private readonly editedHere = new Set<string>();
+  /** Queue local changes for the sync server (while sync is on). */
+  private outbox = false;
 
   constructor(
     private readonly store: SqliteStore,
@@ -89,9 +95,40 @@ export class DocManager {
     getPagesMap(this.workspace).observe((event) => {
       event.changes.keys.forEach((change, pageId) => {
         if (change.action === 'delete') this.dropPageDoc(pageId);
+        // A synced page's content can arrive before the page itself: index it now.
+        else if (change.action === 'add') this.indexStoredLater(pageId);
       });
     });
     this.indexWorkspace();
+  }
+
+  /** Start (or stop) queueing every local change in the sync outbox. */
+  setOutbox(enabled: boolean): void {
+    this.outbox = enabled;
+  }
+
+  /**
+   * Queue the full state of every doc for the server: when a workspace starts syncing
+   * (its existing content), or when the server turns out to have lost data. Merging is
+   * idempotent, so sending what the server already has is harmless.
+   */
+  queueFullState(): number {
+    const ids = new Set([...this.store.listDocIds(), ...this.docs.keys()]);
+    let queued = 0;
+    for (const id of ids) {
+      const open = this.docs.get(id)?.doc;
+      let state: Uint8Array | null = null;
+      if (open) state = Y.encodeStateAsUpdate(open);
+      else {
+        const updates = this.store.getUpdates(id);
+        if (updates.length) state = Y.mergeUpdates(updates);
+      }
+      if (state && state.byteLength > 2) {
+        this.store.outboxAdd(id, state);
+        queued++;
+      }
+    }
+    return queued;
   }
 
   onUpdate(listener: UpdateListener): () => void {
@@ -215,6 +252,8 @@ export class DocManager {
   }
 
   close(): void {
+    if (this.storedTimer) clearTimeout(this.storedTimer);
+    this.storedTimer = null;
     this.flush();
     for (const { doc } of this.docs.values()) doc.destroy();
     this.docs.clear();
@@ -231,9 +270,13 @@ export class DocManager {
       }
     }
     doc.on('update', (update: Uint8Array, origin: unknown) => {
-      this.store.appendUpdate(docId, update);
+      this.store.appendUpdate(docId, update, this.outbox && origin !== SYNC_ORIGIN);
       for (const listener of this.listeners) listener(docId, update, origin);
-      if (origin !== MAIN_ORIGIN) this.scheduleIndex(docId);
+      if (origin === MAIN_ORIGIN) return;
+      // Only a change made here bumps "last edited": the device that made a synced
+      // change already did (and bumping it again would echo back to every device).
+      if (origin !== SYNC_ORIGIN) this.editedHere.add(docId);
+      this.scheduleIndex(docId);
     });
     this.docs.set(docId, { doc, refs: 0 });
     return doc;
@@ -252,6 +295,7 @@ export class DocManager {
   }
 
   private index(docId: string): void {
+    const edited = this.editedHere.delete(docId);
     if (docId === WORKSPACE_DOC_ID) {
       this.indexWorkspace();
       return;
@@ -273,6 +317,7 @@ export class DocManager {
       return;
     }
     this.indexContent(docId, entry.doc);
+    if (!edited) return;
     if (databaseId) {
       // A row's page: "last edited" lives in its database doc (if it's open).
       const db = this.docs.get(databaseId)?.doc;
@@ -281,6 +326,28 @@ export class DocManager {
     }
     this.workspace.transact(() => touchPage(this.workspace, docId), MAIN_ORIGIN);
     this.indexWorkspace();
+  }
+
+  private readonly storedToIndex = new Set<string>();
+  private storedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Index the stored content of pages that just appeared (soon, all at once). */
+  private indexStoredLater(docId: string): void {
+    this.storedToIndex.add(docId);
+    this.storedTimer ??= setTimeout(() => {
+      this.storedTimer = null;
+      const ids = [...this.storedToIndex];
+      this.storedToIndex.clear();
+      // The pages' index rows first, so their bodies have somewhere to go.
+      this.indexWorkspace();
+      for (const id of ids) {
+        if (this.docs.has(id) || this.store.getUpdates(id).length === 0) continue;
+        this.load(id);
+        this.index(id);
+        this.docs.get(id)!.refs = 1;
+        this.release(id);
+      }
+    }, this.indexDelayMs);
   }
 
   /** Pages that show each synced block (filled as pages are indexed). */
@@ -361,10 +428,11 @@ export class DocManager {
     }
     this.store.replacePropertyReminders(databaseId, readDateReminders(db));
     this.onRemindersChanged();
-    // Content typed before the row reached the index.
+    // Content typed (or synced) before the row reached the index.
     for (const id of added) {
       const content = this.docs.get(id)?.doc;
       if (content) this.indexContent(id, content);
+      else this.indexStoredLater(id);
     }
     for (const id of removed) this.dropDoc(id);
   }
@@ -397,6 +465,7 @@ export class DocManager {
     const timer = this.pending.get(pageId);
     if (timer !== undefined) clearTimeout(timer);
     this.pending.delete(pageId);
+    this.editedHere.delete(pageId);
     const entry = this.docs.get(pageId);
     if (entry) {
       entry.doc.destroy();

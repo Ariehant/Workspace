@@ -1,6 +1,6 @@
 # Phase 4: Sync server
 
-**Status:** M1, M2 and M3 done. M4 next.
+**Status:** M1–M4 done. M5 next.
 
 ## Context
 
@@ -264,7 +264,7 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
     - the heartbeat, text and oversized frames, and shutdown
 - **Verified here:** two devices synced over `wss://` through Caddy's TLS (local CA) to the bundled server on Postgres 16. The server image wasn't rebuilt because Docker Hub rate-limited the base image pull. The Dockerfile is unchanged, and its `@workspace/server...` filter picks up `packages/sync`.
 
-### M4: desktop sync
+### M4: desktop sync ✅
 
 - **SyncService (main process):**
   - It listens to `DocManager.onUpdate`. Local changes go to an outbox table (SQLite migration 6) together with the cursor, so nothing is lost if the app quits offline. Updates from the server are applied through `DocManager` with a sync origin, so they don't bounce back.
@@ -282,6 +282,61 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
 - **Tests:**
   - Unit: the outbox, the cursor, and applying remote updates without echo.
   - E2E: a desktop instance against a real server process (local Postgres) — sign in, upload, restart, still synced.
+
+**M4 notes:**
+
+- **Local storage** (`storage-local`):
+  - **Migration 6** adds `sync_outbox` and `sync_files` (attachments the server has).
+  - **The outbox:** while sync is on, `DocManager` stores every change that didn't come from the server in the outbox, in the same transaction (a savepoint) as the update itself, so a crash can't keep one without the other. That covers windows, imports and the manager's own changes ("last edited").
+  - **The server's updates** are applied with `SYNC_ORIGIN`. Windows, search, backlinks, reminders and history see them like any other change, and they're never queued to go back.
+  - **`LocalSyncStore`** is `SyncClient`'s store over the database. The cursor is saved after the updates it covers, so a crash in between applies them twice (harmless) rather than skipping them.
+  - **`queueFullState()`** queues every doc's state. It runs when a workspace starts syncing, and when the server turns out to have lost data (restored from an older backup).
+- **Indexing fixes found by the sync tests:**
+  - "Last edited" is only bumped for changes made on this device. Otherwise every device that received an edit would bump it again and echo that back to all the others.
+  - A page's content can arrive before the page itself (they are different docs). When pages or database rows appear, their stored content is now indexed too, so synced pages are searchable straight away.
+- **Desktop main process** (`apps/desktop/src/main/sync/`):
+  - **`SyncService`** holds the account, the chosen workspace and a `SyncClient` over a `ws` socket with a bearer token. Its status (state, changes and files waiting, last synced) is broadcast to every window.
+  - **Dead connections:** a watchdog drops a socket that has heard nothing (not even a ping) for 75 seconds, and waking from sleep reconnects at once.
+  - **The token** is encrypted with Electron's `safeStorage` (the system keyring). Settings → Sync warns when no keyring is available.
+  - **Settings privacy:** `sync.*` settings (account, token, cursor) can't be read or written by the renderer, and are never written to backups or restored from them.
+  - **Sign-in:** password, account creation (the first account on a new server becomes its admin) or SSO. For SSO, the system browser goes to `/api/auth/oidc/<id>/start?client=desktop`, a one-off loopback server on `127.0.0.1` receives the one-time code, and the app exchanges it together with its PKCE verifier.
+  - **Choosing a workspace:**
+    - **Upload this workspace** creates a server workspace and queues everything.
+    - **Merge** joins an existing one, and both sets of pages end up everywhere.
+    - **Replace** joins an existing one after moving this device's database and files aside into the data folder, as a restore does. The app then restarts on an empty database holding only the sync settings, with no "Getting started" page.
+    - "Back up this device first…" runs the Phase 3 backup.
+  - **Stop syncing** stops, signs out (ending the session on the server too) and forgets the workspace. The pages stay.
+  - **Attachments upload** in the background once live: `HEAD` first, then `PUT` streamed from disk. Files too large for the server are skipped and logged, and other failures retry a minute later.
+  - **Attachments download:** a file this device lacks is fetched when `ws-file://` (or "open file") asks for it, checked against its hash, and kept. A page can arrive before its attachment finishes uploading, so a missing file is asked for again for about 30 seconds.
+  - **Bundling:** `ws`'s optional native helpers (`bufferutil`, `utf-8-validate`) are marked external in the main build. Bundled, they became empty objects and broke every frame over 48 bytes.
+- **Server** (`files-routes.ts`):
+  - **Endpoints:** `GET`/`HEAD`/`PUT /api/workspaces/<id>/files/<file id>` and `GET /api/workspaces/<id>/storage`.
+  - **Uploads** are streamed to a temp file while they're hashed, refused past `MAX_FILE_MB` (413), checked against the id (400), and are a no-op when the server already has the file.
+  - **Downloads** are sent with `nosniff`, `CSP: sandbox` and an immutable cache. HTML, SVG and XML are always sent as attachments, so nothing uploaded can run as the app's page.
+  - **Access:** members only, and guests can't upload.
+  - `FileStorage.putFile` stores from a path (filesystem copy, or an S3 upload with a stream).
+- **UI** (`packages/app`):
+  - **Sidebar:** a sync line at the bottom ("Sync is off", "Synced", "Syncing 3 changes", "Offline · 2 changes to sync", "Signed out of sync").
+  - **Settings → Sync** (that line, or File → Sync…) walks through the server address, sign-in or account creation, and choosing a workspace. Once syncing, it shows the status (server, account, workspace, changes and files waiting, last synced), "Retry now" when offline, and "Stop syncing".
+  - New `success` and `warning` color tokens in both themes.
+- **Tests:**
+  - **Unit:**
+    - the outbox: only local changes, and never the server's
+    - full-state queueing
+    - sync settings kept out of backups
+    - attachments checked by hash
+    - two real local databases syncing through a hub: offline edits on one, a restart while offline, convergence, and synced pages indexed for search
+    - the server's file API: upload and download, hash mismatch, outsiders, guests, content type, size limit, active content
+  - **E2E** (`sync.spec.ts`), with the real server bundle on a throwaway Postgres:
+    - device A creates the account through Settings → Sync and uploads its workspace
+    - device B takes it with "Replace": the app restarts and shows A's pages
+    - typing on A shows on B, and renaming on B shows on A
+    - an image pasted on A loads on B
+    - with the server stopped, A's changes wait ("Offline · N changes to sync") and arrive after "Retry now"
+    - A restarts still signed in and syncing
+    - device C signs in with single sign-on (a fake OIDC provider started by the test). In E2E mode the app follows the sign-in links itself rather than opening a browser, so the loopback server, the code exchange and linking by verified email are all exercised. C merges its pages, and its welcome page reaches A.
+  - **Screenshots:** set `WORKSPACE_SHOTS=<dir>` to save screenshots of each step of the sync UI.
+- **Flaky test fixed:** "pasting Markdown" (the one that failed under load in M1) failed in about a third of runs when run on its own. Right after a paste, the editor can still move the caret, so a quick click-then-paste could land in the code block or the new heading. The test now confirms the caret is in the last paragraph before each paste, and passed 12 runs out of 12.
 
 ### M5: server index and search
 

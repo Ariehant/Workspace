@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
+import type { SyncInfo } from './platform';
+import { SyncIndicator } from './sync-settings';
 import { Trash } from './trash';
 
 export const SIDEBAR_WIDTH = { min: 200, max: 480, default: 240 } as const;
@@ -71,6 +73,9 @@ export interface SidebarProps {
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
   onCollapse(): void;
+  /** Sync status (hosts that sync), and opening Settings → Sync. */
+  sync?: SyncInfo | null;
+  onSync?(): void;
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -204,6 +209,7 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       <div className="border-t border-line p-1">
+        {props.sync && props.onSync && <SyncIndicator info={props.sync} onOpen={props.onSync} />}
         <button
           type="button"
           onClick={props.onTemplates}

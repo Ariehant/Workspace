@@ -31,6 +31,8 @@ export function buildMenu(createWindow: () => BrowserWindow, isDev: boolean): Me
           click: () => createWindow(),
         },
         { type: 'separator' },
+        { label: 'Sync…', click: send('sync-settings') },
+        { type: 'separator' },
         {
           label: 'Close Tab',
           accelerator: 'CmdOrCtrl+W',

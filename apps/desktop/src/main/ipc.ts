@@ -6,8 +6,9 @@ import { IPC, type ThemeSource } from '../shared/ipc';
 
 const isDocId = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= 128;
+/** Settings the UI may read and write: not sync's (the session token is among them). */
 const isSettingKey = (value: unknown): value is string =>
-  typeof value === 'string' && /^[\w.-]{1,64}$/.test(value);
+  typeof value === 'string' && /^[\w.-]{1,64}$/.test(value) && !value.startsWith('sync.');
 const THEMES: readonly ThemeSource[] = ['system', 'light', 'dark'];
 
 /**

@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as Y from 'yjs';
 import { isFileId } from './file-store';
-import type { FileRecord, SqliteStore } from './sqlite-store';
+import { isSyncSetting, type FileRecord, type SqliteStore } from './sqlite-store';
 
 /** Identifies a workspace backup's manifest. */
 export const BACKUP_FORMAT = 'workspace-backup';
@@ -107,7 +107,10 @@ export function restoreBackup(
     const settings = entries.get('settings.json');
     if (settings) {
       const values = JSON.parse(new TextDecoder().decode(settings)) as Record<string, unknown>;
-      for (const [key, value] of Object.entries(values)) store.setSetting(key, value);
+      for (const [key, value] of Object.entries(values)) {
+        // Older backups may carry another device's sync state: never restore it.
+        if (!isSyncSetting(key)) store.setSetting(key, value);
+      }
     }
   }
   return { docs, files };

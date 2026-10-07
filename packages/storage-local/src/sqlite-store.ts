@@ -116,7 +116,22 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX doc_versions_doc ON doc_versions (doc_id, created_at);
   `,
+  // 6: sync with a server (Phase 4 M4): local updates waiting for the server's
+  // acknowledgement, and attachments already uploaded.
+  `
+  CREATE TABLE sync_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_id TEXT NOT NULL,
+    data BLOB NOT NULL
+  );
+  CREATE TABLE sync_files (
+    file_id TEXT PRIMARY KEY
+  );
+  `,
 ];
+
+/** Settings that belong to this device's sync (never exported to a backup). */
+export const isSyncSetting = (key: string) => key.startsWith('sync.');
 
 /** A reference from one page to another, as stored for backlinks. */
 export interface LinkRow {
@@ -246,10 +261,91 @@ export class SqliteStore {
 
   // --- Yjs document updates -------------------------------------------------
 
-  appendUpdate(docId: string, update: Uint8Array): void {
-    this.db
-      .prepare('INSERT INTO doc_updates (doc_id, data, created_at) VALUES (?, ?, ?)')
-      .run(docId, update, Date.now());
+  /**
+   * Store an update; with `outbox`, also queue it for the sync server, in the same
+   * transaction (a savepoint, so it nests): a crash can't keep one without the other.
+   */
+  appendUpdate(docId: string, update: Uint8Array, outbox = false): void {
+    if (!outbox) {
+      this.db
+        .prepare('INSERT INTO doc_updates (doc_id, data, created_at) VALUES (?, ?, ?)')
+        .run(docId, update, Date.now());
+      return;
+    }
+    this.db.exec('SAVEPOINT append_update');
+    try {
+      this.db
+        .prepare('INSERT INTO doc_updates (doc_id, data, created_at) VALUES (?, ?, ?)')
+        .run(docId, update, Date.now());
+      this.outboxAdd(docId, update);
+      this.db.exec('RELEASE append_update');
+    } catch (error) {
+      this.db.exec('ROLLBACK TO append_update');
+      this.db.exec('RELEASE append_update');
+      throw error;
+    }
+  }
+
+  // --- Sync outbox ------------------------------------------------------------
+
+  outboxAdd(docId: string, update: Uint8Array): void {
+    this.db.prepare('INSERT INTO sync_outbox (doc_id, data) VALUES (?, ?)').run(docId, update);
+  }
+
+  /** Updates not yet acknowledged by the server, oldest first. */
+  outboxPending(limit: number): { localId: number; docId: string; update: Uint8Array }[] {
+    const rows = this.db
+      .prepare('SELECT id, doc_id, data FROM sync_outbox ORDER BY id LIMIT ?')
+      .all(limit) as { id: number; doc_id: string; data: Uint8Array }[];
+    return rows.map((r) => ({ localId: r.id, docId: r.doc_id, update: r.data }));
+  }
+
+  outboxRemove(ids: readonly number[]): void {
+    const remove = this.db.prepare('DELETE FROM sync_outbox WHERE id = ?');
+    this.transaction(() => {
+      for (const id of ids) remove.run(id);
+    });
+  }
+
+  outboxCount(): number {
+    return (this.db.prepare('SELECT count(*) AS n FROM sync_outbox').get() as { n: number }).n;
+  }
+
+  outboxClear(): void {
+    this.db.exec('DELETE FROM sync_outbox');
+  }
+
+  /** Attachments the server has (uploaded, or found there). */
+  markFileSynced(id: string): void {
+    this.db.prepare('INSERT OR IGNORE INTO sync_files (file_id) VALUES (?)').run(id);
+  }
+
+  /** Local attachments not yet known to be on the server. */
+  unsyncedFiles(): FileRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM files WHERE id NOT IN (SELECT file_id FROM sync_files) ORDER BY created_at`,
+      )
+      .all() as { id: string; name: string; mime: string; size: number; created_at: number }[];
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      mime: row.mime,
+      size: row.size,
+      createdAt: row.created_at,
+    }));
+  }
+
+  unsyncedFileCount(): number {
+    return (
+      this.db
+        .prepare('SELECT count(*) AS n FROM files WHERE id NOT IN (SELECT file_id FROM sync_files)')
+        .get() as { n: number }
+    ).n;
+  }
+
+  clearSyncedFiles(): void {
+    this.db.exec('DELETE FROM sync_files');
   }
 
   getUpdates(docId: string): Uint8Array[] {
@@ -742,13 +838,21 @@ export class SqliteStore {
       .run(key, JSON.stringify(value));
   }
 
-  /** Every setting, for backups. */
+  /** Every setting, for backups (except this device's sync settings: the token!). */
   listSettings(): Record<string, unknown> {
     const rows = this.db.prepare('SELECT key, value FROM settings').all() as {
       key: string;
       value: string;
     }[];
-    return Object.fromEntries(rows.map((row) => [row.key, JSON.parse(row.value) as unknown]));
+    return Object.fromEntries(
+      rows
+        .filter((row) => !isSyncSetting(row.key))
+        .map((row) => [row.key, JSON.parse(row.value) as unknown]),
+    );
+  }
+
+  deleteSetting(key: string): void {
+    this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
   }
 
   close(): void {
