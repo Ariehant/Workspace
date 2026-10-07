@@ -49,6 +49,7 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
   const publicOrigin = new URL(ctx.config.publicUrl).origin;
   const hub = new SyncHub(pgLogStore(store), {
     onError: (error) => app.log.error({ err: error }, 'sync failed'),
+    onAppend: (workspaceId) => ctx.indexer.schedule(workspaceId),
   });
   const wss = new WebSocketServer({
     noServer: true,
@@ -197,6 +198,7 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
       }
       if (changed > 0) {
         hub.notify(id);
+        ctx.indexer.schedule(id);
         app.log.info({ workspaceId: id, docs: changed }, 'compacted');
       }
     }

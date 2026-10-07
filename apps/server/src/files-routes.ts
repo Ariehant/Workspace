@@ -12,7 +12,8 @@ import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { fail, requireUser } from './auth/context';
 import type { ServerContext } from './context';
-import { FILE_ID, fileKey } from './files';
+import { FILE_ID, fileKey, type ByteRange } from './files';
+import { decideMime } from './files/sniff';
 
 const params = {
   type: 'object',
@@ -26,6 +27,9 @@ const params = {
 const ACTIVE = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml)/i;
 
 class TooLarge extends Error {}
+
+/** Bytes kept from the start of an upload, to tell what it is. */
+const HEAD_BYTES = 512;
 
 export function fileRoutes(app: FastifyInstance, ctx: ServerContext) {
   const signedIn = requireUser(ctx);
@@ -47,25 +51,40 @@ export function fileRoutes(app: FastifyInstance, ctx: ServerContext) {
       if (!(await access(request))) return fail(reply, 404, 'not_found', 'No such file.');
       const { id, fileId } = request.params;
       const meta = await store.getFile(id, fileId);
-      const stored = meta ? await files.get(fileKey(id, fileId)) : null;
-      if (!meta || !stored) return fail(reply, 404, 'not_found', 'No such file.');
+      if (!meta) return fail(reply, 404, 'not_found', 'No such file.');
+      const etag = `"${fileId}"`;
       const filename = encodeURIComponent(meta.name);
-      return (
-        reply
-          .header('content-type', meta.mime)
-          .header('content-length', stored.size)
-          .header('x-file-name', filename)
-          .header('etag', `"${fileId}"`)
-          .header('cache-control', 'private, max-age=31536000, immutable')
-          .header('x-content-type-options', 'nosniff')
-          // Served from our own origin: whatever it is, it can't run as our page.
-          .header('content-security-policy', "sandbox; default-src 'none'")
-          .header(
-            'content-disposition',
-            `${ACTIVE.test(meta.mime) ? 'attachment' : 'inline'}; filename*=UTF-8''${filename}`,
-          )
-          .send(stored.body)
-      );
+      reply
+        .header('etag', etag)
+        .header('accept-ranges', 'bytes')
+        .header('cache-control', 'private, max-age=31536000, immutable')
+        .header('x-content-type-options', 'nosniff')
+        // Served from our own origin: whatever it is, it can't run as our page.
+        .header('content-security-policy', "sandbox; default-src 'none'")
+        .header('x-file-name', filename)
+        .header(
+          'content-disposition',
+          `${ACTIVE.test(meta.mime) ? 'attachment' : 'inline'}; filename*=UTF-8''${filename}`,
+        );
+      // Content-addressed: the same id is always the same bytes.
+      if (request.headers['if-none-match']?.split(/\s*,\s*/).includes(etag)) {
+        return reply.code(304).send();
+      }
+      const range = parseRange(request.headers.range, meta.size);
+      if (range === 'unsatisfiable') {
+        return reply.code(416).header('content-range', `bytes */${meta.size}`).send();
+      }
+      const stored = await files.get(fileKey(id, fileId), range ?? undefined);
+      if (!stored) return fail(reply, 404, 'not_found', 'No such file.');
+      reply.header('content-type', meta.mime);
+      if (range) {
+        return reply
+          .code(206)
+          .header('content-range', `bytes ${range.start}-${range.end}/${stored.size}`)
+          .header('content-length', range.end - range.start + 1)
+          .send(stored.body);
+      }
+      return reply.header('content-length', stored.size).send(stored.body);
     },
   );
 
@@ -81,10 +100,7 @@ export function fileRoutes(app: FastifyInstance, ctx: ServerContext) {
       }
       const { id, fileId } = request.params;
       const name = decodeHeader(request.headers['x-file-name']) || 'Untitled';
-      const mime = String(request.headers['x-file-mime'] || 'application/octet-stream').slice(
-        0,
-        100,
-      );
+      let mime = String(request.headers['x-file-mime'] || 'application/octet-stream').slice(0, 100);
 
       if ((await store.getFile(id, fileId)) && (await files.has(fileKey(id, fileId)))) {
         request.body.resume();
@@ -95,10 +111,13 @@ export function fileRoutes(app: FastifyInstance, ctx: ServerContext) {
       const hash = createHash('sha256');
       let size: number;
       try {
-        size = await saveLimited(request.body, tmp, config.maxFileBytes, hash);
+        const head: Buffer[] = [];
+        size = await saveLimited(request.body, tmp, config.maxFileBytes, hash, head);
         if (!fileId.startsWith(hash.digest('hex'))) {
           return fail(reply, 400, 'hash_mismatch', "The file's content doesn't match its id.");
         }
+        // Stored as what the content is, not what the client said it is.
+        mime = decideMime(mime, Buffer.concat(head));
         await files.putFile(fileKey(id, fileId), tmp, size, mime);
         await store.putFile(id, { id: fileId, name, mime, size }, request.auth!.user.id);
         return reply.code(201).send({ id: fileId, existed: false });
@@ -132,7 +151,13 @@ export function fileRoutes(app: FastifyInstance, ctx: ServerContext) {
  * Write a request body to `path`, hashing it, and stop (TooLarge) past `limit` bytes.
  * Returns the size.
  */
-function saveLimited(body: Readable, path: string, limit: number, hash: Hash): Promise<number> {
+function saveLimited(
+  body: Readable,
+  path: string,
+  limit: number,
+  hash: Hash,
+  head: Buffer[],
+): Promise<number> {
   return new Promise((resolve, reject) => {
     const out = createWriteStream(path);
     let size = 0;
@@ -148,6 +173,7 @@ function saveLimited(body: Readable, path: string, limit: number, hash: Hash): P
       } else out.end(() => resolve(size));
     };
     const onData = (chunk: Buffer) => {
+      if (size < HEAD_BYTES) head.push(chunk.subarray(0, HEAD_BYTES - size));
       size += chunk.length;
       if (size > limit) return finish(new TooLarge());
       hash.update(chunk);
@@ -162,6 +188,32 @@ function saveLimited(body: Readable, path: string, limit: number, hash: Hash): P
     body.once('error', (error) => finish(error));
     out.once('error', (error) => finish(error));
   });
+}
+
+/**
+ * One `bytes=` range (video seeking), clamped to the file. Null means the whole file
+ * (no header, or one we don't support, like several ranges).
+ */
+export function parseRange(
+  header: string | undefined,
+  size: number,
+): ByteRange | null | 'unsatisfiable' {
+  const match = header ? /^bytes=(\d*)-(\d*)$/.exec(header.trim()) : null;
+  if (!match || (!match[1] && !match[2])) return null;
+  let start: number;
+  let end: number;
+  if (!match[1]) {
+    // The last N bytes.
+    const suffix = Number(match[2]);
+    if (suffix === 0) return 'unsatisfiable';
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  }
+  if (start >= size || start > end) return 'unsatisfiable';
+  return { start, end };
 }
 
 function decodeHeader(value: string | string[] | undefined): string {

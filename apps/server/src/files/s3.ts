@@ -9,7 +9,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import type { Readable } from 'node:stream';
-import type { FileStorage } from './storage';
+import type { ByteRange, FileStorage } from './storage';
 
 export interface S3Options {
   endpoint: string | null;
@@ -69,10 +69,21 @@ export class S3Storage implements FileStorage {
     );
   }
 
-  async get(key: string) {
+  async get(key: string, range?: ByteRange) {
     try {
-      const out = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
-      return { body: out.Body as Readable, size: Number(out.ContentLength ?? 0) };
+      const out = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}),
+        }),
+      );
+      // With a range, the whole size is after the slash of Content-Range.
+      const total = out.ContentRange ? Number(out.ContentRange.split('/')[1]) : NaN;
+      return {
+        body: out.Body as Readable,
+        size: Number.isFinite(total) ? total : Number(out.ContentLength ?? 0),
+      };
     } catch (error) {
       if (notFound(error)) return null;
       throw error;

@@ -9,11 +9,19 @@ import { authRoutes } from './auth/routes';
 import type { Config } from './config';
 import type { ServerContext } from './context';
 import type { FileStorage } from './files';
+import { Indexer } from './search/indexer';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
 import { workspaceRoutes } from './workspaces';
 
 export const VERSION = '0.1.0';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** The search indexer (main.ts starts its catch-up after listening). */
+    indexer: Indexer;
+  }
+}
 
 export interface ServerDeps {
   config: Config;
@@ -22,10 +30,19 @@ export interface ServerDeps {
   /** Single sign-on clients (made from the config when not given). */
   oidc?: OidcClients;
   sync?: SyncOptions;
+  /** Search index: wait this long after changes before indexing. */
+  indexDelayMs?: number;
 }
 
 /** The HTTP server and its routes (listening is up to the caller). */
-export function buildServer({ config, store, files, oidc, sync }: ServerDeps): FastifyInstance {
+export function buildServer({
+  config,
+  store,
+  files,
+  oidc,
+  sync,
+  indexDelayMs,
+}: ServerDeps): FastifyInstance {
   const app = Fastify({
     logger:
       config.logLevel === 'silent'
@@ -42,7 +59,19 @@ export function buildServer({ config, store, files, oidc, sync }: ServerDeps): F
     bodyLimit: 1024 * 1024,
     trustProxy: true,
   });
-  const ctx: ServerContext = { config, store, files, oidc: oidc ?? new OidcClients(config) };
+  const indexer = new Indexer(store, {
+    delayMs: indexDelayMs,
+    onError: (error, workspaceId) => app.log.error({ err: error, workspaceId }, 'indexing failed'),
+  });
+  const ctx: ServerContext = {
+    config,
+    store,
+    files,
+    oidc: oidc ?? new OidcClients(config),
+    indexer,
+  };
+  app.decorate('indexer', indexer);
+  app.addHook('onClose', () => indexer.close());
 
   app.decorateRequest('auth', null);
   void app.register(cookie);

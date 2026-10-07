@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { access, copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
-import type { FileStorage } from './storage';
+import type { ByteRange, FileStorage } from './storage';
 
 /** Files in a folder (a Docker volume), for single-machine installs and tests. */
 export class FsStorage implements FileStorage {
@@ -44,11 +44,11 @@ export class FsStorage implements FileStorage {
     await rename(tmp, path);
   }
 
-  async get(key: string) {
+  async get(key: string, range?: ByteRange) {
     const path = this.path(key);
     try {
       const { size } = await stat(path);
-      return { body: createReadStream(path), size };
+      return { body: createReadStream(path, range), size };
     } catch {
       return null;
     }

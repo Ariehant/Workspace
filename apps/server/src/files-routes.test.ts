@@ -19,6 +19,12 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+/** 4×3 red PNG. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEklEQVR4nGP4z8AARwzEcQwDAH2gC/UmQhvLAAAAAElFTkSuQmCC',
+  'base64',
+);
+
 const idOf = (bytes: Buffer, ext = '.png') =>
   `${createHash('sha256').update(bytes).digest('hex')}${ext}`;
 
@@ -70,7 +76,7 @@ async function setup() {
 describe('attachments API', () => {
   it('uploads once, checks the hash, and serves the file back', async () => {
     const s = await setup();
-    const bytes = Buffer.from('fake png bytes');
+    const bytes = PNG;
     const id = idOf(bytes);
     expect((await s.get(id, s.ada.token, 'HEAD')).statusCode).toBe(404);
 
@@ -139,5 +145,64 @@ describe('attachments API', () => {
     await s.put(id, svg, s.ada.token, { 'x-file-mime': 'image/svg+xml' });
     const res = await s.get(id);
     expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+  });
+
+  it('serves byte ranges and answers 304 to a known ETag', async () => {
+    const s = await setup();
+    const bytes = Buffer.from('0123456789');
+    const id = idOf(bytes, '.txt');
+    await s.put(id, bytes, s.ada.token, { 'x-file-mime': 'text/plain' });
+    const get = (headers: Record<string, string>) =>
+      s.app.inject({
+        url: s.url(id),
+        headers: { authorization: `Bearer ${s.ada.token}`, ...headers },
+      });
+
+    const part = await get({ range: 'bytes=2-5' });
+    expect(part.statusCode).toBe(206);
+    expect(part.body).toBe('2345');
+    expect(part.headers['content-range']).toBe('bytes 2-5/10');
+    expect(part.headers['content-length']).toBe('4');
+    expect((await get({ range: 'bytes=7-' })).body).toBe('789');
+    expect((await get({ range: 'bytes=-3' })).body).toBe('789');
+    expect((await get({ range: 'bytes=8-100' })).body).toBe('89');
+    const beyond = await get({ range: 'bytes=10-' });
+    expect(beyond.statusCode).toBe(416);
+    expect(beyond.headers['content-range']).toBe('bytes */10');
+    // Several ranges: the whole file instead.
+    const multi = await get({ range: 'bytes=0-1,4-5' });
+    expect([multi.statusCode, multi.body]).toEqual([200, '0123456789']);
+    expect(multi.headers['accept-ranges']).toBe('bytes');
+
+    const cached = await get({ 'if-none-match': `"${id}"` });
+    expect(cached.statusCode).toBe(304);
+    expect(cached.body).toBe('');
+    expect((await get({ 'if-none-match': '"other"' })).statusCode).toBe(200);
+  });
+
+  it('stores files as what their content is, not what they claim', async () => {
+    const s = await setup();
+    const typeOf = async (bytes: Buffer, claimed: string, ext: string) => {
+      const id = idOf(bytes, ext);
+      await s.put(id, bytes, s.ada.token, { 'x-file-mime': claimed });
+      const res = await s.get(id);
+      return [res.headers['content-type'], res.headers['content-disposition']!.split(';')[0]];
+    };
+    // A real PNG, whatever it was called.
+    expect(await typeOf(PNG, 'application/octet-stream', '.png')).toEqual(['image/png', 'inline']);
+    // A page pretending to be an image: stored as HTML, so it's downloaded, never shown.
+    expect(
+      await typeOf(Buffer.from('<!DOCTYPE html><script>x</script>'), 'image/png', '.png'),
+    ).toEqual(['text/html', 'attachment']);
+    // Claims to be media but isn't anything recognizable: plain bytes.
+    expect(await typeOf(Buffer.from('not really a video'), 'video/mp4', '.mp4')).toEqual([
+      'application/octet-stream',
+      'inline',
+    ]);
+    // Text stays as declared.
+    expect(await typeOf(Buffer.from('a,b\n1,2'), 'text/csv', '.csv')).toEqual([
+      'text/csv',
+      'inline',
+    ]);
   });
 });

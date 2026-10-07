@@ -112,7 +112,8 @@ describe('SyncHub', () => {
   });
 
   it('broadcasts pushes to the other connections, live', async () => {
-    const { open } = setup();
+    const appended: string[] = [];
+    const { open } = setup({ onAppend: (ws) => appended.push(ws) });
     const a = open();
     const b = open();
     a.hello(0, 'A');
@@ -123,6 +124,7 @@ describe('SyncHub', () => {
     const [update] = ofType(b.received, 'updates');
     expect(update!.cursor).toBe(1);
     expect(contentsOf(update!.items[0]!.update).t).toBe('hi');
+    expect(appended).toEqual([WS]);
   });
 
   it('sends updates appended by another process after a gap', async () => {

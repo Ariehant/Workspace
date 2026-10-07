@@ -121,6 +121,37 @@ export const MIGRATIONS: string[] = [
     expires_at timestamptz NOT NULL
   );
   `,
+  `
+  -- The search index: derived from the docs (rebuildable), like the desktop's.
+  -- kind is null for content that arrived before its page or row is known.
+  CREATE TABLE search_index (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    id text NOT NULL,
+    kind text CHECK (kind IN ('page', 'row')),
+    database_id text,
+    title text NOT NULL DEFAULT '',
+    icon text,
+    props text NOT NULL DEFAULT '',
+    body text NOT NULL DEFAULT '',
+    in_trash boolean NOT NULL DEFAULT false,
+    updated_at bigint NOT NULL DEFAULT 0,
+    -- 'simple': no stemming, so mixed languages and code-ish words match as typed.
+    tsv tsvector GENERATED ALWAYS AS (
+      setweight(to_tsvector('simple', title), 'A') ||
+      setweight(to_tsvector('simple', props), 'B') ||
+      setweight(to_tsvector('simple', left(body, 500000)), 'C')
+    ) STORED,
+    PRIMARY KEY (workspace_id, id)
+  );
+  CREATE INDEX search_index_tsv ON search_index USING gin (tsv);
+  CREATE INDEX search_index_db ON search_index (workspace_id, database_id);
+
+  -- How far into each workspace's update log the index is.
+  CREATE TABLE search_state (
+    workspace_id uuid PRIMARY KEY REFERENCES workspaces ON DELETE CASCADE,
+    indexed_seq bigint NOT NULL DEFAULT 0
+  );
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

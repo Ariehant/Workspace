@@ -7,8 +7,8 @@ The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Ph
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
 except its last check, importing a real Notion export. Phase 4 (sync server, see
-[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server (M1), accounts (M2), the sync protocol (M3) and desktop sync
-(M4) are done.
+[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server (M1), accounts (M2), the sync protocol (M3), desktop sync (M4)
+and server-side search and attachments (M5) are done; the web app (M6) is next.
 
 ## What works today
 
@@ -162,6 +162,7 @@ The first account created becomes the server admin. After that, `SIGNUP` decides
 ```sh
 docker compose exec server workspace-admin create-invite [email]
 docker compose exec server workspace-admin create-user ada@example.com "Ada" [--admin]
+docker compose exec server workspace-admin reindex   # rebuild the search index
 docker compose exec server workspace-admin help      # all commands
 ```
 

@@ -15,6 +15,8 @@ async function main(): Promise<void> {
   const version = await store.migrate();
   app.log.info({ schema: version }, 'database ready');
   await app.listen({ host: config.host, port: config.port });
+  // Index whatever arrived while the server was down (or before search existed).
+  void app.indexer.catchUp().catch((error: unknown) => app.log.error({ err: error }, 'indexing'));
 
   let stopping = false;
   const stop = (signal: string) => {

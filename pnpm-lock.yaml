@@ -131,6 +131,12 @@ importers:
       '@fastify/rate-limit':
         specifier: ^11.2.0
         version: 11.2.0
+      '@workspace/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@workspace/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@workspace/storage-remote':
         specifier: workspace:*
         version: link:../../packages/storage-remote
@@ -146,6 +152,9 @@ importers:
       ws:
         specifier: ^8.22.0
         version: 8.22.0
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.33
     devDependencies:
       '@types/node':
         specifier: ^26.6.4
@@ -159,9 +168,6 @@ importers:
       jose:
         specifier: ^6.2.12
         version: 6.2.12
-      yjs:
-        specifier: ^13.6.27
-        version: 13.6.33
 
   packages/app:
     dependencies:

@@ -1,6 +1,6 @@
 # Phase 4: Sync server
 
-**Status:** M1–M4 done. M5 next.
+**Status:** M1–M5 done. M6 (the web app) next.
 
 ## Context
 
@@ -338,13 +338,41 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
   - **Screenshots:** set `WORKSPACE_SHOTS=<dir>` to save screenshots of each step of the sync UI.
 - **Flaky test fixed:** "pasting Markdown" (the one that failed under load in M1) failed in about a third of runs when run on its own. Right after a paste, the editor can still move the caret, so a quick click-then-paste could land in the code block or the new heading. The test now confirms the caret is in the last paragraph before each paste, and passed 12 runs out of 12.
 
-### M5: server index and search
+### M5: server index and search ✅
 
 - The server keeps the same derived index the desktop has (titles, page tree, body text, rows with their property text) in Postgres full-text search (`tsvector`, `simple` configuration for mixed languages). It reuses the pure functions from core and database: `pageText`, row indexing.
   - It's updated after appends, debounced per doc.
 - `GET /api/search` gives the same results and snippets as quick find on the desktop.
 - **Attachments API:** upload (size limit, MIME sniffing, content hash checked), download with `ETag`/range requests, and per-workspace storage usage.
 - **Admin basics:** a CLI in the image (`workspace-admin`) to create users, reset passwords, list workspaces and compact logs.
+
+**M5 notes:**
+
+- **The index** (migration 3, `search_index` and `search_state`):
+  - It is one row per page or database row: title, icon, property text, body, trash flag and last edited time. A generated `tsvector` uses the `simple` configuration, which is word-for-word with no stemming, so mixed languages and code-ish words like `2Nm` match as typed. Titles weigh most, then properties, then body. There is a GIN index on it.
+  - Content can arrive before its page or row. It is then stored but not searchable until the page tree or its database says what it is.
+- **The indexer follows the log** rather than individual events:
+  - Each workspace remembers how far into its update log it has indexed. A run reads the docs changed since then, re-reads each one's merged state, indexes it and moves the mark forward.
+  - It uses the desktop's pure functions:
+    - the workspace doc: pages, titles, trash (`listPages`, `isInTrash`)
+    - database docs: rows, with property text from `rowPropertiesText` and user names from the workspace doc; templates are left out, as on the desktop
+    - everything else: body text from `pageText`
+  - **Triggers:** runs start a second after appends (the hub's new `onAppend`) and after compactions. At startup the server catches up any workspace that's behind, which also covers data from before M5. A big backlog is indexed in batches of 2,000 docs. There's one run at a time per workspace, and shutdown waits for it.
+  - `workspace-admin reindex [workspace id]` rebuilds from scratch.
+- **Search:** `GET /api/workspaces/<id>/search?q=…`, members only.
+  - Every typed word must match as a prefix (`robo arm` becomes `robo:* & arm:*`; the input is reduced to letters and digits, so it can't inject query syntax).
+  - Results are ranked by weight, then by last edited, and leave out trashed pages and rows of trashed databases.
+  - Each result has `id`, `title`, `icon`, `databaseId` and a `ts_headline` snippet with hits in `[ ]`, the same shape as the desktop's quick find.
+  - Not indexed on the server yet: the content of synced blocks counting on every page that shows them (the desktop does this). That goes with the server-side backlinks in Phase 5.
+- **Attachments:**
+  - **Ranges:** `Range: bytes=a-b`, `a-`, or `-n` gives a 206 with `Content-Range`, so video can seek. An unsatisfiable range gives a 416, and several ranges give the whole file. The filesystem and S3 drivers read only the requested bytes.
+  - **Caching:** the `ETag` is the content id, and `If-None-Match` gives a 304.
+  - **Type sniffing:** uploads are stored as what their first bytes are, whatever the client claims. The sniffer knows PNG, JPEG, GIF, WebP, AVIF, HEIC, PDF, MP4, QuickTime, WebM, Ogg, MP3, FLAC, WAV, zip, SVG and HTML. A page posing as an image is stored as `text/html` (so always downloaded), and something claiming to be media that isn't is stored as `application/octet-stream`. Zip-based formats such as `.docx` keep their own name.
+- **Tests:**
+  - **Search store:** the query builder, prefix and all-words matching, ranking, trash, removal, isolation between workspaces, and the log position.
+  - **End to end on the server:** a device syncs pages, content and a database row over the real socket, and search finds each one (by content, property and title) and follows renames and the trash. Plus startup catch-up of data written straight into the log, `reindex`, and members only.
+  - **Files:** byte ranges (all forms), 304s, a disguised HTML upload, fake media, and the sniffer itself.
+  - **Desktop sync E2E:** after device A uploads, the real server bundle's search finds its page by a word in its content.
 
 ### M6: web app
 

@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { PgStore } from '@workspace/storage-remote';
 import { hashPassword, randomToken } from './auth/passwords';
+import { Indexer } from './search/indexer';
 
 export const USAGE = `Usage: workspace-admin <command>
 
@@ -19,6 +20,7 @@ Commands:
   enable-user <email>             Re-enable an account
   make-admin <email>              Make an account a server admin
   list-workspaces                 List workspaces with their members and sizes
+  reindex [workspace id]          Rebuild the search index (of one workspace, or all)
 `;
 
 export interface AdminIo {
@@ -172,6 +174,32 @@ export async function runAdmin(store: PgStore, argv: string[], io: AdminIo): Pro
         io.out(`${r.id}\t${r.name}\t${r.members} members\t${r.last_seq} updates\t${mb} MB`);
       }
       return 0;
+    }
+
+    case 'reindex': {
+      const ids = positional[0]
+        ? [positional[0]]
+        : (await store.pool.query<{ id: string }>('SELECT id FROM workspaces')).rows.map(
+            (r) => r.id,
+          );
+      let failed = false;
+      const indexer = new Indexer(store, {
+        onError: (error) => {
+          failed = true;
+          io.err(String(error));
+        },
+      });
+      for (const id of ids) {
+        if (!(await store.getWorkspace(id).catch(() => null))) {
+          io.err(`No workspace ${id}.`);
+          return 1;
+        }
+        await store.search.clear(id);
+        await indexer.run(id);
+      }
+      await indexer.close();
+      io.out(`Reindexed ${ids.length} workspace${ids.length === 1 ? '' : 's'}`);
+      return failed ? 1 : 0;
     }
 
     default:

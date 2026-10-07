@@ -1,13 +1,22 @@
 import type { Readable } from 'node:stream';
 
+export interface ByteRange {
+  start: number;
+  /** Inclusive. */
+  end: number;
+}
+
 /** Where attachment bytes live. Keys are `<workspace id>/<file id>`. */
 export interface FileStorage {
   has(key: string): Promise<boolean>;
   put(key: string, bytes: Uint8Array, mime: string): Promise<void>;
   /** Store a file from a local path (uploads are streamed to a temp file first). */
   putFile(key: string, path: string, size: number, mime: string): Promise<void>;
-  /** The file's bytes as a stream, or null if it isn't stored. */
-  get(key: string): Promise<{ body: Readable; size: number } | null>;
+  /**
+   * The file's bytes as a stream (all of them, or bytes `start`–`end` inclusive), or null
+   * if it isn't stored. `size` is the whole file's.
+   */
+  get(key: string, range?: ByteRange): Promise<{ body: Readable; size: number } | null>;
   delete(key: string): Promise<void>;
   /** Fails if the storage can't be reached (readiness checks). */
   check(): Promise<void>;

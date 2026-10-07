@@ -58,4 +58,34 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
       return { workspace: { ...(await store.getWorkspace(request.params.id))!, role } };
     },
   );
+
+  // Quick find for the web app: titles, row properties and content, like the desktop's.
+  app.get<{ Params: { id: string }; Querystring: { q: string; limit?: number } }>(
+    '/api/workspaces/:id/search',
+    {
+      preHandler: signedIn,
+      schema: {
+        params: idParams,
+        querystring: {
+          type: 'object',
+          required: ['q'],
+          properties: {
+            q: { type: 'string', maxLength: 200 },
+            limit: { type: 'integer', minimum: 1, maximum: 50 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!(await store.roleOf(request.params.id, request.auth!.user.id))) {
+        return fail(reply, 404, 'not_found', 'No such workspace.');
+      }
+      const results = await store.search.search(
+        request.params.id,
+        request.query.q,
+        request.query.limit ?? 20,
+      );
+      return { results };
+    },
+  );
 }

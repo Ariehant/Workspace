@@ -61,6 +61,8 @@ export interface HubOptions {
   ringSize?: number;
   /** Most docs a partial client may have open. */
   maxOpenDocs?: number;
+  /** Called after updates were appended to a workspace's log (e.g. to update a search index). */
+  onAppend?: (workspaceId: string) => void;
   /** Errors that aren't the client's fault (the store failing), for logging. */
   onError?: (error: unknown) => void;
   sleep?: (ms: number) => Promise<void>;
@@ -85,7 +87,7 @@ const EMPTY_DOC_UPDATE = Y.encodeStateAsUpdate(new Y.Doc());
 
 export class SyncHub {
   private readonly workspaces = new Map<string, WorkspaceState>();
-  readonly options: Required<HubOptions>;
+  readonly options: Required<Omit<HubOptions, 'onAppend'>> & Pick<HubOptions, 'onAppend'>;
 
   constructor(
     readonly store: LogStore,
@@ -168,6 +170,7 @@ export class SyncHub {
     void result.then(
       () => {
         for (const c of workspace.connections) c.poke();
+        this.options.onAppend?.(workspace.id);
       },
       () => {},
     );

@@ -181,8 +181,15 @@ test('device A creates the account and uploads its workspace', async () => {
   }).then((r) => r.json() as Promise<{ token: string }>);
   const listed = await fetch(`${base}/api/workspaces`, {
     headers: { authorization: `Bearer ${login.token}` },
-  }).then((r) => r.json() as Promise<{ workspaces: { name: string }[] }>);
+  }).then((r) => r.json() as Promise<{ workspaces: { id: string; name: string }[] }>);
   expect(listed.workspaces.map((w) => w.name)).toEqual(['Robotics lab']);
+  // ...and has indexed it: the server's search finds the page by its content.
+  const search = () =>
+    fetch(`${base}/api/workspaces/${listed.workspaces[0]!.id}/search?q=parallel`, {
+      headers: { authorization: `Bearer ${login.token}` },
+    }).then((r) => r.json() as Promise<{ results: { title: string; snippet: string }[] }>);
+  await expect.poll(async () => (await search()).results.map((r) => r.title)).toEqual(['Gripper']);
+  expect((await search()).results[0]!.snippet).toContain('[parallel]');
 });
 
 test('device B takes the server’s workspace, and edits flow both ways', async () => {
