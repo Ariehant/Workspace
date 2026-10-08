@@ -1,6 +1,6 @@
 # Phase 5: Collaboration
 
-**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server), M3 (teamspaces, private pages and sharing in the app) M4 (presence and live cursors), M5 (comments and suggested edits), M6 (inbox and notifications) and M7 (publish to web, server backlinks and history) are done. The exit check is next.
+**Status:** done. M1–M7 are complete (members and groups, scopes and permissions, teamspaces and sharing, presence, comments and suggested edits, the inbox, and publishing with server backlinks and history), and the exit check passes.
 
 ## Context
 
@@ -706,6 +706,29 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   Every attempt is denied, and nothing it shouldn't see arrives in its stream.
 
 - **The Docker stack:** the stack smoke test (Phase 4) is extended with a second account and a shared page.
+
+**Exit check results:**
+
+- **Three accounts, two desktops and the web app** (`apps/desktop/e2e/collab-exit.spec.ts`). Ada, the owner, is on the web app; Bob, a member, is on a desktop that reaches the server through a proxy; Gus, a guest, is on another desktop.
+  - **Private pages:** Ada's private page never reaches Bob's or Gus's desktop. Their database files (and write-ahead logs) contain neither its id nor its title, while Bob's holds the teamspace page's, as a control. Typed text is stored in pieces, so ids and titles, which are stored whole, are what the check looks for.
+  - **Live co-editing:** Ada (web) and Bob (desktop) co-edit a teamspace page, each seeing the other's text, named cursor and avatar.
+  - **Commenting guest:** Ada shares a page with Gus as "can comment". His page is read-only with "Can comment"; he comments on a range and suggests an edit; Ada accepts it from the web, and it reaches his desktop.
+  - **Notifications:** Ada's reply in Gus's thread and her mention of Bob reach the right inboxes and show as desktop notifications.
+  - **Offline denial:** Bob edits offline; Ada makes the teamspace view-only; on reconnect his edit is refused, the page matches the server (and Ada's), and his history keeps it as "Not saved: your access changed".
+  - **Revoking:** taking Gus's access away removes the page from his desktop.
+  - **Publishing:** published without its sub-pages, the page reads signed out. The unpublished sub-page, a file id and the private page's path are all 404.
+- **The authorization matrix** (M2, `apps/server/src/access.test.ts`) still passes: each role × doc kind × read, write, search and location, over the socket and the REST API.
+- **Crafted clients** (`apps/server/src/crafted.test.ts`), raw sockets that skip the app:
+  - **A guest with access to nothing** claims to hold Ada's scopes, opens her docs by name, and pushes to her private page, to a new doc hinted into her private scope, to the members doc and to a teamspace page. He also watches her private page and sends a cursor there as Ada.
+    - Every push is denied, every open refused, and his access list is empty.
+    - Nothing but the members doc (and the server's empty copy of the doc he tried to plant) reaches him, and none of Ada's titles or text.
+    - His cursor goes nowhere, and nothing he sent is stored.
+  - **A member** has a private page's open refused; can't store a comment thread written as Ada, a doc hinted into Ada's private scope, or the members doc; and their cursor sent as Ada reaches Ada stamped as them. Their own doc in the teamspace is stored.
+  - **REST:** backlinks, publishing, views, follows, versions and sharing of someone else's private page answer 403 or 404; search doesn't find it; a slug they tried to take doesn't exist.
+- **The Docker stack** (`stack.smoke.test.ts`), with a second account: an owner's private pages don't reach a member's device; the one shared with the member arrives live, and the other doesn't. Published, the page is public through Caddy (with its CSP) until it's unpublished.
+  - Run here against the image built in this sandbox, through Caddy with TLS (both stack tests pass). The sandbox's outbound proxy needs its CA in the build stage, so the build used a derived Dockerfile that adds it there only.
+- **Runs:** the full desktop E2E passed twice (129 tests each), and the web E2E passed (3 tests).
+- **Still open from Phase 3:** importing a real Notion export, which needs a sample export.
 
 ## Packages
 

@@ -9,7 +9,7 @@ see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see
 except its last check, importing a real Notion export. Phase 4 (sync server, see
 [docs/PHASE4.md](docs/PHASE4.md)) is complete: a self-hosted server (Docker Compose behind Caddy), accounts and SSO,
 offline-first sync between desktops, server-side search and attachments, and the web app. Two desktops
-converge after offline edits and restarts. Phase 5 (collaboration, see [docs/PHASE5.md](docs/PHASE5.md)) is in progress: members,
+converge after offline edits and restarts. Phase 5 (collaboration, see [docs/PHASE5.md](docs/PHASE5.md)) is complete: members,
 invites, roles and groups, profiles and @-mentions of people are done (M1), and the server now
 decides who sees and edits what: scopes (teamspaces, private pages, shared pages) with roles,
 enforced per doc on the sync socket, search and page location (M2). The app shows it all
@@ -22,8 +22,9 @@ have open. Comments work too (M5): comment on selected text or on the whole page
 instead, and someone who may edit accepts or rejects them. The inbox (M6) collects mentions,
 comments and replies on pages you follow, reminders and pages shared with you, live, with
 desktop notifications. Pages can be published to the web (M7), readable without signing in,
-and the server keeps backlinks and page history, so the web app has them too. Next is the
-Phase 5 exit check.
+and the server keeps backlinks and page history, so the web app has them too. The exit check
+passes: three accounts on two desktops and the web app, crafted clients that try to get around
+the checks, and the Docker stack with a second account. Next is Phase 6 (automations and API).
 
 ## What works today
 
