@@ -181,6 +181,25 @@ function mineAt(
   return null;
 }
 
+/** A keystroke's change as a transaction (typed text, or a character deleted), or null. */
+function typedChange(state: EditorState, event: InputEvent): Transaction | null {
+  const { selection } = state;
+  if (!(selection instanceof TextSelection)) return null;
+  const { $from, from, to } = selection;
+  if (event.inputType === 'insertText' && event.data) return state.tr.insertText(event.data);
+  const back = event.inputType === 'deleteContentBackward';
+  if (!back && event.inputType !== 'deleteContentForward') return null;
+  if (from !== to) return state.tr.deleteSelection();
+  // One character within the paragraph (both halves of a surrogate pair); at its edges,
+  // the keymap and the browser decide (joining blocks is refused anyway).
+  const text = $from.parent.textContent;
+  const at = $from.parentOffset;
+  if (back ? at === 0 : at >= text.length) return null;
+  const low = (index: number) => /[\udc00-\udfff]/.test(text.charAt(index));
+  if (back) return state.tr.delete(from - (at > 1 && low(at - 1) ? 2 : 1), from);
+  return state.tr.delete(from, from + (low(at + 1) ? 2 : 1));
+}
+
 /**
  * A change typed in suggest mode, as a suggestion: text inserted, deleted, or a selection
  * replaced, inside text. Anything else (structure) is refused. Returns where the caret
@@ -285,6 +304,18 @@ export const Comments = Extension.create<CommentsOptions>({
         },
         props: {
           decorations: (state) => key.getState(state),
+          handleDOMEvents: {
+            // Suggest mode: typing never touches the DOM. Read back from the DOM, a refused
+            // keystroke would linger there and the next one could be taken first.
+            beforeinput: (v, event) => {
+              if (!host.suggesting() || event.isComposing) return false;
+              const tr = typedChange(v.state, event);
+              if (!tr) return false;
+              event.preventDefault();
+              v.dispatch(tr);
+              return true;
+            },
+          },
           handleClick: (_view, _pos, event) => {
             const el = (event.target as HTMLElement | null)?.closest?.('[data-thread]');
             const id = el?.getAttribute('data-thread');
