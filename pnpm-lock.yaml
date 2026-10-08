@@ -140,6 +140,9 @@ importers:
       '@workspace/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@workspace/exporters':
+        specifier: workspace:*
+        version: link:../../packages/exporters
       '@workspace/storage-remote':
         specifier: workspace:*
         version: link:../../packages/storage-remote

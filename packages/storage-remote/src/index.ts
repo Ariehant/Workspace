@@ -5,3 +5,4 @@ export * from './search';
 export * from './teams';
 export * from './scopes';
 export * from './notifications';
+export * from './pages';

@@ -17,6 +17,7 @@
     "@fastify/static": "^9.3.0",
     "@workspace/core": "workspace:*",
     "@workspace/database": "workspace:*",
+    "@workspace/exporters": "workspace:*",
     "@workspace/storage-remote": "workspace:*",
     "@workspace/sync": "workspace:*",
     "fastify": "^5.12.5",

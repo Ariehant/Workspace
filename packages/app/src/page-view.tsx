@@ -532,7 +532,15 @@ export interface PageViewProps {
   onShare?(id: PageId): void;
   /** Following pages (a server workspace): their comments reach the inbox. */
   follow?: { get(id: PageId): Promise<boolean>; set(id: PageId, on: boolean): Promise<void> };
+  /** Page views (a server workspace): counted when a page is opened, shown in its menu. */
+  analytics?: {
+    get(id: PageId): Promise<{ views: number; viewers: number }>;
+    view(id: PageId): Promise<unknown>;
+  };
 }
+
+/** Pages this window has counted a view of. */
+const viewed = new Set<PageId>();
 
 function useWorkspacePageModel(pageId: PageId): PageModel | null {
   const { workspace } = useApp();
@@ -564,7 +572,14 @@ export function PageView({
   onTrash,
   onShare,
   follow,
+  analytics,
 }: PageViewProps) {
+  // A view, once per page per window.
+  useEffect(() => {
+    if (!analytics || viewed.has(pageId)) return;
+    viewed.add(pageId);
+    analytics.view(pageId).catch(() => viewed.delete(pageId));
+  }, [analytics, pageId]);
   const { pages } = useApp();
   const model = useWorkspacePageModel(pageId);
   const isDatabase = model?.meta.kind === 'database';
@@ -607,6 +622,7 @@ export function PageView({
             onSaveAsTemplate={() => onSaveAsTemplate(pageId)}
             onExport={onExport ? () => onExport(pageId) : undefined}
             onTrash={() => onTrash(pageId)}
+            views={analytics && (() => analytics.get(pageId))}
             follow={
               follow && {
                 get: () => follow.get(pageId),

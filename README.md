@@ -21,7 +21,9 @@ have open. Comments work too (M5): comment on selected text or on the whole page
 @-mention, react and resolve, in a comments panel. People who may only comment suggest edits
 instead, and someone who may edit accepts or rejects them. The inbox (M6) collects mentions,
 comments and replies on pages you follow, reminders and pages shared with you, live, with
-desktop notifications. Next is publishing to the web.
+desktop notifications. Pages can be published to the web (M7), readable without signing in,
+and the server keeps backlinks and page history, so the web app has them too. Next is the
+Phase 5 exit check.
 
 ## What works today
 

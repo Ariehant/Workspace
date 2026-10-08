@@ -14,7 +14,10 @@ import { smtpMailer, type Mailer } from './mailer';
 import { inviteRoutes, memberRoutes } from './members/routes';
 import { scopeRoutes } from './scopes/routes';
 import { MembersDoc } from './members/members-doc';
+import { HistoryKeeper, type HistoryOptions } from './history/keeper';
 import { Notifier } from './notify/notifier';
+import { pageRoutes } from './publish/routes';
+import { Site, siteRoutes } from './publish/site';
 import { notificationRoutes } from './notify/routes';
 import { Indexer } from './search/indexer';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
@@ -31,6 +34,8 @@ declare module 'fastify' {
     indexer: Indexer;
     /** Notifications (main.ts starts it after listening). */
     notifier: Notifier;
+    /** Page history (main.ts starts it after listening). */
+    history: HistoryKeeper;
   }
 }
 
@@ -45,6 +50,8 @@ export interface ServerDeps {
   indexDelayMs?: number;
   /** Notifications: wait this long after changes; look for due reminders this often. */
   notify?: { delayMs?: number; reminderPollMs?: number; now?: () => number };
+  /** Page history: how long a doc must be quiet before a snapshot, and how often to look. */
+  history?: HistoryOptions;
   /** Sends invite emails (default: SMTP from the config, or none). */
   mailer?: Mailer | null;
 }
@@ -58,6 +65,7 @@ export function buildServer({
   sync,
   indexDelayMs,
   notify,
+  history: historyOptions,
   mailer,
 }: ServerDeps): FastifyInstance {
   const app = Fastify({
@@ -99,6 +107,10 @@ export function buildServer({
     onError: (error, workspaceId) =>
       app.log.error({ err: error, workspaceId }, 'notifications failed'),
   });
+  const history = new HistoryKeeper(store, {
+    ...historyOptions,
+    onError: (error) => app.log.error({ err: error }, 'page history failed'),
+  });
   const ctx: ServerContext = {
     config,
     store,
@@ -106,6 +118,7 @@ export function buildServer({
     oidc: oidc ?? new OidcClients(config),
     indexer,
     notifier,
+    history,
     access,
     realtime,
     members: new MembersDoc({ store, append: realtime.appendFromServer }),
@@ -113,7 +126,9 @@ export function buildServer({
   };
   app.decorate('indexer', indexer);
   app.decorate('notifier', notifier);
-  app.addHook('onClose', () => Promise.all([indexer.close(), notifier.close()]));
+  app.decorate('history', history);
+  app.addHook('onClose', () => Promise.all([indexer.close(), notifier.close(), history.close()]));
+  const site = new Site(ctx);
 
   app.decorateRequest('auth', null);
   void app.register(cookie);
@@ -181,6 +196,8 @@ export function buildServer({
     inviteRoutes(scope, ctx);
     scopeRoutes(scope, ctx);
     notificationRoutes(scope, ctx);
+    pageRoutes(scope, ctx, site, history);
+    siteRoutes(scope, ctx, site);
   });
   webApp(app, config.webDir);
   endpoint = syncEndpoint(app, ctx, sync);

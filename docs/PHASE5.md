@@ -1,6 +1,6 @@
 # Phase 5: Collaboration
 
-**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server), M3 (teamspaces, private pages and sharing in the app) M4 (presence and live cursors), M5 (comments and suggested edits) and M6 (inbox and notifications) are done. M7 (publish to web, server backlinks and history) is next.
+**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server), M3 (teamspaces, private pages and sharing in the app) M4 (presence and live cursors), M5 (comments and suggested edits), M6 (inbox and notifications) and M7 (publish to web, server backlinks and history) are done. The exit check is next.
 
 ## Context
 
@@ -624,7 +624,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
     - Ada's own `@remind` shows once (the desktop's or the server's), and reaches her inbox. Bob isn't reminded.
   - The full desktop E2E passed twice (117 tests each) and the web E2E passed (3 tests).
 
-### M7: publish to web, server backlinks and history (about 1 week)
+### M7: publish to web, server backlinks and history ✅
 
 - **Publish** (Share menu → Publish):
   - **Settings:** a slug, whether sub-pages are included, whether search engines may index it, a title and description for search results and social cards, and whether visitors may duplicate it as a template.
@@ -645,6 +645,45 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - nothing unpublished leaks through links, mentions or synced blocks on a published page
   - snapshots and restore
   - E2E: publish a page, open it signed out, then unpublish
+
+**M7 notes:**
+
+- **Storage** (migration 9): `page_links`, `doc_snapshots` and `history_pending`, `published_pages` (one slug per page, unique across the server), and `page_views` and `page_viewers` (views per day, and who viewed: a user id, or a daily hash for public visitors).
+- **Publishing** (`apps/server/src/publish/`):
+  - **The page menu's Share dialog** has a Publish section. Publishing gives the page an address (`/p/<slug>`, from its title), and has settings for sub-pages, search engines, and a title and description for search results and link previews. Unpublish is there too. Only someone with full access may publish, change or unpublish.
+  - **Rendering:** `/p/<slug>` redirects to the page's file, rendered by the HTML exporter (`exportPages`) from the merged docs, with relative links between the published pages. The render is cached until the workspace's log moves on, and unpublishing drops it at once.
+  - **Nothing unpublished leaks:** only the published pages', databases' and rows' docs are loaded. Mentions and links to other pages show as "Private page", as text with no link and no title (a new `outside` option of the exporter). Synced blocks from elsewhere and other databases' rows show nothing.
+  - **Files:** a visitor gets a file only if a published page shows it. Files are streamed from storage, under the export's path.
+  - **Headers:** a strict CSP, `nosniff`, `no-referrer`, and `noindex` (header and meta tag) unless search engines are allowed. The chosen title and description go into the page's head.
+  - Sub-pages that the parent's content doesn't link to are listed under it, so visitors can reach them.
+- **Views:** opening a page in the app counts a view (once per page per window), and so does each public visit, with a hash of the IP address and user agent salted per day (no cookie, nothing kept about the visitor). The page menu shows the views and people over four weeks.
+- **Backlinks on the server:** the search indexer, which already reads every changed page doc from the log, also stores its links (`readLinks`, the desktop's function) in `page_links`. `GET …/pages/:id/backlinks` returns those from pages the caller can read. The web app turns on backlinks.
+- **History on the server** (`apps/server/src/history/keeper.ts`):
+  - A log follower notes the docs that changed. Once a doc has been quiet for 10 minutes, it keeps a snapshot, with the users who changed it since the last one (from `doc_updates.user_id`).
+  - Snapshots are pruned like the desktop's: everything for a week, then the newest of each day, and nothing older than 90 days. Clients can ask for a snapshot now, before a restore (edit access).
+  - The web app turns on page history; restoring runs in the client, as on the desktop.
+  - While syncing, the desktop's history shows the server's versions ("Edited by …") next to its own.
+- **Differs from the plan:**
+  - No custom domains, and visitors can't duplicate a published page as a template yet.
+  - The search indexer keeps the links (it reads the same docs); relations aren't among the server's backlinks.
+  - A render is invalidated by any change in the workspace, not only to its pages (simpler, and correct).
+  - Views show as totals in the page menu, not a chart.
+- **Tests:**
+  - **Server:**
+    - Publishing needs full access.
+    - The render is checked for the title and description, the CSP and `noindex`, and the sub-page.
+    - Nothing of an unpublished page leaks: no title, synced content or id.
+    - Only the image the page shows is served, not another file of the workspace.
+    - Edits show in the render; without sub-pages, the sub-page is gone; slugs are unique; unpublishing takes the page down at once.
+    - Views count public visitors and people.
+    - Backlinks are listed only for readers.
+    - History: a snapshot after the quiet time with its author, none without changes, one on request, and nothing for someone who can't read the page.
+  - **E2E (`publish.spec.ts`):**
+    - Ada publishes a page with a sub-page from her desktop.
+    - Someone signed out reads it in a browser and follows the link to the sub-page; the private page shows as "Private page". Their visit and Ada's show in the page menu.
+    - Unpublishing returns 404.
+    - On the web app, Ada sees the backlink to a page from the server.
+  - The full desktop E2E passed twice (121 tests each; a third run in between failed once in an unrelated page-icon test, where closing the app timed out, and that spec then passed three times on its own) and the web E2E passed (3 tests).
 
 ## Exit check
 

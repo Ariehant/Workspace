@@ -48,6 +48,8 @@ export interface PageMenuProps {
   /** Omitted for database rows. */
   onExport?(): void;
   onTrash(): void;
+  /** Views over the last four weeks (a server workspace): read when the menu opens. */
+  views?(): Promise<{ views: number; viewers: number }>;
   /** Following the page (a server workspace): read when the menu opens. */
   follow?: { get(): Promise<boolean>; set(on: boolean): Promise<void> };
   /** Suggest edits: on, and its toggle (null when it's always on: they may only comment). */
@@ -105,8 +107,10 @@ export function PageMenu({
   onTrash,
   suggest,
   follow,
+  views,
 }: PageMenuProps) {
   const [following, setFollowing] = useState<boolean | null>(null);
+  const [seen, setSeen] = useState<{ views: number; viewers: number } | null>(null);
   // Computed when the menu opens rather than on every render of the page.
   const [stats, setStats] = useState<{ words: number; now: number } | null>(null);
   const [history, setHistory] = useState(false);
@@ -125,6 +129,7 @@ export function PageMenu({
             open ? { words: pageDoc ? countWords(pageText(pageDoc)) : 0, now: Date.now() } : null,
           );
           if (open && follow) follow.get().then(setFollowing, () => setFollowing(null));
+          if (open && views) views().then(setSeen, () => setSeen(null));
         }}
       >
         <MenuTrigger asChild>
@@ -258,6 +263,12 @@ export function PageMenu({
             <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-xs text-muted">
               <div data-testid="word-count">Word count: {stats.words.toLocaleString('en-US')}</div>
               <div>Last edited {timeAgo(page.updatedAt, stats.now)}</div>
+              {seen && (
+                <div data-testid="page-views">
+                  {seen.views.toLocaleString('en-US')} {seen.views === 1 ? 'view' : 'views'} ·{' '}
+                  {seen.viewers} {seen.viewers === 1 ? 'person' : 'people'} in 4 weeks
+                </div>
+              )}
             </div>
           )}
         </MenuContent>

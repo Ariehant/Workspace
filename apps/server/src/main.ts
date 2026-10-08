@@ -27,6 +27,7 @@ async function main(): Promise<void> {
   void app.indexer.catchUp().catch((error: unknown) => app.log.error({ err: error }, 'indexing'));
   // Notify about what arrived while it was down, and fire reminders that came due.
   void app.notifier.start().catch((error: unknown) => app.log.error({ err: error }, 'notifier'));
+  void app.history.start().catch((error: unknown) => app.log.error({ err: error }, 'history'));
 
   let stopping = false;
   const stop = (signal: string) => {

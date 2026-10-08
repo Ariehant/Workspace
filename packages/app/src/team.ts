@@ -175,7 +175,38 @@ export function teamApi(team: TeamPlatform) {
     me: async () => (await r<{ user: Profile }>('GET', 'me')).user,
     updateMe: async (change: { name?: string; avatar?: string | null }) =>
       (await r<{ user: Profile }>('PATCH', 'me', change)).user,
+    // Publishing (Phase 5 M7).
+    published: (pageId: string) =>
+      r<{ published: PublishedPage | null; suggestedSlug: string }>(
+        'GET',
+        `pages/${pageId}/publish`,
+      ),
+    publish: (pageId: string, settings: PublishSettings) =>
+      r<{ published: PublishedPage }>('PUT', `pages/${pageId}/publish`, settings),
+    unpublish: (pageId: string) => r<{ published: null }>('DELETE', `pages/${pageId}/publish`),
+    // Views (people who opened it, and public visitors).
+    analytics: (pageId: string) =>
+      r<{ views: number; viewers: number; days: { day: string; views: number }[] }>(
+        'GET',
+        `pages/${pageId}/analytics`,
+      ),
+    view: (pageId: string) => r<{ ok: true }>('POST', `pages/${pageId}/views`),
   };
+}
+
+export interface PublishSettings {
+  slug: string;
+  includeSubpages: boolean;
+  allowIndexing: boolean;
+  title: string;
+  description: string;
+}
+
+/** A page on the web, at `url`. */
+export interface PublishedPage extends PublishSettings {
+  pageId: string;
+  url: string;
+  publishedAt: number;
 }
 
 export type TeamApi = ReturnType<typeof teamApi>;

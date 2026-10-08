@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { sectionName } from './scope-actions';
 import { AccessRow, usePrincipals } from './teamspace-dialogs';
 import { SCOPE_ROLE_LABELS, type ScopeDetails, type ScopeRole, type TeamApi } from './team';
+import { PublishSection } from './publish-section';
 
 const select =
   'h-8 rounded-md border border-line bg-surface px-1.5 text-sm text-fg outline-none focus:border-accent disabled:opacity-60';
@@ -228,6 +229,7 @@ export function ShareDialog({
             </>
           )}
           {error && scopes && <p className="text-sm text-red-600">{error}</p>}
+          {here && <PublishSection team={team} pageId={pageId} canPublish={canShare} />}
           <div className="flex justify-end border-t border-line pt-3">
             <Button
               onClick={() => {

@@ -276,6 +276,25 @@ registerIpc(
   onRendererReady,
   (pageId) => createWindow(pageId),
   () => sync.syncedUser(),
+  // While syncing, the server's versions show next to this device's.
+  {
+    versions: async (docId) => {
+      const r = await sync.team({ method: 'GET', path: `docs/${docId}/versions` });
+      return 'ok' in r
+        ? (
+            r.ok as {
+              versions: { id: number; createdAt: number; reason: string; authors: string[] }[];
+            }
+          ).versions
+        : [];
+    },
+    version: async (id) => {
+      const r = await sync.team({ method: 'GET', path: `versions/${id}` });
+      return 'ok' in r
+        ? new Uint8Array(Buffer.from((r.ok as { state: string }).state, 'base64'))
+        : null;
+    },
+  },
 );
 registerExport({
   manager,

@@ -36,6 +36,10 @@ const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [/^notifications(\?filter=(all|mentions|unread|archived)(&before=\d{1,16})?)?$/, ['GET']],
   [/^notifications\/(read|archive)$/, ['POST']],
   [/^pages\/[\w-]{1,128}\/follow$/, ['GET', 'PUT']],
+  // Publishing and views (Phase 5 M7).
+  [/^pages\/[\w-]{1,128}\/publish$/, ['GET', 'PUT', 'DELETE']],
+  [/^pages\/[\w-]{1,128}\/analytics$/, ['GET']],
+  [/^pages\/[\w-]{1,128}\/views$/, ['POST']],
 ];
 const MAX_TEAM_BODY = 128 * 1024;
 

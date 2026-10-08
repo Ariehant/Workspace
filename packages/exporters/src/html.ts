@@ -32,7 +32,12 @@ export function inlineHtml(inline: readonly Inline[], ctx: RenderContext): strin
         if (attrs.kind === 'date')
           return `<time datetime="${escapeHtml(String(attrs.date ?? ''))}">@${escapeHtml(formatDateMention(String(attrs.date ?? '')))}</time>`;
         const pageId = String(attrs.pageId ?? '');
-        return `<a class="mention" href="${escapeHtml(ctx.pageHref(pageId))}">${escapeHtml(ctx.pageTitle(pageId))}</a>`;
+        const href = ctx.pageHref(pageId);
+        const title = escapeHtml(ctx.pageTitle(pageId));
+        // No address: a page the reader can't open (shown as text).
+        return href
+          ? `<a class="mention" href="${escapeHtml(href)}">${title}</a>`
+          : `<span class="mention">${title}</span>`;
       }
       const { marks } = part;
       let out = escapeHtml(part.text).replace(/\n/g, '<br>');
@@ -164,9 +169,12 @@ export function blockHtml(node: ContentNode, ctx: RenderContext): string {
     case 'database':
     case 'linkedDatabase': {
       const id = String(attrs.pageId ?? attrs.databaseId ?? '');
-      return id
-        ? `<p class="page-link"><a href="${escapeHtml(ctx.pageHref(id))}">${escapeHtml(ctx.pageTitle(id))}</a></p>`
-        : '';
+      if (!id) return '';
+      const href = ctx.pageHref(id);
+      const title = escapeHtml(ctx.pageTitle(id));
+      return href
+        ? `<p class="page-link"><a href="${escapeHtml(href)}">${title}</a></p>`
+        : `<p class="page-link">${title}</p>`;
     }
     case 'syncedBlock':
       return attrs.syncedId ? blocksHtml(ctx.synced(String(attrs.syncedId)), ctx) : '';

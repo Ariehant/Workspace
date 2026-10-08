@@ -5,6 +5,7 @@ import { Accounts } from './accounts';
 import { migrate } from './migrations';
 import { SearchIndex } from './search';
 import { Notifications } from './notifications';
+import { Pages } from './pages';
 import { Scopes } from './scopes';
 import { Teams } from './teams';
 
@@ -58,6 +59,7 @@ export class PgStore {
   readonly teams: Teams;
   readonly scopes: Scopes;
   readonly notifications: Notifications;
+  readonly pages: Pages;
 
   constructor(connectionString: string, options: { max?: number } = {}) {
     this.pool = new pg.Pool({ connectionString, max: options.max ?? 10 });
@@ -68,6 +70,7 @@ export class PgStore {
     this.teams = new Teams(this.pool);
     this.scopes = new Scopes(this.pool);
     this.notifications = new Notifications(this.pool);
+    this.pages = new Pages(this.pool);
   }
 
   migrate(): Promise<number> {

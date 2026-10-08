@@ -5,6 +5,7 @@ import type { Config } from './config';
 import type { FileStorage } from './files';
 import type { Mailer } from './mailer';
 import type { MembersDoc } from './members/members-doc';
+import type { HistoryKeeper } from './history/keeper';
 import type { Notifier } from './notify/notifier';
 import type { Indexer } from './search/indexer';
 
@@ -31,6 +32,8 @@ export interface ServerContext {
   indexer: Indexer;
   /** Notifications: mentions, comments, reminders, sharing. */
   notifier: Notifier;
+  /** Page history: snapshots of docs once they've been quiet. */
+  history: HistoryKeeper;
   /** Who may read and write which docs (scopes, roles, placements). */
   access: AccessService;
   realtime: Realtime;

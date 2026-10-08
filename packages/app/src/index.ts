@@ -3,6 +3,8 @@ export { can } from './platform';
 export type {
   AccountInfo,
   AppCommand,
+  Backlink,
+  DocVersionInfo,
   Feature,
   Platform,
   ScopeInfo,

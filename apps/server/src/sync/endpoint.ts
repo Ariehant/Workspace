@@ -56,6 +56,7 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
     onAppend: (workspaceId) => {
       ctx.indexer.schedule(workspaceId);
       ctx.notifier.schedule(workspaceId);
+      void ctx.history.follow(workspaceId);
     },
   });
   const wss = new WebSocketServer({

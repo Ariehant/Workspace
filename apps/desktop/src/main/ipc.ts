@@ -15,6 +15,14 @@ const THEMES: readonly ThemeSource[] = ['system', 'light', 'dark'];
  * Connects renderer windows to the DocManager. Tracks which docs each window has
  * open so updates are only sent where needed and are released when a window closes.
  */
+/** Page history kept by the server (Phase 5 M7). */
+export interface ServerHistory {
+  versions(
+    docId: string,
+  ): Promise<{ id: number; createdAt: number; reason: string; authors: string[] }[]>;
+  version(id: number): Promise<Uint8Array | null>;
+}
+
 export function registerIpc(
   manager: DocManager,
   store: SqliteStore,
@@ -22,6 +30,8 @@ export function registerIpc(
   openWindow: (pageId: string) => void,
   /** The account, while this workspace syncs with a server. */
   syncedUser: () => { id: string; name: string } | null = () => null,
+  /** The server's page history (while syncing): shown with this device's own versions. */
+  server: ServerHistory | null = null,
 ): void {
   const openDocs = new Map<number, Map<string, number>>();
 
@@ -103,12 +113,27 @@ export function registerIpc(
     isDocId(id) ? store.syncedPlaces(id) : 0,
   );
 
-  ipcMain.handle(IPC.historyList, (_event, docId: unknown) =>
-    isDocId(docId) ? manager.versions(docId) : [],
-  );
-  ipcMain.handle(IPC.historyGet, (_event, id: unknown) =>
-    typeof id === 'number' && Number.isInteger(id) ? manager.versionState(id) : null,
-  );
+  // The server's versions have negative ids here (this device's are positive).
+  ipcMain.handle(IPC.historyList, async (_event, docId: unknown) => {
+    if (!isDocId(docId)) return [];
+    const local = manager.versions(docId);
+    const remote = server ? await server.versions(docId).catch(() => []) : [];
+    return [
+      ...local,
+      ...remote.map((v) => ({
+        id: -v.id,
+        docId,
+        createdAt: v.createdAt,
+        reason: v.reason,
+        authors: v.authors,
+      })),
+    ].sort((a, b) => b.createdAt - a.createdAt);
+  });
+  ipcMain.handle(IPC.historyGet, async (_event, id: unknown) => {
+    if (typeof id !== 'number' || !Number.isInteger(id)) return null;
+    if (id < 0) return server ? await server.version(-id).catch(() => null) : null;
+    return manager.versionState(id);
+  });
   ipcMain.handle(IPC.historySnapshot, (_event, docId: unknown, reason: unknown) =>
     isDocId(docId) && typeof reason === 'string' && /^[a-z-]{1,32}$/.test(reason)
       ? manager.snapshot(docId, reason)

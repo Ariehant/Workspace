@@ -2,7 +2,7 @@
  * The shared UI's host in the browser: docs over the sync socket (a partial client: only
  * the docs on screen), search, files and settings over the API.
  */
-import type { AccountInfo, Platform, ScopeInfo } from '@workspace/app';
+import type { AccountInfo, Backlink, DocVersionInfo, Platform, ScopeInfo } from '@workspace/app';
 import { parseNotification, type NotificationData, type PresenceHandlers } from '@workspace/core';
 import { PartialClient } from '@workspace/sync';
 import { ApiError, api, type Me } from './api';
@@ -43,6 +43,7 @@ export function createWebPlatform(options: {
   // Presence: one handler per doc shown (the app keeps one awareness each).
   const presenceHandlers = new Map<string, PresenceHandlers>();
   const notificationListeners = new Set<(n: NotificationData) => void>();
+  const base = `/api/workspaces/${workspace.id}`;
   // Reminders fire at 9:00 where this person is.
   void api('PATCH', '/api/auth/me', {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -191,11 +192,27 @@ export function createWebPlatform(options: {
     openFile: (id) => window.open(fileUrl(id), '_blank', 'noopener'),
     // Fetching other sites is the desktop's job (a server doing it would be an SSRF risk).
     linkPreview: async () => null,
-    backlinks: async () => [],
-    syncedPlaces: async () => 0,
-    listVersions: async () => [],
-    getVersion: async () => null,
-    snapshot: async () => null,
+    // Backlinks and history from the server (Phase 5 M7).
+    backlinks: async (pageId) =>
+      (await api<{ backlinks: Backlink[] }>('GET', `${base}/pages/${pageId}/backlinks`)).backlinks,
+    syncedPlaces: async (syncedId) =>
+      (await api<{ places: number }>('GET', `${base}/synced/${syncedId}/places`)).places,
+    listVersions: async (docId) =>
+      (
+        await api<{ versions: DocVersionInfo[] }>('GET', `${base}/docs/${docId}/versions`).catch(
+          () => ({ versions: [] }),
+        )
+      ).versions,
+    getVersion: async (id) => {
+      const r = await api<{ state: string }>('GET', `${base}/versions/${id}`).catch(() => null);
+      return r ? Uint8Array.from(atob(r.state), (c) => c.charCodeAt(0)) : null;
+    },
+    snapshot: async (docId, reason) =>
+      (
+        await api<{ id: number | null }>('POST', `${base}/docs/${docId}/versions`, {
+          reason,
+        }).catch(() => ({ id: null }))
+      ).id,
     startExport: async () => false,
     cancelExport: () => {},
     onExportStatus: () => () => {},
@@ -205,7 +222,7 @@ export function createWebPlatform(options: {
     startImport: async () => false,
     cancelImport: () => {},
     onImportStatus: () => () => {},
-    features: { export: false, import: false, backup: false, history: false, backlinks: false },
+    features: { export: false, import: false, backup: false },
     scopes: {
       get: () => (scopes ? Promise.resolve(scopes) : scopesKnown),
       onChange: (listener) => {

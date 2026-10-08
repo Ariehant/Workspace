@@ -1,5 +1,6 @@
 /**
- * Keeps each workspace's search index up to date by following its update log: it
+ * Keeps each workspace's search index (and the links between pages, for backlinks) up
+ * to date by following its update log: it
  * remembers how far it got (`search_state`), and on each run re-reads the docs changed
  * since then (their merged state) and indexes them with the same pure functions the
  * desktop uses. Restarts, catch-ups and compactions need nothing special.
@@ -7,6 +8,8 @@
 import {
   MEMBERS_DOC_ID,
   WORKSPACE_DOC_ID,
+  isCommentsDocId,
+  readLinks,
   isInTrash,
   listPages,
   pageText,
@@ -133,8 +136,10 @@ export class Indexer {
                 props: rowPropertiesText(row, db.properties, { users: users! }),
               })),
             );
-          } else {
+          } else if (!isCommentsDocId(docId)) {
             await search.setBody(workspaceId, docId, pageText(doc));
+            // Links in its content (backlinks), with the same function the desktop uses.
+            await this.store.pages.setLinks(workspaceId, docId, readLinks(doc));
           }
         } finally {
           doc.destroy();

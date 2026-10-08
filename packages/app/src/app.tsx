@@ -632,6 +632,10 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     [showPage],
   );
   useEffect(() => platform.notifications?.onOpen?.(openNotification), [platform, openNotification]);
+  const analyticsApi = useMemo(
+    () => (team ? { get: team.analytics, view: team.view } : undefined),
+    [team],
+  );
   const followApi = useMemo(
     () => (inbox ? { get: inbox.api.following, set: inbox.api.setFollowing } : undefined),
     [inbox?.api], // eslint-disable-line react-hooks/exhaustive-deps
@@ -659,6 +663,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       onTrash={trash}
       onShare={team && scoped ? setSharing : undefined}
       follow={followApi}
+      analytics={analyticsApi}
       isFavorite={favorites.includes(currentPageId)}
       onToggleFavorite={() => toggleFavorite(currentPageId)}
     />

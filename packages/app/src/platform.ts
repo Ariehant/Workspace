@@ -284,4 +284,6 @@ export interface DocVersionInfo {
   id: number;
   createdAt: number;
   reason: string;
+  /** Kept by the server (Phase 5 M7): who changed the page since the one before. */
+  authors?: string[];
 }

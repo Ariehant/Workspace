@@ -359,6 +359,70 @@ export const MIGRATIONS: string[] = [
   );
   INSERT INTO log_followers (workspace_id, name, seq) SELECT id, 'notify', last_seq FROM workspaces;
   `,
+  `
+  -- Phase 5 M7. Links in page content (backlinks), kept by the search indexer.
+  CREATE TABLE page_links (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    source_id text NOT NULL,
+    target_id text NOT NULL,
+    kind text NOT NULL,
+    block_id text,
+    snippet text NOT NULL DEFAULT ''
+  );
+  CREATE INDEX page_links_target ON page_links (workspace_id, target_id);
+  CREATE INDEX page_links_source ON page_links (workspace_id, source_id);
+
+  -- Page history: a doc's state once it has been quiet a while, with who changed it.
+  CREATE TABLE doc_snapshots (
+    id bigserial PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    doc_id text NOT NULL,
+    seq bigint NOT NULL,
+    state bytea NOT NULL,
+    reason text NOT NULL DEFAULT 'edit',
+    authors uuid[] NOT NULL DEFAULT '{}',
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX doc_snapshots_doc ON doc_snapshots (workspace_id, doc_id, created_at DESC);
+  -- Docs changed since their last snapshot, and when they last changed.
+  CREATE TABLE history_pending (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    doc_id text NOT NULL,
+    last_change timestamptz NOT NULL,
+    PRIMARY KEY (workspace_id, doc_id)
+  );
+  INSERT INTO log_followers (workspace_id, name, seq) SELECT id, 'history', last_seq FROM workspaces;
+
+  -- Pages published to the web (/p/<slug>).
+  CREATE TABLE published_pages (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    page_id text NOT NULL,
+    slug text NOT NULL UNIQUE,
+    include_subpages boolean NOT NULL DEFAULT true,
+    allow_indexing boolean NOT NULL DEFAULT false,
+    title text NOT NULL DEFAULT '',
+    description text NOT NULL DEFAULT '',
+    published_by uuid REFERENCES users ON DELETE SET NULL,
+    published_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, page_id)
+  );
+
+  -- Page views per day, and who viewed (a user, or a daily hash for public visitors).
+  CREATE TABLE page_views (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    page_id text NOT NULL,
+    day date NOT NULL,
+    views integer NOT NULL DEFAULT 0,
+    PRIMARY KEY (workspace_id, page_id, day)
+  );
+  CREATE TABLE page_viewers (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    page_id text NOT NULL,
+    day date NOT NULL,
+    viewer text NOT NULL,
+    PRIMARY KEY (workspace_id, page_id, day, viewer)
+  );
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

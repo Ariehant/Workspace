@@ -7,10 +7,12 @@ import { useApp } from './context';
 import { useEditorServices } from './editor-services';
 import { useDocVersion } from './hooks';
 import type { DocVersionInfo } from './platform';
+import { useDisplayContext } from './database/hooks';
 
 const REASONS: Record<string, string> = {
   edit: 'Before editing',
   restore: 'Before a restore',
+  manual: 'Saved',
   template: 'Before a template was applied',
   'not-saved': 'Not saved: your access changed',
 };
@@ -51,6 +53,7 @@ export function HistoryDialog({
   const { platform } = useApp();
   const services = useEditorServices(docId);
   const [versions, setVersions] = useState<DocVersionInfo[] | null>(null);
+  const { users } = useDisplayContext();
   const [selected, setSelected] = useState<{ id: number; doc: Y.Doc } | null>(null);
   const [undo, setUndo] = useState<number | null>(null);
   const live = useDocVersion(pageDoc);
@@ -138,7 +141,13 @@ export function HistoryDialog({
                 )}
               >
                 <span className="font-medium">{when.format(v.createdAt)}</span>
-                <span className="text-xs text-muted">{REASONS[v.reason] ?? v.reason}</span>
+                <span className="text-xs text-muted">
+                  {v.authors
+                    ? v.authors.length > 0
+                      ? `Edited by ${v.authors.map((id) => users.get(id) ?? 'Someone').join(', ')}`
+                      : (REASONS[v.reason] ?? 'Saved')
+                    : (REASONS[v.reason] ?? v.reason)}
+                </span>
               </button>
             ))}
           </div>

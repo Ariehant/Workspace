@@ -2,7 +2,10 @@ import type { ContentNode } from './content';
 
 /** What rendering a page needs from the export around it. */
 export interface RenderContext {
-  /** A link to a page or row: its exported file (relative), else a `workspace://` URL. */
+  /**
+   * A link to a page or row: its exported file (relative), else a `workspace://` URL; empty
+   * for a page the reader can't open (shown as text).
+   */
   pageHref(pageId: string): string;
   pageTitle(pageId: string): string;
   /** A mentioned person's name. */

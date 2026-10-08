@@ -47,6 +47,11 @@ export interface ExportOptions {
   includeSubpages: boolean;
   /** Mermaid diagrams pre-rendered to SVG, for HTML. */
   mermaidSvg?(code: string): string | null;
+  /**
+   * Pages outside the export, as links and mentions show them (a published site shows
+   * nothing of pages that aren't published). Default: a `workspace://` link and the title.
+   */
+  outside?: { href(id: string): string; title(id: string): string };
   onProgress?(done: number, total: number): void;
 }
 
@@ -243,6 +248,7 @@ export function* exportPages(source: ExportSource, options: ExportOptions): Gene
 
     const titleOf = (id: string) =>
       items.get(id)?.title ??
+      options.outside?.title(id) ??
       getPage(source.workspace, id)?.title ??
       databases.snapshot(id, false)?.rows.find((r) => r.id === id)?.title ??
       'Untitled';
@@ -253,7 +259,8 @@ export function* exportPages(source: ExportSource, options: ExportOptions): Gene
     const contextFor = (item: Item): RenderContext => ({
       pageHref: (id) => {
         const target = items.get(id);
-        return target ? relativePath(item.file, target.file) : pageUrl(id);
+        if (target) return relativePath(item.file, target.file);
+        return options.outside ? options.outside.href(id) : pageUrl(id);
       },
       pageTitle: titleOf,
       userName: (id) => source.users.get(id) ?? 'Someone',
