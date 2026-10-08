@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import {
   LocalSyncStore,
+  SYNC_ACCESS,
   SYNC_CURSOR,
   SYNC_ORIGIN,
   type DocManager,
@@ -26,6 +27,7 @@ import type {
   SyncEnable,
   SyncInfo,
   SyncServerInfo,
+  SyncScope,
   SyncSignIn,
   TeamRequest,
 } from '../../shared/ipc';
@@ -205,6 +207,7 @@ export class SyncService {
       files: config ? store.unsyncedFileCount() : 0,
       lastSyncedAt: this.lastSyncedAt,
       secureStorage: this.secureStorage(),
+      scopes: config ? (store.getSetting<SyncScope[]>(SYNC_ACCESS) ?? null) : null,
     };
   }
 
@@ -267,10 +270,17 @@ export class SyncService {
         denied: (items) => local.denied(items),
         reset: (docId, state) => local.reset(docId, state),
         applyBackfill: (items) => local.applyBackfill(items),
-        revoke: (docIds, scopes) => local.revoke(docIds, scopes),
-        setAccess: (scopes) => local.setAccess(scopes),
+        revoke: (docIds, scopes) => {
+          local.revoke(docIds, scopes);
+          if (scopes.length > 0) this.emit();
+        },
+        setAccess: (scopes) => {
+          local.setAccess(scopes);
+          // The sidebar's sections follow.
+          this.emit();
+        },
         knownScopes: () => local.knownScopes(),
-        scopeOf: () => local.scopeOf(),
+        scopeOf: (docId) => local.scopeOf(docId),
       },
       deviceId: config.deviceId,
       connect: (handlers) => {

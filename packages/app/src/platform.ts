@@ -79,8 +79,11 @@ export interface Platform {
   restoreBackup(): Promise<boolean>;
   /** A print view has finished rendering. */
   printReady(): void;
-  /** Import files (asks which); pages go under a new top-level page. */
-  startImport(): Promise<boolean>;
+  /**
+   * Import files (asks which); pages go under a new top-level page, in page tree `tree`
+   * (a section of a server workspace; default: the workspace doc).
+   */
+  startImport(tree?: string): Promise<boolean>;
   cancelImport(): void;
   onImportStatus(listener: (status: ImportStatus) => void): () => void;
   /** Sync with a server (the desktop; the web app is always on its server). */
@@ -94,6 +97,36 @@ export interface Platform {
    * web app always has one; the desktop while it syncs a workspace.
    */
   team?: TeamPlatform;
+  /** The scopes the person can read (a server workspace); see `ScopesPlatform`. */
+  scopes?: ScopesPlatform;
+}
+
+/**
+ * A scope the person can read, as the server last said: a teamspace, someone's private
+ * pages, or a page shared on its own. Its pages are in its tree doc.
+ */
+export interface ScopeInfo {
+  id: string;
+  kind: 'teamspace' | 'private' | 'shared';
+  name: string;
+  treeDoc: string;
+  /** The scope it inherits access from ('' if none). */
+  parent: string;
+  role: 'full' | 'edit' | 'comment' | 'view';
+}
+
+export interface ScopesPlatform {
+  /**
+   * The scopes, or `null` when the workspace isn't on a server (or the server hasn't
+   * said yet): then its one tree, the workspace doc, is all the user's.
+   */
+  get(): Promise<ScopeInfo[] | null>;
+  onChange(listener: (scopes: ScopeInfo[] | null) => void): () => void;
+  /**
+   * Hosts that place new docs themselves (the web app) ask the app which scope a doc
+   * belongs in: its page's tree's. The desktop works it out from its own copy.
+   */
+  setResolver?(resolve: ((docId: string) => string | null) | null): void;
 }
 
 export type TeamMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
@@ -147,6 +180,8 @@ export interface SyncInfo {
   lastSyncedAt: number | null;
   /** The session token is encrypted with the system keyring. */
   secureStorage: boolean;
+  /** The scopes the person can read (`null` until the server has said, or not syncing). */
+  scopes: ScopeInfo[] | null;
 }
 
 export interface SyncServerInfo {

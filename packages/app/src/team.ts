@@ -26,6 +26,56 @@ export interface PendingInvite {
 
 export type InviteRole = Exclude<WorkspaceRole, 'owner'>;
 
+export type ScopeRole = 'full' | 'edit' | 'comment' | 'view';
+export type ScopeVisibility = 'open' | 'closed' | 'private';
+
+/** Who gets what in a scope: `user:<id>`, `group:<id>` or `workspace` (every member). */
+export interface AccessEntry {
+  principal: string;
+  role: ScopeRole;
+}
+
+/** A scope as the server describes it (to someone with a role in it). */
+export interface ScopeDetails {
+  id: string;
+  kind: 'teamspace' | 'private' | 'shared';
+  name: string;
+  treeDoc: string;
+  parentId: string | null;
+  inherit: boolean;
+  icon: string | null;
+  description: string;
+  visibility: ScopeVisibility;
+  joinRole: ScopeRole;
+  role: ScopeRole;
+  /** Who has access (not shown to guests, except where they have full access). */
+  access?: AccessEntry[];
+}
+
+/** A teamspace the person can find (joined or not). */
+export interface TeamspaceListing extends Omit<ScopeDetails, 'role' | 'access'> {
+  /** Theirs, or `null` if they haven't joined. */
+  role: ScopeRole | null;
+  /** People added to it by name. */
+  members: number;
+  /** What everyone in the workspace gets, if anything. */
+  everyone: ScopeRole | null;
+}
+
+export const SCOPE_ROLE_LABELS: Record<ScopeRole, string> = {
+  full: 'Full access',
+  edit: 'Can edit',
+  comment: 'Can comment',
+  view: 'Can view',
+};
+
+export const SCOPE_ROLE_HINTS: Record<ScopeRole, string> = {
+  full: 'Edit and share with others',
+  edit: 'Edit, but not share',
+  comment: 'View and comment',
+  view: 'View only',
+};
+
 export interface CreatedInvite {
   id: string;
   email: string;
@@ -96,6 +146,32 @@ export function teamApi(team: TeamPlatform) {
       r<{ ok: true }>('PUT', `groups/${id}/members/${userId}`),
     removeFromGroup: (id: string, userId: string) =>
       r<{ ok: true }>('DELETE', `groups/${id}/members/${userId}`),
+    // Scopes: teamspaces, sharing, moving pages between them.
+    scopes: () => r<{ defaultScopeId: string | null; scopes: ScopeDetails[] }>('GET', 'scopes'),
+    teamspaces: () => r<{ teamspaces: TeamspaceListing[] }>('GET', 'teamspaces'),
+    createTeamspace: (input: {
+      name: string;
+      icon?: string | null;
+      description?: string;
+      visibility?: ScopeVisibility;
+      joinRole?: ScopeRole;
+      everyone?: ScopeRole | null;
+    }) => r<{ scope: ScopeDetails }>('POST', 'teamspaces', input),
+    updateScope: (
+      id: string,
+      change: Partial<
+        Pick<ScopeDetails, 'name' | 'inherit' | 'icon' | 'description' | 'visibility' | 'joinRole'>
+      >,
+    ) => r<{ ok: true }>('PATCH', `scopes/${id}`, change),
+    setAccess: (id: string, principal: string, role: ScopeRole | null) =>
+      r<{ ok: true }>('PUT', `scopes/${id}/access`, { principal, role }),
+    joinTeamspace: (id: string) => r<{ ok: true }>('POST', `scopes/${id}/join`),
+    leaveTeamspace: (id: string) => r<{ ok: true }>('POST', `scopes/${id}/leave`),
+    /** Make a page its own scope (to share it), from scope `from` where it is now. */
+    sharePage: (pageId: string, from: string) =>
+      r<{ scope: ScopeDetails }>('POST', `pages/${pageId}/share`, { scope: from }),
+    movePage: (pageId: string, from: string, to: string, parentId: string | null) =>
+      r<{ ok: true }>('POST', `pages/${pageId}/move`, { from, to, parentId }),
     me: async () => (await r<{ user: Profile }>('GET', 'me')).user,
     updateMe: async (change: { name?: string; avatar?: string | null }) =>
       (await r<{ user: Profile }>('PATCH', 'me', change)).user,

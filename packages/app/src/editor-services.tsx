@@ -6,6 +6,7 @@ import {
   setMathMacros,
   trashPage,
   type PageId,
+  workspaceDataDoc,
 } from '@workspace/core';
 import { fillFromTable, tableCells } from '@workspace/database';
 import type { EditorServices } from '@workspace/editor';
@@ -26,6 +27,11 @@ export function useEditorServices(pageId: PageId): EditorServices {
     () => ({
       pageId,
       getPage: (id) => pages.get(id),
+      // In a server workspace, a page that isn't here is mostly one this person can't see
+      // (a getter: the trees can change after this is made).
+      get missingPage() {
+        return workspace.list().some((t) => t.info.kind !== 'local') ? 'No access' : undefined;
+      },
       listPages: () => pages.list(),
       getBreadcrumb: () => pages.breadcrumb(pageId),
       navigate,
@@ -55,7 +61,7 @@ export function useEditorServices(pageId: PageId): EditorServices {
       },
       databaseToTable: async (id) => {
         const handle = await databases.load(id);
-        const users = new Map(listUsers(workspace).map((u) => [u.id, u.name]));
+        const users = new Map(listUsers(workspaceDataDoc(workspace)).map((u) => [u.id, u.name]));
         const cells = tableCells(handle.doc, handle.snapshot().views[0]?.id ?? '', { users });
         trashPage(workspace, id);
         return cells;
@@ -63,7 +69,7 @@ export function useEditorServices(pageId: PageId): EditorServices {
       subscribe: (listener) => pages.subscribe(listener),
       people: {
         list: () => {
-          const people = readPeople(workspace, members);
+          const people = readPeople(workspaceDataDoc(workspace), members);
           return people.active.map((id) => ({
             id,
             name: people.names.get(id) ?? '',
@@ -71,20 +77,20 @@ export function useEditorServices(pageId: PageId): EditorServices {
           }));
         },
         get: (id) => {
-          const people = readPeople(workspace, members);
+          const people = readPeople(workspaceDataDoc(workspace), members);
           const name = people.names.get(id);
           return name === undefined ? null : { id, name, avatar: people.avatars.get(id) ?? null };
         },
-        subscribe: (listener) => observePeople(workspace, members, listener),
+        subscribe: (listener) => observePeople(workspaceDataDoc(workspace), members, listener),
       },
       uploadFile: (file) => platform.importFile(file),
       fileUrl: (id) => platform.fileUrl(id),
       openFile: (id) => platform.openFile(id),
       linkPreview: (url) => platform.linkPreview(url),
       mathMacros: {
-        get: () => getMathMacros(workspace),
-        set: (macros) => setMathMacros(workspace, macros),
-        subscribe: (listener) => observeMathMacros(workspace, listener),
+        get: () => getMathMacros(workspaceDataDoc(workspace)),
+        set: (macros) => setMathMacros(workspaceDataDoc(workspace), macros),
+        subscribe: (listener) => observeMathMacros(workspaceDataDoc(workspace), listener),
       },
     }),
     [workspace, platform, client, pages, databases, user, members, pageId, navigate, openRow],

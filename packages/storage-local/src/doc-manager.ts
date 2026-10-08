@@ -1,6 +1,9 @@
 import {
+  Forest,
   WORKSPACE_DOC_ID,
   getPagesMap,
+  isTreeDocId,
+  localTree,
   isInTrash,
   listPages,
   MEMBERS_DOC_ID,
@@ -64,7 +67,13 @@ interface LoadedDoc {
  * `updatedAt` stamps are derived here so they stay correct whichever window edits.
  */
 export class DocManager {
-  readonly workspace: Y.Doc;
+  /**
+   * Every page tree this device holds: the workspace doc, and in a synced workspace the
+   * tree docs of the other scopes the person can read (Phase 5). Held for the manager's
+   * whole life; the page index covers all of them.
+   */
+  readonly forest = new Forest();
+  private readonly treeObservers = new Map<string, () => void>();
   private readonly docs = new Map<string, LoadedDoc>();
   private readonly listeners = new Set<UpdateListener>();
   private readonly resetListeners = new Set<(docId: string) => void>();
@@ -91,17 +100,60 @@ export class DocManager {
     this.versionIntervalMs = options.versionIntervalMs ?? 10 * 60_000;
     this.now = options.now ?? Date.now;
     this.store.pruneVersions(this.now());
-    this.workspace = this.load(WORKSPACE_DOC_ID);
-    this.docs.get(WORKSPACE_DOC_ID)!.refs = Infinity; // never unloaded
-
-    getPagesMap(this.workspace).observe((event) => {
-      event.changes.keys.forEach((change, pageId) => {
-        if (change.action === 'delete') this.dropPageDoc(pageId);
-        // A synced page's content can arrive before the page itself: index it now.
-        else if (change.action === 'add') this.indexStoredLater(pageId);
-      });
-    });
+    this.addTree(WORKSPACE_DOC_ID);
+    for (const docId of this.store.listDocIds()) {
+      if (isTreeDocId(docId) && docId !== WORKSPACE_DOC_ID) this.addTree(docId);
+    }
     this.indexWorkspace();
+  }
+
+  /** The first scope's tree doc (a local workspace's only one). */
+  get workspace(): Y.Doc {
+    return this.docs.get(WORKSPACE_DOC_ID)!.doc;
+  }
+
+  /** Hold a tree doc for good, and keep the page index and page docs in step with it. */
+  private addTree(docId: string): Y.Doc {
+    const existing = this.docs.get(docId);
+    if (existing && this.treeObservers.has(docId)) return existing.doc;
+    const doc = existing?.doc ?? this.load(docId);
+    this.docs.get(docId)!.refs = Infinity; // never unloaded
+    const pages = getPagesMap(doc);
+    const observer = (event: Y.YMapEvent<Y.Map<unknown>>) => {
+      const fromSync = event.transaction.origin === SYNC_ORIGIN;
+      event.changes.keys.forEach((change, pageId) => {
+        if (change.action === 'delete') {
+          // Still in another tree: it moved there (or this was its stub).
+          if (this.forest.entryOf(pageId)) return;
+          // Gone by sync: maybe on its way to another scope's tree (the server moves
+          // shared pages), so only its index entries go; deleted here: all of it.
+          if (fromSync) this.store.removePageIndex(pageId);
+          else this.dropPageDoc(pageId);
+        } else if (change.action === 'add') {
+          // A synced page's content can arrive before the page itself: index it now.
+          this.indexStoredLater(pageId);
+        }
+      });
+    };
+    pages.observe(observer);
+    this.treeObservers.set(docId, () => pages.unobserve(observer));
+    this.syncForest();
+    return doc;
+  }
+
+  private dropTree(docId: string): void {
+    this.treeObservers.get(docId)?.();
+    this.treeObservers.delete(docId);
+    const entry = this.docs.get(docId);
+    entry?.doc.destroy();
+    this.docs.delete(docId);
+    this.syncForest();
+  }
+
+  private syncForest(): void {
+    this.forest.set(
+      [...this.treeObservers.keys()].map((id) => localTree(this.docs.get(id)!.doc, id)),
+    );
   }
 
   /** Start (or stop) queueing every local change in the sync outbox. */
@@ -140,6 +192,7 @@ export class DocManager {
 
   /** Load (or reuse) a document and return its full state. Pair with `release`. */
   open(docId: string): Uint8Array {
+    if (isTreeDocId(docId)) this.addTree(docId);
     const entry = this.docs.get(docId);
     if (entry) {
       entry.refs++;
@@ -152,7 +205,7 @@ export class DocManager {
 
   release(docId: string): void {
     const entry = this.docs.get(docId);
-    if (!entry) return;
+    if (!entry || entry.refs === Infinity) return;
     entry.refs--;
     if (entry.refs > 0) return;
     this.flush(docId);
@@ -161,6 +214,7 @@ export class DocManager {
   }
 
   applyUpdate(docId: string, update: Uint8Array, origin: unknown): void {
+    if (isTreeDocId(docId)) this.addTree(docId);
     const entry = this.docs.get(docId);
     if (entry) {
       this.maybeSnapshot(docId, entry.doc);
@@ -195,7 +249,11 @@ export class DocManager {
     this.store.replaceUpdates(docId, state);
     this.store.outboxRemoveDoc(docId);
     const entry = this.docs.get(docId);
-    if (entry && docId !== WORKSPACE_DOC_ID) {
+    if (this.treeObservers.has(docId)) {
+      // A tree: held for good, so swapped for the new state in place.
+      this.dropTree(docId);
+      this.addTree(docId);
+    } else if (entry) {
       // Reload it from the new state, keeping the windows' references.
       const refs = entry.refs;
       entry.doc.destroy();
@@ -214,8 +272,11 @@ export class DocManager {
   forget(docIds: readonly string[]): void {
     for (const docId of docIds) {
       this.store.outboxRemoveDoc(docId);
-      if (docId === WORKSPACE_DOC_ID) {
+      if (isTreeDocId(docId)) {
+        this.dropTree(docId);
         this.store.deleteDoc(docId);
+        // The workspace doc stays held (empty): it's always part of the forest.
+        if (docId === WORKSPACE_DOC_ID) this.addTree(docId);
       } else {
         this.dropPageDoc(docId);
         this.store.removePageIndex(docId);
@@ -228,7 +289,7 @@ export class DocManager {
 
   /** Save a doc's current state as a version (if it has any content). */
   snapshot(docId: string, reason: string): number | null {
-    if (docId === WORKSPACE_DOC_ID) return null;
+    if (isTreeDocId(docId)) return null;
     const open = this.docs.get(docId);
     const doc = open?.doc ?? this.load(docId);
     try {
@@ -255,7 +316,7 @@ export class DocManager {
 
   /** Before an edit: snapshot when the last version is older than the interval. */
   private maybeSnapshot(docId: string, doc: Y.Doc): void {
-    if (docId === WORKSPACE_DOC_ID) return;
+    if (isTreeDocId(docId)) return;
     let last = this.lastVersion.get(docId);
     if (last === undefined) {
       last = this.store.lastVersionTime(docId) ?? -Infinity;
@@ -285,7 +346,7 @@ export class DocManager {
       }
     };
     for (const docId of this.store.listDocIds()) {
-      if (docId !== WORKSPACE_DOC_ID) indexOne(docId, true);
+      if (!isTreeDocId(docId)) indexOne(docId, true);
     }
     for (const docId of later) indexOne(docId, false);
   }
@@ -347,7 +408,7 @@ export class DocManager {
 
   private index(docId: string): void {
     const edited = this.editedHere.delete(docId);
-    if (docId === WORKSPACE_DOC_ID) {
+    if (isTreeDocId(docId)) {
       this.indexWorkspace();
       return;
     }
@@ -357,7 +418,7 @@ export class DocManager {
       this.indexDatabase(docId, entry.doc);
       return;
     }
-    const isPage = getPagesMap(this.workspace).has(docId);
+    const isPage = !!this.forest.entryOf(docId);
     const databaseId = isPage ? null : this.store.locatePage(docId)?.databaseId;
     if (!isPage && !databaseId) {
       // A synced block's doc: re-index the pages that show it.
@@ -375,7 +436,8 @@ export class DocManager {
       if (db && hasRow(db, docId)) db.transact(() => touchRow(db, docId, undefined), MAIN_ORIGIN);
       return;
     }
-    this.workspace.transact(() => touchPage(this.workspace, docId), MAIN_ORIGIN);
+    const tree = this.forest.treeOf(docId)!.doc;
+    tree.transact(() => touchPage(tree, docId), MAIN_ORIGIN);
     this.indexWorkspace();
   }
 
@@ -500,13 +562,13 @@ export class DocManager {
   }
 
   private indexWorkspace(): void {
-    const rows: PageIndexRow[] = listPages(this.workspace).map((page) => ({
+    const rows: PageIndexRow[] = listPages(this.forest).map((page) => ({
       id: page.id,
       parentId: page.parentId,
       title: page.title,
       icon: page.icon,
       sortKey: page.sortKey,
-      inTrash: isInTrash(this.workspace, page.id),
+      inTrash: isInTrash(this.forest, page.id),
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
     }));

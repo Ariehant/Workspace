@@ -53,6 +53,10 @@ export interface PageMeta {
   font: PageFont;
   /** Locked pages can't be edited until unlocked (guards against accidental edits). */
   locked: boolean;
+  /** In a forest (see `Forest`): the tree doc the page lives in. */
+  tree?: string;
+  /** In a forest: the tree it shows in (where its stub is, or its own). */
+  home?: string;
 }
 
 export type PageFont = 'default' | 'serif' | 'mono';

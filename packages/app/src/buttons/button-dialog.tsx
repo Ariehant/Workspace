@@ -6,6 +6,7 @@ import {
   listUsers,
   type ButtonConfig,
   type ButtonStep,
+  workspaceDataDoc,
 } from '@workspace/core';
 import {
   OPTION_COLORS,
@@ -502,7 +503,9 @@ function ValuesEditor({
 }) {
   const loaded = useDatabase(databaseId);
   const { workspace } = useApp();
-  const ctx: DisplayContext = { users: new Map(listUsers(workspace).map((u) => [u.id, u.name])) };
+  const ctx: DisplayContext = {
+    users: new Map(listUsers(workspaceDataDoc(workspace)).map((u) => [u.id, u.name])),
+  };
   if (!loaded) return null;
   const properties = loaded.snapshot.properties.filter(settable);
   const unused = properties.filter((p) => !(p.id in values));

@@ -269,6 +269,34 @@ export const MIGRATIONS: string[] = [
   UPDATE search_index s SET scope_id = w.default_scope_id FROM workspaces w
   WHERE w.id = s.workspace_id;
   `,
+
+  // 7: teamspace details, and private pages for every member.
+  `
+  -- A teamspace's icon and description; who can find it (open: anyone in the workspace
+  -- can join; closed: listed, joined by being added; private: only its members see it);
+  -- and the role joining it gives.
+  ALTER TABLE scopes ADD COLUMN icon text;
+  ALTER TABLE scopes ADD COLUMN description text NOT NULL DEFAULT '';
+  ALTER TABLE scopes ADD COLUMN visibility text NOT NULL DEFAULT 'open'
+    CHECK (visibility IN ('open', 'closed', 'private'));
+  ALTER TABLE scopes ADD COLUMN join_role text NOT NULL DEFAULT 'edit'
+    CHECK (join_role IN ('full', 'edit', 'comment', 'view'));
+
+  -- Every member but guests has private pages: make the missing ones (with their tree).
+  CREATE TEMP TABLE new_private ON COMMIT DROP AS
+  SELECT gen_random_uuid() AS id, m.workspace_id, m.user_id
+  FROM workspace_members m
+  WHERE m.role <> 'guest' AND NOT EXISTS (
+    SELECT 1 FROM scopes s
+    WHERE s.workspace_id = m.workspace_id AND s.kind = 'private' AND s.owner_id = m.user_id
+  );
+  INSERT INTO scopes (id, workspace_id, kind, name, tree_doc, owner_id, inherit)
+  SELECT id, workspace_id, 'private', 'Private', 'tree:' || id, user_id, false FROM new_private;
+  INSERT INTO scope_access (scope_id, principal, role)
+  SELECT id, 'user:' || user_id, 'full' FROM new_private;
+  INSERT INTO doc_scopes (workspace_id, doc_id, scope_id)
+  SELECT workspace_id, 'tree:' || id, id FROM new_private;
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

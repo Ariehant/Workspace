@@ -4,6 +4,8 @@ import type { MemberRole } from './store';
 
 export type ScopeKind = 'teamspace' | 'private' | 'shared';
 export type ScopeRole = 'full' | 'edit' | 'comment' | 'view';
+/** Who can find a teamspace: anyone (and join it), anyone (added by its members), or only its members. */
+export type ScopeVisibility = 'open' | 'closed' | 'private';
 
 export interface Scope {
   id: string;
@@ -14,6 +16,12 @@ export interface Scope {
   parentId: string | null;
   inherit: boolean;
   ownerId: string | null;
+  /** A teamspace's emoji (or none). */
+  icon: string | null;
+  description: string;
+  visibility: ScopeVisibility;
+  /** The role someone gets by joining (an open teamspace). */
+  joinRole: ScopeRole;
 }
 
 /** 'user:<id>', 'group:<id>' or 'workspace' (every member but guests). */
@@ -51,6 +59,10 @@ type ScopeRow = {
   parent_id: string | null;
   inherit: boolean;
   owner_id: string | null;
+  icon: string | null;
+  description: string;
+  visibility: ScopeVisibility;
+  join_role: ScopeRole;
 };
 const toScope = (r: ScopeRow): Scope => ({
   id: r.id,
@@ -61,6 +73,10 @@ const toScope = (r: ScopeRow): Scope => ({
   parentId: r.parent_id,
   inherit: r.inherit,
   ownerId: r.owner_id,
+  icon: r.icon,
+  description: r.description,
+  visibility: r.visibility,
+  joinRole: r.join_role,
 });
 
 /** Scopes, who may do what in them, and which scope each doc is in. */
@@ -124,6 +140,10 @@ export class Scopes {
     parentId?: string | null;
     inherit?: boolean;
     ownerId?: string | null;
+    icon?: string | null;
+    description?: string;
+    visibility?: ScopeVisibility;
+    joinRole?: ScopeRole;
     access: { principal: Principal; role: ScopeRole }[];
   }): Promise<Scope> {
     const id = randomUUID();
@@ -131,8 +151,9 @@ export class Scopes {
     try {
       await client.query('BEGIN');
       const { rows } = await client.query<ScopeRow>(
-        `INSERT INTO scopes (id, workspace_id, kind, name, tree_doc, parent_id, inherit, owner_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        `INSERT INTO scopes (id, workspace_id, kind, name, tree_doc, parent_id, inherit, owner_id,
+           icon, description, visibility, join_role)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
         [
           id,
           input.workspaceId,
@@ -142,6 +163,10 @@ export class Scopes {
           input.parentId ?? null,
           input.inherit ?? true,
           input.ownerId ?? null,
+          input.icon ?? null,
+          input.description ?? '',
+          input.visibility ?? 'open',
+          input.joinRole ?? 'edit',
         ],
       );
       for (const entry of input.access) {
@@ -167,12 +192,36 @@ export class Scopes {
   async update(
     workspaceId: string,
     scopeId: string,
-    change: { name?: string; inherit?: boolean },
+    change: {
+      name?: string;
+      inherit?: boolean;
+      /** `null` removes the icon. */
+      icon?: string | null;
+      description?: string;
+      visibility?: ScopeVisibility;
+      joinRole?: ScopeRole;
+    },
   ): Promise<boolean> {
     const { rowCount } = await this.pool.query(
-      `UPDATE scopes SET name = coalesce($3, name), inherit = coalesce($4, inherit)
+      `UPDATE scopes SET
+         name = coalesce($3, name),
+         inherit = coalesce($4, inherit),
+         icon = CASE WHEN $5 THEN $6 ELSE icon END,
+         description = coalesce($7, description),
+         visibility = coalesce($8, visibility),
+         join_role = coalesce($9, join_role)
        WHERE id = $1 AND workspace_id = $2`,
-      [scopeId, workspaceId, change.name ?? null, change.inherit ?? null],
+      [
+        scopeId,
+        workspaceId,
+        change.name ?? null,
+        change.inherit ?? null,
+        change.icon !== undefined,
+        change.icon ?? null,
+        change.description ?? null,
+        change.visibility ?? null,
+        change.joinRole ?? null,
+      ],
     );
     return (rowCount ?? 0) > 0;
   }
@@ -243,7 +292,12 @@ export class Scopes {
        LIMIT 1`,
       [workspaceId, docId, scopeId],
     );
-    return rows[0]!.scope_id;
+    if (rows[0]) return rows[0].scope_id;
+    // Someone else's insert was in flight: it wasn't in this statement's snapshot, and it
+    // is committed now.
+    const placed = await this.placementOf(workspaceId, docId);
+    if (!placed) throw new Error(`Could not place ${docId}`);
+    return placed;
   }
 
   /**

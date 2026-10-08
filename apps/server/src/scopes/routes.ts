@@ -10,10 +10,10 @@
  */
 import { MEMBERS_DOC_ID, moveSubtree, subtreeIds } from '@workspace/core';
 import { isDatabaseDoc, readDatabase } from '@workspace/database';
-import type { Scope, ScopeRole } from '@workspace/storage-remote';
+import type { Scope, ScopeRole, ScopeVisibility } from '@workspace/storage-remote';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import * as Y from 'yjs';
-import { atLeast } from '../access/roles';
+import { atLeast, rolesFor } from '../access/roles';
 import type { Roles } from '../access/service';
 import { fail, requireUser } from '../auth/context';
 import type { ServerContext } from '../context';
@@ -21,6 +21,10 @@ import type { ServerContext } from '../context';
 const uuid = { type: 'string', format: 'uuid' } as const;
 const scopeName = { type: 'string', maxLength: 100 } as const;
 const role = { type: 'string', enum: ['full', 'edit', 'comment', 'view'] } as const;
+// (A type list, not anyOf: type coercion would turn null into '' for the string branch.)
+const icon = { type: ['string', 'null'], maxLength: 64 } as const;
+const description = { type: 'string', maxLength: 1000 } as const;
+const visibility = { type: 'string', enum: ['open', 'closed', 'private'] } as const;
 const pageId = { type: 'string', minLength: 1, maxLength: 128 } as const;
 const PRINCIPAL = /^(workspace|user:[0-9a-f-]{36}|group:[0-9a-f-]{36})$/;
 
@@ -93,6 +97,10 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
     treeDoc: scope.treeDoc,
     parentId: scope.parentId,
     inherit: scope.inherit,
+    icon: scope.icon,
+    description: scope.description,
+    visibility: scope.visibility,
+    joinRole: scope.joinRole,
     role: r,
   });
 
@@ -104,14 +112,15 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
       if (!roles) return reply;
       const access = await ctx.access.workspace(request.params.id);
       const model = await store.scopes.model(request.params.id);
+      // Who has access is shown to the workspace's own people (guests see only theirs).
+      const guest = (await store.roleOf(request.params.id, request.auth!.user.id)) === 'guest';
       return {
         defaultScopeId: access.defaultScopeId,
         scopes: [...roles].flatMap(([id, r]) => {
           const scope = access.scope(id);
           if (!scope) return [];
-          // Who has access is shown to those who may change it.
           const entries =
-            r === 'full'
+            !guest || r === 'full'
               ? model.entries
                   .filter((e) => e.scopeId === id)
                   .map((e) => ({ principal: e.principal, role: e.role }))
@@ -122,7 +131,44 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
     },
   );
 
-  app.post<{ Params: { id: string }; Body: { name: string; everyone?: ScopeRole | null } }>(
+  // Every teamspace the caller can find: theirs, and the workspace's open and closed ones.
+  app.get<{ Params: { id: string } }>(
+    '/api/workspaces/:id/teamspaces',
+    { preHandler: signedIn, schema: { params: { type: 'object', properties: { id: uuid } } } },
+    async (request, reply) => {
+      const roles = await rolesOf(request, reply);
+      if (!roles) return reply;
+      const guest = (await store.roleOf(request.params.id, request.auth!.user.id)) === 'guest';
+      const model = await store.scopes.model(request.params.id);
+      return {
+        teamspaces: model.scopes
+          .filter((s) => s.kind === 'teamspace')
+          .filter((s) => roles.has(s.id) || (!guest && s.visibility !== 'private'))
+          .map((s) => ({
+            ...describe(s, roles.get(s.id) ?? 'view'),
+            role: roles.get(s.id) ?? null,
+            members: model.entries.filter(
+              (e) => e.scopeId === s.id && e.principal.startsWith('user:'),
+            ).length,
+            everyone:
+              model.entries.find((e) => e.scopeId === s.id && e.principal === 'workspace')?.role ??
+              null,
+          })),
+      };
+    },
+  );
+
+  app.post<{
+    Params: { id: string };
+    Body: {
+      name: string;
+      everyone?: ScopeRole | null;
+      icon?: string | null;
+      description?: string;
+      visibility?: ScopeVisibility;
+      joinRole?: ScopeRole;
+    };
+  }>(
     '/api/workspaces/:id/teamspaces',
     {
       preHandler: signedIn,
@@ -131,7 +177,14 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
         body: {
           type: 'object',
           required: ['name'],
-          properties: { name: scopeName, everyone: { anyOf: [role, { type: 'null' }] } },
+          properties: {
+            name: scopeName,
+            everyone: { anyOf: [role, { type: 'null' }] },
+            icon,
+            description,
+            visibility,
+            joinRole: role,
+          },
         },
       },
     },
@@ -148,6 +201,10 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
         workspaceId: request.params.id,
         kind: 'teamspace',
         name,
+        icon: request.body.icon ?? null,
+        description: request.body.description?.trim() ?? '',
+        visibility: request.body.visibility ?? 'open',
+        joinRole: request.body.joinRole ?? 'edit',
         access: [
           { principal: `user:${request.auth!.user.id}`, role: 'full' },
           ...(everyone ? [{ principal: 'workspace', role: everyone }] : []),
@@ -155,6 +212,74 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
       });
       await ctx.access.changed(request.params.id);
       return reply.code(201).send({ scope: describe(scope, 'full') });
+    },
+  );
+
+  // Join an open teamspace (with its joining role).
+  app.post<{ Params: Params }>(
+    '/api/workspaces/:id/scopes/:scopeId/join',
+    {
+      preHandler: signedIn,
+      schema: { params: { type: 'object', properties: { id: uuid, scopeId: uuid } } },
+    },
+    async (request, reply) => {
+      const { id, scopeId } = request.params;
+      const userId = request.auth!.user.id;
+      const roles = await rolesOf(request, reply);
+      if (!roles) return reply;
+      const scope = (await ctx.access.workspace(id)).scope(scopeId);
+      const guest = (await store.roleOf(id, userId)) === 'guest';
+      if (
+        !scope ||
+        scope.kind !== 'teamspace' ||
+        (scope.visibility === 'private' && !roles.has(scopeId))
+      ) {
+        return fail(reply, 404, 'not_found', 'No such teamspace.');
+      }
+      if (roles.has(scopeId)) return { ok: true };
+      if (guest || scope.visibility !== 'open') {
+        return fail(reply, 403, 'forbidden', 'Ask someone in this teamspace to add you.');
+      }
+      await store.scopes.setAccess(scopeId, `user:${userId}`, scope.joinRole);
+      await ctx.access.changed(id);
+      return { ok: true };
+    },
+  );
+
+  // Leave a teamspace you were added to (not one you're in through everyone or a group).
+  app.post<{ Params: Params }>(
+    '/api/workspaces/:id/scopes/:scopeId/leave',
+    {
+      preHandler: signedIn,
+      schema: { params: { type: 'object', properties: { id: uuid, scopeId: uuid } } },
+    },
+    async (request, reply) => {
+      const { id, scopeId } = request.params;
+      const userId = request.auth!.user.id;
+      const roles = await rolesOf(request, reply);
+      if (!roles) return reply;
+      const scope = (await ctx.access.workspace(id)).scope(scopeId);
+      if (!scope || scope.kind !== 'teamspace' || !roles.has(scopeId)) {
+        return fail(reply, 404, 'not_found', 'No such teamspace.');
+      }
+      const model = await store.scopes.model(id);
+      const without = {
+        ...model,
+        entries: model.entries.filter(
+          (e) => !(e.scopeId === scopeId && e.principal === `user:${userId}`),
+        ),
+      };
+      if (rolesFor(without, userId).has(scopeId)) {
+        return fail(
+          reply,
+          400,
+          'invalid',
+          'You’re in this teamspace through everyone in the workspace, a group, or as an admin.',
+        );
+      }
+      await store.scopes.setAccess(scopeId, `user:${userId}`, null);
+      await ctx.access.changed(id);
+      return { ok: true };
     },
   );
 
@@ -173,7 +298,17 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
     },
   );
 
-  app.patch<{ Params: Params; Body: { name?: string; inherit?: boolean } }>(
+  app.patch<{
+    Params: Params;
+    Body: {
+      name?: string;
+      inherit?: boolean;
+      icon?: string | null;
+      description?: string;
+      visibility?: ScopeVisibility;
+      joinRole?: ScopeRole;
+    };
+  }>(
     '/api/workspaces/:id/scopes/:scopeId',
     {
       preHandler: signedIn,
@@ -182,16 +317,34 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
         body: {
           type: 'object',
           minProperties: 1,
-          properties: { name: scopeName, inherit: { type: 'boolean' } },
+          properties: {
+            name: scopeName,
+            inherit: { type: 'boolean' },
+            icon,
+            description,
+            visibility,
+            joinRole: role,
+          },
         },
       },
     },
     async (request, reply) => {
       const found = await scopeWith(request, reply, request.params.scopeId, 'full');
       if (!found) return reply;
+      const { body } = request;
+      if (found.scope.kind !== 'teamspace' && (body.visibility || body.joinRole || body.icon)) {
+        return fail(reply, 400, 'invalid', 'Only teamspaces have these settings.');
+      }
+      if (body.name !== undefined && !body.name.trim() && found.scope.kind === 'teamspace') {
+        return fail(reply, 400, 'invalid', 'Name the teamspace.');
+      }
       await store.scopes.update(request.params.id, request.params.scopeId, {
-        name: request.body.name?.trim(),
-        inherit: request.body.inherit,
+        name: body.name?.trim(),
+        inherit: body.inherit,
+        icon: body.icon,
+        description: body.description?.trim(),
+        visibility: body.visibility,
+        joinRole: body.joinRole,
       });
       await ctx.access.changed(request.params.id);
       return { ok: true };

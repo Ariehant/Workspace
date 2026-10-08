@@ -1,7 +1,6 @@
 import {
   DocClient,
   MEMBERS_DOC_ID,
-  WORKSPACE_DOC_ID,
   buildPageTree,
   TRASH_RETENTION_MS,
   createPage,
@@ -28,17 +27,30 @@ import {
   type TabsState,
   type User,
   upsertUser,
+  workspaceDataDoc,
+  roleAllows,
+  ScopeMoveError,
+  type Forest,
+  type MovePageTarget,
 } from '@workspace/core';
 import type { OpenPagesIn } from '@workspace/database';
 import { useAppliedTheme, type ThemePreference } from '@workspace/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type * as Y from 'yjs';
 import { AppContext, useApp } from './context';
 import { DatabaseRegistry } from './database/registry';
 import { useRegistryVersion } from './database/hooks';
 import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
 import { PageDirectory } from './pages';
+import { useForest } from './forest';
+import { moveAcrossScopes, scopeOfDoc } from './scope-actions';
+import { buildSections } from './sections';
+import { ShareDialog } from './share-dialog';
+import {
+  BrowseTeamspacesDialog,
+  NewTeamspaceDialog,
+  TeamspaceSettingsDialog,
+} from './teamspace-dialogs';
 import { useDoc, useDocVersion } from './hooks';
 import { PageView } from './page-view';
 import { can, type AppCommand, type Platform } from './platform';
@@ -127,7 +139,7 @@ export interface BlockTarget {
 export function App({ platform }: { platform: Platform }) {
   const client = useMemo(() => new DocClient(platform.transport), [platform]);
   useEffect(() => () => client.destroy(), [client]);
-  const workspace = useDoc(client, WORKSPACE_DOC_ID);
+  const workspace = useForest(client, platform);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [user, setUser] = useState<User | null>(null);
   // A window that only renders a page for printing (PDF export), always in light colors.
@@ -159,6 +171,13 @@ export function App({ platform }: { platform: Platform }) {
     };
   }, [platform, client, workspace, user]);
   useEffect(() => () => base?.databases.destroy(), [base]);
+  // Hosts that place new docs themselves learn from the trees where each one goes.
+  useEffect(() => {
+    const scopes = platform.scopes;
+    if (!base || !scopes?.setResolver) return;
+    scopes.setResolver((docId) => scopeOfDoc(base.workspace, base.pages, docId));
+    return () => scopes.setResolver?.(null);
+  }, [platform, base]);
   const context = useMemo(() => (base ? { ...base, members } : null), [base, members]);
   if (!workspace || !settings || !context) return null;
   if (print) {
@@ -178,7 +197,7 @@ export function App({ platform }: { platform: Platform }) {
 interface ShellProps {
   platform: Platform;
   client: DocClient;
-  workspace: Y.Doc;
+  workspace: Forest;
   initial: Settings;
 }
 
@@ -191,7 +210,12 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   // `version` changes whenever the workspace doc does, which is what invalidates the tree.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tree = useMemo(() => buildPageTree(listPages(workspace)), [workspace, version]);
+  const sections = useMemo(() => buildSections(workspace, tree), [workspace, tree]);
+  /** The workspace is on a server (its pages are in scopes: teamspaces, private, shared). */
+  const scoped = sections.some((s) => s.kind !== 'local');
   const { databases, pages, user } = useApp();
+  const syncInfo = useSyncInfo(platform.sync);
+  const team = useTeam(platform, syncInfo);
   // Rows of databases loading in, found through links or history.
   const registryVersion = useRegistryVersion();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -364,8 +388,15 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   }, [client, platform, workspace, initial.onboarded, navigate]);
 
   const create = useCallback(
-    (parentId: PageId | null) => {
-      const id = createPage(workspace, { parentId });
+    (parentId: PageId | null, tree?: string) => {
+      let id: PageId;
+      try {
+        id = createPage(workspace, { parentId, tree });
+      } catch (error) {
+        // No section this person can add pages to.
+        console.error('Could not create the page', error);
+        return;
+      }
       navigate(id);
     },
     [workspace, navigate],
@@ -400,14 +431,32 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     [client, workspace],
   );
 
-  const drop = useCallback(
-    (id: PageId, targetId: PageId | null, zone: DropZone) => {
-      const target = targetId ? resolveDrop(workspace, id, targetId, zone) : { parentId: null };
-      if (!target) return;
-      movePage(workspace, id, target);
-      if (target.parentId) setExpanded((prev) => new Set([...prev, target.parentId!]));
+  /**
+   * Move a page; to another section (another scope), the server moves it, once confirmed:
+   * who can see it changes.
+   */
+  const moveTo = useCallback(
+    (id: PageId, target: MovePageTarget) => {
+      try {
+        movePage(workspace, id, target);
+        if (target.parentId) setExpanded((prev) => new Set([...prev, target.parentId!]));
+      } catch (error) {
+        if (!(error instanceof ScopeMoveError)) throw error;
+        void moveAcrossScopes(workspace, team, error);
+      }
     },
-    [workspace],
+    [workspace, team],
+  );
+
+  const drop = useCallback(
+    (id: PageId, targetId: PageId | null, zone: DropZone, tree?: string) => {
+      const target = targetId
+        ? resolveDrop(workspace, id, targetId, zone)
+        : { parentId: null, ...(tree ? { tree } : {}) };
+      if (!target) return;
+      moveTo(id, target);
+    },
+    [workspace, moveTo],
   );
 
   const toggleFavorite = useCallback((id: PageId) => {
@@ -415,15 +464,51 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   }, []);
 
   const [moving, setMoving] = useState<PageId | null>(null);
-  const syncInfo = useSyncInfo(platform.sync);
+  const [sharing, setSharing] = useState<PageId | null>(null);
+  /** Teamspace dialogs: new, browse, or one's settings (its scope id). */
+  const [teamspaceDialog, setTeamspaceDialog] = useState<
+    { kind: 'new' } | { kind: 'browse' } | { kind: 'settings'; scopeId: string } | null
+  >(null);
+  const leaveTeamspace = useCallback(
+    (scopeId: string) => {
+      const name = workspace.byScope(scopeId)?.info.name ?? 'this teamspace';
+      if (!team || !window.confirm(`Leave ${name}? Its pages leave your sidebar.`)) return;
+      team
+        .leaveTeamspace(scopeId)
+        .catch((error: unknown) =>
+          window.alert(error instanceof Error ? error.message : String(error)),
+        );
+    },
+    [team, workspace],
+  );
+  // Teamspace icons come from the server (sync carries names and roles only).
+  const [teamspaceIcons, setTeamspaceIcons] = useState<ReadonlyMap<string, string>>(new Map());
+  const teamspaceKey = sections
+    .filter((s) => s.kind === 'teamspace')
+    .map((s) => s.scope)
+    .join();
+  useEffect(() => {
+    if (!team || !teamspaceKey || teamspaceDialog) return;
+    let alive = true;
+    team.teamspaces().then(
+      ({ teamspaces }) =>
+        alive &&
+        setTeamspaceIcons(new Map(teamspaces.flatMap((t) => (t.icon ? [[t.id, t.icon]] : [])))),
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+    // Again after a teamspace dialog closes (its icon may have changed).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [team, teamspaceKey, teamspaceDialog === null]);
   const [syncOpen, setSyncOpen] = useState(false);
-  const team = useTeam(platform, syncInfo);
   // Keep the user's name current in a local workspace (created by / person values show
   // it). A server workspace has its members doc for names, and its page tree may not be
   // the user's to change (the server would refuse it, and send its copy back).
   const local = !platform.team || (!!platform.sync && !!syncInfo && syncInfo.mode !== 'on');
   useEffect(() => {
-    if (local) upsertUser(workspace, user);
+    if (local) upsertUser(workspaceDataDoc(workspace), user);
   }, [local, workspace, user]);
   const [peopleOpen, setPeopleOpen] = useState<'members' | 'profile' | null>(null);
 
@@ -525,6 +610,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       onExport={can(platform, 'export') ? setExporting : undefined}
       onMove={setMoving}
       onTrash={trash}
+      onShare={team && scoped ? setSharing : undefined}
       isFavorite={favorites.includes(currentPageId)}
       onToggleFavorite={() => toggleFavorite(currentPageId)}
     />
@@ -547,7 +633,9 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
         {sidebarOpen && (
           <Sidebar
             workspace={workspace}
-            tree={tree}
+            sections={sections}
+            canEdit={(id) => roleAllows(pages.role(id), 'edit')}
+            icons={teamspaceIcons}
             favorites={favorites}
             width={sidebarWidth}
             currentPageId={currentPageId}
@@ -565,7 +653,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onTemplates={() => setTemplates(true)}
             onImport={() =>
               void platform
-                .startImport()
+                .startImport(workspace.primary?.info.id)
                 .catch((error: unknown) => console.error('Import failed', error))
             }
             onExportAll={() => setExporting(null)}
@@ -599,6 +687,41 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
                   }
                 : undefined
             }
+            teamspaces={
+              team && scoped
+                ? {
+                    onNew: () => setTeamspaceDialog({ kind: 'new' }),
+                    onBrowse: () => setTeamspaceDialog({ kind: 'browse' }),
+                    onSettings: (scopeId) => setTeamspaceDialog({ kind: 'settings', scopeId }),
+                    onLeave: leaveTeamspace,
+                  }
+                : undefined
+            }
+          />
+        )}
+        {team && sharing && (
+          <ShareDialog
+            team={team}
+            forest={workspace}
+            pageId={sharing}
+            onClose={() => setSharing(null)}
+          />
+        )}
+        {team && teamspaceDialog?.kind === 'new' && (
+          <NewTeamspaceDialog
+            team={team}
+            onClose={() => setTeamspaceDialog(null)}
+            onCreated={() => {}}
+          />
+        )}
+        {team && teamspaceDialog?.kind === 'browse' && (
+          <BrowseTeamspacesDialog team={team} onClose={() => setTeamspaceDialog(null)} />
+        )}
+        {team && teamspaceDialog?.kind === 'settings' && (
+          <TeamspaceSettingsDialog
+            team={team}
+            scopeId={teamspaceDialog.scopeId}
+            onClose={() => setTeamspaceDialog(null)}
           />
         )}
         {team && peopleOpen === 'members' && (
@@ -657,7 +780,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             pageId={moving}
             fileUrl={platform.fileUrl}
             onMove={(parentId) => {
-              movePage(workspace, moving, { parentId });
+              moveTo(moving, { parentId });
               navigate(moving);
             }}
             onClose={() => setMoving(null)}

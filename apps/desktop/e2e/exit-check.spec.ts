@@ -228,7 +228,7 @@ test('live: text, sub-page, move, database rows and properties, trash, attachmen
     timeout: 10_000,
   });
   await expect(
-    B.getByRole('tree', { name: 'Pages' })
+    B.getByRole('tree', { name: 'Private' })
       .locator(':scope > li')
       .filter({ hasText: /^Motors/ }),
   ).toHaveCount(0);

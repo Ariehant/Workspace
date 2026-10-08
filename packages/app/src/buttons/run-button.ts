@@ -1,4 +1,4 @@
-import { listUsers, type ButtonConfig } from '@workspace/core';
+import { listUsers, type ButtonConfig, workspaceDataDoc } from '@workspace/core';
 import { readDatabase, runDatabaseStep } from '@workspace/database';
 import type { AppContextValue } from '../context';
 
@@ -29,7 +29,7 @@ async function loadWithRelated(app: ButtonEnv['app'], databaseId: string): Promi
 /** Run a button's steps in order; a declined confirmation stops the rest. */
 export async function runButton(config: ButtonConfig, env: ButtonEnv): Promise<void> {
   const { app } = env;
-  const users = new Map(listUsers(app.workspace).map((u) => [u.id, u.name]));
+  const users = new Map(listUsers(workspaceDataDoc(app.workspace)).map((u) => [u.id, u.name]));
   for (const step of config.steps) {
     switch (step.kind) {
       case 'confirm': {

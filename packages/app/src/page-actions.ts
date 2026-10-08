@@ -4,6 +4,7 @@ import {
   getPage,
   type DocClient,
   type PageId,
+  type PageTree,
 } from '@workspace/core';
 import { copyDatabase } from '@workspace/database';
 import type * as Y from 'yjs';
@@ -15,7 +16,7 @@ import type * as Y from 'yjs';
  */
 export async function duplicatePage(
   client: DocClient,
-  workspace: Y.Doc,
+  workspace: PageTree,
   id: PageId,
 ): Promise<PageId> {
   const mapping = duplicatePageTree(workspace, id);

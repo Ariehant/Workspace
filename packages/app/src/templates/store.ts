@@ -1,4 +1,4 @@
-import { getPage, newId, type DocClient, type PageId } from '@workspace/core';
+import { getPage, newId, type DocClient, type PageId, type PageTree } from '@workspace/core';
 import {
   captureBundle,
   instantiateBundle,
@@ -46,7 +46,7 @@ export function clientDocs(client: DocClient): WithDoc {
 /** "Save as template": pack the page (and its sub-pages and databases) into My templates. */
 export async function saveAsTemplate(
   client: DocClient,
-  workspace: Y.Doc,
+  workspace: PageTree,
   pageId: PageId,
 ): Promise<string> {
   const page = getPage(workspace, pageId);
@@ -72,7 +72,7 @@ export async function saveAsTemplate(
 /** "Use template": a copy of the template at the top level. Resolves its page id. */
 export function applyTemplate(
   client: DocClient,
-  workspace: Y.Doc,
+  workspace: PageTree,
   bundle: PageBundle,
   parentId: PageId | null = null,
 ): Promise<PageId> {

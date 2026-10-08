@@ -6,7 +6,15 @@
 import { createWriteStream, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parentPort, workerData } from 'node:worker_threads';
-import { MEMBERS_DOC_ID, WORKSPACE_DOC_ID, userNames } from '@workspace/core';
+import {
+  Forest,
+  MEMBERS_DOC_ID,
+  WORKSPACE_DOC_ID,
+  isTreeDocId,
+  localTree,
+  userNames,
+  workspaceDataDoc,
+} from '@workspace/core';
 import {
   exportPages,
   mermaidSources,
@@ -107,7 +115,12 @@ async function run(): Promise<void> {
         }
         return docs.get(id)!;
       };
-      const workspace = doc(WORKSPACE_DOC_ID) ?? new Y.Doc();
+      // Every page tree this device holds (a synced workspace has one per scope).
+      const workspace = new Forest(
+        [WORKSPACE_DOC_ID, ...store.listDocIds().filter((id) => id !== WORKSPACE_DOC_ID)]
+          .filter(isTreeDocId)
+          .map((id) => localTree(doc(id) ?? new Y.Doc(), id)),
+      );
       const source: ExportSource = {
         workspace,
         doc,
@@ -122,7 +135,7 @@ async function run(): Promise<void> {
             return null;
           }
         },
-        users: userNames(workspace, doc(MEMBERS_DOC_ID)),
+        users: userNames(workspaceDataDoc(workspace), doc(MEMBERS_DOC_ID)),
       };
       const options = job.options!;
       const svgs =

@@ -1,5 +1,6 @@
 import { basename, extname } from 'node:path';
 import type { Worker } from 'node:worker_threads';
+import { WORKSPACE_DOC_ID, isTreeDocId } from '@workspace/core';
 import type { DocManager } from '@workspace/storage-local';
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { IPC, type ImportStatus } from '../shared/ipc';
@@ -22,7 +23,7 @@ export function registerImport(deps: {
 }): void {
   let running: Worker | null = null;
 
-  ipcMain.handle(IPC.importStart, async (event) => {
+  ipcMain.handle(IPC.importStart, async (event, tree: unknown) => {
     if (running) throw new Error('An import is already running');
     const window = BrowserWindow.fromWebContents(event.sender);
     const options = {
@@ -46,7 +47,15 @@ export function registerImport(deps: {
     };
     const first = filePaths[0]!;
     const title = filePaths.length === 1 ? basename(first, extname(first)) || 'Import' : 'Import';
-    const job: ImportJob = { dbPath: deps.dbPath, dataDir: deps.dataDir, paths: filePaths, title };
+    const job: ImportJob = {
+      dbPath: deps.dbPath,
+      dataDir: deps.dataDir,
+      paths: filePaths,
+      title,
+      // A page tree of this workspace (the renderer's section), else the workspace doc.
+      tree:
+        typeof tree === 'string' && isTreeDocId(tree) && tree.length < 64 ? tree : WORKSPACE_DOC_ID,
+    };
     const worker = createImportWorker({ workerData: job });
     running = worker;
     let settled = false;

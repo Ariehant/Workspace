@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { parentPort, workerData } from 'node:worker_threads';
-import { WORKSPACE_DOC_ID, getPagesMap } from '@workspace/core';
+import { getPagesMap } from '@workspace/core';
 import { isDatabaseDoc } from '@workspace/database';
 import { importFiles, type ArchiveFile, type ImportReport } from '@workspace/importers';
 import { FileStore, SqliteStore } from '@workspace/storage-local';
@@ -18,6 +18,8 @@ export interface ImportJob {
   dataDir: string;
   paths: string[];
   title: string;
+  /** The page tree the import goes into (the workspace doc, or a scope's tree). */
+  tree: string;
 }
 
 export type ImportWorkerMessage =
@@ -48,7 +50,7 @@ function run(): void {
       return /\.zip$/i.test(path) ? unpack(data) : [{ path: basename(path), data }];
     });
     const workspace = new Y.Doc();
-    const updates = store.getUpdates(WORKSPACE_DOC_ID);
+    const updates = store.getUpdates(job.tree);
     if (updates.length) Y.applyUpdate(workspace, Y.mergeUpdates(updates));
     const before = Y.encodeStateVector(workspace);
     const docs = new Map<string, Y.Doc>();
@@ -75,7 +77,7 @@ function run(): void {
     post({
       type: 'docs',
       docs: [
-        { id: WORKSPACE_DOC_ID, update: Y.encodeStateAsUpdate(workspace, before) },
+        { id: job.tree, update: Y.encodeStateAsUpdate(workspace, before) },
         ...ordered.map(([id, doc]) => ({ id, update: Y.encodeStateAsUpdate(doc) })),
       ],
       report,

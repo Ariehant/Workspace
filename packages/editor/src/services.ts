@@ -49,6 +49,11 @@ export interface EditorServices {
   /** The page being edited. */
   pageId: string;
   getPage(id: string): PageRef | null;
+  /**
+   * What a link to a page that isn't here shows (default "Deleted page"). In a server
+   * workspace that's mostly a page the person can't see: "No access".
+   */
+  missingPage?: string;
   /** Pages that can be linked to, most relevant first. */
   listPages(): PageRef[];
   /** Ancestors of the current page, then the page itself. */

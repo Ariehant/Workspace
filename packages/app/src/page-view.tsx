@@ -8,10 +8,12 @@ import {
   restorePage,
   setPageIcon,
   setPageOptions,
+  roleAllows,
   setPageTitle,
   type PageId,
   type PageMeta,
   type PageOptions,
+  type TreeRole,
 } from '@workspace/core';
 import { PageEditor, PageIcon, type Editor, type PageRef } from '@workspace/editor';
 import { Button, IconButton, Popover, PopoverContent, PopoverTrigger, cn } from '@workspace/ui';
@@ -21,6 +23,7 @@ import {
   ChevronsRight,
   ImageIcon,
   Lock,
+  Eye,
   Smile,
   Star,
   Table2,
@@ -80,12 +83,25 @@ export interface PageHeaderProps {
   crumbs: PageRef[];
   locked: boolean;
   onUnlock(): void;
+  /** The person may not edit the page: their role, shown as a badge. */
+  access?: TreeRole;
+  /** Open the share dialog (a page of a server workspace). */
+  onShare?(): void;
   /** Favorite toggle (pages only). */
   favorite?: { on: boolean; toggle(): void };
   menu: ReactNode;
 }
 
-export function PageHeader({ chrome, crumbs, locked, onUnlock, favorite, menu }: PageHeaderProps) {
+export function PageHeader({
+  chrome,
+  crumbs,
+  locked,
+  onUnlock,
+  access,
+  onShare,
+  favorite,
+  menu,
+}: PageHeaderProps) {
   const { platform } = useApp();
   const { navigate } = useNavigation();
   return (
@@ -134,6 +150,24 @@ export function PageHeader({ chrome, crumbs, locked, onUnlock, favorite, menu }:
           className="flex h-7 items-center gap-1 rounded px-2 text-xs text-muted hover:bg-hover"
         >
           <Lock size={12} /> Locked
+        </button>
+      )}
+      {access && !roleAllows(access, 'edit') && (
+        <span
+          data-testid="access-badge"
+          className="flex h-7 items-center gap-1 rounded px-2 text-xs text-muted"
+          title="Ask someone with full access to change this"
+        >
+          <Eye size={12} /> {access === 'comment' ? 'Can comment' : 'View only'}
+        </span>
+      )}
+      {onShare && (
+        <button
+          type="button"
+          onClick={onShare}
+          className="flex h-7 items-center rounded px-2 text-sm hover:bg-hover"
+        >
+          Share
         </button>
       )}
       {favorite && (
@@ -402,6 +436,8 @@ export interface PageViewProps {
   onExport?(id: PageId): void;
   onMove(id: PageId): void;
   onTrash(id: PageId): void;
+  /** Share the page (a server workspace). */
+  onShare?(id: PageId): void;
 }
 
 function useWorkspacePageModel(pageId: PageId): PageModel | null {
@@ -432,6 +468,7 @@ export function PageView({
   onExport,
   onMove,
   onTrash,
+  onShare,
 }: PageViewProps) {
   const { pages } = useApp();
   const model = useWorkspacePageModel(pageId);
@@ -442,7 +479,9 @@ export function PageView({
   useScrollToBlock(articleRef, pageDoc ? blockTarget : null);
   if (!model) return null;
   const { meta } = model;
-  const editable = !meta.locked && !model.trashed;
+  // Someone who may only view (or comment) gets the page read-only, as when locked.
+  const role = pages.role(pageId);
+  const editable = !meta.locked && !model.trashed && roleAllows(role, 'edit');
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-surface">
@@ -451,6 +490,8 @@ export function PageView({
         crumbs={pages.breadcrumb(pageId)}
         locked={meta.locked}
         onUnlock={() => model.setOptions({ locked: false })}
+        access={role}
+        onShare={onShare ? () => onShare(pageId) : undefined}
         favorite={{ on: isFavorite, toggle: onToggleFavorite }}
         menu={
           <PageMenu

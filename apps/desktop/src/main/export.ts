@@ -55,7 +55,7 @@ export function registerExport(deps: ExportDeps): void {
     const date = new Date().toISOString().slice(0, 10);
     if (request.format === 'backup') return `Workspace backup ${date}.zip`;
     const title = request.pageId
-      ? (getPage(deps.manager.workspace, request.pageId)?.title ?? 'Untitled')
+      ? (getPage(deps.manager.forest, request.pageId)?.title ?? 'Untitled')
       : 'Workspace';
     const kind = request.format === 'html' ? 'HTML' : request.format === 'pdf' ? '' : 'Markdown';
     return `${fileSafe(title || 'Untitled')}${kind ? ` (${kind})` : ''}.${request.format === 'pdf' ? 'pdf' : 'zip'}`;

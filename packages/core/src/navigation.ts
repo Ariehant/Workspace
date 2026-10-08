@@ -1,7 +1,13 @@
 import type { PageId, PageMeta } from './schema';
 import { newId } from './ids';
-import { compareSiblings, deletePagePermanently, getAncestorIds, listPages } from './workspace';
-import type * as Y from 'yjs';
+import { Forest, roleAllows } from './forest';
+import {
+  compareSiblings,
+  deletePagePermanently,
+  getAncestorIds,
+  listPages,
+  type PageTree,
+} from './workspace';
 
 // --- Back / forward history ----------------------------------------------------------
 
@@ -47,25 +53,37 @@ export type DropZone = 'before' | 'after' | 'inside';
  * Returns `null` for drops that can't happen (onto itself or into its own sub-pages).
  */
 export function resolveDrop(
-  doc: Y.Doc,
+  doc: PageTree,
   dragId: PageId,
   targetId: PageId,
   zone: DropZone,
-): { parentId: PageId | null; index: number } | null {
+): { parentId: PageId | null; index: number; tree?: string } | null {
   if (dragId === targetId) return null;
   if (getAncestorIds(doc, targetId).includes(dragId)) return null;
   const pages = listPages(doc);
   const target = pages.find((p) => p.id === targetId);
   if (!target) return null;
 
-  // Same sibling list as `movePage` (trashed pages keep their slot), so indexes agree.
+  // Same sibling list as `movePage` (trashed pages keep their slot), so indexes agree. At
+  // the top level of a forest, the siblings are those of the target's section.
   const childrenOf = (parentId: PageId | null) =>
-    pages.filter((p) => p.parentId === parentId && p.id !== dragId).sort(compareSiblings);
+    pages
+      .filter(
+        (p) =>
+          p.parentId === parentId &&
+          p.id !== dragId &&
+          (parentId !== null || p.home === target.home),
+      )
+      .sort(compareSiblings);
 
   if (zone === 'inside') return { parentId: target.id, index: childrenOf(target.id).length };
   const siblings = childrenOf(target.parentId);
   const at = siblings.findIndex((p) => p.id === targetId);
-  return { parentId: target.parentId, index: zone === 'before' ? at : at + 1 };
+  return {
+    parentId: target.parentId,
+    index: zone === 'before' ? at : at + 1,
+    ...(target.parentId === null && target.home ? { tree: target.home } : {}),
+  };
 }
 
 // --- Trash ---------------------------------------------------------------------------
@@ -73,16 +91,22 @@ export function resolveDrop(
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Pages put in the trash directly (their sub-pages go with them), newest first. */
-export function trashedPages(doc: Y.Doc): PageMeta[] {
+export function trashedPages(doc: PageTree): PageMeta[] {
   return listPages(doc)
     .filter((p) => p.trashedAt !== null)
     .sort((a, b) => (b.trashedAt ?? 0) - (a.trashedAt ?? 0));
 }
 
-/** Permanently delete pages trashed before `cutoff`. Returns every deleted id. */
-export function emptyTrashBefore(doc: Y.Doc, cutoff: number): PageId[] {
+/**
+ * Permanently delete pages trashed before `cutoff` (in a forest, those in trees the
+ * person can edit). Returns every deleted id.
+ */
+export function emptyTrashBefore(doc: PageTree, cutoff: number): PageId[] {
   const deleted: PageId[] = [];
+  const editable = (page: PageMeta) =>
+    !(doc instanceof Forest) || roleAllows(doc.get(page.tree ?? '')?.info.role, 'edit');
   for (const page of trashedPages(doc)) {
+    if (!editable(page)) continue;
     if (page.trashedAt! < cutoff && !deleted.includes(page.id)) {
       deleted.push(...deletePagePermanently(doc, page.id));
     }

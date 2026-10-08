@@ -1,4 +1,11 @@
-import { resolveDrop, type DropZone, type PageId, type PageTreeNode } from '@workspace/core';
+import {
+  resolveDrop,
+  type DropZone,
+  type PageId,
+  type PageTreeNode,
+  type PageTree,
+} from '@workspace/core';
+import type { SidebarSection } from './sections';
 import { PageIcon } from '@workspace/editor';
 import {
   IconButton,
@@ -24,8 +31,10 @@ import {
   CornerUpRight,
   Download,
   FileInput,
+  Compass,
   LayoutTemplate,
   MoreHorizontal,
+  Settings,
   Palette,
   Plus,
   Search,
@@ -37,7 +46,6 @@ import {
   Users,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
-import type * as Y from 'yjs';
 import type { AccountInfo, SyncInfo } from './platform';
 import { SyncIndicator } from './sync-settings';
 import { Trash } from './trash';
@@ -51,8 +59,9 @@ interface DragState {
 }
 
 export interface SidebarProps {
-  workspace: Y.Doc;
-  tree: PageTreeNode[];
+  workspace: PageTree;
+  /** Teamspaces, Shared and Private (or just "Pages", for a workspace not on a server). */
+  sections: SidebarSection[];
   favorites: readonly PageId[];
   width: number;
   currentPageId: PageId | null;
@@ -60,12 +69,15 @@ export interface SidebarProps {
   theme: ThemePreference;
   onSelect(id: PageId): void;
   onToggle(id: PageId): void;
-  onCreate(parentId: PageId | null): void;
+  /** A new page: under `parentId`, or at the top of tree `tree` (default: Private). */
+  onCreate(parentId: PageId | null, tree?: string): void;
   onTrash(id: PageId): void;
   onDuplicate(id: PageId): void;
   onMove(id: PageId): void;
-  /** Drop `id` relative to `targetId`, or at the end of the top level when `null`. */
-  onDrop(id: PageId, targetId: PageId | null, zone: DropZone): void;
+  /**
+   * Drop `id` relative to `targetId`, or (`null`) at the end of tree `tree`'s top level.
+   */
+  onDrop(id: PageId, targetId: PageId | null, zone: DropZone, tree?: string): void;
   onToggleFavorite(id: PageId): void;
   onSearch(): void;
   onTemplates(): void;
@@ -85,14 +97,23 @@ export interface SidebarProps {
   account?: AccountInfo;
   /** The workspace is on a server: its members and the account's profile. */
   team?: { onMembers(): void; onProfile(): void };
+  /** May the person change this page (add inside, move, trash)? Default: yes. */
+  canEdit?(id: PageId): boolean;
+  /** A teamspace's icon, by scope (when the server has said). */
+  icons?: ReadonlyMap<string, string>;
+  /** Teamspaces (a server workspace): make one, find others, a teamspace's menu. */
+  teamspaces?: {
+    onNew(): void;
+    onBrowse(): void;
+    onSettings(scopeId: string): void;
+    onLeave(scopeId: string): void;
+  };
 }
 
 export function Sidebar(props: SidebarProps) {
-  const { workspace, tree, favorites, width, onCreate, onCollapse, onSelect, onSearch, onDrop } =
-    props;
+  const { workspace, sections, favorites, width, onCreate, onCollapse, onSelect, onSearch } = props;
   const { theme, onThemeChange, fileUrl, account } = props;
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [overEnd, setOverEnd] = useState(false);
 
   const nodes = new Map<PageId, PageTreeNode>();
   const index = (list: PageTreeNode[]) =>
@@ -100,7 +121,7 @@ export function Sidebar(props: SidebarProps) {
       nodes.set(node.page.id, node);
       index(node.children);
     });
-  index(tree);
+  for (const section of sections) index(section.nodes);
   const favoriteNodes = favorites
     .map((id) => nodes.get(id))
     .filter((node): node is PageTreeNode => node !== undefined);
@@ -213,41 +234,36 @@ export function Sidebar(props: SidebarProps) {
             </ul>
           </section>
         )}
-        <div className="group flex h-7 items-center px-2 text-xs font-medium text-muted">
-          <span className="flex-1">Pages</span>
-          <IconButton
-            label="Add a page"
-            size="sm"
-            className="opacity-0 group-hover:opacity-100"
-            onClick={() => onCreate(null)}
-          >
-            <Plus size={14} />
-          </IconButton>
-        </div>
-        <ul role="tree" aria-label="Pages">
-          {tree.map((node) => (
-            <TreeItem key={node.page.id} node={node} depth={0} draggableRows {...itemProps} />
-          ))}
-        </ul>
-        {tree.length === 0 && <p className="px-2 py-1 text-sm text-faint">No pages yet</p>}
-        {/* Dropping below the tree moves a page to the end of the top level. */}
-        <div
-          data-testid="sidebar-drop-end"
-          className={cn('min-h-8 flex-1 border-t-2 border-transparent', overEnd && 'border-accent')}
-          onDragOver={(event) => {
-            if (!drag) return;
-            event.preventDefault();
-            setOverEnd(true);
-            if (drag.over) setDrag({ ...drag, over: null });
-          }}
-          onDragLeave={() => setOverEnd(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setOverEnd(false);
-            if (drag) onDrop(drag.id, null, 'after');
-            setDrag(null);
-          }}
-        />
+        {props.teamspaces &&
+          sections.some((s) => s.kind === 'teamspace' || s.kind === 'private') && (
+            <div className="group flex h-7 items-center px-2 text-xs font-medium text-muted">
+              <span className="flex-1">Teamspaces</span>
+              <IconButton
+                label="Browse teamspaces"
+                size="sm"
+                className="opacity-0 group-hover:opacity-100"
+                onClick={props.teamspaces.onBrowse}
+              >
+                <Compass size={14} />
+              </IconButton>
+              <IconButton
+                label="New teamspace"
+                size="sm"
+                className="opacity-0 group-hover:opacity-100"
+                onClick={props.teamspaces.onNew}
+              >
+                <Plus size={14} />
+              </IconButton>
+            </div>
+          )}
+        {sections.map((section, i) => (
+          <Section
+            key={section.id}
+            section={section}
+            last={i === sections.length - 1}
+            {...itemProps}
+          />
+        ))}
       </div>
 
       <div className="border-t border-line p-1">
@@ -313,6 +329,123 @@ export function Sidebar(props: SidebarProps) {
       </div>
       <ResizeHandle width={width} onResize={props.onResize} />
     </nav>
+  );
+}
+
+interface SectionProps extends SidebarProps {
+  section: SidebarSection;
+  /** The last section takes the rest of the height (a big drop target). */
+  last: boolean;
+  drag: DragState | null;
+  setDrag(drag: DragState | null): void;
+}
+
+/** One sidebar section: its header (add a page, a teamspace's menu) and its pages. */
+function Section(props: SectionProps) {
+  const { section, last, drag, setDrag, onCreate, onDrop, teamspaces } = props;
+  const [overEnd, setOverEnd] = useState(false);
+  const teamspace = section.kind === 'teamspace' && section.scope && teamspaces;
+  return (
+    <section
+      data-testid={`sidebar-section-${section.kind}`}
+      className={cn(
+        'flex flex-col',
+        last ? 'flex-1' : 'mb-3',
+        section.kind === 'teamspace' && 'pl-1',
+      )}
+    >
+      <div className="group flex h-7 items-center px-2 text-xs font-medium text-muted">
+        <span className="flex-1 truncate">
+          {section.scope && props.icons?.get(section.scope) && (
+            <span className="mr-1.5" aria-hidden>
+              {props.icons.get(section.scope)}
+            </span>
+          )}
+          {section.title}
+        </span>
+        {teamspace && (
+          <Menu>
+            <MenuTrigger asChild>
+              <IconButton
+                label={`${section.title} options`}
+                size="sm"
+                className="opacity-0 group-hover:opacity-100"
+              >
+                <MoreHorizontal size={14} />
+              </IconButton>
+            </MenuTrigger>
+            <MenuContent>
+              <MenuItem
+                icon={<Settings size={14} />}
+                onSelect={() => teamspace.onSettings(section.scope!)}
+              >
+                Teamspace settings…
+              </MenuItem>
+              <MenuItem
+                icon={<LogOut size={14} />}
+                onSelect={() => teamspace.onLeave(section.scope!)}
+              >
+                Leave teamspace
+              </MenuItem>
+            </MenuContent>
+          </Menu>
+        )}
+        {section.addTo && (
+          <IconButton
+            label={section.kind === 'local' ? 'Add a page' : `Add a page to ${section.title}`}
+            size="sm"
+            className="opacity-0 group-hover:opacity-100"
+            onClick={() => onCreate(null, section.addTo!)}
+          >
+            <Plus size={14} />
+          </IconButton>
+        )}
+      </div>
+      <ul role="tree" aria-label={section.title}>
+        {section.nodes.map((node) => (
+          <TreeItem
+            key={node.page.id}
+            node={node}
+            depth={0}
+            draggableRows
+            {...props}
+            drag={drag}
+            setDrag={setDrag}
+          />
+        ))}
+      </ul>
+      {section.nodes.length === 0 && (
+        <p className="px-2 py-1 text-sm text-faint">
+          {section.kind === 'local' ? 'No pages yet' : 'No pages inside'}
+        </p>
+      )}
+      {/* Dropping below a section's pages moves a page to the end of its top level. */}
+      {section.addTo && (
+        <div
+          data-testid={
+            section.kind === 'local' ? 'sidebar-drop-end' : `sidebar-drop-end-${section.id}`
+          }
+          className={cn(
+            'border-t-2 border-transparent',
+            last ? 'min-h-8 flex-1' : 'h-2',
+            overEnd && 'border-accent',
+          )}
+          onDragOver={(event) => {
+            if (!drag) return;
+            event.preventDefault();
+            setOverEnd(true);
+            if (drag.over) setDrag({ ...drag, over: null });
+          }}
+          onDragLeave={() => setOverEnd(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setOverEnd(false);
+            if (drag) onDrop(drag.id, null, 'after', section.addTo!);
+            setDrag(null);
+          }}
+        />
+      )}
+    </section>
   );
 }
 
@@ -385,6 +518,7 @@ function TreeItem(props: TreeItemProps) {
     setDrag,
   } = props;
   const { page, children } = node;
+  const editable = props.canEdit?.(page.id) ?? true;
   const isOpen = expanded.has(page.id);
   const isCurrent = page.id === currentPageId;
   const isFavorite = favorites.includes(page.id);
@@ -397,34 +531,35 @@ function TreeItem(props: TreeItemProps) {
     return () => clearTimeout(timer);
   }, [over, isOpen, onToggle, page.id]);
 
-  const dragProps = draggableRows
-    ? {
-        draggable: true,
-        onDragStart: (event: DragEvent<HTMLDivElement>) => {
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/plain', page.title || 'Untitled');
-          setDrag({ id: page.id, over: null });
-        },
-        onDragEnd: () => setDrag(null),
-        onDragOver: (event: DragEvent<HTMLDivElement>) => {
-          if (!drag) return;
-          const zone = zoneAt(event);
-          if (!resolveDrop(workspace, drag.id, page.id, zone)) return;
-          event.preventDefault();
-          event.stopPropagation();
-          event.dataTransfer.dropEffect = 'move';
-          if (drag.over?.id !== page.id || drag.over.zone !== zone) {
-            setDrag({ ...drag, over: { id: page.id, zone } });
-          }
-        },
-        onDrop: (event: DragEvent<HTMLDivElement>) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (drag) onDrop(drag.id, page.id, zoneAt(event));
-          setDrag(null);
-        },
-      }
-    : {};
+  const dragProps =
+    draggableRows && editable
+      ? {
+          draggable: true,
+          onDragStart: (event: DragEvent<HTMLDivElement>) => {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', page.title || 'Untitled');
+            setDrag({ id: page.id, over: null });
+          },
+          onDragEnd: () => setDrag(null),
+          onDragOver: (event: DragEvent<HTMLDivElement>) => {
+            if (!drag) return;
+            const zone = zoneAt(event);
+            if (!resolveDrop(workspace, drag.id, page.id, zone)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.dataTransfer.dropEffect = 'move';
+            if (drag.over?.id !== page.id || drag.over.zone !== zone) {
+              setDrag({ ...drag, over: { id: page.id, zone } });
+            }
+          },
+          onDrop: (event: DragEvent<HTMLDivElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (drag) onDrop(drag.id, page.id, zoneAt(event));
+            setDrag(null);
+          },
+        }
+      : {};
 
   return (
     <li role="treeitem" aria-expanded={isOpen} aria-selected={isCurrent}>
@@ -492,29 +627,35 @@ function TreeItem(props: TreeItemProps) {
               >
                 {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
               </MenuItem>
-              <MenuSeparator />
-              <MenuItem icon={<Copy size={14} />} onSelect={() => onDuplicate(page.id)}>
-                Duplicate
-              </MenuItem>
-              <MenuItem icon={<CornerUpRight size={14} />} onSelect={() => onMove(page.id)}>
-                Move to
-              </MenuItem>
-              <MenuSeparator />
-              <MenuItem icon={<Trash2 size={14} />} danger onSelect={() => onTrash(page.id)}>
-                Move to Trash
-              </MenuItem>
+              {editable && (
+                <>
+                  <MenuSeparator />
+                  <MenuItem icon={<Copy size={14} />} onSelect={() => onDuplicate(page.id)}>
+                    Duplicate
+                  </MenuItem>
+                  <MenuItem icon={<CornerUpRight size={14} />} onSelect={() => onMove(page.id)}>
+                    Move to
+                  </MenuItem>
+                  <MenuSeparator />
+                  <MenuItem icon={<Trash2 size={14} />} danger onSelect={() => onTrash(page.id)}>
+                    Move to Trash
+                  </MenuItem>
+                </>
+              )}
             </MenuContent>
           </Menu>
-          <IconButton
-            label="Add a page inside"
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation();
-              onCreate(page.id);
-            }}
-          >
-            <Plus size={14} />
-          </IconButton>
+          {editable && (
+            <IconButton
+              label="Add a page inside"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCreate(page.id);
+              }}
+            >
+              <Plus size={14} />
+            </IconButton>
+          )}
         </span>
       </div>
       {isOpen && (

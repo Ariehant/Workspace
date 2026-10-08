@@ -2,7 +2,7 @@
  * The shared UI's host in the browser: docs over the sync socket (a partial client: only
  * the docs on screen), search, files and settings over the API.
  */
-import type { AccountInfo, Platform } from '@workspace/app';
+import type { AccountInfo, Platform, ScopeInfo } from '@workspace/app';
 import { PartialClient } from '@workspace/sync';
 import { ApiError, api, type Me } from './api';
 
@@ -33,6 +33,12 @@ export function createWebPlatform(options: {
   const { workspace, user } = options;
   const listeners = new Set<(docId: string, update: Uint8Array) => void>();
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // The person's scopes: the server says on connecting, and when they change.
+  let scopes: ScopeInfo[] | undefined;
+  const scopeListeners = new Set<(scopes: ScopeInfo[]) => void>();
+  let firstScopes: (scopes: ScopeInfo[]) => void = () => {};
+  const scopesKnown = new Promise<ScopeInfo[]>((resolve) => (firstScopes = resolve));
+  let resolveScope: ((docId: string) => string | null) | null = null;
   const client = new PartialClient({
     deviceId: crypto.randomUUID(),
     onUpdate: (docId, update) => {
@@ -46,6 +52,13 @@ export function createWebPlatform(options: {
       location.reload();
     },
     onRevoked: () => location.reload(),
+    onAccess: (next) => {
+      scopes = next as ScopeInfo[];
+      firstScopes(scopes);
+      for (const listener of scopeListeners) listener(scopes);
+    },
+    // A new doc goes to its page's scope (the app knows its trees).
+    scopeOf: (docId) => resolveScope?.(docId) ?? null,
     connect: (handlers) => {
       // The session cookie authenticates the socket (same origin).
       const ws = new WebSocket(`${protocol}//${location.host}/api/sync/${workspace.id}`);
@@ -163,6 +176,16 @@ export function createWebPlatform(options: {
     cancelImport: () => {},
     onImportStatus: () => () => {},
     features: { export: false, import: false, backup: false, history: false, backlinks: false },
+    scopes: {
+      get: () => (scopes ? Promise.resolve(scopes) : scopesKnown),
+      onChange: (listener) => {
+        scopeListeners.add(listener);
+        return () => scopeListeners.delete(listener);
+      },
+      setResolver: (resolve) => {
+        resolveScope = resolve;
+      },
+    },
     team: {
       request: (method, path, body) =>
         api(

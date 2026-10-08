@@ -39,10 +39,15 @@ const platform: Platform = {
   provideDiagrams: (render) => api.exports.onMermaid(render),
   restoreBackup: () => api.exports.restoreBackup(),
   printReady: () => api.exports.printReady(),
-  startImport: () => api.imports.start(),
+  startImport: (tree) => api.imports.start(tree),
   cancelImport: () => api.imports.cancel(),
   onImportStatus: (listener) => api.imports.onStatus(listener),
   sync: api.sync,
+  // The scopes come with the sync status (from the server's last `access`).
+  scopes: {
+    get: async () => (await api.sync.status()).scopes,
+    onChange: (listener) => api.sync.onChange((info) => listener(info.scopes)),
+  },
   // Works while this workspace syncs (the app only offers it then).
   team: {
     request: async <T,>(method: TeamMethod, path: string, body?: unknown): Promise<T> => {

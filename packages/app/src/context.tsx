@@ -1,4 +1,4 @@
-import type { DocClient, User } from '@workspace/core';
+import type { DocClient, Forest, User } from '@workspace/core';
 import { createContext, useContext } from 'react';
 import type * as Y from 'yjs';
 import type { DatabaseRegistry } from './database/registry';
@@ -8,7 +8,8 @@ import type { Platform } from './platform';
 export interface AppContextValue {
   platform: Platform;
   client: DocClient;
-  workspace: Y.Doc;
+  /** The page trees the person can see (one, for a workspace that isn't on a server). */
+  workspace: Forest;
   /** Open database docs and row lookups. */
   databases: DatabaseRegistry;
   /** Lookups across pages and rows. */

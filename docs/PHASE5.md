@@ -1,6 +1,6 @@
 # Phase 5: Collaboration
 
-**Status:** M1 (members, invites and groups) and M2 (scopes and permissions on the server) are done. M3 (teamspaces, private pages and sharing in the app) is next.
+**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server) and M3 (teamspaces, private pages and sharing in the app) are done. M4 (presence and live cursors) is next.
 
 ## Context
 
@@ -320,7 +320,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
     - Bob edits offline while Ada makes the pages view-only. On reconnecting, his edit is refused: the app restarts on the server's copy, and his text is in the page history as "Not saved: your access changed".
     - The real-server helpers (the server and the TCP proxy) moved to `e2e/server.ts`, shared with the exit check.
 
-### M3: teamspaces, private pages and sharing in the app (about 1.5 weeks)
+### M3: teamspaces, private pages and sharing in the app ✅
 
 - **Sidebar sections:**
   - Teamspaces: each with its tree, plus join and leave
@@ -353,6 +353,92 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - sharing a page with the guest shows it under their "Shared" and nothing else
   - a view-only member can't type
   - revoking access removes the page from the guest's desktop
+
+**M3 notes:**
+
+- **Many page trees as one (`Forest`, in `@workspace/core`):**
+  - A `Forest` holds the tree docs of the scopes someone can read. Every page function (`getPage`, `listPages`, `createPage`, `movePage`, `trashPage`, `duplicatePageTree` and the rest) accepts either a single tree doc or a forest:
+    - reads see the union
+    - each write goes to the tree the page lives in
+    - a new top-level page goes to a named tree, or by default to the person's private pages
+  - **Stubs:** a page shared on its own shows where its stub is, for people who can read both trees. Moving it there moves the stub.
+  - A parent the person can't see shows the page at the top level.
+  - Pages carry `tree` (where they live) and `home` (where they show).
+  - **Moves across scopes:** a move that would take a page to another tree throws `ScopeMoveError`, and the app asks the server to do it.
+  - **Workspace-wide data** (math macros, the old list of users) stays in the workspace doc (`workspaceDataDoc`). Someone who can't read it gets the defaults.
+- **Desktop:**
+  - The doc manager holds every tree doc it has (`workspace` and `tree:*`) as a forest. The page index, search, links and "last edited" cover all of them.
+  - **A tree reset** to the server's copy is swapped in place and the windows reload. The app no longer restarts, as it did in M2.
+  - **A page removed from a tree:**
+    - by sync, it may be on its way to another scope's tree: its content stays, and only its index rows go
+    - by a deletion on this device: everything goes
+  - **New docs** are hinted to their page's scope (a row to its database's, comments to their page's), so they're placed where they belong.
+  - The sync status carries the scopes (from `sync.access`), and the renderer builds its forest from them.
+  - Imports go into the private pages (`startImport(tree)`), and exports read every tree.
+  - The renderer may call the scope routes through the main process's allow-list.
+- **Web:** the scopes come from the socket's `access` message. The app tells the client which scope a new doc belongs in (`ScopesPlatform.setResolver`).
+- **Server:**
+  - **Migration 7:** teamspaces get an icon, a description, a visibility (open, closed, private) and the role joining gives. Every member but guests gets private pages, both for existing members and on joining.
+  - **Routes:**
+    - `GET teamspaces`: the teamspaces the caller can find (private ones only for their members, none for guests)
+    - `POST scopes/:id/join`: open teamspaces only
+    - `POST scopes/:id/leave`: refused when someone is in it through everyone in the workspace, a group, or as an admin
+    - `PATCH scopes/:id` and `POST teamspaces` take the new fields
+    - Who has access is listed to the workspace's members, not only to those with full access
+  - Someone else's private pages, opened to a person, reach them as a shared scope, so they show under "Shared", not as their own "Private".
+  - Fixed a race in `Scopes.place`: two devices placing the same new doc at once could read nothing.
+- **App:**
+  - **Sidebar sections:**
+    - Teamspaces (by name, with icons from the server), Shared, then Private. A workspace that isn't on a server keeps its one "Pages" section.
+    - Each section has its own "add a page" button and drop zone.
+    - The Teamspaces header has New teamspace and Browse.
+    - A teamspace's menu has its settings and Leave.
+    - Rows the person can't edit offer no add, duplicate, move, trash or drag.
+  - **Teamspace dialogs:**
+    - New teamspace: name, icon, description, who can find it, and everyone in the workspace's access.
+    - Settings: the same details, the joining role, and members (add, change role, remove).
+    - Browse: Join for open teamspaces.
+  - **Share dialog** (the page header's Share button):
+    - Invite people (members and guests) or groups with a role. A page that has the access of where it is gets shared on its own first.
+    - Who has access, with "from Engineering" for access that comes from the teamspace.
+    - General access: "Everyone with access to …" (inheritance) and "Everyone in the workspace".
+    - Copy link.
+  - **Read-only:** a page (or a row, by its database) the person can only view or comment on is read-only, as a locked page is, with a "View only" or "Can comment" badge.
+  - **Moving across sections:** dragging a page to another section, or "Move to" under a page of another section, asks first ("who can see it may change"), then the server moves it.
+  - **No access:** mentions and page links to a page that isn't there show "No access" on a server workspace ("Deleted page" otherwise). A synced block from such a page says so.
+- **Differs from the plan:**
+  - **Closed teamspaces** are joined by being added; join requests need the inbox (M6).
+  - **Default teamspaces** are the ones that give everyone in the workspace a role. There's no separate flag, and they can't be left.
+  - **Workspace owners and admins** have full access to every teamspace (from M2), so all teamspaces show in their sidebar.
+  - **A move across sections while offline** says it needs a connection, rather than waiting to run later.
+  - **"Comment" works as "view"** until comments exist (M5).
+- **Moved again: "can edit content" and the `rows:<dbId>` split** go to Phase 6, with forms, which need the same row-level writes. Roles stay full, edit, comment and view.
+- **Not done:** relation and rollup cells that point at rows in an unreadable database show nothing, rather than "No access".
+- **Tests:**
+  - **Core forest:**
+    - the union and per-tree writes
+    - stubs shown in place, or at the top without their tree
+    - moves within a tree, and refused across
+    - duplicating
+    - change events
+  - **Desktop storage:**
+    - trees held, indexed and scoped
+    - trees kept after a restart
+    - content kept when sync moves a page to another tree
+    - trees reset in place and revoked
+  - **Server:**
+    - private pages for members (not guests)
+    - teamspace details
+    - finding (open, closed, private) and joining
+    - leaving, and not leaving a teamspace that's everyone's
+  - **App:** the sidebar's sections.
+  - **E2E (`scopes.spec.ts`)**, with Ada (owner, desktop), Bob (member, web) and Gus (guest, desktop):
+    - Ada's pages are private. She makes "Engineering" (everyone may view) through the dialog and adds a page.
+    - Bob sees Engineering view only (badge, read-only editor and title) and none of Ada's private pages.
+    - Ada shares "Diary" with Gus from the Share dialog. It shows under his "Shared", and nothing else does.
+    - Ada drags "Specs" from Private into Engineering and confirms. Bob sees it there, live.
+    - Ada removes Gus's access, and "Diary" leaves his desktop.
+  - The M2 access test follows the change: a refused edit reloads the window, without a restart.
 
 ### M4: presence and live cursors (about 0.5 weeks)
 

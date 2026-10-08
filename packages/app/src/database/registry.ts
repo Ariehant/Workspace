@@ -6,6 +6,7 @@ import {
   setPageKind,
   type DocClient,
   type PageId,
+  type PageTree,
 } from '@workspace/core';
 import {
   ComputedCache,
@@ -18,7 +19,6 @@ import {
   type DocResolver,
   type Row,
 } from '@workspace/database';
-import type * as Y from 'yjs';
 import type { Platform } from '../platform';
 
 interface Entry {
@@ -47,7 +47,7 @@ export class DatabaseRegistry {
   constructor(
     private readonly client: DocClient,
     private readonly platform: Platform,
-    private readonly workspace: Y.Doc,
+    private readonly workspace: PageTree,
   ) {}
 
   /** Load a database doc (once) and resolve its handle. */
@@ -212,7 +212,7 @@ export class DatabaseRegistry {
 /** Create a database page and set up its doc. Resolves its id. */
 export async function createDatabase(
   client: DocClient,
-  workspace: Y.Doc,
+  workspace: PageTree,
   options: { parentId: PageId | null; title?: string },
 ): Promise<PageId> {
   const id = createPage(workspace, { ...options, kind: 'database' });
@@ -223,7 +223,7 @@ export async function createDatabase(
 /** Turn an empty page into a full-page database (Notion's "Get started with: Table"). */
 export async function convertToDatabase(
   client: DocClient,
-  workspace: Y.Doc,
+  workspace: PageTree,
   pageId: PageId,
 ): Promise<void> {
   await setUpDatabaseDoc(client, pageId);

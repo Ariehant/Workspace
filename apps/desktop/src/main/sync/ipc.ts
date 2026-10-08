@@ -24,6 +24,14 @@ const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [/^groups$/, ['GET', 'POST']],
   [new RegExp(`^groups/${UUID}$`), ['PATCH', 'DELETE']],
   [new RegExp(`^groups/${UUID}/members/${UUID}$`), ['PUT', 'DELETE']],
+  // Scopes (Phase 5 M3): teamspaces, private pages, sharing and moving pages.
+  [/^scopes$/, ['GET']],
+  [/^teamspaces$/, ['GET', 'POST']],
+  [/^private$/, ['POST']],
+  [new RegExp(`^scopes/${UUID}$`), ['PATCH']],
+  [new RegExp(`^scopes/${UUID}/access$`), ['PUT']],
+  [new RegExp(`^scopes/${UUID}/(join|leave)$`), ['POST']],
+  [new RegExp(`^pages/${UUID}/(share|move)$`), ['POST']],
 ];
 const MAX_TEAM_BODY = 128 * 1024;
 

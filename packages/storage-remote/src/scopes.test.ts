@@ -109,7 +109,7 @@ describe('Scopes', () => {
     expect((await s.placements(ws.id)).get('page-2')).toBe(home);
   });
 
-  it('migration 6 makes existing workspaces their owner’s private pages', async () => {
+  it('migrations 6 and 7: existing workspaces become their owner’s private pages', async () => {
     const url = await createTestDatabase(inject('pgUrl'));
     const pool = new pg.Pool({ connectionString: url });
     await pool.query(
@@ -145,21 +145,28 @@ describe('Scopes', () => {
     await old.migrate();
     const ws = '33333333-3333-4333-8333-333333333333';
     const model = await old.scopes.model(ws);
+    // The owner's holds everything; the member gets private pages of their own (7).
+    const member = model.scopes.find((s) => s.ownerId === '22222222-2222-4222-8222-222222222222');
     expect(model.scopes).toEqual([
       expect.objectContaining({
         kind: 'private',
         treeDoc: 'workspace',
         ownerId: '11111111-1111-4111-8111-111111111111',
       }),
+      expect.objectContaining({ kind: 'private', treeDoc: `tree:${member?.id}` }),
     ]);
     expect(model.entries).toEqual([
       expect.objectContaining({
         principal: 'user:11111111-1111-4111-8111-111111111111',
         role: 'full',
       }),
+      expect.objectContaining({
+        principal: 'user:22222222-2222-4222-8222-222222222222',
+        role: 'full',
+      }),
     ]);
     const placements = await old.scopes.placements(ws);
-    expect([...placements.keys()].sort()).toEqual(['page-a', 'workspace']);
+    expect([...placements.keys()].sort()).toEqual(['page-a', `tree:${member?.id}`, 'workspace']);
     expect(model.defaultScopeId).toBe(model.scopes[0]!.id);
     await old.close();
   });

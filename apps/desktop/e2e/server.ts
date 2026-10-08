@@ -11,6 +11,8 @@ import { createTestDatabase, startTestPostgres } from '@workspace/storage-remote
 import { expect } from './helpers';
 
 const serverDir = fileURLToPath(new URL('../../server', import.meta.url));
+/** The web app's build (served by the server when asked; build it first). */
+export const webDir = fileURLToPath(new URL('../../web/dist', import.meta.url));
 
 export interface SyncServer {
   /** e.g. http://127.0.0.1:40123 */
@@ -19,8 +21,14 @@ export interface SyncServer {
   stop(): Promise<void>;
 }
 
-/** Build and start the server (open sign-up), with its files under `root`. */
-export async function startSyncServer(root: string): Promise<SyncServer> {
+/**
+ * Build and start the server (open sign-up), with its files under `root`; `web` also
+ * serves the web app (from its build).
+ */
+export async function startSyncServer(
+  root: string,
+  options: { web?: boolean } = {},
+): Promise<SyncServer> {
   const build = spawnSync('node', ['build.mjs'], { cwd: serverDir, encoding: 'utf8' });
   if (build.status !== 0) throw new Error(`Server build failed: ${build.stderr}`);
   const postgres = await startTestPostgres();
@@ -38,6 +46,7 @@ export async function startSyncServer(root: string): Promise<SyncServer> {
       FILES_DIR: join(root, 'server-files'),
       SIGNUP: 'open',
       LOG_LEVEL: 'warn',
+      ...(options.web ? { WEB_DIR: webDir } : {}),
     },
     stdio: ['ignore', 'inherit', 'inherit'],
   });

@@ -5,6 +5,7 @@ import {
   restorePage,
   trashedPages,
   type PageId,
+  type PageTree,
 } from '@workspace/core';
 import { PageIcon } from '@workspace/editor';
 import {
@@ -19,7 +20,6 @@ import {
 import { deleteRow, restoreRow } from '@workspace/database';
 import { Trash2, Undo2 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
-import type * as Y from 'yjs';
 import { useApp } from './context';
 import { useRegistryVersion } from './database/hooks';
 
@@ -36,7 +36,7 @@ interface TrashItem {
 }
 
 export interface TrashProps {
-  workspace: Y.Doc;
+  workspace: PageTree;
   fileUrl(id: string): string;
   onOpen(id: PageId): void;
   children: ReactNode;

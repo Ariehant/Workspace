@@ -1,6 +1,13 @@
-import { getAncestorIds, getPage, isInTrash, listPages, type PageId } from '@workspace/core';
+import {
+  getAncestorIds,
+  getPage,
+  isInTrash,
+  listPages,
+  type Forest,
+  type PageId,
+  type TreeRole,
+} from '@workspace/core';
 import type { PageRef } from '@workspace/editor';
-import type * as Y from 'yjs';
 import { isLiveRow } from '@workspace/database';
 import type { DatabaseRegistry } from './database/registry';
 
@@ -10,7 +17,7 @@ import type { DatabaseRegistry } from './database/registry';
  */
 export class PageDirectory {
   constructor(
-    private readonly workspace: Y.Doc,
+    private readonly workspace: Forest,
     private readonly databases: DatabaseRegistry,
   ) {}
 
@@ -44,6 +51,15 @@ export class PageDirectory {
   databaseOf(id: PageId): string | null {
     if (getPage(this.workspace, id)) return null;
     return this.databases.databaseOf(id)?.id ?? null;
+  }
+
+  /**
+   * The person's role on a page (its tree's; a row's is its database's). `full` where the
+   * workspace isn't on a server, and for what isn't loaded yet.
+   */
+  role(id: PageId): TreeRole {
+    const host = this.workspace.treeOf(id) ? id : this.databaseOf(id);
+    return (host && this.workspace.treeOf(host)?.info.role) || 'full';
   }
 
   /** The workspace page new sub-pages of `id` go under (a row's go under its database). */

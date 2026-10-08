@@ -6,6 +6,7 @@ import {
   readBlocks,
   restorePage,
   type PageMeta,
+  roleAllows,
 } from '@workspace/core';
 import { PageIcon } from '@workspace/editor';
 import type * as Y from 'yjs';
@@ -322,13 +323,14 @@ function RowContent({
   blockTarget?: BlockTarget | null;
 }) {
   const found = useRow(rowId, databaseId);
-  const { workspace } = useApp();
+  const { workspace, pages } = useApp();
   const { pageDoc, onEditor, focusBody } = usePageBody(rowId);
   const articleRef = useRef<HTMLElement>(null);
   useScrollToBlock(articleRef, pageDoc ? (blockTarget ?? null) : null);
   if (!found) return <div className="h-24" aria-busy="true" />;
   const { handle, snapshot, row, model } = found;
-  const editable = !row.locked && !model.trashed;
+  // As its database: read-only for someone who may only view or comment.
+  const editable = !row.locked && !model.trashed && roleAllows(pages.role(rowId), 'edit');
   return (
     <>
       {row.isTemplate && (
@@ -437,6 +439,7 @@ export function RowPageView({
         crumbs={pages.breadcrumb(rowId)}
         locked={found?.row.locked ?? false}
         onUnlock={() => found?.model.setOptions({ locked: false })}
+        access={pages.role(rowId)}
         menu={<RowMenu rowId={rowId} databaseId={databaseId} />}
       />
       {found?.model.trashed && (

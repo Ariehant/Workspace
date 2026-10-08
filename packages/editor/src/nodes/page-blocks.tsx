@@ -30,7 +30,11 @@ function PageLinkView({ node, selected }: ReactNodeViewProps) {
           <ArrowUpRight size={10} strokeWidth={3} className="absolute -right-0.5 -bottom-0.5" />
         </span>
         <span className="truncate border-b border-line font-medium">
-          {missing ? 'Deleted page' : page.title || 'Untitled'}
+          {!page
+            ? (services.missingPage ?? 'Deleted page')
+            : page.inTrash
+              ? 'Deleted page'
+              : page.title || 'Untitled'}
         </span>
       </button>
     </NodeViewWrapper>

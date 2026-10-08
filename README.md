@@ -12,8 +12,10 @@ offline-first sync between desktops, server-side search and attachments, and the
 converge after offline edits and restarts. Phase 5 (collaboration, see [docs/PHASE5.md](docs/PHASE5.md)) is in progress: members,
 invites, roles and groups, profiles and @-mentions of people are done (M1), and the server now
 decides who sees and edits what: scopes (teamspaces, private pages, shared pages) with roles,
-enforced per doc on the sync socket, search and page location (M2). Next are teamspaces, private
-pages and sharing in the app (M3), then live cursors, comments, an inbox and publishing to the web.
+enforced per doc on the sync socket, search and page location (M2). The app shows it all
+(M3): sidebar sections for teamspaces, pages shared with you and your private pages, a share
+dialog, teamspace settings, read-only pages for viewers, and moving pages between sections. Next
+are live cursors, comments, an inbox and publishing to the web.
 
 ## What works today
 

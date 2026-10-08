@@ -7,6 +7,7 @@ import {
   pageUrl,
   type PageId,
   type PageMeta,
+  type PageTree,
 } from '@workspace/core';
 import {
   ComputedCache,
@@ -26,7 +27,7 @@ import { blocksMarkdown } from './markdown';
 
 /** Where an export reads the workspace from. */
 export interface ExportSource {
-  workspace: Y.Doc;
+  workspace: PageTree;
   /** A doc's current state (pages, databases, rows, synced blocks), or null. */
   doc(id: string): Y.Doc | null;
   /** A stored file's bytes and original name, or null if it's missing. */
@@ -100,7 +101,7 @@ function attachmentName(name: string | null, fileId: string, taken: Set<string>)
 
 /** Workspace pages to export, parents before children, in sidebar order. */
 export function selectPages(
-  workspace: Y.Doc,
+  workspace: PageTree,
   roots: readonly PageId[] | 'all',
   includeSubpages: boolean,
 ): { page: PageMeta; parentId: PageId | null }[] {

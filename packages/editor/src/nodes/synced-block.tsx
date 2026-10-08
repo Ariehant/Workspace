@@ -75,7 +75,9 @@ function SyncedBlockView({ node, editor }: ReactNodeViewProps) {
           <span>{places > 1 ? `Editing in ${places} places` : 'Synced block'}</span>
         ) : (
           <button type="button" onClick={() => source && services.navigate(source)}>
-            Synced from {sourcePage?.title || 'Untitled'}
+            {sourcePage || !services.missingPage
+              ? `Synced from ${sourcePage?.title || 'Untitled'}`
+              : `Synced from a page you can’t open`}
           </button>
         )}
       </div>

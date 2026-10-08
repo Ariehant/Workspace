@@ -119,7 +119,7 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
       {
         userId: found.user.id,
         policy: access.policy(roles),
-        scopes: access.accessScopes(roles),
+        scopes: access.accessScopes(roles, found.user.id),
         reconcile: (known, cursor) => access.reconcile(roles, known, cursor),
       },
     );
@@ -277,7 +277,7 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
     for (const docId of gained) lost.delete(docId);
     client.connection.reauthorize({
       policy: access.policy(roles),
-      scopes: access.accessScopes(roles),
+      scopes: access.accessScopes(roles, client.userId),
       gained: [...gained],
       lost: [...lost],
       lostScopes,

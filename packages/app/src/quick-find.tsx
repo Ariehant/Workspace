@@ -1,15 +1,14 @@
-import { listPages, type PageId } from '@workspace/core';
+import { listPages, type PageId, type PageTree } from '@workspace/core';
 import { PageIcon } from '@workspace/editor';
 import { Dialog, DialogContent, cn } from '@workspace/ui';
 import { CornerDownLeft, Search } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import type * as Y from 'yjs';
 import { useApp } from './context';
 import { useRegistryVersion } from './database/hooks';
 import type { Platform, SearchHit } from './platform';
 
 export interface QuickFindProps {
-  workspace: Y.Doc;
+  workspace: PageTree;
   platform: Platform;
   /** Recently visited pages, most recent first: shown before anything is typed. */
   recent: readonly PageId[];

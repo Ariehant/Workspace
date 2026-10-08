@@ -101,13 +101,16 @@ export class WorkspaceAccess {
     return atLeast(roles.get(scope), needed);
   }
 
-  /** The scopes someone has a role in, as sync tells the client. */
-  accessScopes(roles: Roles): AccessScope[] {
+  /**
+   * The scopes `userId` has a role in, as sync tells the client. Someone else's private
+   * pages, opened to them, are pages shared with them.
+   */
+  accessScopes(roles: Roles, userId: string): AccessScope[] {
     return this.model.scopes
       .filter((s) => roles.has(s.id))
       .map((s) => ({
         id: s.id,
-        kind: s.kind,
+        kind: s.kind === 'private' && s.ownerId !== userId ? 'shared' : s.kind,
         name: s.name,
         treeDoc: s.treeDoc,
         parent: s.parentId ?? '',
@@ -184,7 +187,7 @@ export class AccessService {
     if (!loading) {
       loading = (async () => {
         const [model, placements] = await Promise.all([
-          this.store.scopes.model(workspaceId),
+          this.loadModel(workspaceId),
           this.store.scopes.placements(workspaceId),
         ]);
         return new WorkspaceAccess(workspaceId, model, placements, this.store);
@@ -210,8 +213,24 @@ export class AccessService {
   async changed(workspaceId: string): Promise<void> {
     if (!this.workspaces.has(workspaceId)) return;
     const access = await this.workspace(workspaceId);
-    access.setModel(await this.store.scopes.model(workspaceId));
+    access.setModel(await this.loadModel(workspaceId));
     this.emit({ kind: 'model', workspaceId });
+  }
+
+  /**
+   * The access model, after giving every member but guests their private pages (someone
+   * who just joined, or became a member).
+   */
+  private async loadModel(workspaceId: string): Promise<AccessModel> {
+    const model = await this.store.scopes.model(workspaceId);
+    const missing = model.members.filter(
+      (m) =>
+        m.role !== 'guest' &&
+        !model.scopes.some((s) => s.kind === 'private' && s.ownerId === m.userId),
+    );
+    if (missing.length === 0) return model;
+    for (const m of missing) await this.store.scopes.privateScope(workspaceId, m.userId);
+    return this.store.scopes.model(workspaceId);
   }
 
   /** Docs moved to another scope (already recorded in the database). */
@@ -219,7 +238,7 @@ export class AccessService {
     if (!this.workspaces.has(workspaceId)) return;
     const access = await this.workspace(workspaceId);
     // A move can come with a new scope (sharing a page): the model first.
-    access.setModel(await this.store.scopes.model(workspaceId));
+    access.setModel(await this.loadModel(workspaceId));
     access.moved(docIds, to);
     this.emit({ kind: 'moved', workspaceId, docIds, from, to });
   }

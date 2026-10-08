@@ -195,7 +195,11 @@ function MentionView({ node, updateAttributes, editor, selected }: ReactNodeView
             <ArrowUpRight size={8} strokeWidth={3} className="ws-mention-arrow" />
           </span>
           <span className="ws-mention-title">
-            {missing ? 'Deleted page' : page.title || 'Untitled'}
+            {!page
+              ? (services.missingPage ?? 'Deleted page')
+              : page.inTrash
+                ? 'Deleted page'
+                : page.title || 'Untitled'}
           </span>
         </span>
       </NodeViewWrapper>

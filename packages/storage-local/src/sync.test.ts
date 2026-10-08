@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import {
   WORKSPACE_DOC_ID,
   createPage,
+  getPage,
   getPageContent,
   listPages,
+  moveSubtree,
   setPageTitle,
 } from '@workspace/core';
 import { MemoryLogStore, SyncClient, SyncHub } from '@workspace/sync';
@@ -320,4 +322,102 @@ describe('two devices through a hub', () => {
     a.client.stop();
     b.client.stop();
   }, 30_000);
+});
+
+describe('page trees of several scopes', () => {
+  /** A tree doc's update, as the server would send it. */
+  const remote = (manager: DocManager, docId: string, fn: (doc: Y.Doc) => void) => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, manager.open(docId));
+    manager.release(docId);
+    const before = Y.encodeStateVector(doc);
+    fn(doc);
+    manager.applyUpdate(docId, Y.encodeStateAsUpdate(doc, before), SYNC_ORIGIN);
+    return doc;
+  };
+
+  it('holds every tree, indexes their pages, and scopes new docs by tree', () => {
+    const store = new SqliteStore(join(dir, 't.db'));
+    const manager = new DocManager(store, { indexDelayMs: 0 });
+    const sync = new LocalSyncStore(store, manager);
+    sync.setAccess([
+      {
+        id: 'S1',
+        kind: 'private',
+        name: 'Private',
+        treeDoc: 'workspace',
+        parent: '',
+        role: 'full',
+      },
+      { id: 'S2', kind: 'teamspace', name: 'Lab', treeDoc: 'tree:S2', parent: '', role: 'edit' },
+    ]);
+    remote(manager, WORKSPACE_DOC_ID, (ws) => createPage(ws, { id: 'mine', title: 'Diary' }));
+    remote(manager, 'tree:S2', (t) => createPage(t, { id: 'plan', title: 'Gear plan' }));
+    expect(manager.forest.list().map((t) => t.info.id)).toEqual(['workspace', 'tree:S2']);
+    expect(
+      listPages(manager.forest)
+        .map((p) => p.title)
+        .sort(),
+    ).toEqual(['Diary', 'Gear plan']);
+    manager.flush();
+    expect(store.search('gear').map((r) => r.id)).toEqual(['plan']);
+
+    // "Last edited" goes to the page's own tree.
+    write(manager, 'plan', 'twelve teeth');
+    manager.flush();
+    expect(getPage(manager.forest, 'plan')!.updatedAt).toBeGreaterThan(0);
+    expect(sync.scopeOf('plan')).toBe('S2');
+    expect(sync.scopeOf('comments:plan')).toBe('S2');
+    expect(sync.scopeOf('mine')).toBe('S1');
+    expect(sync.scopeOf('tree:S2')).toBe('S2');
+    expect(sync.scopeOf('unknown')).toBe(null);
+
+    // The trees are there again after a restart.
+    manager.close();
+    const again = new DocManager(store, { indexDelayMs: 0 });
+    expect(
+      listPages(again.forest)
+        .map((p) => p.title)
+        .sort(),
+    ).toEqual(['Diary', 'Gear plan']);
+    again.close();
+    store.close();
+  });
+
+  it('keeps a page’s content when sync moves it to another tree, and swaps reset trees', () => {
+    const store = new SqliteStore(join(dir, 'm.db'));
+    const manager = new DocManager(store, { indexDelayMs: 0 });
+    const ws = remote(manager, WORKSPACE_DOC_ID, (doc) =>
+      createPage(doc, { id: 'spec', title: 'Spec' }),
+    );
+    write(manager, 'spec', 'torque table');
+    // The server shares the page: out of the workspace tree (a stub stays), into its own.
+    const shared = new Y.Doc();
+    const beforeWs = Y.encodeStateVector(ws);
+    moveSubtree(ws, shared, 'spec', { stubScope: 'S3' });
+    manager.applyUpdate(WORKSPACE_DOC_ID, Y.encodeStateAsUpdate(ws, beforeWs), SYNC_ORIGIN);
+    manager.applyUpdate('tree:S3', Y.encodeStateAsUpdate(shared), SYNC_ORIGIN);
+    expect(read(manager, 'spec')).toBe('torque table');
+    expect(getPage(manager.forest, 'spec')).toMatchObject({ tree: 'tree:S3', home: 'workspace' });
+
+    // Deleted here (from the trash): the content goes too.
+    manager.forest
+      .list()[1]!
+      .doc.transact(() => manager.forest.list()[1]!.doc.getMap('pages').delete('spec'));
+    expect(store.getUpdates('spec')).toEqual([]);
+
+    // A tree reset to the server's copy is swapped in place; a revoked tree goes.
+    const resets: string[] = [];
+    manager.onReset((id) => resets.push(id));
+    const server = new Y.Doc();
+    createPage(server, { id: 'other', title: 'Other' });
+    manager.reset('tree:S3', Y.encodeStateAsUpdate(server));
+    expect(listPages(manager.forest).map((p) => p.title)).toEqual(['Other']);
+    manager.forget(['tree:S3']);
+    expect(manager.forest.list().map((t) => t.info.id)).toEqual(['workspace']);
+    expect(store.getUpdates('tree:S3')).toEqual([]);
+    expect(resets).toEqual(['tree:S3', 'tree:S3']);
+    manager.close();
+    store.close();
+  });
 });

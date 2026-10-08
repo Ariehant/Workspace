@@ -87,6 +87,18 @@ export interface SyncInfo {
   lastSyncedAt: number | null;
   /** The session token is encrypted with the system keyring. */
   secureStorage: boolean;
+  /** The scopes the person can read (`null` until the server has said, or not syncing). */
+  scopes: SyncScope[] | null;
+}
+
+/** A scope the person can read (teamspace, private pages, shared page), with their role. */
+export interface SyncScope {
+  id: string;
+  kind: 'teamspace' | 'private' | 'shared';
+  name: string;
+  treeDoc: string;
+  parent: string;
+  role: 'full' | 'edit' | 'comment' | 'view';
 }
 
 export interface SyncServerInfo {

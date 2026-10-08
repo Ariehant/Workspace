@@ -3,9 +3,8 @@
  * start in her private scope) and invites Bob: his desktop joins and shows nothing.
  * When Ada opens her pages to the workspace, they arrive on Bob's desktop live. Then
  * Bob edits a page offline while Ada makes it view-only: on reconnecting, the server
- * refuses his edit, his page goes back to the server's copy (the app restarts, as the
- * edit also touched the page tree), and the edit is kept in the page's history
- * ("Not saved").
+ * refuses his edit, his page goes back to the server's copy, and the edit is kept in
+ * the page's history ("Not saved").
  */
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -205,13 +204,12 @@ test('an edit made offline after losing edit access is refused and kept in histo
   await setWorkspaceRole('view');
 
   proxy.restore();
-  // The server refuses both changes and sends its copies back. The page tree is held for
-  // the app's whole life, so the app restarts on it (tests relaunch it themselves).
-  const restarted = b.app.waitForEvent('close');
+  // The server refuses both changes and sends its copies back: the window loads again.
   await b.app.evaluate(({ powerMonitor }) => powerMonitor.emit('resume'));
-  await restarted;
-  b = await launch(dirB());
   const R = b.window;
+  await expect(editor(R)).not.toContainText('Offline: switch to a parallel jaw.', {
+    timeout: 20_000,
+  });
   await synced(R);
   await openPage(R, 'Gripper');
   await expect(editor(R)).toContainText('Bob: fingertips in TPU.');

@@ -101,7 +101,7 @@ const api = {
     printReady: (): void => ipcRenderer.send(IPC.printReady),
   },
   imports: {
-    start: (): Promise<boolean> => ipcRenderer.invoke(IPC.importStart),
+    start: (tree?: string): Promise<boolean> => ipcRenderer.invoke(IPC.importStart, tree),
     cancel: (): void => ipcRenderer.send(IPC.importCancel),
     onStatus: (listener: (status: ImportStatus) => void): Unsubscribe =>
       on(IPC.importStatus, listener),

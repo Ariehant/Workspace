@@ -1,4 +1,4 @@
-import { createPage, getPageContent, type DocClient } from '@workspace/core';
+import { createPage, getPageContent, type DocClient, type PageTree } from '@workspace/core';
 import * as Y from 'yjs';
 
 type Node = [type: string, text: string, attrs?: Record<string, unknown>];
@@ -36,7 +36,7 @@ function element(
 }
 
 /** Create the "Getting started" page shown on first launch. */
-export async function createWelcomePage(client: DocClient, workspace: Y.Doc): Promise<string> {
+export async function createWelcomePage(client: DocClient, workspace: PageTree): Promise<string> {
   const id = createPage(workspace, { title: 'Getting started', icon: '👋' });
   const handle = client.acquire(id);
   try {

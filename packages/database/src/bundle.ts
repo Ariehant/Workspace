@@ -9,6 +9,7 @@ import {
   setPageOptions,
   type PageId,
   type PageMeta,
+  type PageTree,
 } from '@workspace/core';
 import * as Y from 'yjs';
 import { copyDatabase } from './copy';
@@ -31,7 +32,7 @@ const isEmpty = (doc: Y.Doc) => Y.encodeStateVector(doc).length <= 1;
 
 /** Pack a page with its sub-pages (not those in the trash), databases and rows. */
 export async function captureBundle(
-  workspace: Y.Doc,
+  workspace: PageTree,
   rootId: PageId,
   withDoc: WithDoc,
 ): Promise<PageBundle> {
@@ -71,7 +72,7 @@ function loadDoc(bundle: PageBundle, id: string): Y.Doc {
  */
 export async function instantiateBundle(
   bundle: PageBundle,
-  workspace: Y.Doc,
+  workspace: PageTree,
   options: { parentId: PageId | null; withDoc: WithDoc; now?: number },
 ): Promise<PageId> {
   const now = options.now ?? Date.now();

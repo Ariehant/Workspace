@@ -1,12 +1,17 @@
-import { getDescendantIds, isInTrash, listPages, type PageId } from '@workspace/core';
+import {
+  getDescendantIds,
+  isInTrash,
+  listPages,
+  type PageId,
+  type PageTree,
+} from '@workspace/core';
 import { PageIcon } from '@workspace/editor';
 import { Dialog, DialogContent, cn } from '@workspace/ui';
 import { Home } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type * as Y from 'yjs';
 
 export interface MoveDialogProps {
-  workspace: Y.Doc;
+  workspace: PageTree;
   pageId: PageId;
   fileUrl(id: string): string;
   onMove(parentId: PageId | null): void;

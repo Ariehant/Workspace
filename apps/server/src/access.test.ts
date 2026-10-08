@@ -263,10 +263,13 @@ describe('access', () => {
     expect(mo.text('plan')).toBe('plan body');
     expect(gus.text('spec')).toBe('spec body');
     expect(gus.scopes.map((s) => [s.id, s.role])).toEqual([[S.id, 'comment']]);
+    // (And Mo's own private pages, empty.)
+    const moPrivate = mo.scopes.find((s) => s.kind === 'private')!;
     expect(Object.fromEntries(mo.scopes.map((s) => [s.id, s.role]))).toEqual({
       [T]: 'edit',
       [V.id]: 'view',
       [S.id]: 'edit',
+      [moPrivate.id]: 'full',
     });
 
     // Writes: what may be written is stored; the rest is undone (server copy) or taken away.
@@ -448,5 +451,73 @@ describe('access', () => {
       w.ada.token,
     );
     await until(() => mo.text('diary') === 'my secret', 'shared through the group');
+  });
+  it('teamspaces: details, finding and joining them, leaving; private pages for members', async () => {
+    const w = await world();
+    const base = `/api/workspaces/${w.ws}`;
+    // Every member but guests has private pages of their own.
+    const mine = async (token: string) =>
+      (await w.scopes(token)).scopes.filter((s) => s.kind === 'private').map((s) => s.role);
+    expect(await mine(w.mo.token)).toEqual(['full']);
+    expect(await mine(w.gus.token)).toEqual([]);
+
+    const made = await w.call('POST', `${base}/teamspaces`, w.ada.token, {
+      name: 'Robotics',
+      icon: '🤖',
+      description: 'Arms and grippers',
+      visibility: 'open',
+      joinRole: 'comment',
+      everyone: null,
+    });
+    expect(made.status).toBe(201);
+    const R = made.body.scope;
+    expect(R).toMatchObject({ icon: '🤖', visibility: 'open', joinRole: 'comment' });
+    const closed = (
+      await w.call('POST', `${base}/teamspaces`, w.ada.token, {
+        name: 'Hiring',
+        visibility: 'closed',
+        everyone: null,
+      })
+    ).body.scope;
+    const hidden = (
+      await w.call('POST', `${base}/teamspaces`, w.ada.token, {
+        name: 'Board',
+        visibility: 'private',
+        everyone: null,
+      })
+    ).body.scope;
+
+    // Mo finds the open and closed ones (not the private one), and joins the open one.
+    const found = (await w.call('GET', `${base}/teamspaces`, w.mo.token)).body.teamspaces as {
+      id: string;
+      role: string | null;
+    }[];
+    expect(found.find((t) => t.id === R.id)?.role).toBe(null);
+    expect(found.some((t) => t.id === closed.id)).toBe(true);
+    expect(found.some((t) => t.id === hidden.id)).toBe(false);
+    expect((await w.call('POST', `${base}/scopes/${R.id}/join`, w.mo.token)).status).toBe(200);
+    expect((await w.scopes(w.mo.token)).scopes.find((s) => s.id === R.id)?.role).toBe('comment');
+    expect((await w.call('POST', `${base}/scopes/${closed.id}/join`, w.mo.token)).status).toBe(403);
+    expect((await w.call('POST', `${base}/scopes/${hidden.id}/join`, w.mo.token)).status).toBe(404);
+    // Guests find only theirs, and join nothing.
+    const guestFinds = (await w.call('GET', `${base}/teamspaces`, w.gus.token)).body.teamspaces;
+    expect(guestFinds).toEqual([]);
+    expect((await w.call('POST', `${base}/scopes/${R.id}/join`, w.gus.token)).status).toBe(403);
+
+    // Details change with full access only.
+    const patch = (token: string, body: object) =>
+      w.call('PATCH', `${base}/scopes/${R.id}`, token, body);
+    expect((await patch(w.mo.token, { name: 'Mine now' })).status).toBe(403);
+    expect((await patch(w.ada.token, { icon: null, description: 'Arms' })).status).toBe(200);
+    expect((await w.scopes(w.ada.token)).scopes.find((s) => s.id === R.id)).toMatchObject({
+      name: 'Robotics',
+      icon: null,
+      description: 'Arms',
+    });
+
+    // Leaving: what Mo joined, yes; the first teamspace (everyone's), no.
+    expect((await w.call('POST', `${base}/scopes/${R.id}/leave`, w.mo.token)).status).toBe(200);
+    expect((await w.scopes(w.mo.token)).scopes.some((s) => s.id === R.id)).toBe(false);
+    expect((await w.call('POST', `${base}/scopes/${w.T}/leave`, w.mo.token)).status).toBe(400);
   });
 });

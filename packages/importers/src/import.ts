@@ -5,6 +5,7 @@ import {
   setPageOptions,
   setPageTitle,
   type PageId,
+  type PageTree,
 } from '@workspace/core';
 import {
   OPTION_COLORS,
@@ -42,7 +43,7 @@ import {
 
 /** Where an import writes: the workspace and new docs for the pages it creates. */
 export interface ImportTarget {
-  workspace: Y.Doc;
+  workspace: PageTree;
   /** An empty doc for a new page, database or row. */
   doc(id: string): Y.Doc;
   /** Store an attachment; its file id (null if it couldn't be stored). */

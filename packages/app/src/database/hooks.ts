@@ -1,3 +1,4 @@
+import { workspaceDataDoc } from '@workspace/core';
 import {
   type DatabaseHandle,
   type DatabaseSnapshot,
@@ -69,7 +70,7 @@ export function useRegistryVersion(): number {
 /** User names and pictures by id, for person and created/edited-by values. */
 export function useDisplayContext(): DisplayContext {
   const { workspace, members } = useApp();
-  const people = usePeople(workspace, members);
+  const people = usePeople(workspaceDataDoc(workspace), members);
   return useMemo(
     () => ({ users: people.names, avatars: people.avatars, people: people.active }),
     [people],

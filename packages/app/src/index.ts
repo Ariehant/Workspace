@@ -5,6 +5,8 @@ export type {
   AppCommand,
   Feature,
   Platform,
+  ScopeInfo,
+  ScopesPlatform,
   SearchHit,
   SyncInfo,
   SyncPlatform,

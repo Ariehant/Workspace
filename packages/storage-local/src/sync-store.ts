@@ -1,3 +1,4 @@
+import { isTreeDocId } from '@workspace/core';
 import type { AccessScope, ClientStore } from '@workspace/sync';
 import { SYNC_ORIGIN, type DocManager } from './doc-manager';
 import type { SqliteStore } from './sqlite-store';
@@ -77,8 +78,19 @@ export class LocalSyncStore implements ClientStore {
     return this.store.getSetting<AccessScope[]>(SYNC_ACCESS) ?? [];
   }
 
-  /** New docs go to the workspace's default scope (the app names a scope from Phase 5 M3). */
-  scopeOf(): string | null {
-    return null;
+  /**
+   * The scope a doc the server may not have seen yet belongs in: its tree's, for a page
+   * (or its comments); its database's, for a row. `null` (the workspace's default scope)
+   * when this device can't tell.
+   */
+  scopeOf(docId: string): string | null {
+    const scopes = this.access();
+    const scopeOfTree = (treeId: string) => scopes.find((s) => s.treeDoc === treeId)?.id ?? null;
+    if (isTreeDocId(docId)) return scopeOfTree(docId);
+    const pageId = docId.startsWith('comments:') ? docId.slice('comments:'.length) : docId;
+    const { forest } = this.manager;
+    const databaseId = this.store.locatePage(pageId)?.databaseId;
+    const tree = forest.treeOf(pageId) ?? (databaseId ? forest.treeOf(databaseId) : undefined);
+    return tree ? scopeOfTree(tree.info.id) : null;
   }
 }

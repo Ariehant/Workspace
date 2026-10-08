@@ -11,6 +11,10 @@ const scope = (id: string, extra: Partial<Scope> = {}): Scope => ({
   parentId: null,
   inherit: true,
   ownerId: null,
+  icon: null,
+  description: '',
+  visibility: 'open',
+  joinRole: 'edit',
   ...extra,
 });
 
