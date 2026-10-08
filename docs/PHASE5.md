@@ -727,6 +727,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - **REST:** backlinks, publishing, views, follows, versions and sharing of someone else's private page answer 403 or 404; search doesn't find it; a slug they tried to take doesn't exist.
 - **The Docker stack** (`stack.smoke.test.ts`), with a second account: an owner's private pages don't reach a member's device; the one shared with the member arrives live, and the other doesn't. Published, the page is public through Caddy (with its CSP) until it's unpublished.
   - Run here against the image built in this sandbox, through Caddy with TLS (both stack tests pass). The sandbox's outbound proxy needs its CA in the build stage, so the build used a derived Dockerfile that adds it there only.
+- **Fixed along the way: suggestions typed right after moving the caret.** The editor reads a moved caret only on the next `selectionchange`. A suggestion made before then redrew the editor with the old selection, which moved the caret back, so the rest of the typing became a second suggestion in the wrong place. In suggest mode, keystrokes are now handled on `beforeinput`: the editor's selection is first brought up to the DOM caret, and the DOM is never changed by typing that is then refused.
 - **Runs:** the full desktop E2E passed twice (129 tests each), and the web E2E passed (3 tests).
 - **Still open from Phase 3:** importing a real Notion export, which needs a sample export.
 
