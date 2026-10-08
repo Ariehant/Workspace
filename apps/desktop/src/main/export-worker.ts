@@ -6,7 +6,7 @@
 import { createWriteStream, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parentPort, workerData } from 'node:worker_threads';
-import { WORKSPACE_DOC_ID, listUsers } from '@workspace/core';
+import { MEMBERS_DOC_ID, WORKSPACE_DOC_ID, userNames } from '@workspace/core';
 import {
   exportPages,
   mermaidSources,
@@ -122,7 +122,7 @@ async function run(): Promise<void> {
             return null;
           }
         },
-        users: new Map(listUsers(workspace).map((u) => [u.id, u.name])),
+        users: userNames(workspace, doc(MEMBERS_DOC_ID)),
       };
       const options = job.options!;
       const svgs =

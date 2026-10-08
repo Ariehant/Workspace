@@ -20,6 +20,8 @@ export function registerIpc(
   store: SqliteStore,
   onReady: () => void,
   openWindow: (pageId: string) => void,
+  /** The account, while this workspace syncs with a server. */
+  syncedUser: () => { id: string; name: string } | null = () => null,
 ): void {
   const openDocs = new Map<number, Map<string, number>>();
 
@@ -113,8 +115,11 @@ export function registerIpc(
       : null,
   );
 
-  // The local user: an id kept for this install, named after the OS account.
+  // While syncing, the account; otherwise the local user: an id kept for this install,
+  // named after the OS account.
   ipcMain.handle(IPC.user, () => {
+    const account = syncedUser();
+    if (account) return account;
     let id = store.getSetting<string>('app.userId');
     if (!id) {
       id = randomUUID();

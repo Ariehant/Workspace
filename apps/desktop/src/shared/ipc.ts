@@ -48,7 +48,18 @@ export const IPC = {
   syncEnable: 'sync:enable',
   syncDisable: 'sync:disable',
   syncRetry: 'sync:retry',
+  /** Members, invites, groups and the profile, on the synced workspace's server. */
+  syncTeam: 'sync:team',
 } as const;
+
+export type TeamMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+
+/** A team API call from the renderer: `path` under the workspace, or `me`. */
+export interface TeamRequest {
+  method: TeamMethod;
+  path: string;
+  body?: unknown;
+}
 
 /** Where this device's sync stands (shown in the sidebar and Settings → Sync). */
 export interface SyncInfo {

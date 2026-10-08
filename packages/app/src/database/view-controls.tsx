@@ -25,7 +25,7 @@ import {
 import { Popover, PopoverAnchor, PopoverContent, cn } from '@workspace/ui';
 import { ChevronDown, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { PropertyIcon } from './cells';
+import { PropertyIcon, pickablePeople } from './cells';
 
 const field =
   'h-7 rounded border border-line bg-surface px-1.5 text-sm text-fg outline-none focus:border-accent';
@@ -216,7 +216,7 @@ export function RuleFields({
     case 'people':
       valueInput = (
         <div role="group" aria-label="Filter people">
-          {[[ME, 'Me'] as const, ...ctx.users].map(([id, name]) => (
+          {[[ME, 'Me'] as const, ...pickablePeople(ctx)].map(([id, name]) => (
             <label
               key={id}
               className="flex h-7 cursor-pointer items-center gap-2 rounded px-1 hover:bg-hover"

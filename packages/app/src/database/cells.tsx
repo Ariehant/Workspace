@@ -29,7 +29,7 @@ import {
   type Row,
   type SelectOption,
 } from '@workspace/database';
-import { IconButton, Popover, PopoverAnchor, PopoverContent, cn } from '@workspace/ui';
+import { Avatar, IconButton, Popover, PopoverAnchor, PopoverContent, cn } from '@workspace/ui';
 import {
   AlignLeft,
   ArrowUpRight,
@@ -129,14 +129,6 @@ export function OptionPill({
           <X size={12} />
         </button>
       )}
-    </span>
-  );
-}
-
-function Avatar({ name }: { name: string }) {
-  return (
-    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-active text-[11px] font-medium text-muted">
-      {name.charAt(0).toUpperCase() || '?'}
     </span>
   );
 }
@@ -255,7 +247,11 @@ export function CellDisplay({
         <span className={cn('flex min-w-0 gap-2', wrap ? 'flex-wrap' : 'overflow-hidden')}>
           {(value as string[]).map((id) => (
             <span key={id} className="flex min-w-0 items-center gap-1.5">
-              <Avatar name={id === ME ? 'Me' : (ctx.users.get(id) ?? '?')} />
+              <Avatar
+                name={id === ME ? 'Me' : (ctx.users.get(id) ?? '?')}
+                src={ctx.avatars?.get(id)}
+                id={id}
+              />
               <span className="truncate">
                 {id === ME ? 'Me (when used)' : (ctx.users.get(id) ?? 'Unknown')}
               </span>
@@ -268,7 +264,7 @@ export function CellDisplay({
       const name = ctx.users.get(value as string) ?? 'Unknown';
       return (
         <span className="flex min-w-0 items-center gap-1.5">
-          <Avatar name={name} />
+          <Avatar name={name} src={ctx.avatars?.get(value as string)} id={value as string} />
           <span className="truncate">{name}</span>
         </span>
       );
@@ -842,6 +838,14 @@ function DateEditor({ handle, row, property }: CellEditorProps) {
 
 // --- Person ----------------------------------------------------------------------------
 
+/** People a picker offers, as [id, name], by name. */
+export function pickablePeople(ctx: DisplayContext): [string, string][] {
+  const ids = ctx.people ?? [...ctx.users.keys()];
+  return ids
+    .map((id): [string, string] => [id, ctx.users.get(id) ?? 'Unknown'])
+    .sort((a, b) => a[1].localeCompare(b[1]));
+}
+
 function PersonEditor({ handle, row, property, ctx }: CellEditorProps) {
   const { user } = useApp();
   const [query, setQuery] = useState('');
@@ -849,7 +853,9 @@ function PersonEditor({ handle, row, property, ctx }: CellEditorProps) {
   const people = [
     // Templates can pick whoever uses them.
     ...(row.isTemplate ? ([[ME, 'Me (when used)']] as [string, string][]) : []),
-    ...[...ctx.users].filter(([, name]) => name.toLowerCase().includes(query.trim().toLowerCase())),
+    ...pickablePeople(ctx).filter(([, name]) =>
+      name.toLowerCase().includes(query.trim().toLowerCase()),
+    ),
   ];
   const toggle = (id: string) => {
     const next = selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id];
@@ -873,7 +879,7 @@ function PersonEditor({ handle, row, property, ctx }: CellEditorProps) {
             onClick={() => toggle(id)}
             className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-hover"
           >
-            <Avatar name={name} />
+            <Avatar name={name} src={ctx.avatars?.get(id)} id={id} />
             <span className="flex-1 truncate">{name}</span>
             {selected.includes(id) && <Check size={14} className="text-muted" />}
           </button>

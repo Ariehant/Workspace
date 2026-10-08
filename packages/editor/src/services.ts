@@ -14,6 +14,14 @@ export interface PageRef {
   isDatabase?: boolean;
 }
 
+/** Someone who can be @-mentioned. */
+export interface PersonRef {
+  id: string;
+  name: string;
+  /** A picture (`data:` URL), or null. */
+  avatar: string | null;
+}
+
 /** An attachment stored in the workspace. */
 export interface FileRef {
   id: string;
@@ -81,6 +89,12 @@ export interface EditorServices {
   /** Open a stored file with the system's default app. */
   openFile(id: string): void;
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /** People to @-mention: the workspace's members (current ones in `list`). */
+  people: {
+    list(): PersonRef[];
+    get(id: string): PersonRef | null;
+    subscribe(listener: () => void): () => void;
+  };
   /** The workspace's KaTeX macros (`\R` -> `\mathbb{R}`), shared by every page. */
   mathMacros: {
     get(): Record<string, string>;
@@ -105,6 +119,16 @@ export function usePageRef(id: string | null): PageRef | null {
     return page ? `${page.title}\u0000${page.icon ?? ''}\u0000${page.inTrash}` : '';
   });
   return key && id ? services.getPage(id) : null;
+}
+
+/** Someone mentioned, kept current (name and picture changes). */
+export function usePersonRef(id: string | null): PersonRef | null {
+  const services = useEditorServices();
+  const key = useSyncExternalStore(services.people.subscribe, () => {
+    const person = id ? services.people.get(id) : null;
+    return person ? `${person.name}\u0000${person.avatar ?? ''}` : '';
+  });
+  return key && id ? services.people.get(id) : null;
 }
 
 export function useBreadcrumb(): PageRef[] {

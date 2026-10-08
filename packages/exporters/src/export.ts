@@ -255,6 +255,7 @@ export function* exportPages(source: ExportSource, options: ExportOptions): Gene
         return target ? relativePath(item.file, target.file) : pageUrl(id);
       },
       pageTitle: titleOf,
+      userName: (id) => source.users.get(id) ?? 'Someone',
       fileHref: (fileId, name) => {
         const key = `${item.folder}\u0000${fileId}`;
         let path = copied.get(key);

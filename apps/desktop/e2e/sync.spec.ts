@@ -196,6 +196,25 @@ test('device A creates the account and uploads its workspace', async () => {
     }).then((r) => r.json() as Promise<{ results: { title: string; snippet: string }[] }>);
   await expect.poll(async () => (await search()).results.map((r) => r.title)).toEqual(['Gripper']);
   expect((await search()).results[0]!.snippet).toContain('[parallel]');
+
+  // Syncing, the desktop manages the workspace's members too (through the main process,
+  // which holds the token).
+  await window.getByRole('button', { name: 'Members', exact: true }).click();
+  const members = window.getByTestId('members-dialog');
+  await expect(members.getByTestId('member-row')).toHaveCount(1);
+  await expect(members.getByTestId('member-row')).toContainText('Ada(you)');
+  await expect(members.getByLabel('Role of Ada')).toHaveValue('owner');
+  await members.getByLabel('Emails to invite').fill('guest@lab.io');
+  await members.getByLabel('Invite as').selectOption('guest');
+  await members.getByRole('button', { name: 'Invite' }).click();
+  await expect(members.getByLabel('Invite link for guest@lab.io')).toHaveValue(
+    new RegExp(`^${base}/invite/[\\w-]+$`),
+  );
+  await shot(window, '5b-members');
+  await members.getByRole('tab', { name: /Invites/ }).click();
+  await members.getByTestId('invite-row').getByRole('button', { name: 'Revoke' }).click();
+  await expect(members.getByTestId('invite-row')).toHaveCount(0);
+  await window.keyboard.press('Escape');
 });
 
 test('device B takes the server’s workspace, and edits flow both ways', async () => {

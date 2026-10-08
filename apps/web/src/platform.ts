@@ -156,6 +156,14 @@ export function createWebPlatform(options: {
     cancelImport: () => {},
     onImportStatus: () => () => {},
     features: { export: false, import: false, backup: false, history: false, backlinks: false },
+    team: {
+      request: (method, path, body) =>
+        api(
+          method,
+          path === 'me' ? '/api/auth/me' : `/api/workspaces/${workspace.id}/${path}`,
+          body,
+        ),
+    },
     account: {
       name: user.name,
       email: user.email,

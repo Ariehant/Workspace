@@ -27,6 +27,8 @@ export interface Config {
   oidc: OidcProvider[];
   /** Allow OIDC providers over plain http (local testing only). */
   oidcAllowInsecure: boolean;
+  /** Where invite emails go out; without it, whoever invites copies the link. */
+  smtp: { url: string; from: string } | null;
 }
 
 export interface OidcProvider {
@@ -110,6 +112,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       clientSecret: get(`${prefix}CLIENT_SECRET`),
     });
   }
+  const smtpUrl = env.SMTP_URL?.trim() || null;
+  if (smtpUrl && !/^smtps?:\/\//.test(smtpUrl)) {
+    problems.push('SMTP_URL must start with smtp:// or smtps://');
+  }
+  const smtpFrom = env.SMTP_FROM?.trim() || null;
+  if (smtpUrl && !smtpFrom) problems.push('SMTP_FROM is required with SMTP_URL');
   const config: Config = {
     host: get('HOST', '0.0.0.0'),
     port,
@@ -122,6 +130,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     webDir: env.WEB_DIR?.trim() || null,
     oidc,
     oidcAllowInsecure: env.OIDC_ALLOW_INSECURE === 'true',
+    smtp: smtpUrl && smtpFrom ? { url: smtpUrl, from: smtpFrom } : null,
   };
   if (problems.length) throw new ConfigError(`Invalid configuration:\n- ${problems.join('\n- ')}`);
   return config;

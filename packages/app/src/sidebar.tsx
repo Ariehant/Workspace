@@ -19,6 +19,7 @@ import {
   LogOut,
   ChevronRight,
   ChevronsLeft,
+  CircleUser,
   Copy,
   CornerUpRight,
   Download,
@@ -33,6 +34,7 @@ import {
   Table2,
   StarOff,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
@@ -81,6 +83,8 @@ export interface SidebarProps {
   /** What the host can do (hides the rest). */
   can: { export: boolean; import: boolean; backup: boolean };
   account?: AccountInfo;
+  /** The workspace is on a server: its members and the account's profile. */
+  team?: { onMembers(): void; onProfile(): void };
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -139,6 +143,17 @@ export function Sidebar(props: SidebarProps) {
                 <MenuItem icon={<LogOut size={14} />} onSelect={account.signOut}>
                   Sign out
                 </MenuItem>
+              </>
+            )}
+            {props.team && (
+              <>
+                <MenuItem icon={<Users size={14} />} onSelect={props.team.onMembers}>
+                  Members…
+                </MenuItem>
+                <MenuItem icon={<CircleUser size={14} />} onSelect={props.team.onProfile}>
+                  Your profile…
+                </MenuItem>
+                <MenuSeparator />
               </>
             )}
             {props.can.export && (
@@ -237,6 +252,16 @@ export function Sidebar(props: SidebarProps) {
 
       <div className="border-t border-line p-1">
         {props.sync && props.onSync && <SyncIndicator info={props.sync} onOpen={props.onSync} />}
+        {props.team && (
+          <button
+            type="button"
+            onClick={props.team.onMembers}
+            className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover"
+          >
+            <Users size={16} />
+            Members
+          </button>
+        )}
         <button
           type="button"
           onClick={props.onTemplates}

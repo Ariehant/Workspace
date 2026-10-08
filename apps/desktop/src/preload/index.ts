@@ -12,6 +12,7 @@ import {
   type SyncServerInfo,
   type SyncSignIn,
   type ThemeSource,
+  type TeamRequest,
 } from '../shared/ipc';
 
 type Unsubscribe = () => void;
@@ -116,6 +117,8 @@ const api = {
     enable: (request: SyncEnable): Promise<Result> => ipcRenderer.invoke(IPC.syncEnable, request),
     disable: (): Promise<Result> => ipcRenderer.invoke(IPC.syncDisable),
     retry: (): void => ipcRenderer.send(IPC.syncRetry),
+    team: (request: TeamRequest): Promise<Result<unknown>> =>
+      ipcRenderer.invoke(IPC.syncTeam, request),
   },
   ready: (): void => ipcRenderer.send(IPC.ready),
 };

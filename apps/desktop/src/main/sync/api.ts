@@ -101,6 +101,11 @@ export class ServerApi {
     return (await response.json()) as T;
   }
 
+  /** Any API call (the team routes the renderer asks for, after checking the path). */
+  call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    return this.request<T>(method, path, body);
+  }
+
   info(): Promise<ServerInfo> {
     return this.request('GET', '/api/auth/config');
   }

@@ -1,7 +1,14 @@
 import { Button, cn } from '@workspace/ui';
 import { Cloud, KeyRound, Loader2, Plus } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ApiError, api, type RemoteWorkspace, type ServerInfo } from './api';
+import {
+  ApiError,
+  api,
+  type InviteInfo,
+  type Me,
+  type RemoteWorkspace,
+  type ServerInfo,
+} from './api';
 
 const input =
   'h-9 w-full rounded-md border border-line bg-transparent px-2.5 text-sm text-fg outline-none placeholder:text-faint focus:border-accent';
@@ -40,15 +47,24 @@ function ErrorText({ error }: { error: string | null }) {
   ) : null;
 }
 
-/** Sign in, or create an account (the first one on a new server becomes its admin). */
-export function SignIn({ onSignedIn }: { onSignedIn(): void }) {
+/**
+ * Sign in, or create an account (the first one on a new server becomes its admin).
+ * From an invite link, it's for the invited address, with the invite filled in.
+ */
+export function SignIn({
+  onSignedIn,
+  invited,
+}: {
+  onSignedIn(): void;
+  invited?: { token: string; email: string; title: string; intro: ReactNode };
+}) {
   const [info, setInfo] = useState<ServerInfo | null>(null);
   const [create, setCreate] = useState(false);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(invited?.email ?? '');
   const [password, setPassword] = useState('');
   const [invite, setInvite] = useState(
-    () => new URLSearchParams(location.search).get('invite') ?? '',
+    () => invited?.token ?? new URLSearchParams(location.search).get('invite') ?? '',
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,10 +110,11 @@ export function SignIn({ onSignedIn }: { onSignedIn(): void }) {
       </Card>
     );
   }
-  const canCreate = info.needsSetup || info.signup !== 'disabled';
+  const canCreate = info.needsSetup || info.signup !== 'disabled' || !!invited;
   return (
-    <Card title={create ? 'Create your account' : 'Sign in'}>
+    <Card title={invited?.title ?? (create ? 'Create your account' : 'Sign in')}>
       <form className="flex flex-col gap-3" onSubmit={(e) => void submit(e)} data-testid="sign-in">
+        {invited?.intro}
         {info.needsSetup && (
           <p className="text-sm text-muted">A new server: the first account becomes its admin.</p>
         )}
@@ -133,7 +150,7 @@ export function SignIn({ onSignedIn }: { onSignedIn(): void }) {
             onChange={(e) => setPassword(e.target.value)}
           />
         </Field>
-        {create && info.signup === 'invite' && !info.needsSetup && (
+        {create && info.signup === 'invite' && !info.needsSetup && !invited && (
           <Field label="Invite code">
             <input
               className={input}
@@ -263,6 +280,123 @@ export function WorkspacePicker({
         >
           Sign out
         </button>
+      </div>
+    </Card>
+  );
+}
+
+const ROLE_NAMES = { admin: 'an admin', member: 'a member', guest: 'a guest' } as const;
+
+/**
+ * An invite link (`/invite/<token>`): who invited you where. Signed out, you sign in or
+ * create the account for the invited address; signed in as that address, you join.
+ */
+export function InviteScreen({
+  token,
+  invite,
+  user,
+  onSignedIn,
+  onSignOut,
+}: {
+  token: string;
+  /** Null: no such invite. */
+  invite: InviteInfo | null;
+  user: Me | null;
+  onSignedIn(): void;
+  onSignOut(): void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!invite) {
+    return (
+      <Card title="Invite not found">
+        <p className="text-sm text-muted">
+          This invite link isn’t valid. Check that you have the whole link, or ask for a new one.
+        </p>
+      </Card>
+    );
+  }
+  const intro = (
+    <p className="text-sm text-muted" data-testid="invite-intro">
+      {invite.invitedBy ?? 'Someone'} invited <strong className="text-fg">{invite.email}</strong> to
+      join <strong className="text-fg">{invite.workspace}</strong> as {ROLE_NAMES[invite.role]}.
+    </p>
+  );
+  const title = `Join ${invite.workspace}`;
+  const usedHere = invite.status === 'accepted' && user?.email === invite.email;
+  if (invite.status !== 'valid' && !usedHere) {
+    return (
+      <Card title={title}>
+        <p className="text-sm text-muted" data-testid="invite-status">
+          {invite.status === 'expired'
+            ? 'This invite has expired. Ask whoever invited you for a new one.'
+            : invite.status === 'revoked'
+              ? 'This invite was withdrawn.'
+              : 'This invite has already been used.'}
+        </p>
+      </Card>
+    );
+  }
+  if (!user) {
+    // Signed in (or signed up) from the invite: join right away.
+    const signedIn = () => {
+      api<{ workspace: RemoteWorkspace }>(
+        'POST',
+        `/api/invites/${encodeURIComponent(token)}/accept`,
+        {},
+      ).then(
+        ({ workspace }) => location.assign(`/w/${workspace.id}`),
+        () => onSignedIn(),
+      );
+    };
+    return <SignIn onSignedIn={signedIn} invited={{ token, email: invite.email, title, intro }} />;
+  }
+  if (user.email !== invite.email) {
+    return (
+      <Card title={title}>
+        <div className="flex flex-col gap-3">
+          {intro}
+          <p className="text-sm text-danger" data-testid="invite-wrong-account">
+            You’re signed in as {user.email}. Sign out, then open the link again to join as{' '}
+            {invite.email}.
+          </p>
+          <Button className="h-9 justify-center" onClick={onSignOut}>
+            Sign out
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+  const join = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { workspace } = await api<{ workspace: RemoteWorkspace }>(
+        'POST',
+        `/api/invites/${encodeURIComponent(token)}/accept`,
+        {},
+      );
+      location.assign(`/w/${workspace.id}`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title={title}>
+      <div className="flex flex-col gap-3">
+        {intro}
+        <ErrorText error={error} />
+        <Button
+          variant="primary"
+          className="h-9 justify-center"
+          disabled={busy}
+          onClick={() => void join()}
+        >
+          {busy && <Loader2 size={14} className="animate-spin" />}
+          Join {invite.workspace}
+        </Button>
       </div>
     </Card>
   );

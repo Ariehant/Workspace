@@ -3,7 +3,8 @@ import {
   getPagesMap,
   isInTrash,
   listPages,
-  listUsers,
+  MEMBERS_DOC_ID,
+  userNames,
   pageText,
   readReminders,
   reminderTime,
@@ -353,6 +354,17 @@ export class DocManager {
   /** Pages that show each synced block (filled as pages are indexed). */
   private readonly syncedHosts = new Map<string, Set<string>>();
 
+  /** A doc that may not be open (read-only): from memory, or from its stored updates. */
+  private storedDoc(docId: string): Y.Doc | null {
+    const open = this.docs.get(docId)?.doc;
+    if (open) return open;
+    const updates = this.store.getUpdates(docId);
+    if (updates.length === 0) return null;
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, Y.mergeUpdates(updates));
+    return doc;
+  }
+
   /** Text of a doc that may not be open: from memory, or from its stored updates. */
   private docText(docId: string): string {
     const open = this.docs.get(docId)?.doc;
@@ -395,7 +407,7 @@ export class DocManager {
 
   /** Index a database's rows: titles and property text, for search and links. */
   private indexDatabase(databaseId: string, doc: Y.Doc): void {
-    const users = new Map(listUsers(this.workspace).map((u) => [u.id, u.name]));
+    const users = userNames(this.workspace, this.storedDoc(MEMBERS_DOC_ID));
     const db = readDatabase(doc);
     const rows: RowIndexRow[] = db.rows.map((row) => ({
       id: row.id,

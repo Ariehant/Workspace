@@ -879,6 +879,12 @@
 .ws-mention-date:hover {
   background: var(--ws-hover);
 }
+.ws-mention-person {
+  color: var(--ws-muted);
+  font-weight: 500;
+  border-radius: 3px;
+  padding: 0 2px;
+}
 .ws-mention.is-selected {
   background: var(--ws-selection);
   border-radius: 3px;

@@ -1,6 +1,6 @@
 # Phase 5: Collaboration
 
-**Status:** planned. M1 (members, invites and groups) is next.
+**Status:** M1 (members, invites and groups) is done. M2 (scopes and permissions on the server) is next.
 
 ## Context
 
@@ -132,7 +132,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
 
 ## Milestones
 
-### M1: members, invites and groups (about 1 week)
+### M1: members, invites and groups ✅
 
 - **Server:**
   - Migration 5: `workspace_members.role` (owner, admin, member, guest), `invites`, `groups`, `group_members`, and `users.avatar_file`.
@@ -156,6 +156,65 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - role rules
   - the members doc being read-only
   - E2E: the owner invites a second account on the web, which accepts and appears in the members list and the person picker
+
+**M1 notes:**
+
+- **Server (`storage-remote`, migration 5):**
+  - Roles were already in `workspace_members` from Phase 4.
+  - Migration 5 adds `users.avatar`, `workspace_invites`, `groups` and `group_members`.
+  - **Differs from the plan:** the avatar is a small `data:` URL on the user row (the client crops it to 96 px, WebP; at most 64 KB), not a stored file. Files are per workspace, and a picture belongs to the account. Inline, it reaches every device in the members doc and shows offline with no file fetch.
+  - `Teams` holds members, invites and groups:
+    - Role changes and removals run under the workspace row's lock, so two owners demoting each other at once still leave one owner.
+    - A new invite to an address replaces the pending one.
+    - Accepting never lowers someone's role. Accepting again as the same person is a no-op, because signing up with an invite already joins.
+- **Routes:**
+  - `/api/workspaces/:id/{members,invites,groups}` and `/api/invites/:token` (what the link shows, without signing in, rate-limited), plus `…/accept`.
+  - Guests get 403 on the members list. Outsiders get 404, as for every workspace route.
+  - Sign-up accepts a workspace invite when sign-up is invite-only, and joins that workspace.
+  - `PATCH /api/auth/me` takes a name and/or a picture.
+- **The members doc (`members`):**
+  - The server writes it (`MembersDoc.refresh`) after every change, and once when a socket connects. That catches up workspaces from before M1.
+  - It reads the doc's merged state, writes only the difference with `writeMembers` (in `@workspace/core`) and appends it through the hub (`SyncHub.appendFromServer`), so connected devices get it live.
+  - The hub refuses client writes to it through a new per-doc check (`Access.canWriteDoc`). Refused items are acknowledged with seq 0 and not stored, so the client's outbox moves on, and the client gets a `denied` error. This is a first step toward M2's per-item acks.
+  - People who leave stay listed as `removed`, so the pages they touched keep their names.
+- **Sockets:** a role change closes the person's sockets with 1001, so they reconnect with the new access. Removal closes them with 4403.
+- **Mail:** `SMTP_URL` and `SMTP_FROM` (nodemailer) send invite emails. Without them, the inviter copies the link. A failed email still returns the link.
+- **App:**
+  - `Platform.team` is a `request(method, path, body)`:
+    - the web app calls the API directly
+    - the desktop goes over IPC to the main process, which holds the token and only forwards the team routes, checked against a pattern and method list
+    - the UI offers it on the web, and on the desktop while it syncs
+  - **Members dialog:** the invite form (emails and role, then links to copy), tabs for Members, Guests, Groups and Invites, role menus, remove and leave. Only owners see or change owners.
+  - **Profile dialog:** name and picture.
+  - **Sidebar:** Members, plus Members… and Your profile… in the workspace menu.
+- **People in the UI:**
+  - `usePeople` merges the members doc with the workspace doc's old `users` map (members' current names win). It feeds person cells (with pictures), "created by", filters and pickers.
+  - Pickers offer a server workspace's current members only. A local workspace offers everyone in its `users` map, as before.
+  - `Avatar` moved to `@workspace/ui`. It shows the picture, or an initial on a color derived from the person's id.
+- **Person mentions:**
+  - `@` suggests people (any word of their name) between dates and pages.
+  - The mention stores the user id, and the name stays current.
+  - Exports write `@Name`. Search indexes person values by member name, on the desktop and the server.
+- **Desktop identity:** while syncing, the app's user is the account (the same id as in the members doc), so new person values and "created by" use it.
+- **Web:**
+  - `/invite/<token>` shows who invited whom, to where and as what.
+  - Signed out, it's a sign-up or sign-in form for the invited address; the invite code is filled in and the workspace is joined right after.
+  - Signed in as someone else, it says so and offers to sign out.
+  - Used, expired and withdrawn links say so.
+- **Not done here (moved):** a desktop holding several server workspaces side by side. Today it syncs one; others are joined on the web, or with "Replace" in Sync. This comes with M3's sidebar sections.
+- **Tests:**
+  - **Store:** owner rules (including two owners racing), invites (email, expiry, reuse, replacement, revocation, never lowering a role), groups (only the workspace's members, removed on leaving) and avatars.
+  - **Server:** invite sign-up on an invite-only server, wrong account, withdrawn invites, the full role matrix, groups over REST.
+  - **The members doc:** it reaches devices live, follows renames, pictures and role changes, ignores a device trying to make itself owner, and reconnects or drops sockets on role changes.
+  - **Hub:** denied docs are acknowledged and dropped, and server appends work with or without connections.
+  - **Units:** `writeMembers`, the `@` people suggestions, person mentions in Markdown and HTML, email parsing.
+  - **Web E2E (`members.spec.ts`), on an invite-only server:**
+    - Ada sets her picture and invites Bob, and gets the link.
+    - Bob signs up from the link and lands in the workspace. The link is used up.
+    - Each sees the other with the right roles. Bob gets no management controls.
+    - Ada makes a group with Bob, @-mentions him (Bob sees it live) and picks him in a person property.
+    - Bob renames himself, and Ada's mention and cell follow.
+  - **Desktop E2E:** once synced, the desktop's Members dialog lists the account, invites a guest and revokes the invite.
 
 ### M2: scopes and permissions on the server (about 1.5 weeks)
 

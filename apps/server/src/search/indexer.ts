@@ -4,7 +4,14 @@
  * since then (their merged state) and indexes them with the same pure functions the
  * desktop uses. Restarts, catch-ups and compactions need nothing special.
  */
-import { WORKSPACE_DOC_ID, isInTrash, listPages, listUsers, pageText } from '@workspace/core';
+import {
+  MEMBERS_DOC_ID,
+  WORKSPACE_DOC_ID,
+  isInTrash,
+  listPages,
+  pageText,
+  userNames,
+} from '@workspace/core';
 import { isDatabaseDoc, readDatabase, rowPropertiesText } from '@workspace/database';
 import type { PgStore } from '@workspace/storage-remote';
 import * as Y from 'yjs';
@@ -143,11 +150,12 @@ export class Indexer {
 
   private async users(workspaceId: string): Promise<ReadonlyMap<string, string>> {
     const doc = await this.load(workspaceId, WORKSPACE_DOC_ID);
-    if (!doc) return new Map();
+    const members = await this.load(workspaceId, MEMBERS_DOC_ID);
     try {
-      return new Map(listUsers(doc).map((u) => [u.id, u.name]));
+      return userNames(doc, members);
     } finally {
-      doc.destroy();
+      doc?.destroy();
+      members?.destroy();
     }
   }
 }

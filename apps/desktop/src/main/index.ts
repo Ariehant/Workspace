@@ -251,7 +251,13 @@ function onRendererReady(): void {
   app.quit();
 }
 
-registerIpc(manager, store, onRendererReady, (pageId) => createWindow(pageId));
+registerIpc(
+  manager,
+  store,
+  onRendererReady,
+  (pageId) => createWindow(pageId),
+  () => sync.syncedUser(),
+);
 registerExport({
   manager,
   dbPath,

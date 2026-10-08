@@ -1,4 +1,3 @@
-import { getUsersMap, listUsers } from '@workspace/core';
 import {
   type DatabaseHandle,
   type DatabaseSnapshot,
@@ -6,6 +5,7 @@ import {
 } from '@workspace/database';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../context';
+import { usePeople } from '../people';
 
 const MINUTE = 60_000;
 const subscribeMinute = (onChange: () => void) => {
@@ -66,31 +66,12 @@ export function useRegistryVersion(): number {
   return useSyncExternalStore(databases.subscribe, databases.getVersion);
 }
 
-/** User names by id, for person and created/edited-by values. */
+/** User names and pictures by id, for person and created/edited-by values. */
 export function useDisplayContext(): DisplayContext {
-  const { workspace } = useApp();
-  const subscribe = useCallback(
-    (listener: () => void) => {
-      const users = getUsersMap(workspace);
-      users.observeDeep(listener);
-      return () => users.unobserveDeep(listener);
-    },
-    [workspace],
-  );
-  const key = useSyncExternalStore(subscribe, () =>
-    listUsers(workspace)
-      .map((u) => `${u.id}\u0000${u.name}`)
-      .join('\u0001'),
-  );
+  const { workspace, members } = useApp();
+  const people = usePeople(workspace, members);
   return useMemo(
-    () => ({
-      users: new Map(
-        key
-          .split('\u0001')
-          .filter(Boolean)
-          .map((entry) => entry.split('\u0000') as [string, string]),
-      ),
-    }),
-    [key],
+    () => ({ users: people.names, avatars: people.avatars, people: people.active }),
+    [people],
   );
 }

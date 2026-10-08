@@ -9,6 +9,7 @@ import { el, marked, setContent } from './testing';
 const ctx: RenderContext = {
   pageHref: (id) => `Other ${id}.md`,
   pageTitle: (id) => (id === 'p1' ? 'Gripper' : 'Untitled'),
+  userName: (id) => (id === 'u1' ? 'Ada *L*' : 'Someone'),
   fileHref: (id, name) => `Page/${name ?? id}`,
   synced: () => [],
   mermaidSvg: (code) => (code.includes('graph') ? '<svg viewBox="0 0 10 10"></svg>' : null),
@@ -46,6 +47,24 @@ describe('Markdown export', () => {
     ).toBe(
       '## Arm\n\nUse **bold** and ***both*** `a*b` see [docs](https://ros.org/a%20b) ' +
         '[Gripper](Other%20p1.md) on @October 6, 2026 $x^2$ 5\\*3\n\nAfter a gap',
+    );
+  });
+
+  it('writes person mentions as the person’s name', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el(
+        'paragraph',
+        {},
+        'Ask ',
+        el('mention', { kind: 'person', userId: 'u1' }),
+        ' or ',
+        el('mention', { kind: 'person', userId: 'gone' }),
+      ),
+    );
+    expect(blocksMarkdown(readContent(doc), ctx)).toBe('Ask @Ada \\*L\\* or @Someone');
+    expect(blocksHtml(readContent(doc), ctx)).toContain(
+      '<span class="mention person">@Ada *L*</span>',
     );
   });
 

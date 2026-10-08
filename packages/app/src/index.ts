@@ -8,4 +8,6 @@ export type {
   SearchHit,
   SyncInfo,
   SyncPlatform,
+  TeamMethod,
+  TeamPlatform,
 } from './platform';

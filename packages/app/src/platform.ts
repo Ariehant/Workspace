@@ -89,6 +89,22 @@ export interface Platform {
   features?: Partial<Record<Feature, boolean>>;
   /** The signed-in account (the web app), shown in the workspace menu. */
   account?: AccountInfo;
+  /**
+   * The workspace's server: members, invites, groups and the account's profile. The
+   * web app always has one; the desktop while it syncs a workspace.
+   */
+  team?: TeamPlatform;
+}
+
+export type TeamMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+
+export interface TeamPlatform {
+  /**
+   * Call the server: `path` is under the workspace (`members`, `invites/<id>`,
+   * `groups/<id>/members/<user>`…), or `me` for the account. Rejects with the server's
+   * message.
+   */
+  request<T>(method: TeamMethod, path: string, body?: unknown): Promise<T>;
 }
 
 /** Features some hosts don't have (the web app hides them rather than break). */

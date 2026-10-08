@@ -4,10 +4,17 @@ import { PluginKey } from '@tiptap/pm/state';
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react';
 import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
 import { formatDate, parseDate, reminderTime, toIsoDate } from '@workspace/core';
-import { cn } from '@workspace/ui';
+import { Avatar, cn } from '@workspace/ui';
 import { AlarmClock, ArrowUpRight, CalendarDays } from 'lucide-react';
 import { forwardRef, useRef, useSyncExternalStore } from 'react';
-import { useEditorServices, usePageRef, type EditorServices, type PageRef } from '../services';
+import {
+  useEditorServices,
+  usePageRef,
+  usePersonRef,
+  type EditorServices,
+  type PageRef,
+  type PersonRef,
+} from '../services';
 import {
   floatingList,
   type SuggestionListHandle,
@@ -16,9 +23,12 @@ import {
 import { ItemList } from '../suggestions/item-list';
 
 export type MentionItem =
-  { kind: 'page'; page: PageRef } | { kind: 'date'; date: string; reminder: boolean };
+  | { kind: 'page'; page: PageRef }
+  | { kind: 'person'; person: PersonRef }
+  | { kind: 'date'; date: string; reminder: boolean };
 
 const MAX_PAGES = 8;
+const MAX_PEOPLE = 5;
 
 /**
  * Dates a (possibly unfinished) query could mean: the exact parse, or completions
@@ -37,10 +47,13 @@ export function dateCandidates(q: string, now = new Date()): Date[] {
     .filter((d): d is Date => d !== null);
 }
 
-/** Suggestions for "@query": the date or reminder it parses as, then matching pages. */
+/**
+ * Suggestions for "@query": the date or reminder it parses as, then matching people
+ * (the workspace's members), then matching pages.
+ */
 export function mentionItems(
   query: string,
-  services: Pick<EditorServices, 'listPages'> | null,
+  services: (Pick<EditorServices, 'listPages'> & Partial<Pick<EditorServices, 'people'>>) | null,
   now = new Date(),
 ): MentionItem[] {
   const q = query.trim().toLowerCase();
@@ -63,6 +76,15 @@ export function mentionItems(
     items.push({ kind: 'date', date: toIsoDate(parseDate('tomorrow', now)!), reminder: true });
   }
 
+  const people = (services?.people?.list() ?? [])
+    // "ada", "love" and "ada lo" all find Ada Lovelace.
+    .filter((p) => {
+      const name = p.name.toLowerCase();
+      return name.startsWith(q) || name.split(/\s+/).some((word) => word.startsWith(q));
+    })
+    .slice(0, MAX_PEOPLE);
+  for (const person of people) items.push({ kind: 'person', person });
+
   const pages = (services?.listPages() ?? [])
     .filter((p) => !p.inTrash && (p.title || 'untitled').toLowerCase().includes(q))
     .slice(0, MAX_PAGES);
@@ -72,6 +94,7 @@ export function mentionItems(
 
 export function mentionItemLabel(item: MentionItem, now = new Date()): string {
   if (item.kind === 'page') return item.page.title || 'Untitled';
+  if (item.kind === 'person') return item.person.name || 'Someone';
   const day = formatDate(item.date, now);
   if (!item.reminder) return day;
   return day === 'Today' || day === 'Tomorrow'
@@ -89,14 +112,30 @@ const MentionList = forwardRef<SuggestionListHandle<MentionItem>, SuggestionList
         loading={loading}
         command={command}
         label="Mention"
-        emptyText="No pages or dates found"
-        keyOf={(item) => (item.kind === 'page' ? item.page.id : `${item.date}:${item.reminder}`)}
-        sectionOf={(item) => (item.kind === 'page' ? 'Pages' : item.reminder ? 'Reminder' : 'Date')}
+        emptyText="No people, pages or dates found"
+        keyOf={(item) =>
+          item.kind === 'page'
+            ? item.page.id
+            : item.kind === 'person'
+              ? `person:${item.person.id}`
+              : `${item.date}:${item.reminder}`
+        }
+        sectionOf={(item) =>
+          item.kind === 'page'
+            ? 'Pages'
+            : item.kind === 'person'
+              ? 'People'
+              : item.reminder
+                ? 'Reminder'
+                : 'Date'
+        }
         renderItem={(item) => (
           <>
             <span className="flex size-5 items-center justify-center text-muted">
               {item.kind === 'page' ? (
                 <PageIcon icon={item.page.icon} size={16} fileUrl={fileUrl} />
+              ) : item.kind === 'person' ? (
+                <Avatar name={item.person.name} src={item.person.avatar} id={item.person.id} />
               ) : item.reminder ? (
                 <AlarmClock size={16} />
               ) : (
@@ -130,9 +169,11 @@ function useMinute(): number {
 
 function MentionView({ node, updateAttributes, editor, selected }: ReactNodeViewProps) {
   const services = useEditorServices();
-  const kind = node.attrs.kind as 'page' | 'date';
+  const kind = node.attrs.kind as 'page' | 'person' | 'date';
   const pageId = node.attrs.pageId as string | null;
   const page = usePageRef(kind === 'page' ? pageId : null);
+  const userId = node.attrs.userId as string | null;
+  const person = usePersonRef(kind === 'person' ? userId : null);
   const dateInput = useRef<HTMLInputElement>(null);
   const now = useMinute();
 
@@ -156,6 +197,20 @@ function MentionView({ node, updateAttributes, editor, selected }: ReactNodeView
           <span className="ws-mention-title">
             {missing ? 'Deleted page' : page.title || 'Untitled'}
           </span>
+        </span>
+      </NodeViewWrapper>
+    );
+  }
+
+  if (kind === 'person') {
+    return (
+      <NodeViewWrapper
+        as="span"
+        className={cn('ws-mention', selected && 'is-selected')}
+        data-testid="mention"
+      >
+        <span className="ws-mention-person" data-user-id={userId ?? undefined}>
+          @{person?.name || 'Unknown person'}
         </span>
       </NodeViewWrapper>
     );
@@ -198,11 +253,12 @@ function MentionView({ node, updateAttributes, editor, selected }: ReactNodeView
 export const mentionKey = new PluginKey('mention');
 
 const label = (attrs: Record<string, unknown>) =>
-  attrs.kind === 'date' ? `@${String(attrs.date)}` : '@page';
+  attrs.kind === 'date' ? `@${String(attrs.date)}` : attrs.kind === 'person' ? '@person' : '@page';
 
 /**
- * Inline @-mention of a page (live title, click to open) or a date, optionally a
- * reminder (the main process notifies at 9:00 on that day).
+ * Inline @-mention of a page (live title, click to open), a person (a member of the
+ * workspace, by id; the name stays current), or a date, optionally a reminder (the
+ * main process notifies at 9:00 on that day).
  */
 export const Mention = Node.create({
   name: 'mention',
@@ -226,6 +282,7 @@ export const Mention = Node.create({
     return {
       kind: attr('kind', 'kind', 'page'),
       pageId: attr('pageId', 'page-id'),
+      userId: attr('userId', 'user-id'),
       date: attr('date', 'date'),
       reminder: attr('reminder', 'reminder', false),
     };
@@ -261,7 +318,9 @@ export const Mention = Node.create({
           const attrs =
             item.kind === 'page'
               ? { kind: 'page', pageId: item.page.id }
-              : { kind: 'date', date: item.date, reminder: item.reminder };
+              : item.kind === 'person'
+                ? { kind: 'person', userId: item.person.id }
+                : { kind: 'date', date: item.date, reminder: item.reminder };
           e.chain()
             .focus()
             .insertContentAt(range, [

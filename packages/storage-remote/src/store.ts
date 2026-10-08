@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import { Accounts } from './accounts';
 import { migrate } from './migrations';
 import { SearchIndex } from './search';
+import { Teams } from './teams';
 
 /** One stored update of the workspace log. */
 export interface LoggedUpdate {
@@ -48,6 +49,7 @@ export class PgStore {
   readonly pool: pg.Pool;
   readonly accounts: Accounts;
   readonly search: SearchIndex;
+  readonly teams: Teams;
 
   constructor(connectionString: string, options: { max?: number } = {}) {
     this.pool = new pg.Pool({ connectionString, max: options.max ?? 10 });
@@ -55,6 +57,7 @@ export class PgStore {
     this.pool.on('error', () => {});
     this.accounts = new Accounts(this.pool);
     this.search = new SearchIndex(this.pool);
+    this.teams = new Teams(this.pool);
   }
 
   migrate(): Promise<number> {

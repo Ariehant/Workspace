@@ -21,7 +21,14 @@ import {
 import { SyncClient, type SyncStatus } from '@workspace/sync';
 import { safeStorage } from 'electron';
 import WebSocket from 'ws';
-import type { Result, SyncEnable, SyncInfo, SyncServerInfo, SyncSignIn } from '../../shared/ipc';
+import type {
+  Result,
+  SyncEnable,
+  SyncInfo,
+  SyncServerInfo,
+  SyncSignIn,
+  TeamRequest,
+} from '../../shared/ipc';
 import { ApiError, ServerApi, normalizeServerUrl, type Account } from './api';
 import { signInWithBrowser } from './oidc';
 
@@ -127,6 +134,48 @@ export class SyncService {
     // On Linux without a keyring, Electron "encrypts" with a fixed key.
     const backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : 'os';
     return backend !== 'basic_text' && backend !== 'unknown';
+  }
+
+  // --- The account while syncing ---------------------------------------------------------
+
+  /**
+   * Who is using the app while a workspace syncs: the account (its id is the person's id
+   * in the workspace's members doc, person properties and "created by").
+   */
+  syncedUser(): { id: string; name: string } | null {
+    const account = this.account;
+    return this.config && account ? { id: account.id, name: account.name } : null;
+  }
+
+  /** A team API call (members, invites, groups, `me`) for the renderer, with our token. */
+  async team(request: TeamRequest): Promise<Result<unknown>> {
+    const config = this.config;
+    const account = this.account;
+    const token = this.token;
+    if (!config || !account || !token) return { error: 'Sync this workspace with a server first.' };
+    const path =
+      request.path === 'me'
+        ? '/api/auth/me'
+        : `/api/workspaces/${config.workspaceId}/${request.path}`;
+    try {
+      const ok = await new ServerApi(account.server, token).call<unknown>(
+        request.method,
+        path,
+        request.body,
+      );
+      // A new name shows in the sync status (and as this person, see `syncedUser`).
+      const user = (ok as { user?: { name?: unknown } } | undefined)?.user;
+      if (request.path === 'me' && request.method === 'PATCH' && typeof user?.name === 'string') {
+        this.deps.store.setSetting(ACCOUNT, {
+          ...account,
+          name: user.name,
+        } satisfies StoredAccount);
+        this.emit();
+      }
+      return { ok };
+    } catch (error) {
+      return { error: message(error) };
+    }
   }
 
   // --- Status ------------------------------------------------------------------------

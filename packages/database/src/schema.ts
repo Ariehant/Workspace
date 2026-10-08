@@ -410,6 +410,10 @@ export interface DatabaseSnapshot {
 export interface DisplayContext {
   /** User id -> name. */
   users: ReadonlyMap<string, string>;
+  /** User id -> picture (`data:` URL), for those who have one. */
+  avatars?: ReadonlyMap<string, string>;
+  /** Who person pickers offer (a server workspace's current members); all `users` if unset. */
+  people?: readonly string[];
   /** The current user, for "me" in person filters. */
   me?: string;
   /** "Now" for relative dates (defaults to the clock). */

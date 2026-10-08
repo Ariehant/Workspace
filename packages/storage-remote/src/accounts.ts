@@ -6,6 +6,8 @@ export interface User {
   email: string;
   name: string;
   isAdmin: boolean;
+  /** A small profile picture as a `data:` URL, or null. */
+  avatar: string | null;
   createdAt: Date;
   disabledAt: Date | null;
 }
@@ -47,6 +49,7 @@ type UserRow = {
   email: string;
   name: string;
   is_admin: boolean;
+  avatar: string | null;
   created_at: Date;
   disabled_at: Date | null;
   password_hash: string | null;
@@ -56,6 +59,7 @@ const toUser = (r: UserRow): UserWithPassword => ({
   email: r.email,
   name: r.name,
   isAdmin: r.is_admin,
+  avatar: r.avatar ?? null,
   createdAt: r.created_at,
   disabledAt: r.disabled_at,
   passwordHash: r.password_hash,
@@ -157,6 +161,10 @@ export class Accounts {
 
   async setName(userId: string, name: string): Promise<void> {
     await this.pool.query('UPDATE users SET name = $2 WHERE id = $1', [userId, name.trim()]);
+  }
+
+  async setAvatar(userId: string, avatar: string | null): Promise<void> {
+    await this.pool.query('UPDATE users SET avatar = $2 WHERE id = $1', [userId, avatar]);
   }
 
   /** Disable (or re-enable) an account; disabling also ends its sessions. */

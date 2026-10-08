@@ -72,6 +72,12 @@ export interface HubOptions {
 export interface Access {
   /** Members can push; guests (Phase 5) only read. */
   canWrite: boolean;
+  /**
+   * Docs this connection may not change (e.g. the members doc, which only the server
+   * writes). Pushes to them are acknowledged with seq 0 and not stored, so the client's
+   * outbox moves on; the client gets one `denied` error per push that had any.
+   */
+  canWriteDoc?: (docId: string) => boolean;
 }
 
 interface WorkspaceState {
@@ -137,6 +143,23 @@ export class SyncHub {
    */
   notify(workspaceId: string): void {
     for (const c of this.workspaces.get(workspaceId)?.connections ?? []) c.poke();
+  }
+
+  /**
+   * Append updates the server made itself (e.g. to the members doc) and send them to the
+   * workspace's connections, in order with everything else.
+   */
+  async appendFromServer(
+    workspaceId: string,
+    updates: { docId: string; data: Uint8Array }[],
+  ): Promise<number[]> {
+    const rows = updates.map((u) => ({ ...u, deviceId: null }));
+    const workspace = this.workspaces.get(workspaceId);
+    if (workspace) return this.append(workspace, rows);
+    // Nobody is connected: store them; whoever connects next catches up from the log.
+    const seqs = await this.store.append(workspaceId, rows);
+    this.options.onAppend?.(workspaceId);
+    return seqs;
   }
 
   /** Close every socket (shutdown). */
@@ -309,13 +332,30 @@ export class SyncConnection {
             throw new ProtocolError(`Malformed update for ${item.docId}`);
           }
         }
-        const seqs = await this.hub.append(
-          this.workspace,
-          message.items.map((i) => ({ docId: i.docId, data: i.update, deviceId: this.deviceId })),
-        );
+        const allowed = this.access.canWriteDoc ?? (() => true);
+        const accepted = message.items.filter((item) => allowed(item.docId));
+        const denied = message.items.filter((item) => !allowed(item.docId));
+        const seqs =
+          accepted.length > 0
+            ? await this.hub.append(
+                this.workspace,
+                accepted.map((i) => ({ docId: i.docId, data: i.update, deviceId: this.deviceId })),
+              )
+            : [];
+        if (denied.length > 0) {
+          this.send({
+            type: 'error',
+            code: 'denied',
+            message: `You can't change ${[...new Set(denied.map((i) => i.docId))].join(', ')}.`,
+          });
+        }
+        const seqOf = new Map(accepted.map((item, i) => [item, seqs[i]!]));
         this.send({
           type: 'ack',
-          items: message.items.map((item, i) => ({ localId: item.localId, seq: seqs[i]! })),
+          items: message.items.map((item) => ({
+            localId: item.localId,
+            seq: seqOf.get(item) ?? 0,
+          })),
         });
         return;
       }

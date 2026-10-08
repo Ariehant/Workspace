@@ -20,12 +20,14 @@
     "@workspace/storage-remote": "workspace:*",
     "@workspace/sync": "workspace:*",
     "fastify": "^5.12.5",
+    "nodemailer": "^10.0.16",
     "openid-client": "^6.8.8",
     "ws": "^8.22.0",
     "yjs": "^13.6.27"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
+    "@types/nodemailer": "^8.0.2",
     "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2",
     "jose": "^6.2.12"

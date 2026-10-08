@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { SessionKind, User } from '@workspace/storage-remote';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ServerContext } from '../context';
+import { workspaceInviteFor } from '../members/routes';
 import {
   SESSION_COOKIE,
   cookieOptions,
@@ -31,6 +32,9 @@ const password = { type: 'string', maxLength: MAX_PASSWORD_LENGTH } as const;
 const client = { type: 'string', enum: ['web', 'desktop'] } as const;
 const deviceName = { type: 'string', maxLength: 100 } as const;
 const secret = { type: 'string', minLength: 1, maxLength: 200 } as const;
+/** Profile pictures are resized by the client; this is about 48 KB of image. */
+const MAX_AVATAR_LENGTH = 64 * 1024;
+const AVATAR = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** base64url(sha256(verifier)): PKCE's S256, between the desktop app and us. */
 const s256 = (verifier: string) => createHash('sha256').update(verifier).digest('base64url');
@@ -70,6 +74,8 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
       };
     }
     if (!invite) return { problem: 'You need an invite to sign up here.', useInvite: false };
+    // An invite to a workspace on this server lets its invitee sign up too.
+    if (await workspaceInviteFor(ctx, invite, address)) return { problem: null, useInvite: false };
     if (!(await accounts.inviteValid(invite, address))) {
       return {
         problem: 'This invite is not valid: it was used, expired or is for someone else.',
@@ -93,6 +99,11 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
     if (policy.useInvite && !(await accounts.consumeInvite(input.invite!, input.email, user.id))) {
       await accounts.deleteUser(user.id);
       return { problem: 'This invite was just used by someone else.', status: 403 };
+    }
+    // Signed up with a workspace invite: join that workspace right away.
+    if (input.invite) {
+      const joined = await ctx.store.teams.acceptInvite(input.invite, user);
+      if (joined.ok) await ctx.members.refresh(joined.workspaceId);
     }
     return { user };
   }
@@ -204,16 +215,32 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
     session: { id: request.auth!.session.id, kind: request.auth!.session.kind },
   }));
 
-  app.patch<{ Body: { name: string } }>(
+  // Name and picture. Both show in every workspace the account is in (members docs).
+  app.patch<{ Body: { name?: string; avatar?: string | null } }>(
     '/api/auth/me',
     {
       preHandler: signedIn,
-      schema: { body: { type: 'object', required: ['name'], properties: { name } } },
+      schema: {
+        body: {
+          type: 'object',
+          minProperties: 1,
+          properties: { name, avatar: { type: ['string', 'null'], maxLength: MAX_AVATAR_LENGTH } },
+        },
+      },
     },
     async (request, reply) => {
-      if (!request.body.name.trim()) return fail(reply, 400, 'invalid', 'Enter your name.');
-      await accounts.setName(request.auth!.user.id, request.body.name);
-      return { user: publicUser((await accounts.userById(request.auth!.user.id))!) };
+      const { name: newName, avatar } = request.body;
+      const userId = request.auth!.user.id;
+      if (newName !== undefined && !newName.trim()) {
+        return fail(reply, 400, 'invalid', 'Enter your name.');
+      }
+      if (typeof avatar === 'string' && !AVATAR.test(avatar)) {
+        return fail(reply, 400, 'invalid', 'The picture must be a PNG, JPEG or WebP image.');
+      }
+      if (newName !== undefined) await accounts.setName(userId, newName);
+      if (avatar !== undefined) await accounts.setAvatar(userId, avatar);
+      await ctx.members.refreshFor(userId);
+      return { user: publicUser((await accounts.userById(userId))!) };
     },
   );
 

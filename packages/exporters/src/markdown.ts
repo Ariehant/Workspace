@@ -18,6 +18,9 @@ export function inlineMarkdown(inline: readonly Inline[], ctx: RenderContext): s
         if (part.node === 'hardBreak') return '<br>';
         if (part.node === 'inlineMath') return `$${String(attrs.latex ?? '')}$`;
         if (attrs.kind === 'date') return `@${formatDateMention(String(attrs.date ?? ''))}`;
+        if (attrs.kind === 'person') {
+          return `@${escapeText(ctx.userName?.(String(attrs.userId ?? '')) ?? 'Someone')}`;
+        }
         const pageId = String(attrs.pageId ?? '');
         return `[${escapeText(ctx.pageTitle(pageId))}](${encodeHref(ctx.pageHref(pageId))})`;
       }

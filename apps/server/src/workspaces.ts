@@ -32,6 +32,7 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
       const title = request.body.name.trim();
       if (!title) return fail(reply, 400, 'invalid', 'Name the workspace.');
       const workspace = await store.createWorkspace(title, request.auth!.user.id);
+      await ctx.members.refresh(workspace.id);
       return reply.code(201).send({ workspace: { ...workspace, role: 'owner' } });
     },
   );

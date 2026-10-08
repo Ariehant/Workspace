@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { SyncHub, type HubOptions, type Peer } from './hub';
+import { SyncHub, type Access, type HubOptions, type Peer } from './hub';
 import { MemoryLogStore } from './memory';
 import {
   CloseCode,
@@ -25,7 +25,7 @@ function edit(text: string): Uint8Array {
 function setup(options: HubOptions = {}) {
   const store = new MemoryLogStore();
   const hub = new SyncHub(store, options);
-  const open = (access = { canWrite: true }) => {
+  const open = (access: Access = { canWrite: true }) => {
     const received: ServerMessage[] = [];
     const peer = {
       closed: null as null | { code: number; reason: string },
@@ -216,6 +216,49 @@ describe('SyncHub', () => {
     await until(() => a.peer.closed !== null);
     expect(a.peer.closed!.code).toBe(CloseCode.protocol);
     expect(await store.latest(WS)).toBe(0);
+  });
+
+  it('acknowledges but drops pushes to docs the connection may not write', async () => {
+    const { store, open } = setup();
+    const a = open({ canWrite: true, canWriteDoc: (docId) => docId !== 'members' });
+    const b = open();
+    a.hello(0, 'A');
+    b.hello(0, 'B');
+    a.send({
+      type: 'push',
+      items: [
+        { localId: 1, docId: 'members', update: edit('me, admin') },
+        { localId: 2, docId: 'p', update: edit('fine') },
+      ],
+    });
+    await until(() => ofType(a.received, 'ack').length > 0);
+    expect(ofType(a.received, 'ack')[0]!.items).toEqual([
+      { localId: 1, seq: 0 },
+      { localId: 2, seq: 1 },
+    ]);
+    expect(ofType(a.received, 'error')).toEqual([
+      { type: 'error', code: 'denied', message: "You can't change members." },
+    ]);
+    expect(a.peer.closed).toBeNull();
+    expect((await store.since(WS, 0, 10)).map((r) => r.docId)).toEqual(['p']);
+    await until(() => ofType(b.received, 'updates').some((m) => m.items.length > 0));
+    expect(ofType(b.received, 'updates').flatMap((m) => m.items.map((i) => i.docId))).toEqual([
+      'p',
+    ]);
+  });
+
+  it('appends the server’s own updates in order, with or without connections', async () => {
+    const { store, hub, open } = setup();
+    expect(await hub.appendFromServer(WS, [{ docId: 'members', data: edit('one') }])).toEqual([1]);
+    const a = open();
+    a.hello(0);
+    await until(() => ofType(a.received, 'caught-up').length > 0);
+    expect(await hub.appendFromServer(WS, [{ docId: 'members', data: edit('two') }])).toEqual([2]);
+    await until(() => ofType(a.received, 'updates').flatMap((m) => m.items).length >= 2);
+    expect((await store.since(WS, 0, 10)).map((r) => [r.seq, r.deviceId])).toEqual([
+      [1, null],
+      [2, null],
+    ]);
   });
 
   it('starts over when the client is ahead of the log (restored server)', async () => {

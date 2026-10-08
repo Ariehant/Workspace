@@ -9,9 +9,10 @@ see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see
 except its last check, importing a real Notion export. Phase 4 (sync server, see
 [docs/PHASE4.md](docs/PHASE4.md)) is complete: a self-hosted server (Docker Compose behind Caddy), accounts and SSO,
 offline-first sync between desktops, server-side search and attachments, and the web app. Two desktops
-converge after offline edits and restarts. Phase 5 (collaboration, see [docs/PHASE5.md](docs/PHASE5.md)) is next: members and
-invites, teamspaces and private pages, sharing with server-enforced permissions, live cursors,
-comments, an inbox and publishing to the web.
+converge after offline edits and restarts. Phase 5 (collaboration, see [docs/PHASE5.md](docs/PHASE5.md)) is in progress: members,
+invites, roles and groups, profiles and @-mentions of people are done (M1); teamspaces and private
+pages with server-enforced permissions (M2) are next, then live cursors, comments, an inbox and
+publishing to the web.
 
 ## What works today
 
@@ -89,6 +90,10 @@ comments, an inbox and publishing to the web.
 - Sync between devices through a server you host (sidebar → "Sync is off", or File → Sync…):
   sign in with a password or single sign-on, upload this workspace or use one from the server,
   and keep working offline; changes and attachments sync when the connection is back.
+- Teams on a server workspace: invite people by email (a link to send, or an email when the
+  server has SMTP) as admins, members or guests; roles, groups, and your name and picture
+  (Members in the sidebar, Your profile in the workspace menu). @-mention people in pages, and
+  pick them in person properties.
 - `.deb` and AppImage packages for Ubuntu.
 
 ## Requirements
@@ -173,6 +178,10 @@ docker compose exec server workspace-admin help      # all commands
 
 Single sign-on works with any OpenID Connect provider (GitLab, Google, Keycloak, Authentik…).
 Set `OIDC_*` in `.env` (see `.env.example`).
+
+People join a workspace through an invite from its owners or admins (Members → Invite), which
+also lets them sign up on an invite-only server. Set `SMTP_URL` and `SMTP_FROM` for the server
+to email invites; otherwise the invite links are shown to copy and send.
 
 `infra/workspace.service` runs it under systemd and `infra/backup.sh` backs it up.
 

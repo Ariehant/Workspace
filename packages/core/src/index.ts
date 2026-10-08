@@ -10,3 +10,4 @@ export * from './tree';
 export * from './workspace';
 export * from './synced';
 export * from './math';
+export * from './members';

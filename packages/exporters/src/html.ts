@@ -25,6 +25,10 @@ export function inlineHtml(inline: readonly Inline[], ctx: RenderContext): strin
         if (part.node === 'hardBreak') return '<br>';
         if (part.node === 'inlineMath')
           return `<code class="equation">${escapeHtml(String(attrs.latex ?? ''))}</code>`;
+        if (attrs.kind === 'person') {
+          const name = ctx.userName?.(String(attrs.userId ?? '')) ?? 'Someone';
+          return `<span class="mention person">@${escapeHtml(name)}</span>`;
+        }
         if (attrs.kind === 'date')
           return `<time datetime="${escapeHtml(String(attrs.date ?? ''))}">@${escapeHtml(formatDateMention(String(attrs.date ?? '')))}</time>`;
         const pageId = String(attrs.pageId ?? '');

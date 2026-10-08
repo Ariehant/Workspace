@@ -45,7 +45,17 @@ export interface Me {
   id: string;
   email: string;
   name: string;
+  avatar: string | null;
   isAdmin: boolean;
+}
+
+/** What an invite link is for (`GET /api/invites/<token>`). */
+export interface InviteInfo {
+  workspace: string;
+  email: string;
+  role: 'admin' | 'member' | 'guest';
+  invitedBy: string | null;
+  status: 'valid' | 'expired' | 'accepted' | 'revoked';
 }
 
 export interface ServerInfo {

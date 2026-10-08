@@ -27,6 +27,28 @@ describe('mention suggestions', () => {
     expect(labels('gear')).toEqual(['Gear ratios']);
   });
 
+  it('offers members by any word of their name, before pages', () => {
+    const withPeople = {
+      ...services,
+      people: {
+        list: () => [
+          { id: 'u1', name: 'Ada Lovelace', avatar: null },
+          { id: 'u2', name: 'Gerty Cori', avatar: null },
+        ],
+        get: () => null,
+        subscribe: () => () => {},
+      },
+    };
+    const items = (q: string) =>
+      mentionItems(q, withPeople, now).map((i) => [i.kind, mentionItemLabel(i, now)]);
+    expect(items('love')).toEqual([['person', 'Ada Lovelace']]);
+    expect(items('g')).toEqual([
+      ['person', 'Gerty Cori'],
+      ['page', 'Gear ratios'],
+    ]);
+    expect(items('').filter(([kind]) => kind === 'person')).toHaveLength(2);
+  });
+
   it('parses dates, including half-typed "in N …"', () => {
     expect(labels('tomorrow')).toEqual(['Tomorrow']);
     expect(dateCandidates('in', now)).toHaveLength(2);

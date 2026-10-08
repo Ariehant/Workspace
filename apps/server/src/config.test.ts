@@ -79,8 +79,22 @@ describe('config', () => {
       },
     ]);
     expect(config.oidcAllowInsecure).toBe(false);
+    expect(config.smtp).toBeNull();
     expect(() =>
       loadConfig({ DATABASE_URL: 'x', OIDC_PROVIDERS: 'gitlab', OIDC_GITLAB_ISSUER: 'nope' }),
     ).toThrow(/OIDC_GITLAB_ISSUER must be a URL[\s\S]*OIDC_GITLAB_CLIENT_ID is required/);
+  });
+
+  it('reads the mail server for invites', () => {
+    expect(
+      loadConfig({
+        DATABASE_URL: 'x',
+        SMTP_URL: 'smtps://u:p@mail.lab.io:465',
+        SMTP_FROM: 'Workspace <ws@lab.io>',
+      }).smtp,
+    ).toEqual({ url: 'smtps://u:p@mail.lab.io:465', from: 'Workspace <ws@lab.io>' });
+    expect(() => loadConfig({ DATABASE_URL: 'x', SMTP_URL: 'mail.lab.io' })).toThrow(
+      /SMTP_URL must start with smtp:\/\/[\s\S]*SMTP_FROM is required/,
+    );
   });
 });

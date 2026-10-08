@@ -14,12 +14,13 @@ import { useApp } from './context';
 import { InlineDatabase } from './database/database-view';
 import { createDatabase } from './database/registry';
 import { useNavigation } from './navigation';
+import { observePeople, readPeople } from './people';
 import { editButton } from './buttons/button-dialog';
 import { runButton } from './buttons/run-button';
 
 /** What the editor of page (or row) `pageId` needs from the app. */
 export function useEditorServices(pageId: PageId): EditorServices {
-  const { workspace, platform, client, pages, databases, user } = useApp();
+  const { workspace, platform, client, pages, databases, user, members } = useApp();
   const { navigate, openRow } = useNavigation();
   return useMemo(
     () => ({
@@ -60,6 +61,22 @@ export function useEditorServices(pageId: PageId): EditorServices {
         return cells;
       },
       subscribe: (listener) => pages.subscribe(listener),
+      people: {
+        list: () => {
+          const people = readPeople(workspace, members);
+          return people.active.map((id) => ({
+            id,
+            name: people.names.get(id) ?? '',
+            avatar: people.avatars.get(id) ?? null,
+          }));
+        },
+        get: (id) => {
+          const people = readPeople(workspace, members);
+          const name = people.names.get(id);
+          return name === undefined ? null : { id, name, avatar: people.avatars.get(id) ?? null };
+        },
+        subscribe: (listener) => observePeople(workspace, members, listener),
+      },
       uploadFile: (file) => platform.importFile(file),
       fileUrl: (id) => platform.fileUrl(id),
       openFile: (id) => platform.openFile(id),
@@ -70,6 +87,6 @@ export function useEditorServices(pageId: PageId): EditorServices {
         subscribe: (listener) => observeMathMacros(workspace, listener),
       },
     }),
-    [workspace, platform, client, pages, databases, user, pageId, navigate, openRow],
+    [workspace, platform, client, pages, databases, user, members, pageId, navigate, openRow],
   );
 }

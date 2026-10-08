@@ -4,15 +4,17 @@ import type { SyncStatus } from '@workspace/sync';
 import { CloudOff, Loader2 } from 'lucide-react';
 import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api, me, type Me, type RemoteWorkspace } from './api';
+import { ApiError, api, me, type InviteInfo, type Me, type RemoteWorkspace } from './api';
 import { createWebPlatform } from './platform';
-import { Card, SignIn, WorkspacePicker } from './shell';
+import { Card, InviteScreen, SignIn, WorkspacePicker } from './shell';
 import './web.css';
 
 const LAST_WORKSPACE = 'workspace.last';
 
 /** `/w/<id>` → the workspace id. */
 const workspaceFromPath = () => /^\/w\/([0-9a-f-]{36})\/?$/i.exec(location.pathname)?.[1] ?? null;
+/** `/invite/<token>` → the invite token. */
+const inviteFromPath = () => /^\/invite\/([\w-]{1,200})\/?$/.exec(location.pathname)?.[1] ?? null;
 
 const remember = (id: string | null) => {
   try {
@@ -44,6 +46,7 @@ document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark
 type State =
   | { screen: 'loading' }
   | { screen: 'sign-in' }
+  | { screen: 'invite'; token: string; invite: InviteInfo | null; user: Me | null }
   | { screen: 'pick'; user: Me }
   | { screen: 'app'; user: Me; workspace: RemoteWorkspace; settings: Record<string, unknown> }
   | { screen: 'error'; message: string };
@@ -52,6 +55,20 @@ type State =
 async function resolveState(): Promise<State> {
   try {
     const user = await me();
+    const token = inviteFromPath();
+    if (token) {
+      const invite = await api<{ invite: InviteInfo }>(
+        'GET',
+        `/api/invites/${encodeURIComponent(token)}`,
+      ).then(
+        (r) => r.invite,
+        (error: unknown) => {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        },
+      );
+      return { screen: 'invite', token, invite, user };
+    }
     if (!user) return { screen: 'sign-in' };
     const wanted = workspaceFromPath();
     const choose = new URLSearchParams(location.search).has('choose');
@@ -89,6 +106,20 @@ function Root() {
       );
     case 'sign-in':
       return <SignIn onSignedIn={() => void resolveState().then(setState)} />;
+    case 'invite':
+      return (
+        <InviteScreen
+          token={state.token}
+          invite={state.invite}
+          user={state.user}
+          onSignedIn={() => void resolveState().then(setState)}
+          onSignOut={() => {
+            void api('POST', '/api/auth/logout', {})
+              .catch(() => {})
+              .then(() => resolveState().then(setState));
+          }}
+        />
+      );
     case 'pick':
       return (
         <WorkspacePicker

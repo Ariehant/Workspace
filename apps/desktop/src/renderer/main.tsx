@@ -1,4 +1,4 @@
-import { App, type AppCommand, type Platform } from '@workspace/app';
+import { App, type AppCommand, type Platform, type TeamMethod } from '@workspace/app';
 import '@workspace/editor/editor.css';
 import '@workspace/ui/styles.css';
 import { StrictMode } from 'react';
@@ -43,6 +43,14 @@ const platform: Platform = {
   cancelImport: () => api.imports.cancel(),
   onImportStatus: (listener) => api.imports.onStatus(listener),
   sync: api.sync,
+  // Works while this workspace syncs (the app only offers it then).
+  team: {
+    request: async <T,>(method: TeamMethod, path: string, body?: unknown): Promise<T> => {
+      const result = await api.sync.team({ method, path, body });
+      if ('error' in result) throw new Error(result.error);
+      return result.ok as T;
+    },
+  },
 };
 
 createRoot(document.getElementById('root')!).render(

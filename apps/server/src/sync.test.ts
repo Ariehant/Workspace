@@ -140,7 +140,8 @@ describe('sync endpoint', () => {
     const first = await new Promise<Buffer>((resolve) =>
       ok.once('message', (d) => resolve(d as Buffer)),
     );
-    expect(first[0]).toBe(11); // caught-up
+    // The members doc (written when the first device connects), then caught-up.
+    expect(first[0]).toBe(10); // updates
     ok.close();
   });
 
@@ -194,7 +195,8 @@ describe('sync endpoint', () => {
     const fresh = s.device('fresh');
     fresh.client.start();
     await until(() => fresh.client.state.state === 'live', 'caught up');
-    expect(fresh.cursor).toBe(1200);
+    // 1200 rows, and the members doc written when the device connected.
+    expect(fresh.cursor).toBe(1201);
     expect(fresh.updatesReceived).toBeGreaterThan(2);
     ['workspace', 'p1', 'p2'].forEach((id, i) =>
       expect(fresh.text(id)).toBe(docs[i]!.getText('t').toString()),
@@ -223,10 +225,11 @@ describe('sync endpoint', () => {
     await until(() => b.client.state.state === 'live', 'live');
     for (let i = 0; i < 10; i++) a.doc('p').getText('t').insert(0, `${i}`);
     await until(() => b.text('p') === a.text('p') && a.outbox.length === 0, 'synced');
-    // The timer merges p's 10 rows into one under a new seq, and wakes the sockets.
-    await until(() => b.cursor >= 11 && a.cursor >= 11, 'cursors past the compacted row');
-    const { rows } = await s.store.pool.query('SELECT count(*)::int AS n FROM doc_updates');
-    expect(rows[0].n).toBe(1);
+    // The timer merges p's 10 rows (after the members doc's) into one under a new seq,
+    // and wakes the sockets.
+    await until(() => b.cursor >= 12 && a.cursor >= 12, 'cursors past the compacted row');
+    const { rows } = await s.store.pool.query('SELECT doc_id FROM doc_updates ORDER BY doc_id');
+    expect(rows.map((r) => r.doc_id)).toEqual(['members', 'p']);
     expect(b.text('p')).toBe(a.text('p'));
 
     // A device that never saw any of it gets the merged row.
@@ -248,7 +251,11 @@ describe('sync endpoint', () => {
     await until(() => a.outbox.length === 0, 'stored');
     await new Promise((r) => setTimeout(r, 100));
     expect(other.docs.has('p')).toBe(false);
-    expect(await s.store.latestSeq(second.id)).toBe(0);
+    const { rows } = await s.store.pool.query(
+      'SELECT doc_id FROM doc_updates WHERE workspace_id = $1',
+      [second.id],
+    );
+    expect(rows.map((r) => r.doc_id)).toEqual(['members']);
     expect(await s.store.docState(second.id, 'p')).toBeNull();
   });
 
@@ -285,7 +292,7 @@ describe('sync endpoint', () => {
     await until(() => guest.client.state.state === 'live', 'guest live');
     guest.doc('p').getText('t').insert(0, 'nope');
     await until(() => guest.client.state.state === 'unauthorized', 'guest refused');
-    expect(await s.store.latestSeq(s.workspace.id)).toBe(0);
+    expect(await s.store.docState(s.workspace.id, 'p')).toBeNull();
 
     await s.store.pool.query(`UPDATE workspace_members SET role = 'member' WHERE user_id = $1`, [
       bob.id,

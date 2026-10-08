@@ -7,6 +7,7 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import { MEMBERS_DOC_ID } from '@workspace/core';
 import { CloseCode, MAX_CLIENT_MESSAGE_BYTES, SyncHub, type SyncConnection } from '@workspace/sync';
 import type { FastifyInstance } from 'fastify';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
@@ -95,6 +96,10 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
       ws.close(1013, 'Too many connections');
       return;
     }
+    // Workspaces from before the members doc, or a missed refresh: catch it up first.
+    await ctx.members.refresh(workspaceId).catch((error: unknown) => {
+      app.log.warn({ err: error, workspaceId }, 'members doc refresh failed');
+    });
     if (ws.readyState !== ws.OPEN) return;
 
     const connection = hub.connect(
@@ -104,7 +109,8 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
         buffered: () => ws.bufferedAmount,
         close: (code, reason) => ws.close(code, reason),
       },
-      { canWrite: role !== 'guest' },
+      // Only the server writes the members doc.
+      { canWrite: role !== 'guest', canWriteDoc: (docId) => docId !== MEMBERS_DOC_ID },
     );
     const client: Client = { token, userId: found.user.id, workspaceId, connection, alive: true };
     clients.set(ws, client);
@@ -219,5 +225,14 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
     wss.close();
   });
 
-  return { hub, compactAll, clients };
+  /** Close a user's sockets on a workspace (see `Realtime.disconnect`). */
+  function disconnect(workspaceId: string, userId: string, removed: boolean) {
+    for (const [ws, client] of clients) {
+      if (client.workspaceId !== workspaceId || client.userId !== userId) continue;
+      if (removed) ws.close(CloseCode.forbidden, 'No access to this workspace');
+      else ws.close(CloseCode.goingAway, 'Your access changed');
+    }
+  }
+
+  return { hub, compactAll, clients, disconnect };
 }

@@ -15,6 +15,8 @@ export interface AppContextValue {
   pages: PageDirectory;
   /** The person using the app. */
   user: User;
+  /** The workspace's members (a server workspace; empty otherwise), once loaded. */
+  members: Y.Doc | null;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

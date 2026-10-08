@@ -9,6 +9,9 @@ import { authRoutes } from './auth/routes';
 import type { Config } from './config';
 import type { ServerContext } from './context';
 import type { FileStorage } from './files';
+import { smtpMailer, type Mailer } from './mailer';
+import { inviteRoutes, memberRoutes } from './members/routes';
+import { MembersDoc } from './members/members-doc';
 import { Indexer } from './search/indexer';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
@@ -34,6 +37,8 @@ export interface ServerDeps {
   sync?: SyncOptions;
   /** Search index: wait this long after changes before indexing. */
   indexDelayMs?: number;
+  /** Sends invite emails (default: SMTP from the config, or none). */
+  mailer?: Mailer | null;
 }
 
 /** The HTTP server and its routes (listening is up to the caller). */
@@ -44,6 +49,7 @@ export function buildServer({
   oidc,
   sync,
   indexDelayMs,
+  mailer,
 }: ServerDeps): FastifyInstance {
   const app = Fastify({
     logger:
@@ -65,12 +71,26 @@ export function buildServer({
     delayMs: indexDelayMs,
     onError: (error, workspaceId) => app.log.error({ err: error, workspaceId }, 'indexing failed'),
   });
+  // The sync endpoint is set up last (it needs the routes' hooks in place); routes reach
+  // it through `realtime`, which only runs once requests are served.
+  let endpoint: ReturnType<typeof syncEndpoint> | null = null;
+  const live = () => {
+    if (!endpoint) throw new Error('The sync endpoint is not running yet');
+    return endpoint;
+  };
+  const realtime: ServerContext['realtime'] = {
+    appendFromServer: (workspaceId, updates) => live().hub.appendFromServer(workspaceId, updates),
+    disconnect: (workspaceId, userId, removed) => live().disconnect(workspaceId, userId, removed),
+  };
   const ctx: ServerContext = {
     config,
     store,
     files,
     oidc: oidc ?? new OidcClients(config),
     indexer,
+    realtime,
+    members: new MembersDoc({ store, append: realtime.appendFromServer }),
+    mailer: mailer === undefined ? smtpMailer(config) : mailer,
   };
   app.decorate('indexer', indexer);
   app.addHook('onClose', () => indexer.close());
@@ -137,9 +157,11 @@ export function buildServer({
     adminRoutes(scope, ctx);
     fileRoutes(scope, ctx);
     settingsRoutes(scope, ctx);
+    memberRoutes(scope, ctx);
+    inviteRoutes(scope, ctx);
   });
   webApp(app, config.webDir);
-  syncEndpoint(app, ctx, sync);
+  endpoint = syncEndpoint(app, ctx, sync);
 
   return app;
 }

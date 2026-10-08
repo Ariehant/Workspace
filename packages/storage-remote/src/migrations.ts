@@ -161,6 +161,43 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (user_id, key)
   );
   `,
+  `
+  -- A small profile picture (a data: URL the client already resized).
+  ALTER TABLE users ADD COLUMN avatar text;
+
+  -- Invitations to join a workspace, for one email address. The token is in the link
+  -- the invitee gets, and stored only as a hash.
+  CREATE TABLE workspace_invites (
+    id uuid PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    email text NOT NULL,
+    role text NOT NULL CHECK (role IN ('admin', 'member', 'guest')),
+    token_hash bytea NOT NULL UNIQUE,
+    invited_by uuid REFERENCES users ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz NOT NULL,
+    accepted_by uuid REFERENCES users ON DELETE SET NULL,
+    accepted_at timestamptz,
+    revoked_at timestamptz
+  );
+  CREATE INDEX workspace_invites_workspace ON workspace_invites (workspace_id);
+
+  -- Named sets of a workspace's members, to share pages with (Phase 5 M2).
+  CREATE TABLE groups (
+    id uuid PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    name text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, name)
+  );
+
+  CREATE TABLE group_members (
+    group_id uuid NOT NULL REFERENCES groups ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+    PRIMARY KEY (group_id, user_id)
+  );
+  CREATE INDEX group_members_user ON group_members (user_id);
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

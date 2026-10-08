@@ -5,6 +5,8 @@ export interface RenderContext {
   /** A link to a page or row: its exported file (relative), else a `workspace://` URL. */
   pageHref(pageId: string): string;
   pageTitle(pageId: string): string;
+  /** A mentioned person's name. */
+  userName?(userId: string): string;
   /** A stored file, copied next to the page: its relative path, or null if it's missing. */
   fileHref(fileId: string, name: string | null): string | null;
   /** The content of a synced block. */

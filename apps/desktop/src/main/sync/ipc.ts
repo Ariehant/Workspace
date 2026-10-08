@@ -1,8 +1,45 @@
 import { BrowserWindow, ipcMain } from 'electron';
-import { IPC, type SyncEnable, type SyncInfo, type SyncSignIn } from '../../shared/ipc';
+import {
+  IPC,
+  type SyncEnable,
+  type SyncInfo,
+  type SyncSignIn,
+  type TeamRequest,
+} from '../../shared/ipc';
 import type { SyncService } from './service';
 
 const isString = (v: unknown, max = 1000): v is string => typeof v === 'string' && v.length <= max;
+
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+/**
+ * The team routes the renderer may call (under the synced workspace), by method. The
+ * main process holds the token, so a renderer can't reach anything else with it.
+ */
+const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
+  [/^me$/, ['GET', 'PATCH']],
+  [/^members$/, ['GET']],
+  [new RegExp(`^members/${UUID}$`), ['PATCH', 'DELETE']],
+  [/^invites$/, ['GET', 'POST']],
+  [new RegExp(`^invites/${UUID}$`), ['DELETE']],
+  [/^groups$/, ['GET', 'POST']],
+  [new RegExp(`^groups/${UUID}$`), ['PATCH', 'DELETE']],
+  [new RegExp(`^groups/${UUID}/members/${UUID}$`), ['PUT', 'DELETE']],
+];
+const MAX_TEAM_BODY = 128 * 1024;
+
+export function isTeamRequest(value: unknown): value is TeamRequest {
+  const r = value as TeamRequest | null;
+  if (!r || typeof r !== 'object' || !isString(r.path, 200) || !isString(r.method, 10))
+    return false;
+  const route = TEAM_ROUTES.find(([pattern]) => pattern.test(r.path));
+  if (!route || !route[1].includes(r.method)) return false;
+  if (r.body === undefined) return true;
+  try {
+    return JSON.stringify(r.body).length <= MAX_TEAM_BODY;
+  } catch {
+    return false;
+  }
+}
 
 export function broadcastSync(info: SyncInfo) {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -44,4 +81,7 @@ export function registerSyncIpc(sync: SyncService) {
   });
   ipcMain.handle(IPC.syncDisable, () => sync.disable());
   ipcMain.on(IPC.syncRetry, () => sync.retryNow());
+  ipcMain.handle(IPC.syncTeam, (_e, request: unknown) =>
+    isTeamRequest(request) ? sync.team(request) : { error: 'Invalid request' },
+  );
 }

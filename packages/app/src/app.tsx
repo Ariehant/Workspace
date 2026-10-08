@@ -1,5 +1,6 @@
 import {
   DocClient,
+  MEMBERS_DOC_ID,
   WORKSPACE_DOC_ID,
   buildPageTree,
   TRASH_RETENTION_MS,
@@ -47,6 +48,8 @@ import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
 import { MoveDialog } from './move-dialog';
 import { duplicatePage } from './page-actions';
 import { SyncDialog, useSyncInfo } from './sync-settings';
+import { MembersDialog, ProfileDialog } from './members-dialog';
+import { useTeam } from './team';
 import { createWelcomePage } from './welcome';
 import { TabBar } from './tab-bar';
 import { useNewTabIntent, useTabScroll } from './tabs';
@@ -142,7 +145,8 @@ export function App({ platform }: { platform: Platform }) {
     });
   }, [platform]);
 
-  const context = useMemo(() => {
+  const members = useDoc(client, MEMBERS_DOC_ID);
+  const base = useMemo(() => {
     if (!workspace || !user) return null;
     const databases = new DatabaseRegistry(client, platform, workspace);
     return {
@@ -154,7 +158,8 @@ export function App({ platform }: { platform: Platform }) {
       pages: new PageDirectory(workspace, databases),
     };
   }, [platform, client, workspace, user]);
-  useEffect(() => () => context?.databases.destroy(), [context]);
+  useEffect(() => () => base?.databases.destroy(), [base]);
+  const context = useMemo(() => (base ? { ...base, members } : null), [base, members]);
   // Keep the user's name current in the workspace (created by / person values show it).
   useEffect(() => {
     if (workspace && user) upsertUser(workspace, user);
@@ -417,6 +422,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const [moving, setMoving] = useState<PageId | null>(null);
   const syncInfo = useSyncInfo(platform.sync);
   const [syncOpen, setSyncOpen] = useState(false);
+  const team = useTeam(platform, syncInfo);
+  const [peopleOpen, setPeopleOpen] = useState<'members' | 'profile' | null>(null);
 
   const changeTheme = useCallback(
     (next: ThemePreference) => {
@@ -582,7 +589,28 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
               backup: can(platform, 'backup'),
             }}
             account={platform.account}
+            team={
+              team
+                ? {
+                    onMembers: () => setPeopleOpen('members'),
+                    onProfile: () => setPeopleOpen('profile'),
+                  }
+                : undefined
+            }
           />
+        )}
+        {team && peopleOpen === 'members' && (
+          <MembersDialog
+            team={team}
+            onClose={() => setPeopleOpen(null)}
+            onLeft={() => {
+              setPeopleOpen(null);
+              platform.account?.switchWorkspace();
+            }}
+          />
+        )}
+        {team && peopleOpen === 'profile' && (
+          <ProfileDialog team={team} onClose={() => setPeopleOpen(null)} />
         )}
         {syncOpen && platform.sync && syncInfo && (
           <SyncDialog
