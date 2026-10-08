@@ -1,4 +1,5 @@
 import { App, type AppCommand, type Platform, type TeamMethod } from '@workspace/app';
+import type { PresenceHandlers } from '@workspace/core';
 import '@workspace/editor/editor.css';
 import '@workspace/ui/styles.css';
 import { StrictMode } from 'react';
@@ -6,12 +7,32 @@ import { createRoot } from 'react-dom/client';
 
 const api = window.workspace;
 
+/** Presence: one handler per doc this window shows (the app keeps one awareness each). */
+const presenceHandlers = new Map<string, PresenceHandlers>();
+api.presence.onUpdate((docId, update) => presenceHandlers.get(docId)?.onUpdate(update));
+api.presence.onRejoin(() => {
+  for (const handlers of presenceHandlers.values()) handlers.onRejoin();
+});
+
 const platform: Platform = {
   transport: {
     open: api.docs.open,
     push: api.docs.push,
     close: api.docs.close,
     subscribe: api.docs.onUpdate,
+    presence: {
+      join: (docId, handlers) => {
+        presenceHandlers.set(docId, handlers);
+        api.presence.join(docId);
+        return {
+          send: (update) => api.presence.send(docId, update),
+          leave: () => {
+            if (presenceHandlers.get(docId) === handlers) presenceHandlers.delete(docId);
+            api.presence.leave(docId);
+          },
+        };
+      },
+    },
   },
   getSetting: api.settings.get,
   setSetting: api.settings.set,

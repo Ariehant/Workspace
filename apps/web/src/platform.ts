@@ -3,6 +3,7 @@
  * the docs on screen), search, files and settings over the API.
  */
 import type { AccountInfo, Platform, ScopeInfo } from '@workspace/app';
+import type { PresenceHandlers } from '@workspace/core';
 import { PartialClient } from '@workspace/sync';
 import { ApiError, api, type Me } from './api';
 
@@ -39,6 +40,8 @@ export function createWebPlatform(options: {
   let firstScopes: (scopes: ScopeInfo[]) => void = () => {};
   const scopesKnown = new Promise<ScopeInfo[]>((resolve) => (firstScopes = resolve));
   let resolveScope: ((docId: string) => string | null) | null = null;
+  // Presence: one handler per doc shown (the app keeps one awareness each).
+  const presenceHandlers = new Map<string, PresenceHandlers>();
   const client = new PartialClient({
     deviceId: crypto.randomUUID(),
     onUpdate: (docId, update) => {
@@ -59,6 +62,10 @@ export function createWebPlatform(options: {
     },
     // A new doc goes to its page's scope (the app knows its trees).
     scopeOf: (docId) => resolveScope?.(docId) ?? null,
+    onAwareness: (docId, update) => presenceHandlers.get(docId)?.onUpdate(update),
+    onPresenceRejoin: () => {
+      for (const handlers of presenceHandlers.values()) handlers.onRejoin();
+    },
     connect: (handlers) => {
       // The session cookie authenticates the socket (same origin).
       const ws = new WebSocket(`${protocol}//${location.host}/api/sync/${workspace.id}`);
@@ -86,6 +93,20 @@ export function createWebPlatform(options: {
       subscribe: (listener) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
+      },
+      presence: {
+        join: (docId, handlers) => {
+          presenceHandlers.set(docId, handlers);
+          client.presence.watch(docId);
+          return {
+            send: (update) => client.presence.awareness(docId, update),
+            leave: () => {
+              if (presenceHandlers.get(docId) !== handlers) return;
+              presenceHandlers.delete(docId);
+              client.presence.unwatch(docId);
+            },
+          };
+        },
       },
     },
     getSetting: async <T>(key: string) => settings.get(keyOf(key)) as T | undefined,

@@ -13,3 +13,4 @@ export * from './math';
 export * from './members';
 export * from './scope-moves';
 export * from './forest';
+export * from './presence';

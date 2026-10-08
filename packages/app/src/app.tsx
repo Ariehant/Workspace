@@ -28,6 +28,7 @@ import {
   type User,
   upsertUser,
   workspaceDataDoc,
+  presenceColor,
   roleAllows,
   ScopeMoveError,
   type Forest,
@@ -43,6 +44,7 @@ import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
 import { PageDirectory } from './pages';
 import { useForest } from './forest';
+import { PresenceHub, usePageViewers } from './presence';
 import { moveAcrossScopes, scopeOfDoc } from './scope-actions';
 import { buildSections } from './sections';
 import { ShareDialog } from './share-dialog';
@@ -178,7 +180,17 @@ export function App({ platform }: { platform: Platform }) {
     scopes.setResolver((docId) => scopeOfDoc(base.workspace, base.pages, docId));
     return () => scopes.setResolver?.(null);
   }, [platform, base]);
-  const context = useMemo(() => (base ? { ...base, members } : null), [base, members]);
+  const presence = useMemo(
+    () =>
+      user
+        ? new PresenceHub(client, { id: user.id, name: user.name, color: presenceColor(user.id) })
+        : null,
+    [client, user],
+  );
+  const context = useMemo(
+    () => (base ? { ...base, members, presence } : null),
+    [base, members, presence],
+  );
   if (!workspace || !settings || !context) return null;
   if (print) {
     return (
@@ -256,6 +268,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   // A row not loaded yet is looked up first (`exists` starts that) before falling back.
   const pending = selected !== null && !exists(selected) && databases.isLocating(selected);
   const currentPageId = selected && (exists(selected) || pending) ? selected : firstPage(tree);
+  // Who else is viewing which page (a dot in the sidebar).
+  const viewers = usePageViewers(workspace, currentPageId);
 
   useEffect(() => platform.setTheme(theme), [platform, theme]);
   useEffect(() => platform.setSetting(SETTING.lastPage, currentPageId), [platform, currentPageId]);
@@ -635,6 +649,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             workspace={workspace}
             sections={sections}
             canEdit={(id) => roleAllows(pages.role(id), 'edit')}
+            viewers={viewers}
             icons={teamspaceIcons}
             favorites={favorites}
             width={sidebarWidth}

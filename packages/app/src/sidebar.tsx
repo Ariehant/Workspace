@@ -5,6 +5,7 @@ import {
   type PageTreeNode,
   type PageTree,
 } from '@workspace/core';
+import type { Peer } from './presence';
 import type { SidebarSection } from './sections';
 import { PageIcon } from '@workspace/editor';
 import {
@@ -99,6 +100,8 @@ export interface SidebarProps {
   team?: { onMembers(): void; onProfile(): void };
   /** May the person change this page (add inside, move, trash)? Default: yes. */
   canEdit?(id: PageId): boolean;
+  /** Others viewing each page now (a dot by the page). */
+  viewers?: ReadonlyMap<PageId, Peer[]>;
   /** A teamspace's icon, by scope (when the server has said). */
   icons?: ReadonlyMap<string, string>;
   /** Teamspaces (a server workspace): make one, find others, a teamspace's menu. */
@@ -609,6 +612,27 @@ function TreeItem(props: TreeItemProps) {
         <span className="flex-1 truncate" data-testid="sidebar-page-title">
           {page.title || 'Untitled'}
         </span>
+        {props.viewers?.get(page.id)?.length ? (
+          <span
+            data-testid="page-viewers"
+            title={`${props.viewers
+              .get(page.id)!
+              .map((p) => p.state.user.name)
+              .join(', ')} viewing`}
+            className="mr-1 flex shrink-0 -space-x-0.5 group-hover:hidden"
+          >
+            {props.viewers
+              .get(page.id)!
+              .slice(0, 3)
+              .map(({ state }) => (
+                <span
+                  key={state.user.id}
+                  className="size-1.5 rounded-full ring-1 ring-sidebar"
+                  style={{ backgroundColor: state.user.color }}
+                />
+              ))}
+          </span>
+        ) : null}
         <span className="flex items-center opacity-0 group-hover:opacity-100">
           <Menu>
             <MenuTrigger asChild>

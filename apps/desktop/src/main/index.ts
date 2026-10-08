@@ -16,6 +16,7 @@ import { asideDir, registerExport } from './export';
 import { registerFileScheme, registerFiles } from './files';
 import { registerImport } from './import';
 import { registerIpc } from './ipc';
+import { registerPresence } from './presence';
 import { openPage } from './reminders';
 import { ReminderScheduler } from './reminders';
 import { buildMenu } from './menu';
@@ -282,6 +283,7 @@ registerExport({
 });
 registerImport({ manager, dbPath, dataDir, onFiles: () => sync.fileAdded() });
 registerSyncIpc(sync);
+registerPresence(sync);
 
 // A second launch (e.g. the desktop opening a workspace:// link) hands over to us.
 app.on('second-instance', (_event, argv) => {

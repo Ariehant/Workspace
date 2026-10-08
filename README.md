@@ -14,8 +14,10 @@ invites, roles and groups, profiles and @-mentions of people are done (M1), and 
 decides who sees and edits what: scopes (teamspaces, private pages, shared pages) with roles,
 enforced per doc on the sync socket, search and page location (M2). The app shows it all
 (M3): sidebar sections for teamspaces, pages shared with you and your private pages, a share
-dialog, teamspace settings, read-only pages for viewers, and moving pages between sections. Next
-are live cursors, comments, an inbox and publishing to the web.
+dialog, teamspace settings, read-only pages for viewers, and moving pages between sections.
+People on the same page see each other (M4): avatars in the page header, named cursors in the
+editor, a dot in the sidebar on pages others are viewing, and avatars on database rows others
+have open. Next are comments, an inbox and publishing to the web.
 
 ## What works today
 

@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import type { PresenceChannel, PresenceHandlers, PresenceTransport } from './presence';
 
 /**
  * Moves Yjs updates between a UI process and wherever documents are stored:
@@ -13,6 +14,8 @@ export interface DocTransport {
   subscribe(listener: (docId: string, update: Uint8Array) => void): () => void;
   /** The UI no longer needs this document. */
   close(docId: string): void;
+  /** Who else is on a doc (hosts that have others to show). */
+  presence?: PresenceTransport;
 }
 
 export interface DocHandle {
@@ -46,6 +49,11 @@ export class DocClient {
       const entry = this.entries.get(docId);
       if (entry) Y.applyUpdate(entry.doc, update, this.remote);
     });
+  }
+
+  /** Join a doc's presence (null if the host has none). */
+  joinPresence(docId: string, handlers: PresenceHandlers): PresenceChannel | null {
+    return this.transport.presence?.join(docId, handlers) ?? null;
   }
 
   acquire(docId: string): DocHandle {

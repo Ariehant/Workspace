@@ -45,7 +45,7 @@
     "lucide-react": "^1.49.0",
     "mermaid": "^12.1.0",
     "prosemirror-search": "^1.1.1",
-    "y-protocols": "^1.0.7",
+    "y-protocols": "1.0.7",
     "yjs": "^13.6.27"
   },
   "peerDependencies": {

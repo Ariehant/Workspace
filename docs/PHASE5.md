@@ -1,6 +1,6 @@
 # Phase 5: Collaboration
 
-**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server) and M3 (teamspaces, private pages and sharing in the app) are done. M4 (presence and live cursors) is next.
+**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server), M3 (teamspaces, private pages and sharing in the app) and M4 (presence and live cursors) are done. M5 (comments and suggested edits) is next.
 
 ## Context
 
@@ -442,7 +442,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - The M2 access test follows the change: a refused edit reloads the window, without a restart.
   - The full desktop E2E passed twice (103 tests each) and the web E2E passed (3 tests).
 
-### M4: presence and live cursors (about 0.5 weeks)
+### M4: presence and live cursors ✅
 
 - **Awareness per open doc:** y-protocols `Awareness` instances, carried by `DocTransport.presence` (over IPC on the desktop, over the socket on the web).
   - The local state holds the user (from the server), a color derived from the user id, and the selection as Yjs relative positions.
@@ -455,6 +455,46 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - identity can't be spoofed (the server overwrites `user`)
   - awareness isn't relayed to people who can't read the doc
   - E2E: two accounts on one page see each other's cursor and avatar
+
+**M4 notes:**
+
+- **Protocol version 3** (`packages/sync`):
+  - Client messages: `watch`, `unwatch` and `awareness`, which carries a y-protocols awareness update of at most 64 KB. The server sends `awareness` with others' presence.
+  - A version-2 server would refuse the new messages, so the version moved on. Older clients are refused with "update the app".
+- **The server's presence rooms** (`PresenceRoom`, in the hub):
+  - Each doc someone watches keeps the latest state of every client. Someone who starts watching gets them all at once.
+  - **The account, not the client, says who someone is:** each state's `user` is replaced with `{id, name, color}` from the signed-in account. The color is derived from the id, the same way on every client.
+  - A connection can't change or remove another connection's clients.
+  - **Readers only:** a watch of a doc the person can't read is ignored. Presence goes only to watchers who may read the doc. Losing access to a doc ends the watch, and the person's cursor goes.
+  - **Leaving:** when a connection unwatches or goes away, the others get its clients removed. The removal keeps each client's clock, so its next state after a reconnect is taken.
+- **Clients:**
+  - `SyncClient` and `PartialClient` share `ClientPresence`: the watched docs, sent again after every reconnect, and then `onPresenceRejoin`, so the app announces itself again with a newer clock.
+  - **Desktop** (`main/presence.ts`): the main process relays between windows that show the same doc and, while syncing, to and from the server. It keeps which clients each window has, so a window that closes, crashes or reloads is removed for the others at once.
+  - **Web:** the socket directly.
+  - `DocTransport.presence` (in `@workspace/core`) is how the app reaches either.
+- **App** (`packages/app/src/presence.ts`):
+  - **One `Awareness` per doc** per window, shared by its views (`PresenceHub`, in the app's context). Only this window's own state is sent. States from others time out after 30 seconds without a renewal, which y-protocols sends every 15.
+  - **Editor:** y-tiptap's cursor plugin draws others' carets and selections, with a name label in each person's color. Your own other windows don't show a caret.
+  - **Page header:** avatars (with pictures, from the members doc) of the others on the page. Clicking one scrolls to their cursor.
+  - **Sidebar:** a dot in each person's color on the pages others are viewing. Each window says which page it shows on that page's tree doc, which only people who can read the page receive.
+  - **Database views:** a row someone has open, as a page or in a peek, shows their avatar in the table. The row page's header shows who else has it open. This uses a `row` field on the database doc's presence.
+  - A desktop that isn't syncing still shares presence between its own windows (and shows nobody else).
+- **Differs from the plan:**
+  - The "viewing" dot and the row avatars use tree and database docs' presence: no extra server state, and the same read rules.
+  - Row avatars show in table views. Board, list, gallery, calendar and timeline cards don't show them yet.
+- **Tests:**
+  - **Hub:**
+    - the account stamped over a forged `user`
+    - another connection's cursor can't be moved or removed
+    - newcomers get everyone
+    - nothing goes to people who can't read the doc, or to unwatched docs
+    - removals at the same clock when someone leaves or loses access
+  - **Server, over real sockets:** the name others see is the account's, and a guest who can't read the page gets nothing.
+  - **Messages:** the new ones round-trip.
+  - **E2E (`presence.spec.ts`)**, with Ada on a desktop and Bob on the web, in a teamspace they both edit:
+    - On the same page, each sees the other's avatar in the header and a named cursor in the editor. Bob's typing reaches Ada, with his cursor.
+    - Bob opens another page: Ada's sidebar shows a dot on it ("Bob viewing"), and her header no longer shows him.
+    - Bob opens a database row: Ada's table shows his avatar on it. He closes the browser, and it goes.
 
 ### M5: comments and suggested edits (about 1 week)
 

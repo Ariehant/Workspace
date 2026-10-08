@@ -35,6 +35,15 @@ const api = {
     onUpdate: (listener: (docId: string, update: Uint8Array) => void): Unsubscribe =>
       on(IPC.docUpdate, listener),
   },
+  presence: {
+    join: (docId: string): void => ipcRenderer.send(IPC.presenceJoin, docId),
+    leave: (docId: string): void => ipcRenderer.send(IPC.presenceLeave, docId),
+    send: (docId: string, update: Uint8Array): void =>
+      ipcRenderer.send(IPC.presenceSend, docId, update),
+    onUpdate: (listener: (docId: string, update: Uint8Array) => void): Unsubscribe =>
+      on(IPC.presenceUpdate, listener),
+    onRejoin: (listener: () => void): Unsubscribe => on(IPC.presenceRejoin, listener),
+  },
   settings: {
     get: <T>(key: string): Promise<T | undefined> => ipcRenderer.invoke(IPC.settingsGet, key),
     set: (key: string, value: unknown): void => ipcRenderer.send(IPC.settingsSet, key, value),

@@ -83,6 +83,13 @@ const FILE_WAITS_MS = [500, 1000, 2000, 4000, 8000, 15000];
 
 export class SyncService {
   private client: SyncClient | null = null;
+  /** Docs the windows show (presence), kept across reconnects and new clients. */
+  private readonly presenceDocs = new Set<string>();
+  /** Where others' presence goes (the windows); see `presence.ts`. */
+  readonly presence: {
+    onAwareness?: (docId: string, update: Uint8Array) => void;
+    onRejoin?: () => void;
+  } = {};
   private api: ServerApi | null = null;
   private socket: WebSocket | null = null;
   private lastHeard = 0;
@@ -316,7 +323,11 @@ export class SyncService {
         this.client?.flush();
       },
       onError: (error) => console.warn('sync:', message(error)),
+      // Presence: others on the docs this device's windows show.
+      onAwareness: (docId, update) => this.presence.onAwareness?.(docId, update),
+      onPresenceRejoin: () => this.presence.onRejoin?.(),
     });
+    for (const docId of this.presenceDocs) client.presence.watch(docId);
     client.onStatus((status) => {
       this.status = status;
       if (status.state === 'live') void this.uploadFiles();
@@ -330,6 +341,22 @@ export class SyncService {
         this.socket.terminate();
       }
     }, 15_000);
+  }
+
+  // --- Presence ----------------------------------------------------------------------
+
+  watchPresence(docId: string): void {
+    this.presenceDocs.add(docId);
+    this.client?.presence.watch(docId);
+  }
+
+  unwatchPresence(docId: string): void {
+    this.presenceDocs.delete(docId);
+    this.client?.presence.unwatch(docId);
+  }
+
+  sendPresence(docId: string, update: Uint8Array): void {
+    this.client?.presence.awareness(docId, update);
   }
 
   // --- Setup flows (from Settings → Sync) ----------------------------------------------

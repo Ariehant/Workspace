@@ -21,6 +21,7 @@ import {
   type ServerMessage,
   type SyncMode,
 } from './messages';
+import { PresenceRoom, decodeAwareness, presenceColor, type PresenceUser } from './presence';
 
 export interface LoggedRow {
   seq: number;
@@ -92,6 +93,8 @@ export interface DocPolicy {
 export interface Access {
   /** Who is connected (stored with their updates). */
   userId?: string | null;
+  /** Their name, stamped on their presence (cursors, avatars). */
+  userName?: string;
   policy?: DocPolicy;
   /** Their scopes and roles, sent after hello. */
   scopes?: AccessScope[];
@@ -126,6 +129,8 @@ interface WorkspaceState {
   recent: LoggedRow[];
   /** Appends from this process, one at a time, so `recent` stays in seq order. */
   appending: Promise<unknown>;
+  /** Presence per doc (only docs someone watches). */
+  rooms: Map<string, PresenceRoom<SyncConnection>>;
 }
 
 const EMPTY_DOC_UPDATE = Y.encodeStateAsUpdate(new Y.Doc());
@@ -161,6 +166,7 @@ export class SyncHub {
         connections: new Set(),
         recent: [],
         appending: Promise.resolve(),
+        rooms: new Map(),
       };
       this.workspaces.set(workspaceId, workspace);
     }
@@ -213,6 +219,19 @@ export class SyncHub {
     workspace.connections.delete(connection);
     if (workspace.connections.size === 0 && this.workspaces.get(workspace.id) === workspace) {
       this.workspaces.delete(workspace.id);
+    }
+  }
+
+  /** @internal Send presence to a doc's watchers who may read it (not `except`). */
+  relay(
+    workspace: WorkspaceState,
+    docId: string,
+    update: Uint8Array | null,
+    except: SyncConnection,
+  ): void {
+    if (!update) return;
+    for (const watcher of workspace.rooms.get(docId)?.watchers ?? []) {
+      if (watcher !== except) watcher.sendPresence(docId, update);
     }
   }
 
@@ -277,6 +296,8 @@ export class SyncConnection {
   private sent = 0;
   private caughtUp = false;
   private readonly openDocs = new Set<string>();
+  /** Docs this connection watches (presence). */
+  private readonly watching = new Set<string>();
   /**
    * Rows this connection appended and hasn't passed yet: the client has them, so they
    * aren't sent back. (Not "rows from this device": an older connection's push can land
@@ -346,6 +367,7 @@ export class SyncConnection {
       for (const id of docIds) {
         this.openDocs.delete(id);
         this.wiped.add(id);
+        this.unwatch(id);
       }
       const last = i + 1000 >= lost.length;
       this.send({ type: 'revoke', docIds, scopes: last ? lostScopes : [] });
@@ -382,7 +404,29 @@ export class SyncConnection {
   onSocketClosed(): void {
     if (this.closed) return;
     this.closed = true;
+    for (const docId of [...this.watching]) this.unwatch(docId);
     this.hub.detach(this, this.workspace);
+  }
+
+  /** @internal Another connection's presence on a doc this one watches. */
+  sendPresence(docId: string, update: Uint8Array): void {
+    if (this.watching.has(docId) && this.canRead(docId)) {
+      this.send({ type: 'awareness', docId, update });
+    }
+  }
+
+  private get presenceUser(): PresenceUser {
+    const id = this.access.userId ?? this.deviceId ?? 'anonymous';
+    return { id, name: this.access.userName ?? 'Someone', color: presenceColor(id) };
+  }
+
+  private unwatch(docId: string): void {
+    if (!this.watching.delete(docId)) return;
+    const room = this.workspace.rooms.get(docId);
+    if (!room) return;
+    const gone = room.leave(this);
+    if (room.empty) this.workspace.rooms.delete(docId);
+    this.hub.relay(this.workspace, docId, gone, this);
   }
 
   close(code: number, reason: string): void {
@@ -529,6 +573,31 @@ export class SyncConnection {
       case 'close':
         this.openDocs.delete(message.docId);
         return;
+      case 'watch': {
+        if (this.watching.has(message.docId) || !this.canRead(message.docId)) return;
+        if (this.watching.size >= this.hub.options.maxOpenDocs) {
+          throw new ProtocolError('Too many watched docs');
+        }
+        this.watching.add(message.docId);
+        let room = this.workspace.rooms.get(message.docId);
+        if (!room) this.workspace.rooms.set(message.docId, (room = new PresenceRoom()));
+        room.watchers.add(this);
+        const present = room.snapshot(this);
+        if (present) this.send({ type: 'awareness', docId: message.docId, update: present });
+        return;
+      }
+      case 'unwatch':
+        this.unwatch(message.docId);
+        return;
+      case 'awareness': {
+        const entries = decodeAwareness(message.update);
+        // Presence for a doc it doesn't watch (or may no longer read) goes nowhere.
+        const room = this.workspace.rooms.get(message.docId);
+        if (!room || !this.watching.has(message.docId) || !this.canRead(message.docId)) return;
+        const relayed = room.receive(this, entries, this.presenceUser);
+        this.hub.relay(this.workspace, message.docId, relayed, this);
+        return;
+      }
     }
   }
 

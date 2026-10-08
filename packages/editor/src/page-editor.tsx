@@ -1,5 +1,6 @@
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { useCallback, useEffect, useState } from 'react';
+import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 import { BlockHandle } from './block-handle';
 import { SelectionToolbar } from './bubble-menu';
@@ -27,6 +28,9 @@ export interface PageEditorProps {
   onEditor?: (editor: Editor | null) => void;
   /** Inside another editor (a synced block): the outer page's block handle is used. */
   nested?: boolean;
+  /** Who else is on the page (their cursors show), and who you are (yours don't). */
+  awareness?: Awareness | null;
+  selfId?: string | null;
 }
 
 interface PickRequest {
@@ -40,7 +44,15 @@ interface PickRequest {
  * becomes a Yjs update, so persistence and (later) live collaboration need no extra
  * wiring. Undo history comes from Yjs, so it only undoes this user's own edits.
  */
-export function PageEditor({ doc, services, editable = true, onEditor, nested }: PageEditorProps) {
+export function PageEditor({
+  doc,
+  services,
+  editable = true,
+  onEditor,
+  nested,
+  awareness = null,
+  selfId = null,
+}: PageEditorProps) {
   const [bridge] = useState(() => new UiBridgeHandle());
   const [pick, setPick] = useState<PickRequest | null>(null);
   const [math, setMath] = useState<MathTarget | null>(null);
@@ -64,12 +76,12 @@ export function PageEditor({ doc, services, editable = true, onEditor, nested }:
 
   const editor = useEditor(
     {
-      extensions: pageExtensions(doc, bridge),
+      extensions: pageExtensions(doc, bridge, { awareness, selfId }),
       editorProps: {
         attributes: { class: 'ws-prose', 'data-testid': 'page-editor', spellcheck: 'true' },
       },
     },
-    [doc],
+    [doc, awareness],
   );
 
   // Ctrl+F also works when focus is outside the editor (e.g. in the page title).

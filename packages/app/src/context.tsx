@@ -4,6 +4,7 @@ import type * as Y from 'yjs';
 import type { DatabaseRegistry } from './database/registry';
 import type { PageDirectory } from './pages';
 import type { Platform } from './platform';
+import type { PresenceHub } from './presence';
 
 export interface AppContextValue {
   platform: Platform;
@@ -18,6 +19,8 @@ export interface AppContextValue {
   user: User;
   /** The workspace's members (a server workspace; empty otherwise), once loaded. */
   members: Y.Doc | null;
+  /** Who else is on the docs this window shows. */
+  presence: PresenceHub | null;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

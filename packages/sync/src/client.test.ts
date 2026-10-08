@@ -4,6 +4,7 @@ import { SyncClient, type ClientSocket, type OutboxEntry, type SocketHandlers } 
 import {
   CloseCode,
   MAX_UPDATE_BYTES,
+  PROTOCOL_VERSION,
   decodeClient,
   encodeServer,
   type ClientMessage,
@@ -96,7 +97,7 @@ describe('SyncClient', () => {
     await until(() => t.last().sent.length === 2);
     expect(t.last().sent[0]).toEqual({
       type: 'hello',
-      protocol: 2,
+      protocol: PROTOCOL_VERSION,
       mode: 'replica',
       cursor: 7,
       deviceId: 'dev',

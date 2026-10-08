@@ -56,7 +56,9 @@ import {
   MenuSubTrigger,
   MenuTrigger,
   cn,
+  Avatar,
 } from '@workspace/ui';
+import { RowPresenceContext } from '../presence';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   AlertCircle,
@@ -85,6 +87,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -1112,6 +1115,7 @@ function Cell(props: CellProps) {
           >
             {row.title}
           </span>
+          <RowViewers rowId={row.id} />
           {props.nest && props.nest.children > 0 && (
             <span className="shrink-0 text-xs leading-5 text-faint" data-testid="sub-item-count">
               {props.nest.children}
@@ -1663,4 +1667,24 @@ async function editPropertyButton(handle: DatabaseHandle, property: Property): P
     hostPageId: handle.id,
   });
   if (config) setPropertyConfig(handle.doc, property.id, { ...stored.config, button: config });
+}
+
+/** Avatars of the others who have this row open. */
+function RowViewers({ rowId }: { rowId: string }) {
+  const viewers = useContext(RowPresenceContext).get(rowId);
+  if (!viewers?.length) return null;
+  return (
+    <span className="flex shrink-0 items-center -space-x-1" data-testid="row-viewers">
+      {viewers.slice(0, 3).map(({ state }) => (
+        <span
+          key={state.user.id}
+          title={`${state.user.name} has this open`}
+          className="rounded-full"
+          style={{ boxShadow: `0 0 0 1.5px ${state.user.color}` }}
+        >
+          <Avatar id={state.user.id} name={state.user.name} size={16} />
+        </span>
+      ))}
+    </span>
+  );
 }

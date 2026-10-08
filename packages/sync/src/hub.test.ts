@@ -10,6 +10,7 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from './messages';
+import { decodeAwareness, encodeAwareness, presenceColor } from './presence';
 import { sleep, until } from './test-net';
 import { contentsOf } from './test-replica';
 
@@ -419,5 +420,71 @@ describe('SyncHub', () => {
     expect(hub.connectionCount).toBe(1);
     hub.closeAll();
     expect(hub.connectionCount).toBe(0);
+  });
+  it('presence: stamps the account on each state, relays to readers watching, and cleans up', async () => {
+    const { open } = setup();
+    const policy = (readable: string[]): DocPolicy => ({
+      canRead: (d) => readable.includes(d),
+      canWrite: () => true,
+    });
+    const ada = open({ userId: 'u-ada', userName: 'Ada', policy: policy(['p', 'q']) });
+    const bob = open({ userId: 'u-bob', userName: 'Bob', policy: policy(['p', 'q']) });
+    const gus = open({ userId: 'u-gus', userName: 'Gus', policy: policy(['q']) });
+    for (const c of [ada, bob, gus]) c.hello(0, c === ada ? 'A' : c === bob ? 'B' : 'G');
+    const said = (state: object, clientID: number, clock = 1) =>
+      encodeAwareness([{ clientID, clock, state: JSON.stringify(state) }]);
+    const awarenessOf = (c: typeof ada) =>
+      ofType(c.received, 'awareness').flatMap((m) =>
+        decodeAwareness(m.update).map((e) => ({ doc: m.docId, ...e, state: JSON.parse(e.state) })),
+      );
+
+    ada.send({ type: 'watch', docId: 'p' });
+    bob.send({ type: 'watch', docId: 'p' });
+    gus.send({ type: 'watch', docId: 'p' }); // can't read p: ignored
+    // Ada claims to be someone else: the server says who she is.
+    ada.send({
+      type: 'awareness',
+      docId: 'p',
+      update: said({ user: { id: 'u-bob', name: 'Bob (not really)' }, cursor: 3 }, 11),
+    });
+    await until(() => awarenessOf(bob).length > 0);
+    expect(awarenessOf(bob)).toEqual([
+      expect.objectContaining({
+        doc: 'p',
+        clientID: 11,
+        state: { user: { id: 'u-ada', name: 'Ada', color: presenceColor('u-ada') }, cursor: 3 },
+      }),
+    ]);
+    expect(awarenessOf(ada)).toEqual([]);
+    expect(awarenessOf(gus)).toEqual([]);
+
+    // Bob can't move or remove Ada's cursor.
+    bob.send({ type: 'awareness', docId: 'p', update: said({ cursor: 99 }, 11, 5) });
+    bob.send({ type: 'awareness', docId: 'p', update: said({ cursor: 1 }, 22) });
+    await until(() => awarenessOf(ada).length > 0);
+    expect(awarenessOf(ada).map((e) => e.clientID)).toEqual([22]);
+
+    // Someone starting to watch sees who's there; presence for unwatched docs goes nowhere.
+    const late = open({ userId: 'u-mo', userName: 'Mo', policy: policy(['p']) });
+    late.hello(0, 'M');
+    late.send({ type: 'awareness', docId: 'p', update: said({ cursor: 0 }, 33) });
+    late.send({ type: 'watch', docId: 'p' });
+    await until(() => awarenessOf(late).length > 0);
+    expect(
+      awarenessOf(late)
+        .map((e) => e.clientID)
+        .sort(),
+    ).toEqual([11, 22]);
+    await sleep(20);
+    expect(awarenessOf(ada).map((e) => e.clientID)).toEqual([22]);
+
+    // Bob goes: the others see his client removed, at its clock (so it can come back).
+    bob.connection.onSocketClosed();
+    await until(() => awarenessOf(ada).some((e) => e.clientID === 22 && e.state === null));
+    expect(awarenessOf(ada).at(-1)).toMatchObject({ clientID: 22, clock: 1, state: null });
+
+    // Ada loses access to p: she stops watching it, and her cursor goes.
+    ada.connection.reauthorize({ policy: policy(['q']), scopes: [], gained: [], lost: ['p'] });
+    await until(() => awarenessOf(late).some((e) => e.clientID === 11 && e.state === null));
   });
 });

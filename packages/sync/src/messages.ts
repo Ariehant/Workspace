@@ -9,6 +9,8 @@
  *   hello {mode, cursor, device, known}          access {scopes}            (on connecting and on changes)
  *   push {items: localId, doc, update, scope}    updates {cursor, items}    (catch-up and live)
  *   open {doc} / close {doc}  (partial)          caught-up {cursor}         (after the first catch-up)
+ *   watch {doc} / unwatch {doc}                  awareness {doc, update}    (presence: others on a doc)
+ *   awareness {doc, update}
  *                                                ack {items: localId, seq, denied}
  *                                                state {doc, update}        (reply to open; or the
  *                                                                            server's copy after a denial)
@@ -20,11 +22,15 @@
  * Version 2 (Phase 5) adds access: the server sends a connection only the docs it may
  * read, and stores pushes only to docs it may write. A push to a doc the server hasn't
  * seen names the scope to place it in.
+ *
+ * Version 3 adds presence: a client watches the docs it shows and sends y-protocols
+ * awareness updates for them (cursors, who's here); the server stamps each state with the
+ * signed-in account and relays it to the others watching the doc who may read it.
  */
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Largest message a client may send (the server's WebSocket limit). */
 export const MAX_CLIENT_MESSAGE_BYTES = 16 * 1024 * 1024;
@@ -35,6 +41,8 @@ export const MAX_PUSH_ITEMS = 500;
 /** Doc ids are short identifiers ("workspace", uuids). */
 export const MAX_DOC_ID_LENGTH = 128;
 const DEVICE_ID_LENGTH = 128;
+/** Largest awareness update a client may send (a few cursors' worth of JSON). */
+export const MAX_AWARENESS_BYTES = 64 * 1024;
 
 export type SyncMode = 'replica' | 'partial';
 
@@ -81,7 +89,12 @@ export type ClientMessage =
     }
   | { type: 'push'; items: PushItem[] }
   | { type: 'open'; docId: string }
-  | { type: 'close'; docId: string };
+  | { type: 'close'; docId: string }
+  /** Presence: the client shows this doc (and wants others' awareness of it). */
+  | { type: 'watch'; docId: string }
+  | { type: 'unwatch'; docId: string }
+  /** A y-protocols awareness update for a watched doc. */
+  | { type: 'awareness'; docId: string; update: Uint8Array };
 
 export type ServerMessage =
   | { type: 'updates'; cursor: number; items: { docId: string; update: Uint8Array }[] }
@@ -94,6 +107,8 @@ export type ServerMessage =
   | { type: 'backfill'; items: { docId: string; update: Uint8Array }[] }
   /** `scopes`: whole scopes lost (the client stops claiming them right away). */
   | { type: 'revoke'; docIds: string[]; scopes: string[] }
+  /** Others' presence on a watched doc (y-protocols awareness, `user` set by the server). */
+  | { type: 'awareness'; docId: string; update: Uint8Array }
   | { type: 'error'; code: string; message: string };
 
 /** WebSocket close codes the server uses (4000–4999 are free for applications). */
@@ -126,6 +141,10 @@ const T = {
   access: 16,
   backfill: 17,
   revoke: 18,
+  watch: 5,
+  unwatch: 6,
+  awarenessIn: 7,
+  awarenessOut: 19,
 } as const;
 
 // --- Encoding ----------------------------------------------------------------------------
@@ -156,6 +175,16 @@ export function encodeClient(message: ClientMessage): Uint8Array {
     case 'close':
       encoding.writeVarUint(e, message.type === 'open' ? T.open : T.close);
       encoding.writeVarString(e, message.docId);
+      break;
+    case 'watch':
+    case 'unwatch':
+      encoding.writeVarUint(e, message.type === 'watch' ? T.watch : T.unwatch);
+      encoding.writeVarString(e, message.docId);
+      break;
+    case 'awareness':
+      encoding.writeVarUint(e, T.awarenessIn);
+      encoding.writeVarString(e, message.docId);
+      encoding.writeVarUint8Array(e, message.update);
       break;
   }
   return encoding.toUint8Array(e);
@@ -226,6 +255,11 @@ export function encodeServer(message: ServerMessage): Uint8Array {
       for (const id of message.docIds) encoding.writeVarString(e, id);
       encoding.writeVarUint(e, message.scopes.length);
       for (const id of message.scopes) encoding.writeVarString(e, id);
+      break;
+    case 'awareness':
+      encoding.writeVarUint(e, T.awarenessOut);
+      encoding.writeVarString(e, message.docId);
+      encoding.writeVarUint8Array(e, message.update);
       break;
   }
   return encoding.toUint8Array(e);
@@ -321,6 +355,15 @@ export function decodeClient(data: Uint8Array): ClientMessage {
     case T.close:
       message = { type: 'close', docId: r.docId() };
       break;
+    case T.watch:
+      message = { type: 'watch', docId: r.docId() };
+      break;
+    case T.unwatch:
+      message = { type: 'unwatch', docId: r.docId() };
+      break;
+    case T.awarenessIn:
+      message = { type: 'awareness', docId: r.docId(), update: r.bytes(MAX_AWARENESS_BYTES) };
+      break;
     default:
       throw new ProtocolError('Unknown message type');
   }
@@ -400,6 +443,13 @@ export function decodeServer(data: Uint8Array): ServerMessage {
       message = { type: 'revoke', docIds, scopes };
       break;
     }
+    case T.awarenessOut:
+      message = {
+        type: 'awareness',
+        docId: r.docId(),
+        update: r.bytes(Number.MAX_SAFE_INTEGER),
+      };
+      break;
     default:
       throw new ProtocolError('Unknown message type');
   }

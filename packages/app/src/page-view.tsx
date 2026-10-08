@@ -16,7 +16,15 @@ import {
   type TreeRole,
 } from '@workspace/core';
 import { PageEditor, PageIcon, type Editor, type PageRef } from '@workspace/editor';
-import { Button, IconButton, Popover, PopoverContent, PopoverTrigger, cn } from '@workspace/ui';
+import {
+  Avatar,
+  Button,
+  IconButton,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  cn,
+} from '@workspace/ui';
 import {
   ArrowLeft,
   ArrowRight,
@@ -37,7 +45,10 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
+import { useDisplayContext } from './database/hooks';
+import { uniquePeople, usePeers, usePresence, type Peer } from './presence';
 import type { BlockTarget } from './app';
 import { useApp } from './context';
 import { can } from './platform';
@@ -87,6 +98,8 @@ export interface PageHeaderProps {
   access?: TreeRole;
   /** Open the share dialog (a page of a server workspace). */
   onShare?(): void;
+  /** Others on the page now. */
+  people?: Peer[];
   /** Favorite toggle (pages only). */
   favorite?: { on: boolean; toggle(): void };
   menu: ReactNode;
@@ -99,10 +112,12 @@ export function PageHeader({
   onUnlock,
   access,
   onShare,
+  people = [],
   favorite,
   menu,
 }: PageHeaderProps) {
   const { platform } = useApp();
+  const { avatars: pictures } = useDisplayContext();
   const { navigate } = useNavigation();
   return (
     <header className="flex h-11 shrink-0 items-center gap-1 px-3 text-sm">
@@ -160,6 +175,35 @@ export function PageHeader({
         >
           <Eye size={12} /> {access === 'comment' ? 'Can comment' : 'View only'}
         </span>
+      )}
+      {people.length > 0 && (
+        <div className="flex items-center -space-x-1.5 pr-1" data-testid="page-people">
+          {people.slice(0, 5).map(({ state }) => (
+            <button
+              key={state.user.id}
+              type="button"
+              title={state.user.name}
+              aria-label={`${state.user.name} is here`}
+              className="rounded-full"
+              style={{ boxShadow: `0 0 0 2px ${state.user.color}` }}
+              onClick={() =>
+                document
+                  .querySelector(`.ws-cursor[data-user-id="${CSS.escape(state.user.id)}"]`)
+                  ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+              }
+            >
+              <Avatar
+                id={state.user.id}
+                name={state.user.name}
+                src={pictures?.get(state.user.id)}
+                size={24}
+              />
+            </button>
+          ))}
+          {people.length > 5 && (
+            <span className="pl-2 text-xs text-muted">+{people.length - 5}</span>
+          )}
+        </div>
       )}
       {onShare && (
         <button
@@ -387,13 +431,17 @@ export function PageBody({
   pageDoc,
   editable,
   onEditor,
+  awareness = null,
 }: {
   pageId: PageId;
   pageDoc: Y.Doc | null;
   editable: boolean;
   onEditor(editor: Editor | null): void;
+  /** Who else is on the page (their cursors show). */
+  awareness?: Awareness | null;
 }) {
   const services = useEditorServices(pageId);
+  const { user } = useApp();
   return pageDoc ? (
     <PageEditor
       key={pageId}
@@ -401,6 +449,8 @@ export function PageBody({
       services={services}
       editable={editable}
       onEditor={onEditor}
+      awareness={awareness}
+      selfId={user.id}
     />
   ) : (
     <div className="h-6" aria-busy="true" />
@@ -475,6 +525,9 @@ export function PageView({
   const isDatabase = model?.meta.kind === 'database';
   // A database page has no content doc; `useDoc` with null loads nothing.
   const { pageDoc, onEditor, focusBody } = usePageBody(isDatabase ? null : pageId);
+  const { user } = useApp();
+  const awareness = usePresence(isDatabase ? null : pageId, pageDoc);
+  const people = uniquePeople(usePeers(awareness, user.id));
   const articleRef = useRef<HTMLElement>(null);
   useScrollToBlock(articleRef, pageDoc ? blockTarget : null);
   if (!model) return null;
@@ -492,6 +545,7 @@ export function PageView({
         onUnlock={() => model.setOptions({ locked: false })}
         access={role}
         onShare={onShare ? () => onShare(pageId) : undefined}
+        people={people}
         favorite={{ on: isFavorite, toggle: onToggleFavorite }}
         menu={
           <PageMenu
@@ -522,6 +576,7 @@ export function PageView({
                   pageDoc={pageDoc}
                   editable={editable}
                   onEditor={onEditor}
+                  awareness={awareness}
                 />
                 {editable && pageDoc && <GetStarted pageId={pageId} pageDoc={pageDoc} />}
               </>

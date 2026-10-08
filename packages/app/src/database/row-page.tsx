@@ -11,6 +11,7 @@ import {
 import { PageIcon } from '@workspace/editor';
 import type * as Y from 'yjs';
 import { useDocVersion } from '../hooks';
+import { usePresence, useRowPresence } from '../presence';
 import {
   TITLE_PROPERTY_ID,
   PROPERTY_TYPES,
@@ -325,6 +326,9 @@ function RowContent({
   const found = useRow(rowId, databaseId);
   const { workspace, pages } = useApp();
   const { pageDoc, onEditor, focusBody } = usePageBody(rowId);
+  // Others see this row open (in their views and its header); its editor shows cursors.
+  useRowPresence(databaseId, found?.handle.doc ?? null, rowId);
+  const awareness = usePresence(rowId, pageDoc);
   const articleRef = useRef<HTMLElement>(null);
   useScrollToBlock(articleRef, pageDoc ? (blockTarget ?? null) : null);
   if (!found) return <div className="h-24" aria-busy="true" />;
@@ -349,7 +353,13 @@ function RowContent({
           <TemplatePicker handle={handle} snapshot={snapshot} rowId={rowId} pageDoc={pageDoc} />
         )}
         <div className="mt-4">
-          <PageBody pageId={rowId} pageDoc={pageDoc} editable={editable} onEditor={onEditor} />
+          <PageBody
+            pageId={rowId}
+            pageDoc={pageDoc}
+            editable={editable}
+            onEditor={onEditor}
+            awareness={awareness}
+          />
         </div>
       </article>
     </>
@@ -432,6 +442,7 @@ export function RowPageView({
 }) {
   const { pages } = useApp();
   const found = useRow(rowId, databaseId);
+  const viewers = useRowPresence(databaseId, found?.handle.doc ?? null).get(rowId);
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-surface" data-testid="row-page">
       <PageHeader
@@ -440,6 +451,7 @@ export function RowPageView({
         locked={found?.row.locked ?? false}
         onUnlock={() => found?.model.setOptions({ locked: false })}
         access={pages.role(rowId)}
+        people={viewers}
         menu={<RowMenu rowId={rowId} databaseId={databaseId} />}
       />
       {found?.model.trashed && (

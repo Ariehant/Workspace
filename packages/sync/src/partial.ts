@@ -16,8 +16,9 @@ import {
   type PushItem,
 } from './messages';
 import type { ClientSocket, SocketHandlers, SyncStatus } from './client';
+import { ClientPresence, type PresenceHooks } from './presence';
 
-export interface PartialClientOptions {
+export interface PartialClientOptions extends PresenceHooks {
   connect: (handlers: SocketHandlers) => ClientSocket;
   deviceId: string;
   /** Updates made elsewhere to an open doc (and states received again after a reconnect). */
@@ -68,10 +69,17 @@ export class PartialClient {
   private readonly docs = new Map<string, OpenDoc>();
   /** Pushed but not acknowledged, in order. */
   private readonly pending = new Map<number, PushItem>();
+  /** Presence: the docs shown here, and others' cursors on them. */
+  readonly presence = new ClientPresence((message) => {
+    if (this.ready) this.send(message);
+  }, this.hooks());
   /** Docs with a denied push: the next state for them replaces what's here. */
   private readonly resetting = new Set<string>();
   private readonly o: Required<
-    Omit<PartialClientOptions, 'onError' | 'onReset' | 'onRevoked' | 'onAccess' | 'scopeOf'>
+    Omit<
+      PartialClientOptions,
+      'onError' | 'onReset' | 'onRevoked' | 'onAccess' | 'scopeOf' | keyof PresenceHooks
+    >
   > &
     PartialClientOptions;
 
@@ -198,6 +206,7 @@ export class PartialClient {
         for (let i = 0; i < items.length; i += 200) {
           this.send({ type: 'push', items: items.slice(i, i + 200) });
         }
+        this.presence.connected();
       },
       onMessage: (data) => {
         try {
@@ -283,7 +292,18 @@ export class PartialClient {
       case 'error':
         this.o.onError?.(new Error(`${message.code}: ${message.message}`));
         return;
+      case 'awareness':
+        this.presence.receive(message.docId, message.update);
+        return;
     }
+  }
+
+  /** The presence hooks, read when called (options are set after the field). */
+  private hooks(): PresenceHooks {
+    return {
+      onAwareness: (docId, update) => this.o.onAwareness?.(docId, update),
+      onPresenceRejoin: () => this.o.onPresenceRejoin?.(),
+    };
   }
 
   private closed(code: number, reason: string) {

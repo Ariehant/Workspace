@@ -5,6 +5,13 @@ export const IPC = {
   docClose: 'doc:close',
   /** main -> renderer: an update made elsewhere. */
   docUpdate: 'doc:update',
+  presenceJoin: 'presence:join',
+  presenceLeave: 'presence:leave',
+  presenceSend: 'presence:send',
+  /** main -> renderer: others' presence on a doc. */
+  presenceUpdate: 'presence:update',
+  /** main -> renderer: sync reconnected; announce again. */
+  presenceRejoin: 'presence:rejoin',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   search: 'search:query',

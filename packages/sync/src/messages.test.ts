@@ -35,6 +35,9 @@ describe('messages', () => {
       },
       { type: 'open', docId: 'page' },
       { type: 'close', docId: 'page' },
+      { type: 'watch', docId: 'page' },
+      { type: 'unwatch', docId: 'page' },
+      { type: 'awareness', docId: 'page', update: bytes(1, 5, 7) },
     ];
     for (const m of client) expect(decodeClient(encodeClient(m))).toEqual(m);
 
@@ -78,6 +81,7 @@ describe('messages', () => {
       { type: 'backfill', items: [{ docId: 'p', update: bytes(4, 2) }] },
       { type: 'revoke', docIds: ['p', 'q'], scopes: ['s9'] },
       { type: 'revoke', docIds: [], scopes: [] },
+      { type: 'awareness', docId: 'page', update: bytes(1, 2) },
     ];
     for (const m of server) expect(decodeServer(encodeServer(m))).toEqual(m);
   });

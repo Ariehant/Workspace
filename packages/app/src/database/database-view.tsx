@@ -90,6 +90,7 @@ import { useApp } from '../context';
 import { useDocVersion } from '../hooks';
 import { useNavigation } from '../navigation';
 import { PropertyIcon } from './cells';
+import { RowPresenceContext, useRowPresence } from '../presence';
 import { useDatabase, useDisplayContext } from './hooks';
 import { BoardView } from './board';
 import { GalleryView } from './gallery';
@@ -170,6 +171,8 @@ function useActiveView(viewSet: string): [string | null, (id: string) => void] {
 export function DatabaseView({ databaseId, viewSet = databaseId, editable }: DatabaseViewProps) {
   const loaded = useDatabase(databaseId);
   const ctx = useDisplayContext();
+  // Who has which row open (their avatars show on the rows).
+  const viewers = useRowPresence(databaseId, loaded?.handle.doc ?? null);
   const { user, workspace } = useApp();
   const databaseTitle = getPage(workspace, databaseId)?.title || 'Untitled';
   const { openRow } = useNavigation();
@@ -534,16 +537,18 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
       )}
 
       {view.type === 'table' && (
-        <TableView
-          handle={handle}
-          snapshot={snapshot}
-          view={view}
-          result={result}
-          ctx={viewCtx}
-          editable={editable}
-          onOpenRow={open}
-          onFilter={addFilter}
-        />
+        <RowPresenceContext.Provider value={viewers}>
+          <TableView
+            handle={handle}
+            snapshot={snapshot}
+            view={view}
+            result={result}
+            ctx={viewCtx}
+            editable={editable}
+            onOpenRow={open}
+            onFilter={addFilter}
+          />
+        </RowPresenceContext.Provider>
       )}
       {view.type !== 'table' &&
         (() => {

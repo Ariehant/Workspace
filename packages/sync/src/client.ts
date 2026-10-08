@@ -17,6 +17,7 @@ import {
   type AccessScope,
   type PushItem,
 } from './messages';
+import { ClientPresence, type PresenceHooks } from './presence';
 
 export type OutboxEntry = PushItem;
 
@@ -80,7 +81,7 @@ export type SyncStatus =
   /** The server can't talk to this app (protocol version). No retries. */
   | { state: 'error'; reason: string };
 
-export interface SyncClientOptions {
+export interface SyncClientOptions extends PresenceHooks {
   store: ClientStore;
   connect: (handlers: SocketHandlers) => ClientSocket;
   deviceId: string;
@@ -119,8 +120,10 @@ export class SyncClient {
   private sendAgain = false;
   /** Incoming messages, handled one at a time. */
   private queue: Promise<void> = Promise.resolve();
+  /** Presence: the docs shown here, and others' cursors on them. */
+  readonly presence: ClientPresence;
   private readonly o: Required<
-    Omit<SyncClientOptions, 'onServerBehind' | 'onOversized' | 'onError'>
+    Omit<SyncClientOptions, 'onServerBehind' | 'onOversized' | 'onError' | keyof PresenceHooks>
   > &
     SyncClientOptions;
 
@@ -134,6 +137,9 @@ export class SyncClient {
       clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
       ...options,
     };
+    this.presence = new ClientPresence((message) => {
+      if (this.ready && this.socket) this.socket.send(encodeClient(message));
+    }, options);
   }
 
   get state(): SyncStatus {
@@ -233,6 +239,7 @@ export class SyncClient {
       this.ready = true;
       this.inflight.clear();
       this.pushed = [];
+      this.presence.connected();
       this.setStatus({ state: 'catching-up' });
       await this.sendOutbox();
     } catch (error) {
@@ -320,6 +327,9 @@ export class SyncClient {
         await this.o.store.setAccess?.(message.scopes);
         return;
       case 'refused':
+        return;
+      case 'awareness':
+        this.presence.receive(message.docId, message.update);
         return;
     }
   }

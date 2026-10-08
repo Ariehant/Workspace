@@ -19,7 +19,10 @@ import { createTestDatabase } from '@workspace/storage-remote/testing';
 import {
   CloseCode,
   PROTOCOL_VERSION,
+  decodeAwareness,
   decodeServer,
+  encodeAwareness,
+  presenceColor,
   encodeClient,
   type ServerMessage,
 } from '@workspace/sync';
@@ -519,5 +522,28 @@ describe('access', () => {
     expect((await w.call('POST', `${base}/scopes/${R.id}/leave`, w.mo.token)).status).toBe(200);
     expect((await w.scopes(w.mo.token)).scopes.some((s) => s.id === R.id)).toBe(false);
     expect((await w.call('POST', `${base}/scopes/${w.T}/leave`, w.mo.token)).status).toBe(400);
+  });
+  it('presence: others on a page see the account’s name, readers only', async () => {
+    const w = await world();
+    const mo = w.device('mo-1', w.mo.token);
+    const gus = w.device('gus-1', w.gus.token);
+    const ada = w.device('ada-2', w.ada.token);
+    for (const d of [mo, gus, ada]) {
+      d.client.start();
+      await w.live(d);
+      // Gus (a guest) may not read "plan": his watch is ignored.
+      d.client.presence.watch('plan');
+    }
+    const state = JSON.stringify({ user: { id: 'x', name: 'Ada (spoofed)' }, cursor: 1 });
+    mo.client.presence.awareness('plan', encodeAwareness([{ clientID: 7, clock: 1, state }]));
+    await until(() => ada.presence.length > 0, 'presence reached Ada');
+    const [entry] = decodeAwareness(ada.presence[0]!.update);
+    expect(JSON.parse(entry!.state).user).toEqual({
+      id: w.mo.id,
+      name: 'mo',
+      color: presenceColor(w.mo.id),
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(gus.presence).toEqual([]);
   });
 });

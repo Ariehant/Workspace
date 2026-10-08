@@ -30,6 +30,9 @@ export class TestDevice {
   readonly client: SyncClient;
   socket: WebSocket | null = null;
 
+  /** Presence received (others' awareness updates). */
+  readonly presence: { docId: string; update: Uint8Array }[] = [];
+
   constructor(options: DeviceOptions) {
     const store: ClientStore = {
       cursor: () => this.cursor,
@@ -71,6 +74,7 @@ export class TestDevice {
     this.client = new SyncClient({
       store,
       deviceId: options.deviceId,
+      onAwareness: (docId, update) => this.presence.push({ docId, update }),
       backoff: { minMs: 20, maxMs: 200 },
       connect: (handlers) => {
         const ws = new WebSocket(options.url, {
