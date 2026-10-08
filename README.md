@@ -7,9 +7,9 @@ The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Ph
 Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
 see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
 except its last check, importing a real Notion export. Phase 4 (sync server, see
-[docs/PHASE4.md](docs/PHASE4.md)) is in progress: the server (M1), accounts (M2), the sync protocol (M3), desktop sync (M4),
-server-side search and attachments (M5) and the web app (M6) are done; the phase's exit check
-is next.
+[docs/PHASE4.md](docs/PHASE4.md)) is complete: a self-hosted server (Docker Compose behind Caddy), accounts and SSO,
+offline-first sync between desktops, server-side search and attachments, and the web app. Two desktops
+converge after offline edits and restarts. Phase 5 (collaboration) is next.
 
 ## What works today
 

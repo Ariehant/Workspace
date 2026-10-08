@@ -118,6 +118,19 @@ jobs:
       - name: Admin CLI
         working-directory: infra
         run: docker compose -f docker-compose.yml -f docker-compose.s3.yml exec -T server workspace-admin migrate
+      # Two devices sign up, sync over wss, store an attachment in S3 and search,
+      # trusting Caddy's local CA.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Stack end to end (sync, files, search, web app)
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.s3.yml cp caddy:/data/caddy/pki/authorities/local/root.crt "$RUNNER_TEMP/caddy-root.crt"
+          STACK_URL=https://localhost NODE_EXTRA_CA_CERTS="$RUNNER_TEMP/caddy-root.crt" \
+            pnpm --filter @workspace/server exec vitest run src/stack.smoke.test.ts
       - name: Logs
         if: failure()
         working-directory: infra

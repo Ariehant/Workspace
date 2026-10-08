@@ -1,6 +1,6 @@
 # Phase 4: Sync server
 
-**Status:** M1–M6 done. The exit check (two desktops, offline, Docker through Caddy) is next.
+**Status:** done. M1–M6 are complete and the exit check passes: two desktops (live, offline and restart), the web app, and the Docker stack through Caddy with TLS.
 
 ## Context
 
@@ -421,21 +421,53 @@ The message encoding uses `lib0`, like y-protocols. Awareness (presence) can be 
   - **The desktop sync E2E** now also drives the web app: a browser edit shows on the desktop and the other way round, and a page created on the desktop appears in the browser's sidebar. That's the exit check's web app item.
   - **Server:** serving the build (app routes, assets, API 404s, headers), settings (CSRF, size and name limits), and page location.
   - **CI** builds the web app, installs Chromium and runs both E2E suites. `CHROMIUM_PATH` points the tests at a preinstalled Chromium.
-- **Not verified here:** the Docker image build itself. Docker Hub rate-limited the base image again. The Dockerfile's steps (filtered install, server and web builds) were run on a clean copy of the sources.
+- **Docker image:** Docker Hub rate-limited the base image during M6, so the Dockerfile's steps were run on a clean copy of the sources instead. The image has since been built and run in the exit check.
 
-## Exit check
+## Exit check ✅
 
 "Two devices for one user stay in sync, including after offline edits":
 
-- **Two desktops, one server:** an E2E test runs a server on a throwaway Postgres and two Electron instances with separate data folders signed in as one user. It checks each of these on the other device:
-  - live edits: page text, a new sub-page, a page moved in the tree, database rows and properties, a deleted page, an attachment
+- **Two desktops, one server** (`apps/desktop/e2e/exit-check.spec.ts`):
+  - **Setup:** a server on a throwaway Postgres and two Electron instances with separate data folders, signed in as one user.
+    - Instance B reaches the server through a small TCP proxy the test controls.
+    - B joins A's workspace with "Replace this computer's workspace".
+  - **Comparing devices:** a snapshot reads every doc on each instance through the app's own API. It covers:
+    - the page tree: titles, parents, order, trash
+    - page text
+    - database properties and rows with their cells
+
+    The test waits until both snapshots are identical.
+
+  - **Live**, each change checked on the other device:
+    - page text
+    - a new sub-page
+    - a page moved to another parent ("Move to")
+    - a database row, a new property and a cell
+    - a page moved to trash
+    - an image attachment, which B fetches from the server
 - **Offline:**
-  - Instance B is cut off from the server (the test closes its socket and blocks reconnects) and both instances edit the same page, other pages and the same database.
-  - After reconnecting, both converge: same text, rows and tree.
-  - Both instances are restarted and are still identical.
-- **The web app:** an edit in the browser shows on a desktop, and the other way round.
+  - The proxy cuts B off: open sockets are dropped and new ones are refused.
+  - Both instances then edit:
+    - the same page
+    - new pages on each side
+    - the same database (new rows on both, and cells set on the same row)
+  - The proxy reconnects B, and a simulated resume from sleep makes B reconnect at once. Both converge: same text, rows and tree, with nothing lost from either side.
+  - Both instances are restarted. Their snapshots still match each other and the merged state from before the restart.
+- **The web app:** the desktop sync E2E (M6) checks it both ways: an edit in the browser shows on a desktop, and the other way round.
 - **Convergence fuzzing** (M3) runs in CI on every push.
-- **The Docker stack:** `docker compose up` on a clean Ubuntu 24.04 machine. A device signs up, uploads and syncs through Caddy with TLS (a local CA in CI).
+- **The Docker stack** (`apps/server/src/stack.smoke.test.ts`): this test runs only when `STACK_URL` is set. It runs against `docker compose up` behind Caddy with TLS, and Node trusts Caddy's local CA through `NODE_EXTRA_CA_CERTS`. The test checks:
+  - a device signs up and creates a workspace
+  - two devices sync a page over `wss://`
+  - an attachment goes up and comes back byte for byte
+  - server search finds the page
+  - `/w/<id>` serves the web app
+
+  CI's server job builds the image, starts the stack with attachments in S3 (SeaweedFS), copies Caddy's root certificate out of the container and runs this test.
+
+- **Run here** on the image built in this sandbox, with both file stores:
+  - The smoke test passed against the volume store and against the S3 overlay.
+  - A Chromium session through `https://localhost` signed up, created a workspace and a page, and still had them after a reload.
+- **Still open from Phase 3:** importing a real Notion export, which needs a sample export.
 
 ## Packages
 
