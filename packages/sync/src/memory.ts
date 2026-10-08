@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import type { LogStore, LoggedRow } from './hub';
+import type { LogStore, LoggedRow, NewRow } from './hub';
 
 /** A `LogStore` in memory, with the same semantics as the Postgres one (tests). */
 export class MemoryLogStore implements LogStore {
@@ -11,10 +11,7 @@ export class MemoryLogStore implements LogStore {
     return log;
   }
 
-  async append(
-    workspaceId: string,
-    updates: { docId: string; data: Uint8Array; deviceId: string | null }[],
-  ): Promise<number[]> {
+  async append(workspaceId: string, updates: NewRow[]): Promise<number[]> {
     const log = this.log(workspaceId);
     return updates.map((u) => {
       const seq = ++log.last;

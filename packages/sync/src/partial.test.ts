@@ -1,25 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { SyncHub } from './hub';
+import { SyncHub, type DocPolicy } from './hub';
 import { MemoryLogStore } from './memory';
-import { PartialClient } from './partial';
+import { NoAccessError, PartialClient } from './partial';
 import { TestNet, seeded, until } from './test-net';
 import { Replica, contents } from './test-replica';
 
 const WS = 'ws';
 
 /** A browser tab: a Y.Doc per open doc, wired to a PartialClient. */
-function tab(net: TestNet, id: string) {
+function tab(net: TestNet, id: string, policy?: DocPolicy) {
   const docs = new Map<string, Y.Doc>();
   const REMOTE = Symbol('remote');
+  const events: string[] = [];
   const client = new PartialClient({
-    connect: net.connector(id, WS),
+    connect: net.connector(id, WS, policy ? { policy } : {}),
     deviceId: id,
     backoff: { minMs: 1, maxMs: 10 },
     onUpdate: (docId, update) => {
       const doc = docs.get(docId);
       if (doc) Y.applyUpdate(doc, update, REMOTE);
     },
+    onReset: (docId, state) => {
+      events.push(`reset ${docId}`);
+      const doc = new Y.Doc();
+      Y.applyUpdate(doc, state, REMOTE);
+      docs.set(docId, doc);
+    },
+    onRevoked: (docIds) => events.push(`revoked ${docIds.join(',')}`),
   });
   const open = async (docId: string) => {
     const doc = new Y.Doc();
@@ -30,7 +38,7 @@ function tab(net: TestNet, id: string) {
     });
     return doc;
   };
-  return { client, docs, open };
+  return { client, docs, open, events };
 }
 
 describe('PartialClient', () => {
@@ -64,6 +72,30 @@ describe('PartialClient', () => {
     desktop.doc('new').getText('t').insert(0, 'later');
     await until(() => desktop.outbox.length === 0, 5000, 'stored');
     expect(contents(web.docs.get('new')!).t).toBe('');
+    web.client.stop();
+    desktop.client.stop();
+  });
+
+  it('refuses unreadable docs, and undoes edits the server refuses', async () => {
+    const store = new MemoryLogStore();
+    const net = new TestNet(new SyncHub(store));
+    const desktop = new Replica('desk', net, WS, Math.random);
+    desktop.client.start();
+    desktop.doc('ro').getText('t').insert(0, 'read only');
+    await until(() => desktop.outbox.length === 0, 5000, 'desktop uploaded');
+
+    const web = tab(net, 'web', {
+      canRead: (docId) => docId !== 'secret',
+      canWrite: (docId) => docId !== 'ro',
+    });
+    web.client.start();
+    await expect(web.client.open('secret')).rejects.toBeInstanceOf(NoAccessError);
+    const ro = await web.open('ro');
+    ro.getText('t').insert(0, 'mine: ');
+    await until(() => web.events.includes('reset ro'), 5000, 'the edit undone');
+    expect(contents(web.docs.get('ro')!).t).toBe('read only');
+    expect(web.client.unsent).toBe(0);
+    expect(contents(desktop.doc('ro')).t).toBe('read only');
     web.client.stop();
     desktop.client.stop();
   });

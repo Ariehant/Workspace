@@ -52,13 +52,42 @@ export function readPageMap(page: Y.Map<unknown>): PageMeta {
   };
 }
 
+/** A page that lives in another scope: only its place in this tree is kept here. */
+export const isStub = (page: Y.Map<unknown>) => typeof page.get(PageField.scope) === 'string';
+
 export function getPage(doc: Y.Doc, id: PageId): PageMeta | null {
   const page = getPagesMap(doc).get(id);
-  return page ? readPageMap(page) : null;
+  return page && !isStub(page) ? readPageMap(page) : null;
 }
 
+/** The pages of this tree (stubs of pages in other scopes left out: see `listStubs`). */
 export function listPages(doc: Y.Doc): PageMeta[] {
-  return Array.from(getPagesMap(doc).values(), readPageMap);
+  const pages: PageMeta[] = [];
+  for (const page of getPagesMap(doc).values()) if (!isStub(page)) pages.push(readPageMap(page));
+  return pages;
+}
+
+export interface PageStub {
+  id: PageId;
+  parentId: PageId | null;
+  sortKey: string;
+  /** The scope the page lives in. */
+  scope: string;
+}
+
+/** Pages of other scopes placed in this tree. */
+export function listStubs(doc: Y.Doc): PageStub[] {
+  const stubs: PageStub[] = [];
+  for (const page of getPagesMap(doc).values()) {
+    if (!isStub(page)) continue;
+    stubs.push({
+      id: page.get(PageField.id) as string,
+      parentId: (page.get(PageField.parentId) as string | null | undefined) ?? null,
+      sortKey: page.get(PageField.sortKey) as string,
+      scope: page.get(PageField.scope) as string,
+    });
+  }
+  return stubs;
 }
 
 /** Order siblings by fractional index; ties (concurrent inserts) break on id. */

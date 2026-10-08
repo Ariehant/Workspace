@@ -135,13 +135,15 @@ describe('sync endpoint', () => {
         mode: 'replica',
         cursor: 0,
         deviceId: 'web',
+        known: [],
       }),
     );
     const first = await new Promise<Buffer>((resolve) =>
       ok.once('message', (d) => resolve(d as Buffer)),
     );
-    // The members doc (written when the first device connects), then caught-up.
-    expect(first[0]).toBe(10); // updates
+    // First what it may read (then the members doc, written as the first device
+    // connects, and caught-up).
+    expect(first[0]).toBe(16); // access
     ok.close();
   });
 
@@ -188,6 +190,9 @@ describe('sync endpoint', () => {
     });
     for (let i = 0; i < 1200; i++) docs[i % 3]!.getText('t').insert(0, `${i},`);
     source.destroy();
+    // Docs written straight to the log need a scope, like pushed ones get.
+    const home = (await s.store.scopes.model(s.workspace.id)).defaultScopeId!;
+    for (const id of ['p1', 'p2']) await s.store.scopes.place(s.workspace.id, id, home);
     for (let i = 0; i < updates.length; i += 200) {
       await s.store.appendUpdates(s.workspace.id, updates.slice(i, i + 200));
     }
@@ -290,8 +295,11 @@ describe('sync endpoint', () => {
     const guest = s.device('guest', bob.token);
     guest.client.start();
     await until(() => guest.client.state.state === 'live', 'guest live');
+    // A guest can't write here (the workspace's pages aren't shared with them): the push is
+    // refused, and the socket stays.
     guest.doc('p').getText('t').insert(0, 'nope');
-    await until(() => guest.client.state.state === 'unauthorized', 'guest refused');
+    await until(() => guest.outbox.length === 0, 'guest refused');
+    expect(guest.client.state.state).toBe('live');
     expect(await s.store.docState(s.workspace.id, 'p')).toBeNull();
 
     await s.store.pool.query(`UPDATE workspace_members SET role = 'member' WHERE user_id = $1`, [

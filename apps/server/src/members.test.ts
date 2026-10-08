@@ -371,13 +371,15 @@ describe('the members doc', () => {
     expect(listMembers(server).find((m) => m.id === bob.id)?.role).toBe('member');
     expect(listMembers(a.doc(MEMBERS_DOC_ID)).find((m) => m.id === bob.id)?.role).toBe('member');
 
-    // A role change reconnects Bob's sockets; removal closes them for good.
+    // A role change reaches Bob's open sockets (new access, no reconnect); removal
+    // closes them for good.
+    const closesNow = b.closes.length;
     await s.call('PATCH', `/api/workspaces/${ws}/members/${bob.id}`, ada.token, { role: 'guest' });
-    await until(() => b.closes.some((c) => c.code === CloseCode.goingAway), 'Bob reconnects');
     await until(
       () => names().some(([n, role]) => n === 'Bob B.' && role === 'guest'),
       'the new role',
     );
+    expect(b.closes.length).toBe(closesNow);
     await s.call('DELETE', `/api/workspaces/${ws}/members/${bob.id}`, ada.token);
     await until(() => b.closes.some((c) => c.code === CloseCode.forbidden), 'Bob is out');
     await until(() => names().some(([, , removed]) => removed), 'Bob marked removed');

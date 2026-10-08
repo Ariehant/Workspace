@@ -130,7 +130,8 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
       }
       request.log.info({ workspaceId: id, userId, role: request.body.role }, 'role changed');
       await changed(id);
-      ctx.realtime.disconnect(id, userId, false);
+      // Their open connections get the new access (no reconnect needed).
+      await ctx.access.changed(id);
       return { ok: true };
     },
   );
@@ -161,6 +162,7 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
       }
       request.log.info({ workspaceId: id, userId, self }, 'member removed');
       await changed(id);
+      await ctx.access.changed(id);
       ctx.realtime.disconnect(id, userId, true);
       return { ok: true };
     },
@@ -340,6 +342,7 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
       if (!(await teams.deleteGroup(request.params.id, request.params.groupId))) {
         return fail(reply, 404, 'not_found', 'No such group.');
       }
+      await ctx.access.changed(request.params.id);
       return { ok: true };
     },
   );
@@ -353,6 +356,7 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
       if (!(await teams.addToGroup(id, groupId, userId))) {
         return fail(reply, 404, 'not_found', 'No such group, or not a member of the workspace.');
       }
+      await ctx.access.changed(id);
       return { ok: true };
     },
   );
@@ -366,6 +370,7 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
       if (!(await teams.removeFromGroup(id, groupId, userId))) {
         return fail(reply, 404, 'not_found', 'Not in this group.');
       }
+      await ctx.access.changed(id);
       return { ok: true };
     },
   );
@@ -427,6 +432,7 @@ export function inviteRoutes(app: FastifyInstance, ctx: ServerContext) {
         }
       }
       await ctx.members.refresh(result.workspaceId);
+      await ctx.access.changed(result.workspaceId);
       const workspace = (await ctx.store.getWorkspace(result.workspaceId))!;
       request.log.info({ workspaceId: workspace.id, userId: user.id }, 'invite accepted');
       return { workspace: { id: workspace.id, name: workspace.name, role: result.role } };

@@ -22,6 +22,9 @@ export interface IndexerOptions {
   onError?: (error: unknown, workspaceId: string) => void;
 }
 
+/** The workspace doc, or a scope's own tree (`tree:<scope id>`). */
+const isTreeDoc = (docId: string) => docId === WORKSPACE_DOC_ID || docId.startsWith('tree:');
+
 /** Docs read per step (a large catch-up is indexed in several). */
 const BATCH = 2000;
 
@@ -92,19 +95,19 @@ export class Indexer {
       const from = await search.indexedSeq(workspaceId);
       const { docIds, lastSeq } = await search.changedSince(workspaceId, from, BATCH);
       if (docIds.length === 0) return;
-      // The page tree first: it says which docs are pages, and holds the user names.
-      const ordered = docIds.includes(WORKSPACE_DOC_ID)
-        ? [WORKSPACE_DOC_ID, ...docIds.filter((id) => id !== WORKSPACE_DOC_ID)]
-        : docIds;
+      // Page trees first: they say which docs are pages.
+      const ordered = [...docIds.filter(isTreeDoc), ...docIds.filter((id) => !isTreeDoc(id))];
       let users: ReadonlyMap<string, string> | null = null;
       for (const docId of ordered) {
         if (this.closed) return;
         const doc = await this.load(workspaceId, docId);
         if (!doc) continue;
         try {
-          if (docId === WORKSPACE_DOC_ID) {
+          if (isTreeDoc(docId)) {
+            // A scope's tree: its pages are searchable by whoever may read the scope.
             await search.setPages(
               workspaceId,
+              await this.store.scopes.placementOf(workspaceId, docId),
               listPages(doc).map((p) => ({
                 id: p.id,
                 title: p.title,
@@ -119,6 +122,7 @@ export class Indexer {
             await search.setRows(
               workspaceId,
               docId,
+              await this.store.scopes.placementOf(workspaceId, docId),
               db.rows.map((row) => ({
                 id: row.id,
                 title: row.title,

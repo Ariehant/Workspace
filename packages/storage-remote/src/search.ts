@@ -80,18 +80,19 @@ export class SearchIndex {
   }
 
   /** The workspace's pages (from its page tree); pages no longer there are removed. */
-  async setPages(workspaceId: string, pages: IndexedPage[]): Promise<void> {
+  /** The pages of one scope's tree (pages it no longer lists are forgotten). */
+  async setPages(workspaceId: string, scopeId: string | null, pages: IndexedPage[]): Promise<void> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO search_index (workspace_id, id, kind, database_id, title, icon, in_trash, updated_at)
-         SELECT $1, id, 'page', NULL, title, icon, in_trash, updated_at
+        `INSERT INTO search_index (workspace_id, id, kind, database_id, title, icon, in_trash, updated_at, scope_id)
+         SELECT $1, id, 'page', NULL, title, icon, in_trash, updated_at, $7
          FROM unnest($2::text[], $3::text[], $4::text[], $5::boolean[], $6::bigint[])
            AS t(id, title, icon, in_trash, updated_at)
          ON CONFLICT (workspace_id, id) DO UPDATE SET kind = 'page', database_id = NULL,
            title = excluded.title, icon = excluded.icon, in_trash = excluded.in_trash,
-           updated_at = excluded.updated_at`,
+           updated_at = excluded.updated_at, scope_id = excluded.scope_id`,
         [
           workspaceId,
           pages.map((p) => p.id),
@@ -99,11 +100,13 @@ export class SearchIndex {
           pages.map((p) => p.icon),
           pages.map((p) => p.inTrash),
           pages.map((p) => Math.round(p.updatedAt)),
+          scopeId,
         ],
       );
       await client.query(
-        `DELETE FROM search_index WHERE workspace_id = $1 AND kind = 'page' AND NOT (id = ANY($2::text[]))`,
-        [workspaceId, pages.map((p) => p.id)],
+        `DELETE FROM search_index WHERE workspace_id = $1 AND kind = 'page'
+           AND scope_id IS NOT DISTINCT FROM $3 AND NOT (id = ANY($2::text[]))`,
+        [workspaceId, pages.map((p) => p.id), scopeId],
       );
       await client.query('COMMIT');
     } catch (error) {
@@ -115,18 +118,25 @@ export class SearchIndex {
   }
 
   /** A database's rows; rows no longer in it are removed. */
-  async setRows(workspaceId: string, databaseId: string, rows: IndexedRow[]): Promise<void> {
+  /** A database's rows (in the database's scope). */
+  async setRows(
+    workspaceId: string,
+    databaseId: string,
+    scopeId: string | null,
+    rows: IndexedRow[],
+  ): Promise<void> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO search_index (workspace_id, id, kind, database_id, title, icon, props, in_trash, updated_at)
-         SELECT $1, id, 'row', $2, title, icon, props, in_trash, updated_at
+        `INSERT INTO search_index (workspace_id, id, kind, database_id, title, icon, props, in_trash, updated_at, scope_id)
+         SELECT $1, id, 'row', $2, title, icon, props, in_trash, updated_at, $9
          FROM unnest($3::text[], $4::text[], $5::text[], $6::text[], $7::boolean[], $8::bigint[])
            AS t(id, title, icon, props, in_trash, updated_at)
          ON CONFLICT (workspace_id, id) DO UPDATE SET kind = 'row', database_id = $2,
            title = excluded.title, icon = excluded.icon, props = excluded.props,
-           in_trash = excluded.in_trash, updated_at = excluded.updated_at`,
+           in_trash = excluded.in_trash, updated_at = excluded.updated_at,
+           scope_id = excluded.scope_id`,
         [
           workspaceId,
           databaseId,
@@ -136,6 +146,7 @@ export class SearchIndex {
           rows.map((r) => r.props),
           rows.map((r) => r.inTrash),
           rows.map((r) => Math.round(r.updatedAt)),
+          scopeId,
         ],
       );
       await client.query(
@@ -161,8 +172,16 @@ export class SearchIndex {
     );
   }
 
-  /** Pages and rows matching every word (by prefix), best first; trash left out. */
-  async search(workspaceId: string, text: string, limit = 20): Promise<SearchHit[]> {
+  /**
+   * Pages and rows matching every word (by prefix), best first; trash left out. With
+   * `scopes`, only pages and rows in those scopes (what the person may read).
+   */
+  async search(
+    workspaceId: string,
+    text: string,
+    limit = 20,
+    scopes: readonly string[] | null = null,
+  ): Promise<SearchHit[]> {
     const query = toTsQuery(text);
     if (!query) return [];
     const { rows } = await this.pool.query<{
@@ -178,13 +197,14 @@ export class SearchIndex {
            AS snippet
        FROM search_index s, to_tsquery('simple', $2) q
        WHERE s.workspace_id = $1 AND s.kind IS NOT NULL AND NOT s.in_trash AND s.tsv @@ q
+         AND ($4::uuid[] IS NULL OR s.scope_id = ANY($4::uuid[]))
          AND NOT EXISTS (
            SELECT 1 FROM search_index d
            WHERE d.workspace_id = s.workspace_id AND d.id = s.database_id AND d.in_trash
          )
        ORDER BY ts_rank(s.tsv, q) DESC, s.updated_at DESC
        LIMIT $3`,
-      [workspaceId, query, limit],
+      [workspaceId, query, limit, scopes],
     );
     return rows.map((r) => ({
       id: r.id,
@@ -196,10 +216,16 @@ export class SearchIndex {
   }
 
   /** Where a page lives: databaseId null for a workspace page; null if unknown. */
-  async locate(workspaceId: string, id: string): Promise<{ databaseId: string | null } | null> {
+  async locate(
+    workspaceId: string,
+    id: string,
+    scopes: readonly string[] | null = null,
+  ): Promise<{ databaseId: string | null } | null> {
     const { rows } = await this.pool.query<{ kind: string; database_id: string | null }>(
-      'SELECT kind, database_id FROM search_index WHERE workspace_id = $1 AND id = $2 AND kind IS NOT NULL',
-      [workspaceId, id],
+      `SELECT kind, database_id FROM search_index
+       WHERE workspace_id = $1 AND id = $2 AND kind IS NOT NULL
+         AND ($3::uuid[] IS NULL OR scope_id = ANY($3::uuid[]))`,
+      [workspaceId, id, scopes],
     );
     const row = rows[0];
     return row ? { databaseId: row.kind === 'row' ? row.database_id : null } : null;

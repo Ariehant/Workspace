@@ -157,6 +157,71 @@ describe('outbox', () => {
   });
 });
 
+describe('access changes', () => {
+  it('keeps refused changes in the history, then takes the server’s copy', () => {
+    const store = new SqliteStore(join(dir, 'a.db'));
+    const manager = new DocManager(store, { indexDelayMs: 0 });
+    manager.setOutbox(true);
+    const sync = new LocalSyncStore(store, manager);
+    editWorkspace(manager, (ws) => createPage(ws, { id: 'p1', title: 'Plan' }));
+    write(manager, 'p1', 'server text');
+    const server = Y.encodeStateAsUpdate(
+      (() => {
+        const doc = new Y.Doc();
+        Y.applyUpdate(doc, manager.open('p1'));
+        manager.release('p1');
+        return doc;
+      })(),
+    );
+    write(manager, 'p1', 'refused edit');
+    const resets: string[] = [];
+    manager.onReset((docId) => resets.push(docId));
+    // A window has it open while this happens.
+    manager.open('p1');
+    sync.denied([{ localId: 1, docId: 'p1' }]);
+    sync.reset('p1', server);
+    expect(read(manager, 'p1')).toBe('server text');
+    expect(resets).toEqual(['p1']);
+    expect(store.outboxPending(100).filter((e) => e.docId === 'p1')).toEqual([]);
+    const versions = manager.versions('p1');
+    expect(versions[0]!.reason).toBe('not-saved');
+    const kept = new Y.Doc();
+    Y.applyUpdate(kept, manager.versionState(versions[0]!.id)!);
+    expect(getPageContent(kept).toString()).toContain('refused edit');
+    manager.release('p1');
+    manager.close();
+    store.close();
+  });
+
+  it('remembers its scopes, merges backfills and forgets revoked docs', () => {
+    const store = new SqliteStore(join(dir, 'b.db'));
+    const manager = new DocManager(store, { indexDelayMs: 0 });
+    const sync = new LocalSyncStore(store, manager);
+    const scope = (id: string) => ({
+      id,
+      kind: 'teamspace' as const,
+      name: id,
+      treeDoc: `tree:${id}`,
+      parent: '',
+      role: 'edit' as const,
+    });
+    sync.setAccess([scope('a'), scope('b')]);
+    expect(sync.knownScopes()).toEqual(['a', 'b']);
+
+    const doc = new Y.Doc();
+    getPageContent(doc).insert(0, [paragraph('from the server')]);
+    sync.applyBackfill([{ docId: 'p2', update: Y.encodeStateAsUpdate(doc) }]);
+    expect(read(manager, 'p2')).toBe('from the server');
+    expect(store.getSetting(SYNC_CURSOR)).toBeUndefined();
+
+    sync.revoke(['p2'], ['b']);
+    expect(sync.knownScopes()).toEqual(['a']);
+    expect(store.listDocIds()).not.toContain('p2');
+    manager.close();
+    store.close();
+  });
+});
+
 describe('two devices through a hub', () => {
   /** A device: its own database and DocManager, syncing through `net`. */
   function device(name: string, net: TestNet) {

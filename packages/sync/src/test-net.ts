@@ -132,7 +132,7 @@ export class TestNet {
   ) {}
 
   /** A `connect` for `SyncClient`, as client `clientId`. */
-  connector(clientId: string, workspaceId: string, access: Access = { canWrite: true }) {
+  connector(clientId: string, workspaceId: string, access: Access | (() => Access) = {}) {
     return (handlers: SocketHandlers): ClientSocket => {
       const link = new Link(this, handlers);
       (link as Link & { clientId: string }).clientId = clientId;
@@ -142,7 +142,7 @@ export class TestNet {
         return link.socket();
       }
       this.links.add(link);
-      link.attach(this.hub, workspaceId, access);
+      link.attach(this.hub, workspaceId, typeof access === 'function' ? access() : access);
       return link.socket();
     };
   }

@@ -14,6 +14,7 @@ import {
   PROTOCOL_VERSION,
   decodeServer,
   encodeClient,
+  type AccessScope,
   type PushItem,
 } from './messages';
 
@@ -31,6 +32,30 @@ export interface ClientStore {
    * can: a cursor saved without its updates would skip them forever).
    */
   applyRemote(items: { docId: string; update: Uint8Array }[], cursor: number): void | Promise<void>;
+  /**
+   * The server refused these updates (the user may not change these docs). They are
+   * acknowledged right after (so the outbox moves on); for each doc that can still be
+   * read, `reset` follows with the server's copy.
+   */
+  denied?(items: { localId: number; docId: string }[]): void | Promise<void>;
+  /** Replace what this device has of a doc with the server's copy (after a denial). */
+  reset?(docId: string, state: Uint8Array): void | Promise<void>;
+  /** Docs the user just gained access to: merge them in (the cursor doesn't move). */
+  applyBackfill?(items: { docId: string; update: Uint8Array }[]): void | Promise<void>;
+  /**
+   * Docs the user may no longer read: delete them from this device. `scopes` were lost
+   * whole: stop reporting them in `knownScopes` (in the same step).
+   */
+  revoke?(docIds: string[], scopes: string[]): void | Promise<void>;
+  /**
+   * The user's scopes and roles (after connecting, and when they change). The device now
+   * holds the docs of these scopes: report them back in `knownScopes`.
+   */
+  setAccess?(scopes: AccessScope[]): void | Promise<void>;
+  /** The scope ids of the last `setAccess` (sent when connecting). */
+  knownScopes?(): string[] | Promise<string[]>;
+  /** The scope to place a doc in, if the server hasn't seen it (see `PushItem.scope`). */
+  scopeOf?(docId: string): string | null;
 }
 
 export interface SocketHandlers {
@@ -192,6 +217,7 @@ export class SyncClient {
   private async opened(generation: number) {
     try {
       const cursor = await this.o.store.cursor();
+      const known = (await this.o.store.knownScopes?.()) ?? [];
       if (generation !== this.generation || !this.socket) return;
       this.helloCursor = cursor;
       this.socket.send(
@@ -201,10 +227,12 @@ export class SyncClient {
           mode: 'replica',
           cursor,
           deviceId: this.o.deviceId,
+          known,
         }),
       );
       this.ready = true;
       this.inflight.clear();
+      this.pushed = [];
       this.setStatus({ state: 'catching-up' });
       await this.sendOutbox();
     } catch (error) {
@@ -262,6 +290,14 @@ export class SyncClient {
         return;
       case 'ack': {
         const ids = message.items.map((i) => i.localId);
+        const denied = message.items.filter((i) => i.denied);
+        if (denied.length > 0 && this.o.store.denied) {
+          const docOf = new Map(this.pushed.map((e) => [e.localId, e.docId]));
+          await this.o.store.denied(
+            denied.map((i) => ({ localId: i.localId, docId: docOf.get(i.localId) ?? '' })),
+          );
+        }
+        for (const id of ids) this.forgetPushed(id);
         await this.o.store.acknowledge(ids);
         for (const id of ids) this.inflight.delete(id);
         if (this.inflight.size === 0) await this.sendOutbox();
@@ -271,8 +307,28 @@ export class SyncClient {
         this.o.onError?.(new Error(`${message.code}: ${message.message}`));
         return;
       case 'state':
+        // Only sent to a replica after a denied push: the server's copy to start over from.
+        await this.o.store.reset?.(message.docId, message.update);
+        return;
+      case 'backfill':
+        await this.o.store.applyBackfill?.(message.items);
+        return;
+      case 'revoke':
+        await this.o.store.revoke?.(message.docIds, message.scopes);
+        return;
+      case 'access':
+        await this.o.store.setAccess?.(message.scopes);
+        return;
+      case 'refused':
         return;
     }
+  }
+
+  /** What was pushed and not yet acknowledged (to name the docs of denied items). */
+  private pushed: { localId: number; docId: string }[] = [];
+  private forgetPushed(localId: number) {
+    const i = this.pushed.findIndex((e) => e.localId === localId);
+    if (i >= 0) this.pushed.splice(i, 1);
   }
 
   private async sendOutbox(): Promise<void> {
@@ -292,8 +348,13 @@ export class SyncClient {
         let bytes = 0;
         const send = () => {
           if (batch.length === 0) return;
-          for (const e of batch) this.inflight.add(e.localId);
-          this.socket!.send(encodeClient({ type: 'push', items: batch }));
+          for (const e of batch) {
+            this.inflight.add(e.localId);
+            this.pushed.push({ localId: e.localId, docId: e.docId });
+          }
+          const scopeOf = this.o.store.scopeOf?.bind(this.o.store);
+          const items = scopeOf ? batch.map((e) => ({ ...e, scope: scopeOf(e.docId) })) : batch;
+          this.socket!.send(encodeClient({ type: 'push', items }));
           batch = [];
           bytes = 0;
         };

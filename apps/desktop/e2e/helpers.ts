@@ -77,7 +77,7 @@ export async function launchApp(
   );
   const window = await app.firstWindow();
   window.on('pageerror', (error) => console.error(`[renderer] ${error.stack ?? error}`));
-  await window.getByRole('tree', { name: 'Pages' }).waitFor();
+  await window.getByRole('tree', { name: 'Pages' }).waitFor({ state: 'attached' });
   // Without a window manager (xvfb) a new window isn't always focused, and the
   // editor's selection toolbar and caret placement need a focused window.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.focus());

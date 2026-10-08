@@ -198,6 +198,77 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX group_members_user ON group_members (user_id);
   `,
+  `
+  -- Scopes: sets of pages with the same access (a teamspace, someone's private pages, a
+  -- shared page). Each has a tree doc with its pages' titles and order.
+  CREATE TABLE scopes (
+    id uuid PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    kind text NOT NULL CHECK (kind IN ('teamspace', 'private', 'shared')),
+    name text NOT NULL DEFAULT '',
+    tree_doc text NOT NULL,
+    -- A shared page's scope: the scope it was split from (its access is inherited).
+    parent_id uuid REFERENCES scopes ON DELETE SET NULL,
+    inherit boolean NOT NULL DEFAULT true,
+    -- Whose private pages these are.
+    owner_id uuid REFERENCES users ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, tree_doc)
+  );
+  CREATE INDEX scopes_workspace ON scopes (workspace_id);
+
+  -- Who gets what in a scope: 'user:<id>', 'group:<id>' or 'workspace' (every member).
+  CREATE TABLE scope_access (
+    scope_id uuid NOT NULL REFERENCES scopes ON DELETE CASCADE,
+    principal text NOT NULL,
+    role text NOT NULL CHECK (role IN ('full', 'edit', 'comment', 'view')),
+    PRIMARY KEY (scope_id, principal)
+  );
+
+  -- Which scope each doc is in: access is decided here, never by what docs contain.
+  CREATE TABLE doc_scopes (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    doc_id text NOT NULL,
+    scope_id uuid NOT NULL REFERENCES scopes ON DELETE CASCADE,
+    PRIMARY KEY (workspace_id, doc_id)
+  );
+  CREATE INDEX doc_scopes_scope ON doc_scopes (scope_id);
+
+  -- Docs moved between scopes, at a point of the log (so devices that were away learn
+  -- about the docs they gained or lost).
+  CREATE TABLE doc_moves (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    seq bigint NOT NULL,
+    doc_id text NOT NULL,
+    from_scope uuid,
+    to_scope uuid
+  );
+  CREATE INDEX doc_moves_seq ON doc_moves (workspace_id, seq);
+
+  ALTER TABLE doc_updates ADD COLUMN user_id uuid;
+  -- Where a doc goes when a client doesn't say (and where the workspace doc lives).
+  ALTER TABLE workspaces ADD COLUMN default_scope_id uuid REFERENCES scopes ON DELETE SET NULL;
+
+  -- Existing workspaces: their pages become their owner's private pages (inviting
+  -- someone shows them nothing until the owner shares), with every doc placed there.
+  INSERT INTO scopes (id, workspace_id, kind, name, tree_doc, owner_id)
+  SELECT gen_random_uuid(), w.id, 'private', 'Private', 'workspace',
+    (SELECT m.user_id FROM workspace_members m
+     WHERE m.workspace_id = w.id AND m.role = 'owner' ORDER BY m.created_at LIMIT 1)
+  FROM workspaces w;
+  INSERT INTO scope_access (scope_id, principal, role)
+  SELECT id, 'user:' || owner_id, 'full' FROM scopes WHERE owner_id IS NOT NULL;
+  UPDATE workspaces w SET default_scope_id = s.id FROM scopes s WHERE s.workspace_id = w.id;
+  INSERT INTO doc_scopes (workspace_id, doc_id, scope_id)
+  SELECT DISTINCT u.workspace_id, u.doc_id, w.default_scope_id
+  FROM doc_updates u JOIN workspaces w ON w.id = u.workspace_id
+  WHERE u.doc_id <> 'members';
+
+  -- Search results are filtered by scope: each page and row is indexed with its scope.
+  ALTER TABLE search_index ADD COLUMN scope_id uuid;
+  UPDATE search_index s SET scope_id = w.default_scope_id FROM workspaces w
+  WHERE w.id = s.workspace_id;
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

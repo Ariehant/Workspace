@@ -19,6 +19,8 @@ function setup() {
     cursor: 0,
     outbox: [] as OutboxEntry[],
     applied: [] as { docIds: string[]; cursor: number }[],
+    events: [] as string[],
+    known: [] as string[],
   };
   const behind: number[][] = [];
   const oversized: number[] = [];
@@ -34,6 +36,25 @@ function setup() {
         state.applied.push({ docIds: items.map((i) => i.docId), cursor });
         state.cursor = cursor;
       },
+      denied: (items) => {
+        state.events.push(`denied ${items.map((i) => `${i.localId}:${i.docId}`).join(',')}`);
+      },
+      reset: (docId) => {
+        state.events.push(`reset ${docId}`);
+      },
+      applyBackfill: (items) => {
+        state.events.push(`backfill ${items.map((i) => i.docId).join(',')}`);
+      },
+      revoke: (docIds, scopes) => {
+        state.events.push(`revoke ${docIds.join(',')} [${scopes.join(',')}]`);
+        state.known = state.known.filter((id) => !scopes.includes(id));
+      },
+      setAccess: (scopes) => {
+        state.events.push(`access ${scopes.map((x) => x.id).join(',')}`);
+        state.known = scopes.map((x) => x.id);
+      },
+      knownScopes: () => state.known,
+      scopeOf: (docId) => (docId === 'p' ? 'scope-1' : null),
     },
     connect: (handlers): ClientSocket => {
       const socket = { handlers, sent: [] as ClientMessage[], closed: false };
@@ -75,10 +96,11 @@ describe('SyncClient', () => {
     await until(() => t.last().sent.length === 2);
     expect(t.last().sent[0]).toEqual({
       type: 'hello',
-      protocol: 1,
+      protocol: 2,
       mode: 'replica',
       cursor: 7,
       deviceId: 'dev',
+      known: [],
     });
     expect(t.last().sent[1]).toMatchObject({
       type: 'push',
@@ -103,12 +125,64 @@ describe('SyncClient', () => {
     t.reply({
       type: 'ack',
       items: [
-        { localId: 1, seq: 10 },
-        { localId: 2, seq: 11 },
+        { localId: 1, seq: 10, denied: false },
+        { localId: 2, seq: 11, denied: false },
       ],
     });
     await t.client.idle();
     expect(t.state.outbox.map((e) => e.localId)).toEqual([3]);
+  });
+
+  it('sends scope hints and known scopes, and hands access changes to the store', async () => {
+    const t = setup();
+    t.state.known = ['s1', 'gone'];
+    t.state.outbox = [t.entry(1), { localId: 2, docId: 'q', update: new Uint8Array(2) }];
+    t.client.start();
+    t.last().handlers.onOpen();
+    await until(() => t.last().sent.length === 2);
+    expect(t.last().sent[0]).toMatchObject({ type: 'hello', known: ['s1', 'gone'] });
+    expect(t.last().sent[1]).toMatchObject({
+      type: 'push',
+      items: [
+        { localId: 1, docId: 'p', scope: 'scope-1' },
+        { localId: 2, docId: 'q', scope: null },
+      ],
+    });
+    const scope = {
+      kind: 'teamspace' as const,
+      name: '',
+      treeDoc: 'x',
+      parent: '',
+      role: 'view' as const,
+    };
+    t.reply({ type: 'revoke', docIds: ['old'], scopes: ['gone'] });
+    t.reply({ type: 'backfill', items: [{ docId: 'new', update: new Uint8Array(1) }] });
+    t.reply({
+      type: 'access',
+      scopes: [
+        { ...scope, id: 's1' },
+        { ...scope, id: 's2' },
+      ],
+    });
+    t.reply({
+      type: 'ack',
+      items: [
+        { localId: 1, seq: 0, denied: true },
+        { localId: 2, seq: 9, denied: false },
+      ],
+    });
+    t.reply({ type: 'state', docId: 'p', update: new Uint8Array(1) });
+    await t.client.idle();
+    expect(t.state.events).toEqual([
+      'revoke old [gone]',
+      'backfill new',
+      'access s1,s2',
+      'denied 1:p',
+      'reset p',
+    ]);
+    // Denied items are acknowledged too: the outbox moves on.
+    expect(t.state.outbox).toEqual([]);
+    expect(t.state.known).toEqual(['s1', 's2']);
   });
 
   it('resends unacknowledged updates after reconnecting, with backoff', async () => {

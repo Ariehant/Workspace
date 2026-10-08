@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { SyncHub, type Access, type HubOptions, type Peer } from './hub';
+import { SyncHub, type Access, type DocPolicy, type HubOptions, type Peer } from './hub';
 import { MemoryLogStore } from './memory';
 import {
   CloseCode,
@@ -25,7 +25,7 @@ function edit(text: string): Uint8Array {
 function setup(options: HubOptions = {}) {
   const store = new MemoryLogStore();
   const hub = new SyncHub(store, options);
-  const open = (access: Access = { canWrite: true }) => {
+  const open = (access: Access = {}) => {
     const received: ServerMessage[] = [];
     const peer = {
       closed: null as null | { code: number; reason: string },
@@ -47,11 +47,13 @@ function setup(options: HubOptions = {}) {
     );
     const send = (message: ClientMessage) => connection.receive(encodeClient(message));
     const hello = (cursor = 0, deviceId = 'dev', mode: 'replica' | 'partial' = 'replica') =>
-      send({ type: 'hello', protocol: PROTOCOL_VERSION, mode, cursor, deviceId });
-    return { received, peer, connection, send, hello };
+      send({ type: 'hello', protocol: PROTOCOL_VERSION, mode, cursor, deviceId, known: [] });
+    return { received, peer, connection, send, hello, hub };
   };
   return { store, hub, open };
 }
+
+const setupHubOf = (c: { hub: SyncHub }) => c.hub;
 
 const ofType = <T extends ServerMessage['type']>(list: ServerMessage[], type: T) =>
   list.filter((m): m is Extract<ServerMessage, { type: T }> => m.type === type);
@@ -66,7 +68,7 @@ describe('SyncHub', () => {
     expect(a.received[0]).toMatchObject({ type: 'error', code: 'protocol' });
 
     const b = open();
-    b.send({ type: 'hello', protocol: 99, mode: 'replica', cursor: 0, deviceId: 'd' });
+    b.send({ type: 'hello', protocol: 99, mode: 'replica', cursor: 0, deviceId: 'd', known: [] });
     await until(() => b.peer.closed !== null);
     expect(b.peer.closed).toEqual({ code: CloseCode.protocol, reason: 'Protocol version' });
 
@@ -94,7 +96,7 @@ describe('SyncHub', () => {
 
     a.send({ type: 'push', items: [{ localId: 5, docId: 'even', update: edit('new') }] });
     await until(() => ofType(a.received, 'ack').length === 1);
-    expect(ofType(a.received, 'ack')[0]!.items).toEqual([{ localId: 5, seq: 11 }]);
+    expect(ofType(a.received, 'ack')[0]!.items).toEqual([{ localId: 5, seq: 11, denied: false }]);
     // Its own update isn't sent back, but the cursor still moves past it.
     await until(() => ofType(a.received, 'updates').length === 3);
     expect(ofType(a.received, 'updates')[2]).toEqual({ type: 'updates', cursor: 11, items: [] });
@@ -199,14 +201,8 @@ describe('SyncHub', () => {
     expect(desk.peer.closed!.code).toBe(CloseCode.protocol);
   });
 
-  it('refuses pushes from readers and malformed updates', async () => {
+  it('refuses malformed updates', async () => {
     const { store, open } = setup();
-    const guest = open({ canWrite: false });
-    guest.hello(0);
-    guest.send({ type: 'push', items: [{ localId: 1, docId: 'p', update: edit('x') }] });
-    await until(() => guest.peer.closed !== null);
-    expect(guest.peer.closed!.code).toBe(CloseCode.forbidden);
-
     const a = open();
     a.hello(0);
     a.send({
@@ -218,33 +214,146 @@ describe('SyncHub', () => {
     expect(await store.latest(WS)).toBe(0);
   });
 
-  it('acknowledges but drops pushes to docs the connection may not write', async () => {
+  it('stores only what the policy allows, and sends the server’s copy of the rest', async () => {
     const { store, open } = setup();
-    const a = open({ canWrite: true, canWriteDoc: (docId) => docId !== 'members' });
-    const b = open();
+    await store.append(WS, [{ docId: 'ro', data: edit('server text'), deviceId: null }]);
+    const writes: [string, string | null][] = [];
+    const policy: DocPolicy = {
+      canRead: (docId) => docId !== 'secret',
+      canWrite: async (docId, scope) => {
+        writes.push([docId, scope]);
+        return docId === 'p';
+      },
+    };
+    const a = open({ policy, userId: 'u1' });
     a.hello(0, 'A');
-    b.hello(0, 'B');
     a.send({
       type: 'push',
       items: [
-        { localId: 1, docId: 'members', update: edit('me, admin') },
-        { localId: 2, docId: 'p', update: edit('fine') },
+        { localId: 1, docId: 'ro', update: edit('mine') },
+        { localId: 2, docId: 'p', update: edit('fine'), scope: 's1' },
+        { localId: 3, docId: 'secret', update: edit('sneaky') },
       ],
     });
-    await until(() => ofType(a.received, 'ack').length > 0);
-    expect(ofType(a.received, 'ack')[0]!.items).toEqual([
-      { localId: 1, seq: 0 },
-      { localId: 2, seq: 1 },
+    await until(() => ofType(a.received, 'revoke').length > 0);
+    expect(writes).toEqual([
+      ['ro', null],
+      ['p', 's1'],
+      ['secret', null],
     ]);
-    expect(ofType(a.received, 'error')).toEqual([
-      { type: 'error', code: 'denied', message: "You can't change members." },
+    expect(ofType(a.received, 'ack')[0]!.items).toEqual([
+      { localId: 1, seq: 0, denied: true },
+      { localId: 2, seq: 2, denied: false },
+      { localId: 3, seq: 0, denied: true },
+    ]);
+    // Readable: the server's copy to start over from. Unreadable: taken away.
+    const [state] = ofType(a.received, 'state');
+    expect(state!.docId).toBe('ro');
+    expect(contentsOf(state!.update).t).toBe('server text');
+    expect(ofType(a.received, 'revoke')).toEqual([
+      { type: 'revoke', docIds: ['secret'], scopes: [] },
     ]);
     expect(a.peer.closed).toBeNull();
-    expect((await store.since(WS, 0, 10)).map((r) => r.docId)).toEqual(['p']);
-    await until(() => ofType(b.received, 'updates').some((m) => m.items.length > 0));
-    expect(ofType(b.received, 'updates').flatMap((m) => m.items.map((i) => i.docId))).toEqual([
-      'p',
+    expect((await store.since(WS, 0, 10)).map((r) => r.docId)).toEqual(['ro', 'p']);
+  });
+
+  it('sends only readable docs, refuses opening the rest, and starts with the scopes', async () => {
+    const { store, open } = setup();
+    const scopes = [
+      {
+        id: 's1',
+        kind: 'teamspace' as const,
+        name: 'Lab',
+        treeDoc: 'workspace',
+        parent: '',
+        role: 'edit' as const,
+      },
+    ];
+    const policy: DocPolicy = { canRead: (d) => !d.startsWith('x'), canWrite: () => true };
+    const replica = open({ policy, scopes });
+    const web = open({ policy, scopes });
+    replica.hello(0, 'R');
+    web.hello(0, 'W', 'partial');
+    await until(() => ofType(replica.received, 'caught-up').length > 0);
+    expect(replica.received[0]).toEqual({ type: 'access', scopes });
+    expect(web.received[0]).toEqual({ type: 'access', scopes });
+
+    web.send({ type: 'open', docId: 'xsecret' });
+    web.send({ type: 'open', docId: 'page' });
+    await until(() => ofType(web.received, 'state').length > 0);
+    expect(ofType(web.received, 'refused')).toEqual([{ type: 'refused', docId: 'xsecret' }]);
+
+    await store.append(WS, [
+      { docId: 'xsecret', data: edit('no'), deviceId: null },
+      { docId: 'page', data: edit('yes'), deviceId: null },
     ]);
+    // (Another process appended: wake the pumps.)
+    setupHubOf(replica).notify(WS);
+    await until(() => replica.received.some((m) => m.type === 'updates' && m.cursor === 2));
+    const sent = ofType(replica.received, 'updates').flatMap((m) => m.items.map((i) => i.docId));
+    expect(sent).toEqual(['page']);
+    await until(() => ofType(web.received, 'updates').some((m) => m.items.length > 0));
+    expect(ofType(web.received, 'updates').flatMap((m) => m.items.map((i) => i.docId))).toEqual([
+      'page',
+    ]);
+  });
+
+  it('reauthorizes: new scopes, revokes what was lost and backfills what was gained', async () => {
+    const { store, open } = setup({ batchBytes: 1 });
+    await store.append(WS, [
+      { docId: 'a', data: edit('in a'), deviceId: null },
+      { docId: 'b1', data: edit('in b1'), deviceId: null },
+      { docId: 'b2', data: edit('in b2'), deviceId: null },
+    ]);
+    let readable = new Set(['a']);
+    const policy = (): DocPolicy => ({ canRead: (d) => readable.has(d), canWrite: () => true });
+    const r = open({ policy: policy(), scopes: [] });
+    r.hello(0, 'R');
+    await until(() => ofType(r.received, 'caught-up').length > 0);
+    expect(ofType(r.received, 'updates').flatMap((m) => m.items.map((i) => i.docId))).toEqual([
+      'a',
+    ]);
+
+    readable = new Set(['b1', 'b2']);
+    const scopes = [
+      {
+        id: 'sb',
+        kind: 'shared' as const,
+        name: '',
+        treeDoc: 'tree:sb',
+        parent: '',
+        role: 'view' as const,
+      },
+    ];
+    r.connection.reauthorize({
+      policy: policy(),
+      scopes,
+      gained: ['b1', 'b2'],
+      lost: ['a'],
+      lostScopes: ['sa'],
+    });
+    await until(() => ofType(r.received, 'backfill').flatMap((m) => m.items).length === 2);
+    expect(ofType(r.received, 'access').at(-1)).toEqual({ type: 'access', scopes });
+    expect(ofType(r.received, 'revoke')).toEqual([
+      { type: 'revoke', docIds: ['a'], scopes: ['sa'] },
+    ]);
+    const backfilled = ofType(r.received, 'backfill').flatMap((m) => m.items);
+    expect(backfilled.map((i) => [i.docId, contentsOf(i.update).t])).toEqual([
+      ['b1', 'in b1'],
+      ['b2', 'in b2'],
+    ]);
+    // Split by size (a 1-byte budget here: one doc per message).
+    expect(ofType(r.received, 'backfill').length).toBe(2);
+
+    // From now on only b-docs come through.
+    await store.append(WS, [
+      { docId: 'a', data: edit('more a'), deviceId: null },
+      { docId: 'b1', data: edit('more b1'), deviceId: null },
+    ]);
+    setupHubOf(r).notify(WS);
+    await until(() => r.received.some((m) => m.type === 'updates' && m.cursor === 5));
+    const last = ofType(r.received, 'updates').at(-1)!;
+    expect(last.items.map((i) => i.docId)).toEqual(['b1']);
   });
 
   it('appends the server’s own updates in order, with or without connections', async () => {

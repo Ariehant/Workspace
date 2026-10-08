@@ -17,13 +17,20 @@ const bytes = (...values: number[]) => new Uint8Array(values);
 describe('messages', () => {
   it('round-trips every message', () => {
     const client: ClientMessage[] = [
-      { type: 'hello', protocol: 1, mode: 'replica', cursor: 2 ** 40, deviceId: 'dev-é' },
-      { type: 'hello', protocol: 1, mode: 'partial', cursor: 0, deviceId: '' },
+      {
+        type: 'hello',
+        protocol: 2,
+        mode: 'replica',
+        cursor: 2 ** 40,
+        deviceId: 'dev-é',
+        known: ['s1', 's2'],
+      },
+      { type: 'hello', protocol: 2, mode: 'partial', cursor: 0, deviceId: '', known: [] },
       {
         type: 'push',
         items: [
-          { localId: 1, docId: 'workspace', update: bytes(1, 2, 3) },
-          { localId: 99, docId: 'b2f6…', update: bytes() },
+          { localId: 1, docId: 'workspace', update: bytes(1, 2, 3), scope: null },
+          { localId: 99, docId: 'b2f6…', update: bytes(), scope: 'scope-1' },
         ],
       },
       { type: 'open', docId: 'page' },
@@ -35,9 +42,42 @@ describe('messages', () => {
       { type: 'updates', cursor: 7, items: [{ docId: 'a', update: bytes(9) }] },
       { type: 'updates', cursor: 8, items: [] },
       { type: 'caught-up', cursor: 12 },
-      { type: 'ack', items: [{ localId: 3, seq: 40 }] },
+      {
+        type: 'ack',
+        items: [
+          { localId: 3, seq: 40, denied: false },
+          { localId: 4, seq: 0, denied: true },
+        ],
+      },
       { type: 'state', docId: 'a', update: bytes(0, 0) },
       { type: 'error', code: 'protocol', message: 'Bad' },
+      { type: 'refused', docId: 'secret' },
+      {
+        type: 'access',
+        scopes: [
+          {
+            id: 's1',
+            kind: 'teamspace',
+            name: 'Lab',
+            treeDoc: 'workspace',
+            parent: '',
+            role: 'full',
+          },
+          { id: 's2', kind: 'shared', name: '', treeDoc: 'tree:s2', parent: 's1', role: 'view' },
+          {
+            id: 's3',
+            kind: 'private',
+            name: 'Private',
+            treeDoc: 'tree:s3',
+            parent: '',
+            role: 'comment',
+          },
+        ],
+      },
+      { type: 'access', scopes: [] },
+      { type: 'backfill', items: [{ docId: 'p', update: bytes(4, 2) }] },
+      { type: 'revoke', docIds: ['p', 'q'], scopes: ['s9'] },
+      { type: 'revoke', docIds: [], scopes: [] },
     ];
     for (const m of server) expect(decodeServer(encodeServer(m))).toEqual(m);
   });

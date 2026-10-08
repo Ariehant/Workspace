@@ -16,6 +16,7 @@ import {
   ProtocolError,
   decodeClient,
   encodeServer,
+  type AccessScope,
   type ClientMessage,
   type ServerMessage,
   type SyncMode,
@@ -29,11 +30,16 @@ export interface LoggedRow {
 }
 
 /** The workspace update logs (Postgres on the server, memory in tests). */
+export interface NewRow {
+  docId: string;
+  data: Uint8Array;
+  deviceId: string | null;
+  /** Who made it (null: the server itself). */
+  userId?: string | null;
+}
+
 export interface LogStore {
-  append(
-    workspaceId: string,
-    updates: { docId: string; data: Uint8Array; deviceId: string | null }[],
-  ): Promise<number[]>;
+  append(workspaceId: string, updates: NewRow[]): Promise<number[]>;
   /** Rows after `cursor`, oldest first, at most `limit`. */
   since(workspaceId: string, cursor: number, limit: number): Promise<LoggedRow[]>;
   latest(workspaceId: string): Promise<number>;
@@ -69,15 +75,48 @@ export interface HubOptions {
   now?: () => number;
 }
 
-export interface Access {
-  /** Members can push; guests (Phase 5) only read. */
-  canWrite: boolean;
+/**
+ * What one connection may read and write, decided by the host (the server knows each
+ * doc's scope and the user's role in it). Without a policy, everything is allowed.
+ */
+export interface DocPolicy {
+  /** May the connection receive this doc's updates? Called for every row: keep it fast. */
+  canRead(docId: string): boolean;
   /**
-   * Docs this connection may not change (e.g. the members doc, which only the server
-   * writes). Pushes to them are acknowledged with seq 0 and not stored, so the client's
-   * outbox moves on; the client gets one `denied` error per push that had any.
+   * May it store an update to this doc? `scope` is where the client asks to place a doc
+   * the server hasn't seen (hosts place new docs as they allow them).
    */
-  canWriteDoc?: (docId: string) => boolean;
+  canWrite(docId: string, scope: string | null): boolean | Promise<boolean>;
+}
+
+export interface Access {
+  /** Who is connected (stored with their updates). */
+  userId?: string | null;
+  policy?: DocPolicy;
+  /** Their scopes and roles, sent after hello. */
+  scopes?: AccessScope[];
+  /**
+   * For a replica connecting: the docs to take away and to send whole, given the scopes
+   * it says it holds and its cursor (what changed while it was away).
+   */
+  reconcile?(
+    known: string[],
+    cursor: number,
+  ): Promise<{ gained: string[]; lost: string[]; lostScopes: string[] }>;
+}
+
+/** A change of a connection's access (see `SyncConnection.reauthorize`). */
+export interface AccessChange {
+  policy: DocPolicy;
+  scopes: AccessScope[];
+  /** Docs it can now read and couldn't before (sent to replicas as `backfill`). */
+  gained: string[];
+  /** Docs it could read and can't any more (sent as `revoke`). */
+  lost: string[];
+  /** Whole scopes it lost (the client stops claiming them as it deletes their docs). */
+  lostScopes?: string[];
+  /** Replaces `Access.reconcile` (if the client hasn't said hello yet, it still will). */
+  reconcile?: Access['reconcile'];
 }
 
 interface WorkspaceState {
@@ -153,7 +192,7 @@ export class SyncHub {
     workspaceId: string,
     updates: { docId: string; data: Uint8Array }[],
   ): Promise<number[]> {
-    const rows = updates.map((u) => ({ ...u, deviceId: null }));
+    const rows = updates.map((u) => ({ ...u, deviceId: null, userId: null }));
     const workspace = this.workspaces.get(workspaceId);
     if (workspace) return this.append(workspace, rows);
     // Nobody is connected: store them; whoever connects next catches up from the log.
@@ -178,13 +217,13 @@ export class SyncHub {
   }
 
   /** @internal Append in order and wake every connection of the workspace. */
-  append(
-    workspace: WorkspaceState,
-    updates: { docId: string; data: Uint8Array; deviceId: string | null }[],
-  ): Promise<number[]> {
+  append(workspace: WorkspaceState, updates: NewRow[]): Promise<number[]> {
     const result = workspace.appending.then(async () => {
       const seqs = await this.store.append(workspace.id, updates);
-      seqs.forEach((seq, i) => workspace.recent.push({ seq, ...updates[i]! }));
+      seqs.forEach((seq, i) => {
+        const { docId, data, deviceId } = updates[i]!;
+        workspace.recent.push({ seq, docId, data, deviceId });
+      });
       const extra = workspace.recent.length - this.options.ringSize;
       if (extra > 0) workspace.recent.splice(0, extra);
       return seqs;
@@ -238,6 +277,18 @@ export class SyncConnection {
   private sent = 0;
   private caughtUp = false;
   private readonly openDocs = new Set<string>();
+  /**
+   * Rows this connection appended and hasn't passed yet: the client has them, so they
+   * aren't sent back. (Not "rows from this device": an older connection's push can land
+   * after a revoke or reset wiped the device's copy, and then it must come back.)
+   */
+  private readonly mine = new Set<number>();
+  /**
+   * Docs this connection revoked or reset: the client threw its copy away, possibly with
+   * edits still in flight that the server may store later. Its rows for these docs are
+   * always sent back.
+   */
+  private readonly wiped = new Set<string>();
   private pumping = false;
   private again = false;
   private closed = false;
@@ -246,8 +297,81 @@ export class SyncConnection {
     private readonly hub: SyncHub,
     private readonly workspace: WorkspaceState,
     private readonly peer: Peer,
-    private readonly access: Access,
+    private access: Access,
   ) {}
+
+  private canRead(docId: string): boolean {
+    return this.access.policy?.canRead(docId) ?? true;
+  }
+
+  /**
+   * The user's access changed: from now on use `change.policy`, and tell the client
+   * (its scopes, the docs it lost, and for a replica the docs it gained, whose updates
+   * are below its cursor). Handled in order with the client's messages.
+   */
+  reauthorize(change: AccessChange): void {
+    this.queue = this.queue.then(() => this.applyAccess(change)).catch((error) => this.fail(error));
+  }
+
+  private async applyAccess({
+    policy,
+    scopes,
+    gained,
+    lost,
+    lostScopes = [],
+    reconcile,
+  }: AccessChange) {
+    if (this.closed) return;
+    // The new policy first: rows appended from here on are filtered by it, and the
+    // states read below include everything appended before.
+    this.access = { ...this.access, policy, scopes, reconcile: reconcile ?? this.access.reconcile };
+    if (!this.mode) return; // hello will send the scopes
+    if (!(await this.sendChanges(gained, lost, lostScopes))) return;
+    this.send({ type: 'access', scopes });
+  }
+
+  /**
+   * Revoke `lost`, then (replicas) backfill `gained`. The `access` message goes after
+   * these, so a client that records its scopes from it never claims a scope whose docs it
+   * didn't get. False if the connection closed meanwhile.
+   */
+  private async sendChanges(
+    gained: string[],
+    lost: string[],
+    lostScopes: string[],
+  ): Promise<boolean> {
+    // The scopes go with the last part, once all their docs are named.
+    for (let i = 0; i < lost.length || (i === 0 && lostScopes.length > 0); i += 1000) {
+      const docIds = lost.slice(i, i + 1000);
+      for (const id of docIds) {
+        this.openDocs.delete(id);
+        this.wiped.add(id);
+      }
+      const last = i + 1000 >= lost.length;
+      this.send({ type: 'revoke', docIds, scopes: last ? lostScopes : [] });
+    }
+    if (this.mode !== 'replica') return !this.closed;
+    let items: { docId: string; update: Uint8Array }[] = [];
+    let bytes = 0;
+    const flush = async () => {
+      if (items.length === 0) return true;
+      if (!(await this.waitForRoom())) return false;
+      this.send({ type: 'backfill', items });
+      items = [];
+      bytes = 0;
+      return true;
+    };
+    for (const docId of gained) {
+      if (!this.canRead(docId)) continue;
+      const state = await this.hub.store.docState(this.workspace.id, docId);
+      if (this.closed) return false;
+      if (!state) continue;
+      items.push({ docId, update: state });
+      bytes += state.byteLength;
+      if (bytes >= this.hub.options.batchBytes && !(await flush())) return false;
+    }
+    return (await flush()) && !this.closed;
+  }
 
   /** A message arrived from the client. Messages are handled one at a time, in order. */
   receive(data: Uint8Array): void {
@@ -312,19 +436,18 @@ export class SyncConnection {
         this.sent =
           message.mode === 'partial' ? latest : message.cursor > latest ? 0 : message.cursor;
         this.mode = message.mode;
+        if (this.mode === 'replica' && this.access.reconcile) {
+          const { gained, lost, lostScopes } = await this.access.reconcile(
+            message.known,
+            this.sent,
+          );
+          if (!(await this.sendChanges(gained, lost, lostScopes))) return;
+        }
+        if (this.access.scopes) this.send({ type: 'access', scopes: this.access.scopes });
         void this.pump();
         return;
       }
       case 'push': {
-        if (!this.access.canWrite) {
-          this.send({
-            type: 'error',
-            code: 'read_only',
-            message: 'You can only read this workspace.',
-          });
-          this.close(CloseCode.forbidden, 'Read only');
-          return;
-        }
         for (const item of message.items) {
           try {
             Y.decodeUpdate(item.update);
@@ -332,37 +455,69 @@ export class SyncConnection {
             throw new ProtocolError(`Malformed update for ${item.docId}`);
           }
         }
-        const allowed = this.access.canWriteDoc ?? (() => true);
-        const accepted = message.items.filter((item) => allowed(item.docId));
-        const denied = message.items.filter((item) => !allowed(item.docId));
+        // One at a time: allowing an item can place a new doc, which the next item (of
+        // the same doc) relies on.
+        const allowed: boolean[] = [];
+        for (const item of message.items) {
+          allowed.push(
+            this.access.policy
+              ? await this.access.policy.canWrite(item.docId, item.scope ?? null)
+              : true,
+          );
+        }
+        if (this.closed) return;
+        const accepted = message.items.filter((_, i) => allowed[i]);
         const seqs =
           accepted.length > 0
             ? await this.hub.append(
                 this.workspace,
-                accepted.map((i) => ({ docId: i.docId, data: i.update, deviceId: this.deviceId })),
+                accepted.map((i) => ({
+                  docId: i.docId,
+                  data: i.update,
+                  deviceId: this.deviceId,
+                  userId: this.access.userId ?? null,
+                })),
               )
             : [];
-        if (denied.length > 0) {
-          this.send({
-            type: 'error',
-            code: 'denied',
-            message: `You can't change ${[...new Set(denied.map((i) => i.docId))].join(', ')}.`,
-          });
-        }
+        accepted.forEach((item, i) => {
+          if (!this.wiped.has(item.docId)) this.mine.add(seqs[i]!);
+        });
         const seqOf = new Map(accepted.map((item, i) => [item, seqs[i]!]));
         this.send({
           type: 'ack',
           items: message.items.map((item) => ({
             localId: item.localId,
             seq: seqOf.get(item) ?? 0,
+            denied: !seqOf.has(item),
           })),
         });
+        // What the client has of a denied doc isn't the server's: send the server's copy
+        // to start again from, or take the doc away if it can't even read it.
+        const denied = [
+          ...new Set(message.items.filter((_, i) => !allowed[i]).map((i) => i.docId)),
+        ];
+        const unreadable: string[] = [];
+        for (const docId of denied) {
+          if (!this.canRead(docId)) {
+            unreadable.push(docId);
+            continue;
+          }
+          const state = await this.hub.store.docState(this.workspace.id, docId);
+          this.wiped.add(docId);
+          this.send({ type: 'state', docId, update: state ?? EMPTY_DOC_UPDATE });
+        }
+        for (const docId of unreadable) this.wiped.add(docId);
+        if (unreadable.length > 0) this.send({ type: 'revoke', docIds: unreadable, scopes: [] });
         return;
       }
       case 'open': {
         if (this.mode !== 'partial') throw new ProtocolError('Only partial clients open docs');
         if (this.openDocs.size >= this.hub.options.maxOpenDocs) {
           throw new ProtocolError('Too many open docs');
+        }
+        if (!this.canRead(message.docId)) {
+          this.send({ type: 'refused', docId: message.docId });
+          return;
         }
         // Opened first, then read: anything appended in between is sent again by the
         // pump, which is harmless (Yjs ignores what it already has).
@@ -431,8 +586,9 @@ export class SyncConnection {
 
   /**
    * Send rows (in seq order) as `updates` messages of about `batchBytes`, each doc's
-   * rows merged into one update. Rows this device pushed itself are skipped (it has
-   * them), and for partial clients so are docs it hasn't opened; the cursor still moves.
+   * rows merged into one update. Rows this connection pushed itself are skipped (the
+   * client has them), so are docs it may not read, and for partial clients docs it hasn't opened;
+   * the cursor still moves.
    */
   private sendRows(rows: LoggedRow[]) {
     const { batchBytes } = this.hub.options;
@@ -451,8 +607,9 @@ export class SyncConnection {
       bytes = 0;
     };
     for (const row of rows) {
-      const own = this.deviceId !== null && row.deviceId === this.deviceId;
-      const wanted = this.mode === 'replica' || this.openDocs.has(row.docId);
+      const own = this.mine.delete(row.seq);
+      const wanted =
+        (this.mode === 'replica' || this.openDocs.has(row.docId)) && this.canRead(row.docId);
       if (!own && wanted) {
         let list = chunk.get(row.docId);
         if (!list) chunk.set(row.docId, (list = []));

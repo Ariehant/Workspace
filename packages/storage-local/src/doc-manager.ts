@@ -67,6 +67,7 @@ export class DocManager {
   readonly workspace: Y.Doc;
   private readonly docs = new Map<string, LoadedDoc>();
   private readonly listeners = new Set<UpdateListener>();
+  private readonly resetListeners = new Set<(docId: string) => void>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly compactThreshold: number;
   private readonly indexDelayMs: number;
@@ -172,6 +173,55 @@ export class DocManager {
     Y.applyUpdate(doc, update, origin);
     this.docs.get(docId)!.refs = 0;
     this.release(docId);
+  }
+
+  // --- Access changes (sync) -----------------------------------------------------
+
+  /**
+   * A doc was replaced (`reset`) or taken away (`forget`): what windows show of it is
+   * out of date, and must be loaded again.
+   */
+  onReset(listener: (docId: string) => void): () => void {
+    this.resetListeners.add(listener);
+    return () => this.resetListeners.delete(listener);
+  }
+
+  /**
+   * Replace a doc with `state`: the server's copy, after it refused this device's
+   * changes (the person may not change it). Unsent changes to it are dropped.
+   */
+  reset(docId: string, state: Uint8Array): void {
+    // (A crash in between leaves unsent changes: they're refused again, and reset again.)
+    this.store.replaceUpdates(docId, state);
+    this.store.outboxRemoveDoc(docId);
+    const entry = this.docs.get(docId);
+    if (entry && docId !== WORKSPACE_DOC_ID) {
+      // Reload it from the new state, keeping the windows' references.
+      const refs = entry.refs;
+      entry.doc.destroy();
+      this.docs.delete(docId);
+      this.load(docId);
+      this.docs.get(docId)!.refs = refs;
+    }
+    this.scheduleIndex(docId);
+    for (const listener of this.resetListeners) listener(docId);
+  }
+
+  /**
+   * Delete docs the person may no longer read: their content, index entries, history,
+   * reminders and unsent changes (a database takes its rows along).
+   */
+  forget(docIds: readonly string[]): void {
+    for (const docId of docIds) {
+      this.store.outboxRemoveDoc(docId);
+      if (docId === WORKSPACE_DOC_ID) {
+        this.store.deleteDoc(docId);
+      } else {
+        this.dropPageDoc(docId);
+        this.store.removePageIndex(docId);
+      }
+    }
+    for (const docId of docIds) for (const listener of this.resetListeners) listener(docId);
   }
 
   // --- Page history ------------------------------------------------------------

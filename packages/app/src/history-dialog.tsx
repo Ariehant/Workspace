@@ -12,6 +12,7 @@ const REASONS: Record<string, string> = {
   edit: 'Before editing',
   restore: 'Before a restore',
   template: 'Before a template was applied',
+  'not-saved': 'Not saved: your access changed',
 };
 
 const when = new Intl.DateTimeFormat('en-US', {

@@ -307,6 +307,11 @@ export class SqliteStore {
     });
   }
 
+  /** Forget unsent changes to a doc (the server refused them, or the doc went away). */
+  outboxRemoveDoc(docId: string): void {
+    this.db.prepare('DELETE FROM sync_outbox WHERE doc_id = ?').run(docId);
+  }
+
   outboxCount(): number {
     return (this.db.prepare('SELECT count(*) AS n FROM sync_outbox').get() as { n: number }).n;
   }

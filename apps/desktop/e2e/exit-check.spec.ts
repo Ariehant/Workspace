@@ -6,119 +6,38 @@
  * page, other pages and the same database, and after reconnecting, and again after
  * restarting both, the two hold the very same docs.
  */
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { createConnection, createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { WORKSPACE_DOC_ID, getPageContent, isInTrash, listPages } from '@workspace/core';
 import { isDatabaseDoc, readDatabase } from '@workspace/database';
-import { createTestDatabase, startTestPostgres } from '@workspace/storage-remote/testing';
 import * as Y from 'yjs';
 import { addProperty, addRow, cell, newDatabase, titles } from './db';
 import { editor, expect, launchApp, sidebarTitles, test, type Launched } from './helpers';
+import { Proxy, startSyncServer, type SyncServer } from './server';
 
 test.describe.configure({ mode: 'serial' });
 
-const serverDir = fileURLToPath(new URL('../../server', import.meta.url));
 const shotsDir = process.env.WORKSPACE_SHOTS;
 const PASSWORD = 'correct horse battery';
 
-let postgres: Awaited<ReturnType<typeof startTestPostgres>>;
-let server: ChildProcess | null = null;
+let server: SyncServer | null = null;
 let root: string;
 let base: string;
 let a: Launched;
 let b: Launched;
 const dirA = () => join(root, 'device-a');
 const dirB = () => join(root, 'device-b');
-
-/** A TCP proxy in front of the server, for device B: `cut()` takes B offline. */
-class Proxy {
-  private readonly sockets = new Set<Socket>();
-  private blocked = false;
-  private server!: Server;
-  port = 0;
-
-  async start(target: number) {
-    this.server = createServer((client) => {
-      if (this.blocked) return void client.destroy();
-      const upstream = createConnection(target, '127.0.0.1');
-      for (const s of [client, upstream]) {
-        this.sockets.add(s);
-        s.on('close', () => this.sockets.delete(s));
-        s.on('error', () => {
-          client.destroy();
-          upstream.destroy();
-        });
-      }
-      client.pipe(upstream).pipe(client);
-    });
-    await new Promise<void>((resolve) => this.server.listen(0, '127.0.0.1', resolve));
-    this.port = (this.server.address() as { port: number }).port;
-  }
-
-  /** Drop every connection and refuse new ones (unplugged network). */
-  cut() {
-    this.blocked = true;
-    for (const s of this.sockets) s.destroy();
-  }
-
-  restore() {
-    this.blocked = false;
-  }
-
-  close() {
-    this.cut();
-    return new Promise<void>((resolve) => this.server.close(() => resolve()));
-  }
-}
+/** Device B reaches the server through this (so the test can cut it off). */
 const proxy = new Proxy();
-
-const freePort = () =>
-  new Promise<number>((resolve) => {
-    const probe = createServer().listen(0, '127.0.0.1', () => {
-      const { port } = probe.address() as { port: number };
-      probe.close(() => resolve(port));
-    });
-  });
 
 test.beforeAll(async () => {
   test.setTimeout(120_000);
-  const build = spawnSync('node', ['build.mjs'], { cwd: serverDir, encoding: 'utf8' });
-  if (build.status !== 0) throw new Error(`Server build failed: ${build.stderr}`);
-  postgres = await startTestPostgres();
-  const databaseUrl = await createTestDatabase(postgres.url);
   root = mkdtempSync(join(tmpdir(), 'workspace-exit-check-'));
-  const port = await freePort();
-  base = `http://127.0.0.1:${port}`;
-  server = spawn('node', ['dist/main.js'], {
-    cwd: serverDir,
-    env: {
-      ...process.env,
-      DATABASE_URL: databaseUrl,
-      HOST: '127.0.0.1',
-      PORT: String(port),
-      PUBLIC_URL: base,
-      FILES_DIR: join(root, 'server-files'),
-      SIGNUP: 'open',
-      LOG_LEVEL: 'warn',
-    },
-    stdio: ['ignore', 'inherit', 'inherit'],
-  });
-  await expect
-    .poll(
-      () =>
-        fetch(`${base}/api/ready`).then(
-          (r) => r.status,
-          () => 0,
-        ),
-      { timeout: 20_000 },
-    )
-    .toBe(200);
-  await proxy.start(port);
+  server = await startSyncServer(root);
+  base = server.base;
+  await proxy.start(server.port);
   if (shotsDir) mkdirSync(shotsDir, { recursive: true });
 });
 
@@ -126,13 +45,7 @@ test.afterAll(async () => {
   await a?.app.close().catch(() => {});
   await b?.app.close().catch(() => {});
   await proxy.close().catch(() => {});
-  if (server && server.exitCode === null) {
-    await new Promise((resolve) => {
-      server!.once('exit', resolve);
-      server!.kill('SIGTERM');
-    });
-  }
-  await postgres?.stop();
+  await server?.stop();
   if (root) rmSync(root, { recursive: true, force: true });
 });
 

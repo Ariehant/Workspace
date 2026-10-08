@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import { Accounts } from './accounts';
 import { migrate } from './migrations';
 import { SearchIndex } from './search';
+import { Scopes } from './scopes';
 import { Teams } from './teams';
 
 /** One stored update of the workspace log. */
@@ -19,6 +20,8 @@ export interface NewUpdate {
   docId: string;
   data: Uint8Array;
   deviceId?: string | null;
+  /** Who made it (null: the server, or before accounts made edits). */
+  userId?: string | null;
 }
 
 export interface Workspace {
@@ -50,6 +53,7 @@ export class PgStore {
   readonly accounts: Accounts;
   readonly search: SearchIndex;
   readonly teams: Teams;
+  readonly scopes: Scopes;
 
   constructor(connectionString: string, options: { max?: number } = {}) {
     this.pool = new pg.Pool({ connectionString, max: options.max ?? 10 });
@@ -58,6 +62,7 @@ export class PgStore {
     this.accounts = new Accounts(this.pool);
     this.search = new SearchIndex(this.pool);
     this.teams = new Teams(this.pool);
+    this.scopes = new Scopes(this.pool);
   }
 
   migrate(): Promise<number> {
@@ -86,8 +91,19 @@ export class PgStore {
 
   // --- Workspaces -------------------------------------------------------------------
 
-  async createWorkspace(name: string, ownerId: string | null): Promise<Workspace> {
+  /**
+   * A new workspace, with its first scope (holding the workspace doc, where pages go by
+   * default): a teamspace every member can edit, or the owner's private pages (a
+   * workspace uploaded from a desktop: nothing shows to people invited later until it's
+   * shared).
+   */
+  async createWorkspace(
+    name: string,
+    ownerId: string | null,
+    options: { firstScope?: 'teamspace' | 'private' } = {},
+  ): Promise<Workspace> {
     const id = randomUUID();
+    const kind = options.firstScope ?? 'teamspace';
     return this.transaction(async (client) => {
       const { rows } = await client.query<{ id: string; name: string; created_at: Date }>(
         'INSERT INTO workspaces (id, name, created_by) VALUES ($1, $2, $3) RETURNING id, name, created_at',
@@ -99,6 +115,38 @@ export class PgStore {
           [id, ownerId],
         );
       }
+      const scopeId = randomUUID();
+      await client.query(
+        `INSERT INTO scopes (id, workspace_id, kind, name, tree_doc, owner_id)
+         VALUES ($1, $2, $3, $4, 'workspace', $5)`,
+        [
+          scopeId,
+          id,
+          kind,
+          kind === 'private' ? 'Private' : name,
+          kind === 'private' ? ownerId : null,
+        ],
+      );
+      if (ownerId) {
+        await client.query(
+          `INSERT INTO scope_access (scope_id, principal, role) VALUES ($1, $2, 'full')`,
+          [scopeId, `user:${ownerId}`],
+        );
+      }
+      if (kind === 'teamspace') {
+        await client.query(
+          `INSERT INTO scope_access (scope_id, principal, role) VALUES ($1, 'workspace', 'edit')`,
+          [scopeId],
+        );
+      }
+      await client.query(
+        `INSERT INTO doc_scopes (workspace_id, doc_id, scope_id) VALUES ($1, 'workspace', $2)`,
+        [id, scopeId],
+      );
+      await client.query('UPDATE workspaces SET default_scope_id = $2 WHERE id = $1', [
+        id,
+        scopeId,
+      ]);
       const row = rows[0]!;
       return { id: row.id, name: row.name, createdAt: row.created_at };
     });
@@ -158,14 +206,15 @@ export class PgStore {
       const first = rows[0].last_seq - updates.length + 1;
       const seqs = updates.map((_, i) => first + i);
       await client.query(
-        `INSERT INTO doc_updates (workspace_id, seq, doc_id, data, device_id)
-         SELECT $1, * FROM unnest($2::bigint[], $3::text[], $4::bytea[], $5::text[])`,
+        `INSERT INTO doc_updates (workspace_id, seq, doc_id, data, device_id, user_id)
+         SELECT $1, * FROM unnest($2::bigint[], $3::text[], $4::bytea[], $5::text[], $6::uuid[])`,
         [
           workspaceId,
           seqs,
           updates.map((u) => u.docId),
           updates.map((u) => Buffer.from(u.data)),
           updates.map((u) => u.deviceId ?? null),
+          updates.map((u) => u.userId ?? null),
         ],
       );
       return seqs;

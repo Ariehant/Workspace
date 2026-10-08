@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LINK_SCHEME, parsePageUrl } from '@workspace/core';
+import { LINK_SCHEME, WORKSPACE_DOC_ID, parsePageUrl } from '@workspace/core';
 import {
   DocManager,
   FileStore,
@@ -214,6 +214,38 @@ function replaceWorkspace(settings: CarrySettings): void {
     if (value !== null && value !== undefined) fresh.setSetting(key, value);
   }
   fresh.close();
+  if (!process.env.WORKSPACE_E2E) app.relaunch();
+  app.exit(0);
+}
+
+/**
+ * Sync replaced a doc with the server's copy, or took it away (access changed): what the
+ * windows show of it is out of date, so they load again. The page tree (the workspace
+ * doc) is held for the app's whole life: then the app restarts.
+ */
+let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+manager.onReset((docId) => {
+  if (docId === WORKSPACE_DOC_ID) {
+    restartApp();
+    return;
+  }
+  reloadTimer ??= setTimeout(() => {
+    reloadTimer = null;
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.reload();
+    }
+  }, 300);
+});
+
+function restartApp(): void {
+  if (restoring) return;
+  restoring = true;
+  reminders.stop();
+  sync.stop();
+  for (const window of BrowserWindow.getAllWindows()) window.destroy();
+  manager.close();
+  store.close();
+  // Tests launch the app again themselves.
   if (!process.env.WORKSPACE_E2E) app.relaunch();
   app.exit(0);
 }

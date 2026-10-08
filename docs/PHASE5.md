@@ -1,6 +1,6 @@
 # Phase 5: Collaboration
 
-**Status:** M1 (members, invites and groups) is done. M2 (scopes and permissions on the server) is next.
+**Status:** M1 (members, invites and groups) and M2 (scopes and permissions on the server) are done. M3 (teamspaces, private pages and sharing in the app) is next.
 
 ## Context
 
@@ -216,7 +216,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
     - Bob renames himself, and Ada's mention and cell follow.
   - **Desktop E2E:** once synced, the desktop's Members dialog lists the account, invites a guest and revokes the invite.
 
-### M2: scopes and permissions on the server (about 1.5 weeks)
+### M2: scopes and permissions on the server ✅
 
 - **Migration 6:**
   - `scopes`, `scope_access` and `doc_scopes`, plus `doc_updates.user_id`
@@ -246,6 +246,79 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - a downgrade while offline (denied push → history snapshot → reset)
   - revoke and backfill across a reconnect
   - convergence fuzzing with filtering on
+
+**M2 notes:**
+
+- **Migration 6 (`storage-remote`):**
+  - Tables `scopes`, `scope_access`, `doc_scopes` and `doc_moves`; columns `doc_updates.user_id`, `workspaces.default_scope_id` and `search_index.scope_id`.
+  - Each existing workspace gets its owner's private scope, with the `workspace` doc as its tree, and every doc but `members` is placed there. Inviting someone exposes nothing until the owner shares.
+  - **New workspaces:** an upload from the desktop starts private, like existing ones. One made on the web starts as a teamspace that everyone in the workspace can edit.
+  - `Scopes` (in `storage-remote`) holds the access model, placements and moves. `place` is insert-or-get, so two devices placing one new doc agree. `move` re-places docs, records each move at a log position, and moves their search rows, all in one transaction.
+- **Effective roles (`apps/server/src/access`):**
+  - **Differs from the plan:** roles are computed in TypeScript (`rolesFor`), not with a recursive CTE. The whole model (scopes, entries, members, groups) is small, so `AccessService` loads it once per workspace with every placement, and answers each row without a query.
+  - A role is the highest of the person's own, their groups' and `workspace` entries; `full` on teamspaces for owners and admins (private pages stay private, even to them); and, for a scope that inherits, its parent's role.
+  - Every change (scope access, member roles, removals, groups, invites accepted, sign-ups that join) reloads the model and re-authorizes the open sockets. A role change no longer closes them.
+  - One server process is assumed, as the plan says. `LISTEN/NOTIFY` is the way to run several.
+- **Protocol version 2 (`packages/sync`):**
+  - `hello` carries the scopes the device holds (`known`). Push items carry a scope hint. Acks say per item whether it was `denied`.
+  - New server messages:
+    - `access`: the person's scopes and roles
+    - `backfill`: the merged state of docs just gained
+    - `revoke {docIds, scopes}`: docs and scopes lost
+    - `refused`: an `open` of a doc the person can't read
+  - The hub takes a `DocPolicy` per connection: `canRead` filters the stream, catch-up and opens, and `canWrite` checks each pushed item (placing a new doc in its hint's scope, or the default scope, if the person may edit there).
+  - **A refused item** is acknowledged and not stored. If the person can still read the doc, the hub sends its copy (`state`) so the device starts over from it. Otherwise it revokes the doc.
+  - **Access changes:** the hub sends `revoke` first, then `backfill`, then `access`, in order with the client's messages. A client that records its scopes from `access` never claims a scope whose docs it hasn't received.
+  - **Returning devices:** on `hello`, the server compares `known` with the person's scopes now, and with the moves recorded since the device's cursor, and sends what it lost and gained.
+  - A row is held back from its own connection only if that connection appended it and hasn't had the doc wiped since. Edits in flight when a doc was revoked or reset come back to the device.
+  - Version 1 clients are refused at `hello`.
+- **Scope API (`/api/workspaces/:id/…`):**
+  - `GET scopes`: the caller's scopes and roles, with the access entries where they have full access
+  - `POST teamspaces`, `POST private`, `PATCH scopes/:scopeId` (name, inherit)
+  - `PUT scopes/:scopeId/access {principal, role|null}`, with principals `user:<id>`, `group:<id>` or `workspace`
+  - `POST pages/:pageId/share`: makes the page its own scope, inheriting from where it was, with a stub left in place
+  - `POST pages/:pageId/move {from, to, parentId?}`: moves a page and its sub-pages to another scope
+  - Moves run one at a time per workspace. The server edits both tree docs as its own peer (`moveSubtree` in `@workspace/core`) and appends the updates through the hub. It then re-places the pages' docs (content, database, rows, comments) and the open sockets get what they gained or lost.
+- **REST filtering:** search and page location only return pages in scopes the caller can read.
+- **Stubs (`@workspace/core`):** a tree entry with a `scope` field is a stub. `getPage` and `listPages` skip stubs, and `listStubs` lists them for M3's sidebar.
+- **Desktop:**
+  - The sync store keeps the access list (`sync.access`), merges backfills without moving the cursor, and forgets revoked docs (their updates, index entries and outbox items).
+  - **A refused change:** a page-history snapshot ("Not saved: your access changed"), then `DocManager.reset` to the server's copy, then the windows reload.
+  - The page tree is held for the app's whole life, so a reset or revoke of it restarts the app.
+  - The app writes the user's name into the page tree (the old `users` map) only for a local workspace. A server workspace has the members doc for names, and its tree may not be the user's to change.
+- **Web:** a reset or revoked doc reloads the page. `PartialClient.open` rejects with `NoAccessError` for a doc the person can't read.
+- **Moved to later milestones:**
+  - **"Can edit content" and the `rows:<dbId>` split:** moved to M3, with the sharing UI that offers the role. Roles today are full, edit, comment and view.
+  - **`watch`, `unwatch` and `awareness`:** M4, with presence.
+  - **Checking comment authors in comments docs:** M5, with comments. Today a comments doc needs the comment role.
+  - **History and backlinks in the matrix:** M7, when those endpoints come to the server. Files stay workspace-wide, as planned.
+- **Known limits until M3:**
+  - The apps show only the `workspace` tree. Docs of other scopes sync, but their pages aren't listed until M3's sidebar sections.
+  - The apps don't know roles yet. A view-only person can still type: the edit is refused, kept in history and undone. A member with no scope they can edit can't create pages.
+- **Tests:**
+  - **The authorization matrix** (`access.test.ts`, real server and Postgres):
+    - An owner, a member, a guest and an outsider, over:
+      - a teamspace everyone can edit
+      - the owner's private pages
+      - a view-only teamspace
+      - a shared page the guest may comment on
+    - For each: open, the live stream, push (including forged scope hints and the members doc), search and page location.
+  - **Access changes** (`access.test.ts`):
+    - an outsider's socket is refused
+    - access taken away while connected (the docs go)
+    - access given back while away (the docs come whole on reconnecting)
+    - a page moved out of a scope while away
+    - a downgrade while offline (the edit is refused and undone, nothing lost on the server)
+    - a grant to a group reaching a member added to it later
+  - **Store:** scope creation and access, private scopes made once, placement races, moves and their search rows, and migration 6 on data from before it.
+  - **Hub, clients and messages:** the policy filtering the stream and opens, refused items (`state` or `revoke`), re-authorization (revoke, backfill, access), `PartialClient` refusing and undoing, and every new message round-tripping.
+  - **Convergence fuzzing with access** (`fuzzWithAccess`): random edits, drops, restarts, roles gained and lost, and refused writes. Every replica must end with exactly what the server holds of the docs it may read. 200 seeds of each fuzzer pass.
+  - **Desktop sync store:** refused changes kept in history then reset, backfills merged, revoked docs forgotten.
+  - **Desktop E2E (`access.spec.ts`):**
+    - Ada uploads her workspace and invites Bob. Bob's desktop joins and shows no pages.
+    - Ada opens her pages to the workspace, and "Gripper" arrives on Bob's desktop live. Bob's edit reaches Ada.
+    - Bob edits offline while Ada makes the pages view-only. On reconnecting, his edit is refused: the app restarts on the server's copy, and his text is in the page history as "Not saved: your access changed".
+    - The real-server helpers (the server and the TCP proxy) moved to `e2e/server.ts`, shared with the exit check.
 
 ### M3: teamspaces, private pages and sharing in the app (about 1.5 weeks)
 

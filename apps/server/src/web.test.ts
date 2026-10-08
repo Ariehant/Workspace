@@ -95,10 +95,12 @@ describe('web app', () => {
 
     const user = signup.json().user.id as string;
     const ws = await store.createWorkspace('W', user);
-    await store.search.setPages(ws.id, [
+    // The workspace's first scope (the creator may read it).
+    const scope = (await store.scopes.model(ws.id)).defaultScopeId;
+    await store.search.setPages(ws.id, scope, [
       { id: 'db', title: 'Parts', icon: null, inTrash: false, updatedAt: 1 },
     ]);
-    await store.search.setRows(ws.id, 'db', [
+    await store.search.setRows(ws.id, 'db', scope, [
       { id: 'row', title: 'Servo', icon: null, inTrash: false, updatedAt: 1, props: '' },
     ]);
     const where = (id: string) =>

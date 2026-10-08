@@ -7,7 +7,14 @@
  * covers anything missed while away) and unacknowledged pushes are sent again.
  * Nothing is persisted: closing the tab while offline loses unsent edits (the app warns).
  */
-import { CloseCode, PROTOCOL_VERSION, decodeServer, encodeClient, type PushItem } from './messages';
+import {
+  CloseCode,
+  PROTOCOL_VERSION,
+  decodeServer,
+  encodeClient,
+  type AccessScope,
+  type PushItem,
+} from './messages';
 import type { ClientSocket, SocketHandlers, SyncStatus } from './client';
 
 export interface PartialClientOptions {
@@ -15,6 +22,17 @@ export interface PartialClientOptions {
   deviceId: string;
   /** Updates made elsewhere to an open doc (and states received again after a reconnect). */
   onUpdate: (docId: string, update: Uint8Array) => void;
+  /**
+   * The server refused local changes to an open doc (the user may not change it): here is
+   * its copy to start over from. Without this, it's merged like any update.
+   */
+  onReset?: (docId: string, state: Uint8Array) => void;
+  /** Open docs the user may no longer read. */
+  onRevoked?: (docIds: string[]) => void;
+  /** The user's scopes and roles (after connecting, and when they change). */
+  onAccess?: (scopes: AccessScope[]) => void;
+  /** The scope to place a doc in, if the server hasn't seen it. */
+  scopeOf?: (docId: string) => string | null;
   backoff?: { minMs: number; maxMs: number };
   onError?: (error: unknown) => void;
   random?: () => number;
@@ -26,8 +44,15 @@ export interface PartialClientOptions {
 interface OpenDoc {
   refs: number;
   /** Waiting for the first state. */
-  waiting: ((state: Uint8Array) => void)[];
+  waiting: { resolve: (state: Uint8Array) => void; reject: (error: Error) => void }[];
   loaded: boolean;
+}
+
+/** `open` of a doc the user may not read. */
+export class NoAccessError extends Error {
+  constructor(readonly docId: string) {
+    super(`No access to ${docId}`);
+  }
 }
 
 export class PartialClient {
@@ -43,7 +68,12 @@ export class PartialClient {
   private readonly docs = new Map<string, OpenDoc>();
   /** Pushed but not acknowledged, in order. */
   private readonly pending = new Map<number, PushItem>();
-  private readonly o: Required<Omit<PartialClientOptions, 'onError'>> & PartialClientOptions;
+  /** Docs with a denied push: the next state for them replaces what's here. */
+  private readonly resetting = new Set<string>();
+  private readonly o: Required<
+    Omit<PartialClientOptions, 'onError' | 'onReset' | 'onRevoked' | 'onAccess' | 'scopeOf'>
+  > &
+    PartialClientOptions;
 
   constructor(options: PartialClientOptions) {
     this.o = {
@@ -106,7 +136,7 @@ export class PartialClient {
     }
     doc.refs++;
     const entry = doc;
-    return new Promise((resolve) => entry.waiting.push(resolve));
+    return new Promise((resolve, reject) => entry.waiting.push({ resolve, reject }));
   }
 
   close(docId: string): void {
@@ -120,7 +150,12 @@ export class PartialClient {
 
   /** A local update: sent now if connected, kept until the server acknowledges it. */
   push(docId: string, update: Uint8Array): void {
-    const item: PushItem = { localId: this.nextId++, docId, update };
+    const item: PushItem = {
+      localId: this.nextId++,
+      docId,
+      update,
+      scope: this.o.scopeOf?.(docId) ?? null,
+    };
     this.pending.set(item.localId, item);
     if (this.ready) this.send({ type: 'push', items: [item] });
     this.notify();
@@ -153,6 +188,7 @@ export class PartialClient {
           mode: 'partial',
           cursor: 0,
           deviceId: this.o.deviceId,
+          known: [],
         });
         this.ready = true;
         this.setStatus({ state: 'catching-up' });
@@ -185,13 +221,44 @@ export class PartialClient {
         if (!doc) return;
         if (!doc.loaded) {
           doc.loaded = true;
-          for (const resolve of doc.waiting.splice(0)) resolve(message.update);
+          for (const w of doc.waiting.splice(0)) w.resolve(message.update);
+        } else if (this.resetting.delete(message.docId) && this.o.onReset) {
+          // After a denied push: the server's copy replaces ours.
+          this.o.onReset(message.docId, message.update);
         } else {
           // Opened again after a reconnect: whatever we missed is in here.
           this.o.onUpdate(message.docId, message.update);
         }
         return;
       }
+      case 'refused': {
+        const doc = this.docs.get(message.docId);
+        if (!doc) return;
+        this.docs.delete(message.docId);
+        for (const w of doc.waiting.splice(0)) w.reject(new NoAccessError(message.docId));
+        return;
+      }
+      case 'revoke': {
+        const lost = message.docIds.filter((id) => this.docs.has(id));
+        for (const id of lost) {
+          const doc = this.docs.get(id)!;
+          this.docs.delete(id);
+          for (const w of doc.waiting.splice(0)) w.reject(new NoAccessError(id));
+        }
+        // Unsent edits to them can't be stored any more.
+        for (const [localId, item] of this.pending) {
+          if (message.docIds.includes(item.docId)) this.pending.delete(localId);
+        }
+        if (lost.length > 0) this.o.onRevoked?.(lost);
+        this.notify();
+        return;
+      }
+      case 'access':
+        this.o.onAccess?.(message.scopes);
+        return;
+      case 'backfill':
+        // Replicas only.
+        return;
       case 'updates':
         for (const item of message.items) {
           const doc = this.docs.get(item.docId);
@@ -200,7 +267,11 @@ export class PartialClient {
         }
         return;
       case 'ack':
-        for (const item of message.items) this.pending.delete(item.localId);
+        for (const item of message.items) {
+          const pushed = this.pending.get(item.localId);
+          if (item.denied && pushed) this.resetting.add(pushed.docId);
+          this.pending.delete(item.localId);
+        }
         this.notify();
         return;
       case 'caught-up':

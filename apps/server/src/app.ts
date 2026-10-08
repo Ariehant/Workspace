@@ -2,6 +2,7 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import type { PgStore } from '@workspace/storage-remote';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { AccessService } from './access/service';
 import { adminRoutes } from './admin-routes';
 import { csrfGuard } from './auth/context';
 import { OidcClients } from './auth/oidc';
@@ -11,6 +12,7 @@ import type { ServerContext } from './context';
 import type { FileStorage } from './files';
 import { smtpMailer, type Mailer } from './mailer';
 import { inviteRoutes, memberRoutes } from './members/routes';
+import { scopeRoutes } from './scopes/routes';
 import { MembersDoc } from './members/members-doc';
 import { Indexer } from './search/indexer';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
@@ -88,6 +90,7 @@ export function buildServer({
     files,
     oidc: oidc ?? new OidcClients(config),
     indexer,
+    access: new AccessService(store),
     realtime,
     members: new MembersDoc({ store, append: realtime.appendFromServer }),
     mailer: mailer === undefined ? smtpMailer(config) : mailer,
@@ -159,6 +162,7 @@ export function buildServer({
     settingsRoutes(scope, ctx);
     memberRoutes(scope, ctx);
     inviteRoutes(scope, ctx);
+    scopeRoutes(scope, ctx);
   });
   webApp(app, config.webDir);
   endpoint = syncEndpoint(app, ctx, sync);

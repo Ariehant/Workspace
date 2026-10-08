@@ -160,11 +160,6 @@ export function App({ platform }: { platform: Platform }) {
   }, [platform, client, workspace, user]);
   useEffect(() => () => base?.databases.destroy(), [base]);
   const context = useMemo(() => (base ? { ...base, members } : null), [base, members]);
-  // Keep the user's name current in the workspace (created by / person values show it).
-  useEffect(() => {
-    if (workspace && user) upsertUser(workspace, user);
-  }, [workspace, user]);
-
   if (!workspace || !settings || !context) return null;
   if (print) {
     return (
@@ -196,7 +191,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   // `version` changes whenever the workspace doc does, which is what invalidates the tree.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tree = useMemo(() => buildPageTree(listPages(workspace)), [workspace, version]);
-  const { databases, pages } = useApp();
+  const { databases, pages, user } = useApp();
   // Rows of databases loading in, found through links or history.
   const registryVersion = useRegistryVersion();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -423,6 +418,13 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const syncInfo = useSyncInfo(platform.sync);
   const [syncOpen, setSyncOpen] = useState(false);
   const team = useTeam(platform, syncInfo);
+  // Keep the user's name current in a local workspace (created by / person values show
+  // it). A server workspace has its members doc for names, and its page tree may not be
+  // the user's to change (the server would refuse it, and send its copy back).
+  const local = !platform.team || (!!platform.sync && !!syncInfo && syncInfo.mode !== 'on');
+  useEffect(() => {
+    if (local) upsertUser(workspace, user);
+  }, [local, workspace, user]);
   const [peopleOpen, setPeopleOpen] = useState<'members' | 'profile' | null>(null);
 
   const changeTheme = useCallback(

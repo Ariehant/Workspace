@@ -151,9 +151,14 @@ export class ServerApi {
       .workspaces;
   }
 
+  /** A workspace for this device's pages: they start private (shared from the app). */
   async createWorkspace(name: string): Promise<RemoteWorkspace> {
-    return (await this.request<{ workspace: RemoteWorkspace }>('POST', '/api/workspaces', { name }))
-      .workspace;
+    return (
+      await this.request<{ workspace: RemoteWorkspace }>('POST', '/api/workspaces', {
+        name,
+        private: true,
+      })
+    ).workspace;
   }
 
   // --- Attachments ---------------------------------------------------------------------

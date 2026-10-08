@@ -1,9 +1,11 @@
-import type { ClientStore } from '@workspace/sync';
+import type { AccessScope, ClientStore } from '@workspace/sync';
 import { SYNC_ORIGIN, type DocManager } from './doc-manager';
 import type { SqliteStore } from './sqlite-store';
 
 /** The newest seq of the server's log applied here. */
 export const SYNC_CURSOR = 'sync.cursor';
+/** The scopes (and roles) this device holds, from the server's last `access`. */
+export const SYNC_ACCESS = 'sync.access';
 
 /**
  * The desktop's side of sync over the local database: the outbox (filled by the
@@ -34,5 +36,49 @@ export class LocalSyncStore implements ClientStore {
     // After the updates: a crash in between applies them again next time (harmless),
     // where the other order could skip them for good.
     this.store.setSetting(SYNC_CURSOR, cursor);
+  }
+
+  /** Before the server's copy replaces them: keep the refused changes in the history. */
+  denied(items: { localId: number; docId: string }[]): void {
+    for (const docId of new Set(items.map((i) => i.docId))) {
+      if (docId) this.manager.snapshot(docId, 'not-saved');
+    }
+  }
+
+  reset(docId: string, state: Uint8Array): void {
+    this.manager.reset(docId, state);
+  }
+
+  applyBackfill(items: { docId: string; update: Uint8Array }[]): void {
+    for (const item of items) this.manager.applyUpdate(item.docId, item.update, SYNC_ORIGIN);
+  }
+
+  revoke(docIds: string[], scopes: string[]): void {
+    // Stop claiming the scopes first: a crash midway gets the rest revoked again.
+    if (scopes.length > 0) {
+      this.store.setSetting(
+        SYNC_ACCESS,
+        this.access().filter((s) => !scopes.includes(s.id)),
+      );
+    }
+    this.manager.forget(docIds);
+  }
+
+  setAccess(scopes: AccessScope[]): void {
+    this.store.setSetting(SYNC_ACCESS, scopes);
+  }
+
+  knownScopes(): string[] {
+    return this.access().map((s) => s.id);
+  }
+
+  /** The scopes and roles from the server's last word (also for showing read-only state). */
+  access(): AccessScope[] {
+    return this.store.getSetting<AccessScope[]>(SYNC_ACCESS) ?? [];
+  }
+
+  /** New docs go to the workspace's default scope (the app names a scope from Phase 5 M3). */
+  scopeOf(): string | null {
+    return null;
   }
 }

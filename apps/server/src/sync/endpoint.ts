@@ -7,11 +7,12 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { MEMBERS_DOC_ID } from '@workspace/core';
 import { CloseCode, MAX_CLIENT_MESSAGE_BYTES, SyncHub, type SyncConnection } from '@workspace/sync';
 import type { FastifyInstance } from 'fastify';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { SESSION_COOKIE, touch } from '../auth/context';
+import { atLeast } from '../access/roles';
+import type { AccessEvent, Roles } from '../access/service';
 import type { ServerContext } from '../context';
 import { pgLogStore } from './log-store';
 
@@ -36,6 +37,8 @@ interface Client {
   workspaceId: string;
   connection: SyncConnection;
   alive: boolean;
+  /** The roles its policy was made from (to see what a change adds or takes away). */
+  roles: Roles;
 }
 
 export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: SyncOptions = {}) {
@@ -102,6 +105,10 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
     });
     if (ws.readyState !== ws.OPEN) return;
 
+    // What this person may read and write, doc by doc (see access/service.ts).
+    const access = await ctx.access.workspace(workspaceId);
+    const roles = access.roles(found.user.id);
+    if (ws.readyState !== ws.OPEN) return;
     const connection = hub.connect(
       workspaceId,
       {
@@ -109,10 +116,21 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
         buffered: () => ws.bufferedAmount,
         close: (code, reason) => ws.close(code, reason),
       },
-      // Only the server writes the members doc.
-      { canWrite: role !== 'guest', canWriteDoc: (docId) => docId !== MEMBERS_DOC_ID },
+      {
+        userId: found.user.id,
+        policy: access.policy(roles),
+        scopes: access.accessScopes(roles),
+        reconcile: (known, cursor) => access.reconcile(roles, known, cursor),
+      },
     );
-    const client: Client = { token, userId: found.user.id, workspaceId, connection, alive: true };
+    const client: Client = {
+      token,
+      userId: found.user.id,
+      workspaceId,
+      connection,
+      alive: true,
+      roles,
+    };
     clients.set(ws, client);
     const receive = (data: RawData, binary: boolean) => {
       if (!binary) connection.close(CloseCode.protocol, 'Binary messages only');
@@ -211,6 +229,7 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
   }
 
   app.addHook('preClose', async () => {
+    stopAccess();
     clearInterval(heartbeat);
     clearInterval(recheck);
     if (compaction) clearInterval(compaction);
@@ -224,6 +243,47 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
     for (const ws of clients.keys()) ws.terminate();
     wss.close();
   });
+
+  // Access changed: each connection of the workspace gets its new policy and scopes, the
+  // docs it gained (whole) and the ones it lost.
+  const stopAccess = ctx.access.onChange((event) => {
+    for (const client of clients.values()) {
+      if (client.workspaceId !== event.workspaceId) continue;
+      void reauthorize(client, event).catch((error: unknown) =>
+        app.log.error({ err: error }, 'reauthorize failed'),
+      );
+    }
+  });
+  async function reauthorize(client: Client, event: AccessEvent) {
+    const access = await ctx.access.workspace(client.workspaceId);
+    const roles = access.roles(client.userId);
+    const old = client.roles;
+    client.roles = roles;
+    const readable = (r: Roles, scopeId: string) => atLeast(r.get(scopeId), 'view');
+    const gainedScopes = [...roles.keys()].filter(
+      (id) => readable(roles, id) && !readable(old, id),
+    );
+    const lostScopes = [...old.keys()].filter((id) => readable(old, id) && !readable(roles, id));
+    const gained = new Set(gainedScopes.flatMap((id) => access.docsIn(id)));
+    const lost = new Set(lostScopes.flatMap((id) => access.docsIn(id)));
+    if (event.kind === 'moved') {
+      for (const docId of event.docIds) {
+        const before = readable(old, event.from);
+        const after = readable(roles, event.to);
+        if (after && !before) gained.add(docId);
+        if (before && !after) lost.add(docId);
+      }
+    }
+    for (const docId of gained) lost.delete(docId);
+    client.connection.reauthorize({
+      policy: access.policy(roles),
+      scopes: access.accessScopes(roles),
+      gained: [...gained],
+      lost: [...lost],
+      lostScopes,
+      reconcile: (known, cursor) => access.reconcile(roles, known, cursor),
+    });
+  }
 
   /** Close a user's sockets on a workspace (see `Realtime.disconnect`). */
   function disconnect(workspaceId: string, userId: string, removed: boolean) {

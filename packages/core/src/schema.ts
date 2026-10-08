@@ -91,4 +91,9 @@ export const PageField = {
   smallText: 'smallText',
   font: 'font',
   locked: 'locked',
+  /**
+   * Only on a *stub*: the page lives in another scope (this id), and this tree keeps just
+   * its place (id, parent, position). Readers of both see it here.
+   */
+  scope: 'scope',
 } as const;

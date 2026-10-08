@@ -10,9 +10,10 @@ except its last check, importing a real Notion export. Phase 4 (sync server, see
 [docs/PHASE4.md](docs/PHASE4.md)) is complete: a self-hosted server (Docker Compose behind Caddy), accounts and SSO,
 offline-first sync between desktops, server-side search and attachments, and the web app. Two desktops
 converge after offline edits and restarts. Phase 5 (collaboration, see [docs/PHASE5.md](docs/PHASE5.md)) is in progress: members,
-invites, roles and groups, profiles and @-mentions of people are done (M1); teamspaces and private
-pages with server-enforced permissions (M2) are next, then live cursors, comments, an inbox and
-publishing to the web.
+invites, roles and groups, profiles and @-mentions of people are done (M1), and the server now
+decides who sees and edits what: scopes (teamspaces, private pages, shared pages) with roles,
+enforced per doc on the sync socket, search and page location (M2). Next are teamspaces, private
+pages and sharing in the app (M3), then live cursors, comments, an inbox and publishing to the web.
 
 ## What works today
 

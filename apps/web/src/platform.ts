@@ -39,6 +39,13 @@ export function createWebPlatform(options: {
       for (const listener of listeners) listener(docId, update);
     },
     onError: (error) => console.warn('sync:', error),
+    // The server refused an edit (the person may not change that page), or took a page
+    // away: start again from what the server has.
+    onReset: (docId) => {
+      console.warn(`sync: changes to ${docId} were refused; reloading`);
+      location.reload();
+    },
+    onRevoked: () => location.reload(),
     connect: (handlers) => {
       // The session cookie authenticates the socket (same origin).
       const ws = new WebSocket(`${protocol}//${location.host}/api/sync/${workspace.id}`);

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { toTsQuery } from './search';
 import { PgStore } from './store';
@@ -34,8 +35,8 @@ describe('search index', () => {
     await s.setBody(ws.id, 'p1', 'The gripper uses a harmonic drive.');
     expect(await s.search(ws.id, 'harmonic')).toEqual([]);
 
-    await s.setPages(ws.id, [page('p1', 'Gripper design'), page('db', 'Parts')]);
-    await s.setRows(ws.id, 'db', [
+    await s.setPages(ws.id, null, [page('p1', 'Gripper design'), page('db', 'Parts')]);
+    await s.setRows(ws.id, 'db', null, [
       { ...page('r1', 'Servo motor'), props: 'Supplier: Dynamixel\nIn stock' },
       { ...page('r2', 'Old motor'), props: 'Dynamixel', inTrash: true },
     ]);
@@ -65,17 +66,42 @@ describe('search index', () => {
     expect((await s.search(ws.id, 'gripper')).map((h) => h.id)).toEqual(['p1', 'db']);
 
     // Trashed pages, and rows of a trashed database, are left out.
-    await s.setPages(ws.id, [page('p1', 'Gripper design'), page('db', 'Parts', { inTrash: true })]);
+    await s.setPages(ws.id, null, [
+      page('p1', 'Gripper design'),
+      page('db', 'Parts', { inTrash: true }),
+    ]);
     expect(await s.search(ws.id, 'servo')).toEqual([]);
     // Pages and rows that are gone are removed.
-    await s.setPages(ws.id, [page('db', 'Parts')]);
-    await s.setRows(ws.id, 'db', []);
+    await s.setPages(ws.id, null, [page('db', 'Parts')]);
+    await s.setRows(ws.id, 'db', null, []);
     expect(await s.search(ws.id, 'gripper')).toEqual([expect.objectContaining({ id: 'db' })]);
     expect(await s.search(ws.id, 'servo')).toEqual([]);
 
     // Other workspaces see nothing.
     const other = await store.createWorkspace('Other', null);
     expect(await s.search(other.id, 'parts')).toEqual([]);
+  });
+
+  it('filters by scope: pages by their tree, rows by their database', async () => {
+    const ws = await store.createWorkspace('Scoped', null);
+    const s = store.search;
+    const [a, b] = [randomUUID(), randomUUID()];
+    await s.setPages(ws.id, a, [page('pa', 'Alpha plan'), page('dba', 'Alpha parts')]);
+    await s.setPages(ws.id, b, [page('pb', 'Beta plan')]);
+    await s.setRows(ws.id, 'dba', a, [{ ...page('ra', 'Alpha servo'), props: '' }]);
+    const ids = async (q: string, scopes: string[] | null) =>
+      (await s.search(ws.id, q, 20, scopes)).map((h) => h.id).sort();
+    expect(await ids('plan', null)).toEqual(['pa', 'pb']);
+    expect(await ids('plan', [a])).toEqual(['pa']);
+    expect(await ids('alpha', [b])).toEqual([]);
+    expect(await ids('servo', [a])).toEqual(['ra']);
+    expect(await ids('plan', [])).toEqual([]);
+    expect(await s.locate(ws.id, 'ra', [b])).toBeNull();
+    expect(await s.locate(ws.id, 'ra', [a])).toEqual({ databaseId: 'dba' });
+    // Each tree replaces only its own pages; a page that moved keeps its new scope.
+    await s.setPages(ws.id, b, [page('pb', 'Beta plan'), page('pa', 'Alpha plan')]);
+    await s.setPages(ws.id, a, [page('dba', 'Alpha parts')]);
+    expect(await ids('plan', [b])).toEqual(['pa', 'pb']);
   });
 
   it('tracks how far into the log the index is', async () => {

@@ -103,7 +103,10 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
     // Signed up with a workspace invite: join that workspace right away.
     if (input.invite) {
       const joined = await ctx.store.teams.acceptInvite(input.invite, user);
-      if (joined.ok) await ctx.members.refresh(joined.workspaceId);
+      if (joined.ok) {
+        await ctx.members.refresh(joined.workspaceId);
+        await ctx.access.changed(joined.workspaceId);
+      }
     }
     return { user };
   }

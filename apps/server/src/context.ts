@@ -1,4 +1,5 @@
 import type { PgStore } from '@workspace/storage-remote';
+import type { AccessService } from './access/service';
 import type { OidcClients } from './auth/oidc';
 import type { Config } from './config';
 import type { FileStorage } from './files';
@@ -27,6 +28,8 @@ export interface ServerContext {
   files: FileStorage;
   oidc: OidcClients;
   indexer: Indexer;
+  /** Who may read and write which docs (scopes, roles, placements). */
+  access: AccessService;
   realtime: Realtime;
   members: MembersDoc;
   /** Null when no mail server is configured: invite links are shown to copy instead. */

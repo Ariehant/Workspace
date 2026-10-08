@@ -22,16 +22,26 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
     })),
   }));
 
-  app.post<{ Body: { name: string } }>(
+  // `private`: the pages start as the creator's own (a workspace uploaded from a
+  // desktop); otherwise in a teamspace everyone in the workspace can edit.
+  app.post<{ Body: { name: string; private?: boolean } }>(
     '/api/workspaces',
     {
       preHandler: signedIn,
-      schema: { body: { type: 'object', required: ['name'], properties: { name } } },
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name'],
+          properties: { name, private: { type: 'boolean' } },
+        },
+      },
     },
     async (request, reply) => {
       const title = request.body.name.trim();
       if (!title) return fail(reply, 400, 'invalid', 'Name the workspace.');
-      const workspace = await store.createWorkspace(title, request.auth!.user.id);
+      const workspace = await store.createWorkspace(title, request.auth!.user.id, {
+        firstScope: request.body.private ? 'private' : 'teamspace',
+      });
       await ctx.members.refresh(workspace.id);
       return reply.code(201).send({ workspace: { ...workspace, role: 'owner' } });
     },
@@ -85,6 +95,7 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
         request.params.id,
         request.query.q,
         request.query.limit ?? 20,
+        await ctx.access.readableScopes(request.params.id, request.auth!.user.id),
       );
       return { results };
     },
@@ -109,7 +120,11 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
       if (!(await store.roleOf(request.params.id, request.auth!.user.id))) {
         return fail(reply, 404, 'not_found', 'No such workspace.');
       }
-      const location = await store.search.locate(request.params.id, request.params.pageId);
+      const location = await store.search.locate(
+        request.params.id,
+        request.params.pageId,
+        await ctx.access.readableScopes(request.params.id, request.auth!.user.id),
+      );
       if (!location) return fail(reply, 404, 'not_found', 'Not indexed (yet).');
       return location;
     },

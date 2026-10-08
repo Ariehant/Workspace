@@ -263,6 +263,14 @@ export class SyncService {
           this.emitSoon();
         },
         applyRemote: (items, cursor) => local.applyRemote(items, cursor),
+        // Access (Phase 5): refused changes, docs gained and lost, the scopes held.
+        denied: (items) => local.denied(items),
+        reset: (docId, state) => local.reset(docId, state),
+        applyBackfill: (items) => local.applyBackfill(items),
+        revoke: (docIds, scopes) => local.revoke(docIds, scopes),
+        setAccess: (scopes) => local.setAccess(scopes),
+        knownScopes: () => local.knownScopes(),
+        scopeOf: () => local.scopeOf(),
       },
       deviceId: config.deviceId,
       connect: (handlers) => {
