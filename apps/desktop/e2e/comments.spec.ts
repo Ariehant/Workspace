@@ -85,22 +85,26 @@ async function openPage(window: Page, title: string) {
 /** Select the first occurrence of `text` in the page (the editor takes the DOM selection). */
 async function selectText(window: Page, text: string) {
   await editor(window).focus();
-  await editor(window).evaluate((el, text) => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const at = node.textContent?.indexOf(text) ?? -1;
-      if (at < 0) continue;
-      const range = document.createRange();
-      range.setStart(node, at);
-      range.setEnd(node, at + text.length);
-      const selection = document.getSelection()!;
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return;
-    }
-    throw new Error(`No "${text}" in the page`);
-  }, text);
-  await expect.poll(() => window.evaluate(() => getSelection()?.toString())).toBe(text);
+  // Again if a redraw (someone's cursor moving) puts the editor's old selection back first.
+  await expect(async () => {
+    await editor(window).evaluate((el, text) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const at = node.textContent?.indexOf(text) ?? -1;
+        if (at < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, at);
+        range.setEnd(node, at + text.length);
+        const selection = document.getSelection()!;
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return;
+      }
+      throw new Error(`No "${text}" in the page`);
+    }, text);
+    await window.waitForTimeout(100);
+    expect(await window.evaluate(() => getSelection()?.toString())).toBe(text);
+  }).toPass({ timeout: 5_000 });
 }
 
 const panel = (window: Page) => window.getByTestId('comments-panel');

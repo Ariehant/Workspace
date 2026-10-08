@@ -181,23 +181,42 @@ function mineAt(
   return null;
 }
 
+/**
+ * Where the caret is in the DOM. The editor's own selection can lag a moment behind (it is
+ * read from `selectionchange`, after a key that moved the caret), and a suggestion's
+ * redraw would put that stale selection back, moving the caret.
+ */
+function domSelection(view: EditorView): TextSelection | null {
+  const dom = (view.root as Document).getSelection?.() ?? document.getSelection();
+  if (!dom?.anchorNode || !dom.focusNode || !view.dom.contains(dom.anchorNode)) return null;
+  try {
+    const { doc } = view.state;
+    const anchor = doc.resolve(view.posAtDOM(dom.anchorNode, dom.anchorOffset));
+    const head = doc.resolve(view.posAtDOM(dom.focusNode, dom.focusOffset));
+    const found = TextSelection.between(anchor, head);
+    return found instanceof TextSelection ? found : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A keystroke's change as a transaction (typed text, or a character deleted), or null. */
 function typedChange(state: EditorState, event: InputEvent): Transaction | null {
-  const { selection } = state;
+  const { selection, tr } = state;
   if (!(selection instanceof TextSelection)) return null;
   const { $from, from, to } = selection;
-  if (event.inputType === 'insertText' && event.data) return state.tr.insertText(event.data);
+  if (event.inputType === 'insertText' && event.data) return tr.insertText(event.data);
   const back = event.inputType === 'deleteContentBackward';
   if (!back && event.inputType !== 'deleteContentForward') return null;
-  if (from !== to) return state.tr.deleteSelection();
+  if (from !== to) return tr.deleteSelection();
   // One character within the paragraph (both halves of a surrogate pair); at its edges,
   // the keymap and the browser decide (joining blocks is refused anyway).
-  const text = $from.parent.textContent;
+  const text = $from.parent.textBetween(0, $from.parent.content.size, '', '\ufffc');
   const at = $from.parentOffset;
   if (back ? at === 0 : at >= text.length) return null;
   const low = (index: number) => /[\udc00-\udfff]/.test(text.charAt(index));
-  if (back) return state.tr.delete(from - (at > 1 && low(at - 1) ? 2 : 1), from);
-  return state.tr.delete(from, from + (low(at + 1) ? 2 : 1));
+  if (back) return tr.delete(from - (at > 1 && low(at - 1) ? 2 : 1), from);
+  return tr.delete(from, from + (low(at + 1) ? 2 : 1));
 }
 
 /**
@@ -309,6 +328,10 @@ export const Comments = Extension.create<CommentsOptions>({
             // keystroke would linger there and the next one could be taken first.
             beforeinput: (v, event) => {
               if (!host.suggesting() || event.isComposing) return false;
+              const caret = domSelection(v);
+              if (caret && !caret.eq(v.state.selection)) {
+                v.dispatch(v.state.tr.setSelection(caret));
+              }
               const tr = typedChange(v.state, event);
               if (!tr) return false;
               event.preventDefault();
