@@ -9,7 +9,9 @@ see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see
 except its last check, importing a real Notion export. Phase 4 (sync server, see
 [docs/PHASE4.md](docs/PHASE4.md)) is complete: a self-hosted server (Docker Compose behind Caddy), accounts and SSO,
 offline-first sync between desktops, server-side search and attachments, and the web app. Two desktops
-converge after offline edits and restarts. Phase 5 (collaboration) is next.
+converge after offline edits and restarts. Phase 5 (collaboration, see [docs/PHASE5.md](docs/PHASE5.md)) is next: members and
+invites, teamspaces and private pages, sharing with server-enforced permissions, live cursors,
+comments, an inbox and publishing to the web.
 
 ## What works today
 
