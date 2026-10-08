@@ -403,6 +403,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
     - Who has access, with "from Engineering" for access that comes from the teamspace.
     - General access: "Everyone with access to …" (inheritance) and "Everyone in the workspace".
     - Copy link.
+  - **New pages:** "New page" (and Ctrl+N) adds a page to your private pages, as in Notion. A section's own "add a page" button adds it there. The web members E2E now writes its shared page in the workspace's teamspace.
   - **Read-only:** a page (or a row, by its database) the person can only view or comment on is read-only, as a locked page is, with a "View only" or "Can comment" badge.
   - **Moving across sections:** dragging a page to another section, or "Move to" under a page of another section, asks first ("who can see it may change"), then the server moves it.
   - **No access:** mentions and page links to a page that isn't there show "No access" on a server workspace ("Deleted page" otherwise). A synced block from such a page says so.
@@ -439,6 +440,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
     - Ada drags "Specs" from Private into Engineering and confirms. Bob sees it there, live.
     - Ada removes Gus's access, and "Diary" leaves his desktop.
   - The M2 access test follows the change: a refused edit reloads the window, without a restart.
+  - The full desktop E2E passed twice (103 tests each) and the web E2E passed (3 tests).
 
 ### M4: presence and live cursors (about 0.5 weeks)
 

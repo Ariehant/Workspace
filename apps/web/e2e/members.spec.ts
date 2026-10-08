@@ -162,8 +162,9 @@ test('the owner invites a teammate, who joins from the link and can be mentioned
   await shot(ada, 'members-4-list');
   await ada.keyboard.press('Escape');
 
-  // Ada mentions Bob in a page; Bob sees it live.
-  await ada.getByRole('button', { name: 'New page' }).click();
+  // Ada mentions Bob in a page of the workspace's teamspace (her "New page" is private);
+  // Bob sees it live.
+  await ada.getByRole('button', { name: 'Add a page to Robotics lab' }).click();
   await ada.getByLabel('Page title').fill('Design review');
   await ada.getByLabel('Page title').press('Enter');
   await expect(editor(ada)).toBeFocused();
@@ -180,7 +181,7 @@ test('the owner invites a teammate, who joins from the link and can be mentioned
   await expect(editor(bob)).toContainText('Motor sizing: @Bob please check the torque.');
 
   // The person picker of a database offers the members.
-  await ada.getByRole('button', { name: 'New page' }).click();
+  await ada.getByRole('button', { name: 'Add a page to Robotics lab' }).click();
   await ada.getByLabel('Page title').fill('Tasks');
   await ada.getByTestId('get-started').getByRole('button', { name: 'Database' }).click();
   await table(ada).getByTestId('table-new-row').last().click();
