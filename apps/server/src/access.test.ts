@@ -13,7 +13,15 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { MEMBERS_DOC_ID, createPage, listStubs } from '@workspace/core';
+import {
+  MEMBERS_DOC_ID,
+  addComment,
+  createPage,
+  createThread,
+  editComment,
+  listStubs,
+  readThreads,
+} from '@workspace/core';
 import { PgStore } from '@workspace/storage-remote';
 import { createTestDatabase } from '@workspace/storage-remote/testing';
 import {
@@ -188,7 +196,11 @@ async function world() {
     ).status,
   ).toBe(200);
   a.hint = S.id;
-  a.doc('comments:spec').getText('t').insert(0, 'first comment');
+  createThread(a.doc('comments:spec'), {
+    anchor: { kind: 'page' },
+    author: ada.id,
+    body: 'first comment',
+  });
   await settled(a);
   a.hint = null;
 
@@ -285,10 +297,11 @@ describe('access', () => {
     mo.doc('plan').getText('t').insert(0, 'mo: ');
     mo.doc('notice').getText('t').insert(0, 'mo was here ');
     mo.doc('diary').getText('t').insert(0, 'peek');
-    mo.doc('comments:spec').getText('t').insert(0, 'mo comments; ');
+    const thread = readThreads(mo.doc('comments:spec'))[0]!;
+    addComment(mo.doc('comments:spec'), thread.id, w.mo.id, 'mo comments');
     mo.doc(MEMBERS_DOC_ID).getMap('members').set(w.mo.id, { name: 'Mo', role: 'owner' });
     gus.doc('spec').getText('t').insert(0, 'gus edits ');
-    gus.doc('comments:spec').getText('t').insert(0, 'gus comments; ');
+    addComment(gus.doc('comments:spec'), thread.id, w.gus.id, 'gus comments');
     gus.doc('plan').getText('t').insert(0, 'gus guesses');
     await w.settled(mo);
     await w.settled(gus);
@@ -300,8 +313,13 @@ describe('access', () => {
     expect(mo.has('diary')).toBe(false);
     expect(await state('spec')).toBe('spec body');
     expect(gus.text('spec')).toBe('spec body');
-    expect(await state('comments:spec')).toContain('mo comments; ');
-    expect(await state('comments:spec')).toContain('gus comments; ');
+    const bodies = async () => {
+      const doc = new (await import('yjs')).Doc();
+      (await import('yjs')).applyUpdate(doc, (await w.store.docState(w.ws, 'comments:spec'))!);
+      return readThreads(doc)[0]!.comments.map((c) => c.body);
+    };
+    // (Mo's and Gus's replies were concurrent: either order.)
+    expect((await bodies()).sort()).toEqual(['first comment', 'gus comments', 'mo comments']);
     expect(await state('plan')).not.toContain('gus');
     expect(gus.revoked).toContain('plan');
     expect(mo.resets).toContain(MEMBERS_DOC_ID);
@@ -545,5 +563,32 @@ describe('access', () => {
     });
     await new Promise((r) => setTimeout(r, 50));
     expect(gus.presence).toEqual([]);
+  });
+  it('comments: only the writer’s own threads, comments and edits are stored', async () => {
+    const w = await world();
+    const gus = w.device('gus-1', w.gus.token);
+    gus.client.start();
+    await w.live(gus);
+    const doc = gus.doc('comments:spec');
+    const [thread] = readThreads(doc);
+    const adas = thread!.comments[0]!.id;
+    addComment(doc, thread!.id, w.gus.id, 'mine');
+    await w.settled(gus);
+    // Forged: a comment "by Ada", and an edit of Ada's comment. Both undone.
+    addComment(doc, thread!.id, w.ada.id, 'Ada says yes');
+    await w.settled(gus);
+    await until(() => gus.resets.includes('comments:spec'), 'forged comment undone');
+    editComment(gus.doc('comments:spec'), thread!.id, adas, 'Ada changed her mind');
+    await w.settled(gus);
+    await until(
+      () => gus.resets.filter((d) => d === 'comments:spec').length === 2,
+      'forged edit undone',
+    );
+    const stored = new (await import('yjs')).Doc();
+    (await import('yjs')).applyUpdate(stored, (await w.store.docState(w.ws, 'comments:spec'))!);
+    expect(readThreads(stored)[0]!.comments.map((c) => [c.author, c.body])).toEqual([
+      [w.ada.id, 'first comment'],
+      [w.gus.id, 'mine'],
+    ]);
   });
 });

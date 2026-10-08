@@ -17,7 +17,10 @@ enforced per doc on the sync socket, search and page location (M2). The app show
 dialog, teamspace settings, read-only pages for viewers, and moving pages between sections.
 People on the same page see each other (M4): avatars in the page header, named cursors in the
 editor, a dot in the sidebar on pages others are viewing, and avatars on database rows others
-have open. Next are comments, an inbox and publishing to the web.
+have open. Comments work too (M5): comment on selected text or on the whole page, reply,
+@-mention, react and resolve, in a comments panel. People who may only comment suggest edits
+instead, and someone who may edit accepts or rejects them. Next are an inbox and publishing to
+the web.
 
 ## What works today
 

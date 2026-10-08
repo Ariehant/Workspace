@@ -154,8 +154,22 @@ export function App({ platform }: { platform: Platform }) {
     loadSettings(platform).then(setSettings, (error: unknown) => {
       console.error('Failed to load settings', error);
     });
-    platform.getUser().then(setUser, (error: unknown) => {
-      console.error('Failed to load the user', error);
+    const loadUser = () =>
+      platform.getUser().then(
+        (next) =>
+          setUser((current) =>
+            current?.id === next.id && current.name === next.name ? current : next,
+          ),
+        (error: unknown) => console.error('Failed to load the user', error),
+      );
+    void loadUser();
+    // Signing in (or out) on the desktop changes who the person is: the account's id
+    // is the one the server knows them by (comments are checked against it).
+    let account: string | null | undefined;
+    return platform.sync?.onChange((info) => {
+      const next = info.mode === 'on' ? (info.account?.email ?? null) : null;
+      if (next !== account) void loadUser();
+      account = next;
     });
   }, [platform]);
 

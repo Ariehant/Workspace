@@ -3,6 +3,7 @@ import {
   WORKSPACE_DOC_ID,
   getPagesMap,
   isTreeDocId,
+  isCommentsDocId,
   localTree,
   isInTrash,
   listPages,
@@ -289,7 +290,7 @@ export class DocManager {
 
   /** Save a doc's current state as a version (if it has any content). */
   snapshot(docId: string, reason: string): number | null {
-    if (isTreeDocId(docId)) return null;
+    if (isTreeDocId(docId) || isCommentsDocId(docId)) return null;
     const open = this.docs.get(docId);
     const doc = open?.doc ?? this.load(docId);
     try {
@@ -316,7 +317,8 @@ export class DocManager {
 
   /** Before an edit: snapshot when the last version is older than the interval. */
   private maybeSnapshot(docId: string, doc: Y.Doc): void {
-    if (isTreeDocId(docId)) return;
+    // Comments have no history of their own (a page's version doesn't include them).
+    if (isTreeDocId(docId) || isCommentsDocId(docId)) return;
     let last = this.lastVersion.get(docId);
     if (last === undefined) {
       last = this.store.lastVersionTime(docId) ?? -Infinity;
@@ -413,7 +415,7 @@ export class DocManager {
       return;
     }
     const entry = this.docs.get(docId);
-    if (!entry) return;
+    if (!entry || isCommentsDocId(docId)) return;
     if (isDatabaseDoc(entry.doc)) {
       this.indexDatabase(docId, entry.doc);
       return;

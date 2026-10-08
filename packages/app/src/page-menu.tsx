@@ -23,6 +23,7 @@ import {
   Link2,
   Lock,
   MoreHorizontal,
+  PenLine,
   Trash2,
 } from 'lucide-react';
 import { useBacklinksMode, type BacklinksMode } from './backlinks';
@@ -46,6 +47,8 @@ export interface PageMenuProps {
   /** Omitted for database rows. */
   onExport?(): void;
   onTrash(): void;
+  /** Suggest edits: on, and its toggle (null when it's always on: they may only comment). */
+  suggest?: { on: boolean; toggle: (() => void) | null };
 }
 
 const FONTS: { font: PageFont; label: string; sample: string }[] = [
@@ -97,6 +100,7 @@ export function PageMenu({
   onSaveAsTemplate,
   onExport,
   onTrash,
+  suggest,
 }: PageMenuProps) {
   // Computed when the menu opens rather than on every render of the page.
   const [stats, setStats] = useState<{ words: number; now: number } | null>(null);
@@ -169,6 +173,19 @@ export function PageMenu({
             <span className="flex-1">Lock page</span>
             <Toggle on={page.locked} />
           </MenuItem>
+          {suggest && (
+            <MenuItem
+              icon={<PenLine size={14} />}
+              disabled={!suggest.toggle}
+              onSelect={(e) => {
+                e.preventDefault();
+                suggest.toggle?.();
+              }}
+            >
+              <span className="flex-1">Suggest edits</span>
+              <Toggle on={suggest.on} />
+            </MenuItem>
+          )}
           {can(platform, 'backlinks') && (
             <MenuSub>
               <MenuSubTrigger icon={<ArrowUpLeft size={14} />}>

@@ -7,7 +7,8 @@
  * One server process is assumed: another process's changes aren't seen until a reload
  * (Postgres LISTEN/NOTIFY would be the way to run several).
  */
-import { MEMBERS_DOC_ID } from '@workspace/core';
+import { MEMBERS_DOC_ID, checkCommentsChange, isCommentsDocId } from '@workspace/core';
+import * as Y from 'yjs';
 import type { AccessModel, PgStore, Scope, ScopeRole } from '@workspace/storage-remote';
 import type { AccessScope, DocPolicy } from '@workspace/sync';
 import { atLeast, rolesFor } from './roles';
@@ -119,11 +120,39 @@ export class WorkspaceAccess {
   }
 
   /** A connection's policy for `roles` (placements stay live: new docs are seen). */
-  policy(roles: Roles): DocPolicy {
+  policy(roles: Roles, userId: string): DocPolicy {
     return {
       canRead: (docId) => this.canRead(roles, docId),
       canWrite: (docId, hint) => this.canWrite(roles, docId, hint),
+      checkUpdate: (docId, update, earlier) =>
+        this.checkUpdate(roles, userId, docId, update, earlier),
     };
+  }
+
+  /**
+   * What a comments doc update contains: the sender's own threads, comments, reactions
+   * and decisions only (see `checkCommentsChange`). Other docs aren't looked into.
+   */
+  async checkUpdate(
+    roles: Roles,
+    userId: string,
+    docId: string,
+    update: Uint8Array,
+    earlier: Uint8Array[],
+  ): Promise<boolean> {
+    if (!isCommentsDocId(docId)) return true;
+    const role = roles.get(this.placements.get(docId) ?? '');
+    const before = new Y.Doc();
+    const state = await this.store.docState(this.workspaceId, docId);
+    if (state) Y.applyUpdate(before, state);
+    for (const u of earlier) Y.applyUpdate(before, u);
+    const problem = checkCommentsChange(before, update, {
+      userId,
+      canEdit: atLeast(role, 'edit'),
+      canManage: atLeast(role, 'full'),
+    });
+    before.destroy();
+    return problem === null;
   }
 
   /**

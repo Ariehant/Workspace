@@ -88,6 +88,15 @@ export interface DocPolicy {
    * the server hasn't seen (hosts place new docs as they allow them).
    */
   canWrite(docId: string, scope: string | null): boolean | Promise<boolean>;
+  /**
+   * Is this update's content allowed (e.g. comments: authored by the sender)? `earlier`:
+   * updates to the same doc accepted earlier in the same push (not stored yet).
+   */
+  checkUpdate?(
+    docId: string,
+    update: Uint8Array,
+    earlier: Uint8Array[],
+  ): boolean | Promise<boolean>;
 }
 
 export interface Access {
@@ -502,12 +511,17 @@ export class SyncConnection {
         // One at a time: allowing an item can place a new doc, which the next item (of
         // the same doc) relies on.
         const allowed: boolean[] = [];
+        const acceptedByDoc = new Map<string, Uint8Array[]>();
         for (const item of message.items) {
-          allowed.push(
-            this.access.policy
-              ? await this.access.policy.canWrite(item.docId, item.scope ?? null)
-              : true,
-          );
+          const policy = this.access.policy;
+          let ok = policy ? await policy.canWrite(item.docId, item.scope ?? null) : true;
+          if (ok && policy?.checkUpdate) {
+            const earlier = acceptedByDoc.get(item.docId) ?? [];
+            ok = await policy.checkUpdate(item.docId, item.update, earlier);
+          }
+          if (ok)
+            acceptedByDoc.set(item.docId, [...(acceptedByDoc.get(item.docId) ?? []), item.update]);
+          allowed.push(ok);
         }
         if (this.closed) return;
         const accepted = message.items.filter((_, i) => allowed[i]);

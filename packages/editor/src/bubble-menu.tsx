@@ -8,6 +8,7 @@ import {
   Code,
   Italic,
   Link2,
+  MessageSquare,
   Radical,
   Strikethrough,
   Underline,
@@ -15,6 +16,7 @@ import {
 import { useMemo, useState, type ReactNode } from 'react';
 import { CONVERTIBLE_BLOCKS, activeBlock } from './blocks/registry';
 import { ColorPanel, ColorSwatch } from './color-menu';
+import { anchorFor, type EditorComments } from './comments';
 import type { ColorValue } from './nodes/colors';
 import { insertInlineEquation } from './nodes/math';
 
@@ -88,7 +90,14 @@ function ToolbarButton(props: {
 }
 
 /** Formatting toolbar shown over a text selection. */
-export function SelectionToolbar({ editor }: { editor: Editor }) {
+export function SelectionToolbar({
+  editor,
+  comments,
+}: {
+  editor: Editor;
+  /** The page's comments: a Comment button (absent where there are none). */
+  comments?: EditorComments | null;
+}) {
   const [panel, setPanel] = useState<'none' | 'turnInto' | 'link' | 'color'>('none');
   const [href, setHref] = useState('');
 
@@ -99,6 +108,8 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
       link: e.getAttributes('link').href as string | undefined,
       color: (e.getAttributes('color').color as string | undefined) ?? null,
       block: activeBlock(e)?.title ?? 'Text',
+      // Suggesting: formatting isn't a suggestion, so only Comment is offered.
+      suggesting: comments?.suggesting() ?? false,
     }),
   });
 
@@ -137,39 +148,62 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
     >
       <div className="flex flex-col rounded-lg bg-menu text-fg shadow-menu">
         <div className="flex items-center gap-0.5 p-1">
-          <ToolbarButton
-            label="Turn into"
-            onClick={() => setPanel(panel === 'turnInto' ? 'none' : 'turnInto')}
-          >
-            <span className="max-w-28 truncate">{state.block}</span>
-            <ChevronDown size={12} />
-          </ToolbarButton>
-          <span className="mx-0.5 h-5 w-px bg-line" />
-          <ToolbarButton label="Link" active={Boolean(state.link)} onClick={openLink}>
-            <Link2 size={16} />
-          </ToolbarButton>
-          <span className="mx-0.5 h-5 w-px bg-line" />
-          <ToolbarButton
-            label="Text color"
-            active={panel === 'color'}
-            onClick={() => setPanel(panel === 'color' ? 'none' : 'color')}
-          >
-            <ColorSwatch value={(state.color as ColorValue | null) ?? null} />
-            <ChevronDown size={12} />
-          </ToolbarButton>
-          <ToolbarButton label="Create equation" onClick={() => insertInlineEquation(editor)}>
-            <Radical size={16} />
-          </ToolbarButton>
-          {MARKS.map(({ mark, label, icon: Icon, toggle }) => (
-            <ToolbarButton
-              key={mark}
-              label={label}
-              active={state.marks[mark]}
-              onClick={() => toggle(editor).run()}
-            >
-              <Icon size={16} />
-            </ToolbarButton>
-          ))}
+          {comments && (
+            <>
+              <ToolbarButton
+                label="Comment (Ctrl+Shift+M)"
+                onClick={() => {
+                  const { from, to } = editor.state.selection;
+                  const anchor = anchorFor(editor.state, from, to);
+                  if (!anchor) return;
+                  // The highlight shows what's commented on; the toolbar goes.
+                  editor.commands.setTextSelection(to);
+                  comments.comment(anchor);
+                }}
+              >
+                <MessageSquare size={15} />
+                <span>Comment</span>
+              </ToolbarButton>
+              {!state.suggesting && <span className="mx-0.5 h-5 w-px bg-line" />}
+            </>
+          )}
+          {!state.suggesting && (
+            <>
+              <ToolbarButton
+                label="Turn into"
+                onClick={() => setPanel(panel === 'turnInto' ? 'none' : 'turnInto')}
+              >
+                <span className="max-w-28 truncate">{state.block}</span>
+                <ChevronDown size={12} />
+              </ToolbarButton>
+              <span className="mx-0.5 h-5 w-px bg-line" />
+              <ToolbarButton label="Link" active={Boolean(state.link)} onClick={openLink}>
+                <Link2 size={16} />
+              </ToolbarButton>
+              <span className="mx-0.5 h-5 w-px bg-line" />
+              <ToolbarButton
+                label="Text color"
+                active={panel === 'color'}
+                onClick={() => setPanel(panel === 'color' ? 'none' : 'color')}
+              >
+                <ColorSwatch value={(state.color as ColorValue | null) ?? null} />
+                <ChevronDown size={12} />
+              </ToolbarButton>
+              <ToolbarButton label="Create equation" onClick={() => insertInlineEquation(editor)}>
+                <Radical size={16} />
+              </ToolbarButton>
+              {MARKS.map(({ mark, label, icon: Icon, toggle }) => (
+                <ToolbarButton
+                  key={mark}
+                  label={label}
+                  active={state.marks[mark]}
+                  onClick={() => toggle(editor).run()}
+                >
+                  <Icon size={16} />
+                </ToolbarButton>
+              ))}
+            </>
+          )}
         </div>
 
         {panel === 'turnInto' && (

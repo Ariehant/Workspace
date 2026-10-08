@@ -8,9 +8,8 @@ import { Plugin, TextSelection } from '@tiptap/pm/state';
 import { search } from 'prosemirror-search';
 import StarterKit from '@tiptap/starter-kit';
 import { PAGE_CONTENT_FIELD } from '@workspace/core';
-import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
-import { Cursors } from './cursors';
+import { Comments, type EditorComments } from './comments';
 import { Callout } from './nodes/callout';
 import { CodeBlock } from './nodes/code-block';
 import { lineStarts } from './nodes/code-lines';
@@ -166,10 +165,7 @@ const BlockRange = NodeRange.extend({
 export function pageExtensions(
   doc: Y.Doc,
   bridge: UiBridgeHandle,
-  presence: { awareness: Awareness | null; selfId: string | null } = {
-    awareness: null,
-    selfId: null,
-  },
+  comments: EditorComments | null = null,
 ) {
   return [
     StarterKit.configure({
@@ -211,7 +207,7 @@ export function pageExtensions(
       filterTransaction: (transaction) => !isChangeOrigin(transaction),
     }),
     Collaboration.configure({ document: doc, field: PAGE_CONTENT_FIELD }),
-    Cursors.configure(presence),
+    Comments.configure({ host: comments }),
     BlockRange,
     SlashCommand,
     OpenLinkOnModClick,

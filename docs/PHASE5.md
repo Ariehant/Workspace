@@ -1,6 +1,6 @@
 # Phase 5: Collaboration
 
-**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server), M3 (teamspaces, private pages and sharing in the app) and M4 (presence and live cursors) are done. M5 (comments and suggested edits) is next.
+**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server), M3 (teamspaces, private pages and sharing in the app) M4 (presence and live cursors) and M5 (comments and suggested edits) are done. M6 (inbox and notifications) is next.
 
 ## Context
 
@@ -496,7 +496,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
     - Bob opens another page: Ada's sidebar shows a dot on it ("Bob viewing"), and her header no longer shows him.
     - Bob opens a database row: Ada's table shows his avatar on it. He closes the browser, and it goes.
 
-### M5: comments and suggested edits (about 1 week)
+### M5: comments and suggested edits ✅
 
 - **Comments doc** (`comments:<pageId>`), so people who can comment don't need write access to the page:
   - threads: id, anchor, resolved by and when, and a list of comments
@@ -519,6 +519,49 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - Limited to text inside one block or across adjacent text blocks. Structural changes (moving blocks, changing block types) aren't suggestible.
 - **Server:** the comments update check (authorship, no editing other people's comments), and a comments index for the inbox and the comments count.
 - **Tests:** anchors through concurrent edits; suggestions applied after edits elsewhere in the block; forged authors denied; E2E for a commenter commenting and suggesting while the owner accepts.
+
+**M5 notes:**
+
+- **The model** (`packages/core/src/comments.ts`), in a comments doc per page (`comments:<pageId>`), placed in the page's scope:
+  - `threads`: a map from thread id to the thread: anchor, author, created, resolved by and when, its comments, and for a suggested edit, the suggestion.
+  - **Comments:** author, body, created and edited times, and reactions (emoji → who reacted, one entry per person so concurrent reactions merge).
+  - **Anchors:** the page, a block, a text range or a row property. A range is two Yjs relative positions (base64), plus the text it covered then (`quote`), so it follows concurrent edits and still says what it was about once the text is gone.
+  - Functions for every change (`createThread`, `addComment`, `editComment`, `deleteComment`, `toggleReaction`, `setResolved`, `updateSuggestion`, `decideSuggestion`), and `mentionsIn` for the `<@userId>` mentions in a body.
+- **The server's check** (`checkCommentsChange`, called from the hub's new `DocPolicy.checkUpdate` hook for each pushed update to a comments doc):
+  - The update is applied to a copy of the stored doc (plus the earlier updates in the same push) and the two are compared.
+  - Refused: new threads or comments by someone else; editing or deleting someone else's comment (deleting is allowed with full access); moving someone else's thread; changing someone else's reaction; resolving, accepting or rejecting as someone else; changing someone else's suggestion; accepting without edit access; rejecting unless you may edit or it's your suggestion; anything outside `threads`; and updates that depend on changes the server hasn't got (they couldn't be checked).
+  - A refused update is handled like any other: the device gets the server's version back.
+- **Editor** (`packages/editor/src/comments.ts`):
+  - Commented ranges are highlighted (the open thread more strongly). Clicking one opens its thread.
+  - **Comment** in the selection toolbar, and `Ctrl+Shift+M`.
+  - **Suggest mode:** a `filterTransaction` turns typing, deleting and replacing a selection inside one text block into suggestions. Typing on extends your suggestion, Backspace takes back suggested text first, and deleting next to your deletion grows it. Anything else (formatting, new blocks, moving blocks) is refused. Accepting a suggestion goes through.
+  - A suggestion shows its range struck through and its new text underlined after it (a widget, not in the page). The toolbar offers only Comment while suggesting.
+  - Highlights are recomputed from the anchors when others' edits or the threads change. Your own edits map them instead, because Yjs only has an edit after the editor's plugins have seen it.
+- **App** (`packages/app/src/comments.tsx`):
+  - **Comments panel** beside the page, from the header's comments button (with the open count): open and resolved threads, each with its quoted text (or "On deleted text: …"), replies, edit and delete, reactions, resolve and re-open. Clicking a thread scrolls to its text.
+  - **Page comments** under the title ("Add comment" next to Add icon and Add cover).
+  - **@-mentions:** typing `@` offers the workspace's people; the comment stores `<@userId>` and shows the current name.
+  - **Suggest edits:** a page-menu toggle for people who may edit. For people who may only comment it is always on: they can type in the page (as suggestions), but the title and everything else stay read-only.
+  - **Suggestions in the panel:** "Replace X with Y", "Add Y" or "Delete X", with Accept (applies it to the page, then marks it accepted) and Reject. The person who suggested it can withdraw it.
+- **Also fixed:** after signing in on the desktop, the app kept the local user's id until a restart. It now reloads the user when the sync account changes, so comments (and anything else written as the person) carry the account's id, which the server checks.
+- **Also fixed (from M4):** the cursor plugin is now added to the live editor when presence arrives, rather than by rebuilding the editor (which lost its state, such as a block's highlight after following a link to it).
+- Comments docs have no page-history versions of their own, and aren't indexed for search.
+- **Differs from the plan:**
+  - The model is in `@workspace/core`, next to the other doc models, rather than a new `collab` package.
+  - Comment bodies are plain text with mentions, not rich text.
+  - A suggestion holds plain replacement text for a range within one text block, not a ProseMirror slice across blocks.
+  - The UI makes page and text-range comments. Block and row-property anchors exist in the model but nothing creates them yet, and database row pages don't have comments yet.
+  - The server's comments index (for the inbox) moves to M6, where it's used. The count in the header comes from the comments doc.
+- **Tests:**
+  - **Core:** threads, replies, reactions and resolving; a range anchor through someone else's edit, and collapsing when its text is deleted; suggestions created, extended and decided; and the server check (each refusal above, and what is allowed).
+  - **Server, over real sockets:** a forged comment and a forged edit of someone else's comment are refused and reset, while each person's own threads and comments are stored.
+  - **E2E (`comments.spec.ts`)**, with Ada on a desktop and Bob on the web, who may only comment:
+    - Ada selects text, comments and mentions Bob.
+    - Bob sees the highlight, opens the thread, replies and reacts. His page shows "Can comment" and a read-only title.
+    - Bob types at the end of the text: it becomes a suggestion (Backspace takes back a letter). Ada sees it, the page itself unchanged, and accepts it: the text is in the page for both.
+    - Ada resolves the thread, and the highlight goes. She comments on a word with `Ctrl+Shift+M` and then deletes the word: the thread stays, "On deleted text".
+    - Bob adds a page comment, which Ada sees under the title.
+  - The full desktop E2E passed twice (112 tests each) and the web E2E passed (3 tests).
 
 ### M6: inbox and notifications (about 0.75 weeks)
 

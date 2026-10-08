@@ -4,6 +4,8 @@ import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 import { BlockHandle } from './block-handle';
 import { SelectionToolbar } from './bubble-menu';
+import type { EditorComments } from './comments';
+import { cursorsPlugin, cursorsPluginKey } from './cursors';
 import { pageExtensions } from './extensions';
 import { FindBar } from './find-bar';
 import { MathEditor, type MathTarget } from './math-editor';
@@ -31,6 +33,8 @@ export interface PageEditorProps {
   /** Who else is on the page (their cursors show), and who you are (yours don't). */
   awareness?: Awareness | null;
   selfId?: string | null;
+  /** The page's comments and suggestions (stable for the editor's life). */
+  comments?: EditorComments | null;
 }
 
 interface PickRequest {
@@ -52,6 +56,7 @@ export function PageEditor({
   nested,
   awareness = null,
   selfId = null,
+  comments = null,
 }: PageEditorProps) {
   const [bridge] = useState(() => new UiBridgeHandle());
   const [pick, setPick] = useState<PickRequest | null>(null);
@@ -76,13 +81,22 @@ export function PageEditor({
 
   const editor = useEditor(
     {
-      extensions: pageExtensions(doc, bridge, { awareness, selfId }),
+      extensions: pageExtensions(doc, bridge, comments),
       editorProps: {
         attributes: { class: 'ws-prose', 'data-testid': 'page-editor', spellcheck: 'true' },
       },
     },
-    [doc, awareness],
+    [doc],
   );
+
+  // Others' cursors: a plugin on the live editor (presence arrives after it's made).
+  useEffect(() => {
+    if (!editor || !awareness || editor.isDestroyed) return;
+    editor.registerPlugin(cursorsPlugin(awareness, selfId));
+    return () => {
+      if (!editor.isDestroyed) editor.unregisterPlugin(cursorsPluginKey);
+    };
+  }, [editor, awareness, selfId]);
 
   // Ctrl+F also works when focus is outside the editor (e.g. in the page title).
   useEffect(() => {
@@ -124,7 +138,7 @@ export function PageEditor({
     <EditorServicesContext.Provider value={services}>
       <EditorContent editor={editor} />
       {editor && !nested && <BlockHandle editor={editor} pageId={doc.guid} />}
-      {editor && <SelectionToolbar editor={editor} />}
+      {editor && <SelectionToolbar editor={editor} comments={comments} />}
       {editor && <TableMenu editor={editor} />}
       {editor && math && <MathEditor editor={editor} target={math} onClose={() => setMath(null)} />}
       {editor && pasted && (

@@ -15,7 +15,13 @@ import {
   type PageOptions,
   type TreeRole,
 } from '@workspace/core';
-import { PageEditor, PageIcon, type Editor, type PageRef } from '@workspace/editor';
+import {
+  PageEditor,
+  PageIcon,
+  type Editor,
+  type EditorComments,
+  type PageRef,
+} from '@workspace/editor';
 import {
   Avatar,
   Button,
@@ -31,6 +37,7 @@ import {
   ChevronsRight,
   ImageIcon,
   Lock,
+  MessageSquare,
   Eye,
   Smile,
   Star,
@@ -53,6 +60,13 @@ import type { BlockTarget } from './app';
 import { useApp } from './context';
 import { can } from './platform';
 import { Backlinks } from './backlinks';
+import {
+  CommentsButton,
+  CommentsPanel,
+  PageCommentsSection,
+  usePageComments,
+  type PageComments,
+} from './comments';
 import { Cover, randomCover } from './cover';
 import { DatabaseView } from './database/database-view';
 import { convertToDatabase } from './database/registry';
@@ -100,6 +114,8 @@ export interface PageHeaderProps {
   onShare?(): void;
   /** Others on the page now. */
   people?: Peer[];
+  /** The page's comments (the header's comments button). */
+  comments?: PageComments | null;
   /** Favorite toggle (pages only). */
   favorite?: { on: boolean; toggle(): void };
   menu: ReactNode;
@@ -113,6 +129,7 @@ export function PageHeader({
   access,
   onShare,
   people = [],
+  comments = null,
   favorite,
   menu,
 }: PageHeaderProps) {
@@ -205,6 +222,7 @@ export function PageHeader({
           )}
         </div>
       )}
+      {comments && <CommentsButton comments={comments} />}
       {onShare && (
         <button
           type="button"
@@ -252,14 +270,19 @@ export function PageHero({
   model,
   editable,
   onEnter,
+  comments = null,
 }: {
   model: PageModel;
   editable: boolean;
   onEnter(): void;
+  /** Comments on the whole page, shown under the title. */
+  comments?: PageComments | null;
 }) {
   const { platform } = useApp();
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [commenting, setCommenting] = useState(false);
   const { meta } = model;
+  const canComment = !!comments?.canComment && !!comments.doc;
   const uploadImage = async (file: File) => (await platform.importFile(file)).id;
   const setIcon = (icon: string | null) => {
     model.setIcon(icon);
@@ -300,9 +323,9 @@ export function PageHero({
             </PopoverContent>
           </Popover>
         )}
-        {editable && (!meta.icon || !meta.cover) && (
+        {((editable && (!meta.icon || !meta.cover)) || canComment) && (
           <div className="mb-1 flex h-7 gap-1 opacity-0 transition-opacity group-hover/hero:opacity-100 focus-within:opacity-100">
-            {!meta.icon && (
+            {editable && !meta.icon && (
               <button
                 type="button"
                 className={heroButton}
@@ -311,13 +334,18 @@ export function PageHero({
                 <Smile size={15} /> Add icon
               </button>
             )}
-            {!meta.cover && (
+            {editable && !meta.cover && (
               <button
                 type="button"
                 className={heroButton}
                 onClick={() => model.setOptions({ cover: randomCover() })}
               >
                 <ImageIcon size={15} /> Add cover
+              </button>
+            )}
+            {canComment && (
+              <button type="button" className={heroButton} onClick={() => setCommenting(true)}>
+                <MessageSquare size={15} /> Add comment
               </button>
             )}
           </div>
@@ -330,6 +358,14 @@ export function PageHero({
           onEnter={onEnter}
         />
         {can(platform, 'backlinks') && <Backlinks pageId={model.id} />}
+        {comments && (
+          <PageCommentsSection
+            key={`comments:${model.id}`}
+            comments={comments}
+            composing={commenting}
+            onDone={() => setCommenting(false)}
+          />
+        )}
       </div>
     </>
   );
@@ -410,10 +446,12 @@ export function usePageBody(pageId: PageId | null) {
   const { client } = useApp();
   const pageDoc = useDoc(client, pageId);
   const editorRef = useRef<Editor | null>(null);
+  const [editor, setEditor] = useState<Editor | null>(null);
   // If the editor is still loading when Enter is pressed in the title, focus it once ready.
   const focusWhenReady = useRef(false);
   const onEditor = useCallback((editor: Editor | null) => {
     editorRef.current = editor;
+    setEditor(editor);
     if (editor && focusWhenReady.current) {
       focusWhenReady.current = false;
       editor.commands.focus('start');
@@ -423,7 +461,7 @@ export function usePageBody(pageId: PageId | null) {
     if (editorRef.current) editorRef.current.commands.focus('start');
     else focusWhenReady.current = true;
   }, []);
-  return { pageDoc, onEditor, focusBody };
+  return { pageDoc, onEditor, focusBody, editor };
 }
 
 export function PageBody({
@@ -432,6 +470,7 @@ export function PageBody({
   editable,
   onEditor,
   awareness = null,
+  comments = null,
 }: {
   pageId: PageId;
   pageDoc: Y.Doc | null;
@@ -439,6 +478,8 @@ export function PageBody({
   onEditor(editor: Editor | null): void;
   /** Who else is on the page (their cursors show). */
   awareness?: Awareness | null;
+  /** The page's comments (highlights, suggestions). */
+  comments?: EditorComments | null;
 }) {
   const services = useEditorServices(pageId);
   const { user } = useApp();
@@ -451,6 +492,7 @@ export function PageBody({
       onEditor={onEditor}
       awareness={awareness}
       selfId={user.id}
+      comments={comments}
     />
   ) : (
     <div className="h-6" aria-busy="true" />
@@ -524,8 +566,10 @@ export function PageView({
   const model = useWorkspacePageModel(pageId);
   const isDatabase = model?.meta.kind === 'database';
   // A database page has no content doc; `useDoc` with null loads nothing.
-  const { pageDoc, onEditor, focusBody } = usePageBody(isDatabase ? null : pageId);
+  const { pageDoc, onEditor, focusBody, editor } = usePageBody(isDatabase ? null : pageId);
   const { user } = useApp();
+  const role = pages.role(pageId);
+  const comments = usePageComments(isDatabase ? null : pageId, role);
   const awareness = usePresence(isDatabase ? null : pageId, pageDoc);
   const people = uniquePeople(usePeers(awareness, user.id));
   const articleRef = useRef<HTMLElement>(null);
@@ -533,8 +577,9 @@ export function PageView({
   if (!model) return null;
   const { meta } = model;
   // Someone who may only view (or comment) gets the page read-only, as when locked.
-  const role = pages.role(pageId);
   const editable = !meta.locked && !model.trashed && roleAllows(role, 'edit');
+  // Suggesting: the text can be typed in, as suggestions (all a commenter may do).
+  const bodyEditable = !meta.locked && !model.trashed && comments.suggesting;
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-surface">
@@ -546,6 +591,7 @@ export function PageView({
         access={role}
         onShare={onShare ? () => onShare(pageId) : undefined}
         people={people}
+        comments={isDatabase ? null : comments}
         favorite={{ on: isFavorite, toggle: onToggleFavorite }}
         menu={
           <PageMenu
@@ -558,31 +604,47 @@ export function PageView({
             onSaveAsTemplate={() => onSaveAsTemplate(pageId)}
             onExport={onExport ? () => onExport(pageId) : undefined}
             onTrash={() => onTrash(pageId)}
+            suggest={
+              isDatabase || !comments.canComment
+                ? undefined
+                : { on: comments.suggesting, toggle: comments.toggleSuggesting }
+            }
           />
         }
       />
       {model.trashed && <TrashBanner label="This page is in Trash." onRestore={model.restore} />}
-      <div className="flex-1 overflow-y-auto" data-testid="page-scroll" data-scroll-root>
-        <HeroCover model={model} editable={editable} />
-        <article ref={articleRef} {...articleProps(meta, isDatabase)}>
-          <PageHero model={model} editable={editable} onEnter={focusBody} />
-          <div className="mt-2">
-            {isDatabase ? (
-              <DatabaseView databaseId={pageId} editable={editable} />
-            ) : (
-              <>
-                <PageBody
-                  pageId={pageId}
-                  pageDoc={pageDoc}
-                  editable={editable}
-                  onEditor={onEditor}
-                  awareness={awareness}
-                />
-                {editable && pageDoc && <GetStarted pageId={pageId} pageDoc={pageDoc} />}
-              </>
-            )}
-          </div>
-        </article>
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto" data-testid="page-scroll" data-scroll-root>
+          <HeroCover model={model} editable={editable} />
+          <article ref={articleRef} {...articleProps(meta, isDatabase)}>
+            <PageHero
+              model={model}
+              editable={editable}
+              onEnter={focusBody}
+              comments={isDatabase ? null : comments}
+            />
+            <div className="mt-2">
+              {isDatabase ? (
+                <DatabaseView databaseId={pageId} editable={editable} />
+              ) : (
+                <>
+                  <PageBody
+                    pageId={pageId}
+                    pageDoc={pageDoc}
+                    editable={editable || bodyEditable}
+                    onEditor={onEditor}
+                    awareness={awareness}
+                    comments={comments.host}
+                  />
+                  {editable && pageDoc && <GetStarted pageId={pageId} pageDoc={pageDoc} />}
+                </>
+              )}
+            </div>
+          </article>
+        </div>
+        {!isDatabase && comments.panelOpen && comments.doc && (
+          <CommentsPanel comments={comments} editor={editor} />
+        )}
       </div>
     </main>
   );
