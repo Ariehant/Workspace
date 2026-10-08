@@ -36,6 +36,8 @@ export interface PartialClientOptions extends PresenceHooks {
   scopeOf?: (docId: string) => string | null;
   backoff?: { minMs: number; maxMs: number };
   onError?: (error: unknown) => void;
+  /** A notification for the signed-in user arrived (JSON). */
+  onNotify?: (payload: string) => void;
   random?: () => number;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -78,7 +80,13 @@ export class PartialClient {
   private readonly o: Required<
     Omit<
       PartialClientOptions,
-      'onError' | 'onReset' | 'onRevoked' | 'onAccess' | 'scopeOf' | keyof PresenceHooks
+      | 'onError'
+      | 'onReset'
+      | 'onRevoked'
+      | 'onAccess'
+      | 'scopeOf'
+      | 'onNotify'
+      | keyof PresenceHooks
     >
   > &
     PartialClientOptions;
@@ -294,6 +302,9 @@ export class PartialClient {
         return;
       case 'awareness':
         this.presence.receive(message.docId, message.update);
+        return;
+      case 'notify':
+        this.o.onNotify?.(message.payload);
         return;
     }
   }

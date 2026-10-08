@@ -44,6 +44,10 @@ const api = {
       on(IPC.presenceUpdate, listener),
     onRejoin: (listener: () => void): Unsubscribe => on(IPC.presenceRejoin, listener),
   },
+  notifications: {
+    on: (listener: (n: unknown) => void): Unsubscribe => on(IPC.notification, listener),
+    onOpen: (listener: (n: unknown) => void): Unsubscribe => on(IPC.notificationOpen, listener),
+  },
   settings: {
     get: <T>(key: string): Promise<T | undefined> => ipcRenderer.invoke(IPC.settingsGet, key),
     set: (key: string, value: unknown): void => ipcRenderer.send(IPC.settingsSet, key, value),

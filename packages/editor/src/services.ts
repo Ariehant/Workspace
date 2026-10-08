@@ -96,6 +96,8 @@ export interface EditorServices {
   linkPreview(url: string): Promise<LinkPreview | null>;
   /** People to @-mention: the workspace's members (current ones in `list`). */
   people: {
+    /** Who's typing (a reminder they set is theirs: only they're reminded). */
+    me?: string;
     list(): PersonRef[];
     get(id: string): PersonRef | null;
     subscribe(listener: () => void): () => void;

@@ -15,3 +15,4 @@ export * from './scope-moves';
 export * from './forest';
 export * from './presence';
 export * from './comments';
+export * from './notifications';

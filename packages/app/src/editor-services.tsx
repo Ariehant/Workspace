@@ -68,6 +68,7 @@ export function useEditorServices(pageId: PageId): EditorServices {
       },
       subscribe: (listener) => pages.subscribe(listener),
       people: {
+        me: user.id,
         list: () => {
           const people = readPeople(workspaceDataDoc(workspace), members);
           return people.active.map((id) => ({

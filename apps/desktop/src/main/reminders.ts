@@ -13,6 +13,8 @@ export class ReminderScheduler {
   private timer: ReturnType<typeof setTimeout> | undefined;
   /** Notifications must be referenced or they can be garbage-collected before a click. */
   private readonly live = new Set<Notification>();
+  /** Reminders already shown another way (the server's copy): not shown again. */
+  shownElsewhere: (reminder: Reminder) => boolean = () => false;
 
   constructor(private readonly store: SqliteStore) {}
 
@@ -21,7 +23,7 @@ export class ReminderScheduler {
     clearTimeout(this.timer);
     for (const reminder of this.store.dueReminders(Date.now())) {
       this.store.markReminderFired(reminder);
-      this.notify(reminder);
+      if (!this.shownElsewhere(reminder)) this.notify(reminder);
     }
     const next = this.store.nextReminderAt();
     const wait =

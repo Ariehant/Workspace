@@ -297,6 +297,68 @@ export const MIGRATIONS: string[] = [
   INSERT INTO doc_scopes (workspace_id, doc_id, scope_id)
   SELECT workspace_id, 'tree:' || id, id FROM new_private;
   `,
+  `
+  -- Phase 5 M6: notifications. The time zone reminders are computed in (IANA name).
+  ALTER TABLE users ADD COLUMN time_zone text;
+
+  -- Each person's notifications in a workspace. doc_id is the doc that has to stay
+  -- readable for it to be shown; key makes a notification happen once.
+  CREATE TABLE notifications (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+    kind text NOT NULL CHECK (kind IN ('mention', 'comment', 'reply', 'reminder', 'access')),
+    page_id text,
+    title text NOT NULL DEFAULT '',
+    block_id text,
+    thread_id text,
+    actor_id uuid REFERENCES users ON DELETE SET NULL,
+    text text NOT NULL DEFAULT '',
+    doc_id text,
+    key text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    read_at timestamptz,
+    archived_at timestamptz
+  );
+  CREATE INDEX notifications_user ON notifications (user_id, workspace_id, created_at DESC);
+  CREATE UNIQUE INDEX notifications_once ON notifications (user_id, workspace_id, key)
+    WHERE key IS NOT NULL;
+
+  -- Who follows a page (replies and new comments on it). following = false records an
+  -- unfollow, so editing the page again doesn't follow it again.
+  CREATE TABLE page_follows (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    page_id text NOT NULL,
+    user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+    following boolean NOT NULL,
+    PRIMARY KEY (workspace_id, page_id, user_id)
+  );
+
+  -- Reminders found in docs (@remind mentions, date properties), each for one person.
+  CREATE TABLE reminders (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    doc_id text NOT NULL,
+    key text NOT NULL,
+    user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+    page_id text NOT NULL,
+    block_id text NOT NULL,
+    fire_at timestamptz NOT NULL,
+    text text NOT NULL DEFAULT '',
+    fired_at timestamptz,
+    PRIMARY KEY (workspace_id, doc_id, key)
+  );
+  CREATE INDEX reminders_due ON reminders (fire_at) WHERE fired_at IS NULL;
+
+  -- How far into each workspace's log a follower of it (the notifier) has read. Existing
+  -- workspaces start now: history doesn't notify anyone.
+  CREATE TABLE log_followers (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    name text NOT NULL,
+    seq bigint NOT NULL DEFAULT 0,
+    PRIMARY KEY (workspace_id, name)
+  );
+  INSERT INTO log_followers (workspace_id, name, seq) SELECT id, 'notify', last_seq FROM workspaces;
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

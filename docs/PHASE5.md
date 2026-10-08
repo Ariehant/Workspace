@@ -1,6 +1,6 @@
 # Phase 5: Collaboration
 
-**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server), M3 (teamspaces, private pages and sharing in the app) M4 (presence and live cursors) and M5 (comments and suggested edits) are done. M6 (inbox and notifications) is next.
+**Status:** M1 (members, invites and groups), M2 (scopes and permissions on the server), M3 (teamspaces, private pages and sharing in the app) M4 (presence and live cursors), M5 (comments and suggested edits) and M6 (inbox and notifications) are done. M7 (publish to web, server backlinks and history) is next.
 
 ## Context
 
@@ -563,7 +563,7 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
     - Bob adds a page comment, which Ada sees under the title.
   - The full desktop E2E passed twice (112 tests each) and the web E2E passed (3 tests).
 
-### M6: inbox and notifications (about 0.75 weeks)
+### M6: inbox and notifications ✅
 
 - **Server log followers** (generalising the search indexer's cursor into `log_followers`):
   - new person mentions in pages and comments
@@ -585,6 +585,44 @@ Today the **workspace doc** holds the metadata of every page (title, icon, paren
   - each notification kind, and notifications for unreadable pages being dropped
   - reminder scheduling across a server restart
   - E2E: a mention on one desktop shows in the other user's inbox and as a desktop notification (Electron's `Notification` is stubbed so the test can see it)
+
+**M6 notes:**
+
+- **Protocol version 4** (`packages/sync`): a server message `notify` carries one notification (JSON, at most 64 KB) to each of the person's connections. `SyncHub.deliver(workspace, user, payload)` sends it; both clients take an `onNotify` option.
+- **The model** (`packages/core/src/notifications.ts`): `NotificationData` (kind, page, block or thread, who did it, text, read and archived times, and a reminder's key), `parseNotification` (clients check what arrives), `readPersonMentions` (person mentions with their block), `commentEvents` (new threads, replies with who already took part, and new mentions in edited comments, between two readings of a comments doc), and `zonedTime` and `reminderTime(date, timeZone)` for reminders computed in someone else's time zone. `@remind` mentions carry `userId`: whoever set them.
+- **Storage** (migration 8): `notifications` (per person and workspace, read and archived times; a key makes each one happen once), `page_follows` (an explicit unfollow is kept, so editing again doesn't follow again), `reminders` (one person each, with its fire time; a new time fires again), `log_followers` (a cursor per workspace and follower; existing workspaces start at their newest entry, so history notifies nobody), and `users.time_zone`.
+- **The notifier** (`apps/server/src/notify/notifier.ts`) follows each workspace's log like the search indexer, scheduled on every append:
+  - For each doc changed since its cursor, it takes the doc as it was at the cursor and replays the new updates one author at a time, so each notification has the right author.
+  - **Pages:** a new person mention notifies the person (not themselves); whoever edits a page follows it.
+  - **Comments:** a mention notifies the person; a new thread notifies the page's followers; a reply notifies them and everyone who took part in the thread. Commenting follows the page. Each person gets one notification per comment (a mention wins).
+  - **Reminders:** `@remind` mentions (for the person on the mention, else whoever added it) and date properties with a reminder (for whoever last set them) are stored with their time in that person's time zone. A loop fires the due ones every 30 seconds, also after a restart.
+  - **Sharing:** adding a person to a teamspace or to a shared page notifies them.
+  - **Access:** nothing is made for someone who can't read the doc, and the list leaves out notifications about docs the person can no longer read.
+  - After a compaction the old and new parts of a doc can't be told apart, so that doc's updates notify nobody (its reminders are still updated).
+- **REST:** `GET /api/workspaces/:id/notifications` (filters `all`, `mentions`, `unread`, `archived`; with the unread count), `POST …/notifications/read` and `…/archive`, and `GET`/`PUT …/pages/:pageId/follow`. `PATCH /api/auth/me` takes `timeZone`; the desktop sends it when sync goes live, the web app when it loads.
+- **App** (`packages/app/src/inbox.tsx`):
+  - **Inbox** in the sidebar, under Search, with the unread count, kept current as notifications arrive. Its panel has All, Mentions, Unread and Archived, "Mark all as read", and per item mark read or unread and archive.
+  - Clicking an item opens its page: at the mentioned block, or with the comments panel open at the thread (`requestThread`).
+  - **Follow page** in the page menu.
+- **Desktop** (`apps/desktop/src/main/notifications.ts`):
+  - Notifications go to every window, and to the system (libnotify) when no window has focus. The inbox's settings menu turns each kind on or off as a system notification. Clicking one opens what it's about.
+  - **Reminders:** while syncing, only the person's own `@remind` mentions remind them locally (offline too). The server's copy of a reminder isn't shown again if the desktop already showed it, and if the server's comes first, the desktop's own stays quiet.
+- **Differs from the plan:**
+  - The search indexer keeps its own `search_state` cursor; `log_followers` holds the notifier's.
+  - No notifications for workspace invites (they're sent by email or link, M1). Groups given access aren't notified one by one.
+  - The web app shows the inbox and its live count, but no browser notifications.
+  - Assigning someone in a person property doesn't notify them yet.
+  - Instead of a separate comments index (moved here from M5), the notifier reads comments docs from the log.
+- **Tests:**
+  - **Core:** person mentions; comment events for threads, replies (with who took part) and edits; parsing; wall-clock times in time zones (with daylight saving).
+  - **Storage:** filters, read and archived; one notification per key; follows that respect an unfollow; reminders replaced per doc and firing again when their time changes; log follower cursors.
+  - **Server, over real sockets:** a mention delivered live and listed, but not to someone who can't read the page; a follower mentioned in a new thread told once (as a mention); a reply to whoever took part; read, archived and unfollowed; notifications hidden after losing access; sharing; `@remind` and date-property reminders at 9:00 in their owner's time zone, owned by whoever set them, firing once across server restarts.
+  - **E2E (`inbox.spec.ts`)**, with Ada and Bob each on a desktop:
+    - Ada mentions Bob: his inbox counts it, and his desktop shows it while he's away. Opening it from the inbox shows the page.
+    - Bob comments on the page: Ada, who follows it, is told. The inbox opens the comments panel at the thread.
+    - Bob turns off mentions as desktop notifications: the next mention only reaches his inbox.
+    - Ada's own `@remind` shows once (the desktop's or the server's), and reaches her inbox. Bob isn't reminded.
+  - The full desktop E2E passed twice (117 tests each) and the web E2E passed (3 tests).
 
 ### M7: publish to web, server backlinks and history (about 1 week)
 

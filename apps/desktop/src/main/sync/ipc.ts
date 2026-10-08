@@ -32,6 +32,10 @@ const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [new RegExp(`^scopes/${UUID}/access$`), ['PUT']],
   [new RegExp(`^scopes/${UUID}/(join|leave)$`), ['POST']],
   [new RegExp(`^pages/${UUID}/(share|move)$`), ['POST']],
+  // The inbox (Phase 5 M6): notifications, and following pages.
+  [/^notifications(\?filter=(all|mentions|unread|archived)(&before=\d{1,16})?)?$/, ['GET']],
+  [/^notifications\/(read|archive)$/, ['POST']],
+  [/^pages\/[\w-]{1,128}\/follow$/, ['GET', 'PUT']],
 ];
 const MAX_TEAM_BODY = 128 * 1024;
 

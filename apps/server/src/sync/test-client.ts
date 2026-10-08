@@ -32,6 +32,8 @@ export class TestDevice {
 
   /** Presence received (others' awareness updates). */
   readonly presence: { docId: string; update: Uint8Array }[] = [];
+  /** Notifications received (JSON). */
+  readonly notifications: string[] = [];
 
   constructor(options: DeviceOptions) {
     const store: ClientStore = {
@@ -75,6 +77,7 @@ export class TestDevice {
       store,
       deviceId: options.deviceId,
       onAwareness: (docId, update) => this.presence.push({ docId, update }),
+      onNotify: (payload) => this.notifications.push(payload),
       backoff: { minMs: 20, maxMs: 200 },
       connect: (handlers) => {
         const ws = new WebSocket(options.url, {

@@ -1,4 +1,4 @@
-import { dateFromString } from './format';
+import { zonedTime } from '@workspace/core';
 import { isDateValue } from './properties';
 import type { DatabaseSnapshot, DateReminder, DateValue } from './schema';
 
@@ -33,19 +33,27 @@ const OFFSETS: Partial<Record<DateReminder, number>> = {
 };
 const DAYS: Partial<Record<DateReminder, number>> = { onDay: 0, '1d': 1, '2d': 2, '1w': 7 };
 
-/** When a date value's reminder fires (ms), or null without one. */
-export function dateReminderTime(value: DateValue): number | null {
+/**
+ * When a date value's reminder fires (ms), or null without one: in this device's time
+ * zone, or in `timeZone` (the server, for the person who set it).
+ */
+export function dateReminderTime(value: DateValue, timeZone?: string): number | null {
   const reminder = value.reminder;
   if (!reminder) return null;
-  const start = dateFromString(value.start);
-  if (value.start.includes('T')) {
-    if (reminder in OFFSETS) return start.getTime() - OFFSETS[reminder]!;
+  const [day = '', time] = value.start.split('T');
+  const [y = 0, m = 1, d = 1] = day.split('-').map(Number);
+  const [hh = 0, mm = 0] = (time ?? '00:00').split(':').map(Number);
+  const wall = (dd: number, h: number, min: number) =>
+    timeZone ? zonedTime(y, m, dd, h, min, timeZone) : new Date(y, m - 1, dd, h, min).getTime();
+  if (time !== undefined) {
+    const start = wall(d, hh, mm);
+    if (reminder in OFFSETS) return start - OFFSETS[reminder]!;
     const days = DAYS[reminder];
-    return days === undefined ? null : start.getTime() - days * 1440 * MINUTE;
+    return days === undefined ? null : start - days * 1440 * MINUTE;
   }
   const days = DAYS[reminder];
   if (days === undefined) return null;
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate() - days, 9, 0).getTime();
+  return wall(d - days, 9, 0);
 }
 
 export interface PropertyReminder {
@@ -57,14 +65,17 @@ export interface PropertyReminder {
 }
 
 /** Reminders set on date properties of live rows. */
-export function readDateReminders(snapshot: DatabaseSnapshot): PropertyReminder[] {
+export function readDateReminders(
+  snapshot: DatabaseSnapshot,
+  timeZone?: string,
+): PropertyReminder[] {
   const dates = snapshot.properties.filter((p) => p.type === 'date');
   return snapshot.rows
     .filter((row) => row.trashedAt === null && !row.isTemplate)
     .flatMap((row) =>
       dates.flatMap((property) => {
         const value = row.values[property.id];
-        const fireAt = isDateValue(value) ? dateReminderTime(value) : null;
+        const fireAt = isDateValue(value) ? dateReminderTime(value, timeZone) : null;
         return fireAt === null
           ? []
           : [

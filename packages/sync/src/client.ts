@@ -94,6 +94,8 @@ export interface SyncClientOptions extends PresenceHooks {
   /** An update too large to ever push (stays in the outbox). */
   onOversized?: (entry: OutboxEntry) => void;
   onError?: (error: unknown) => void;
+  /** A notification for the signed-in user arrived (JSON). */
+  onNotify?: (payload: string) => void;
   random?: () => number;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -123,7 +125,10 @@ export class SyncClient {
   /** Presence: the docs shown here, and others' cursors on them. */
   readonly presence: ClientPresence;
   private readonly o: Required<
-    Omit<SyncClientOptions, 'onServerBehind' | 'onOversized' | 'onError' | keyof PresenceHooks>
+    Omit<
+      SyncClientOptions,
+      'onServerBehind' | 'onOversized' | 'onError' | 'onNotify' | keyof PresenceHooks
+    >
   > &
     SyncClientOptions;
 
@@ -330,6 +335,9 @@ export class SyncClient {
         return;
       case 'awareness':
         this.presence.receive(message.docId, message.update);
+        return;
+      case 'notify':
+        this.o.onNotify?.(message.payload);
         return;
     }
   }

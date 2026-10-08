@@ -5,6 +5,7 @@ import type { Config } from './config';
 import type { FileStorage } from './files';
 import type { Mailer } from './mailer';
 import type { MembersDoc } from './members/members-doc';
+import type { Notifier } from './notify/notifier';
 import type { Indexer } from './search/indexer';
 
 /** The live sync connections, as routes need them. */
@@ -28,6 +29,8 @@ export interface ServerContext {
   files: FileStorage;
   oidc: OidcClients;
   indexer: Indexer;
+  /** Notifications: mentions, comments, reminders, sharing. */
+  notifier: Notifier;
   /** Who may read and write which docs (scopes, roles, placements). */
   access: AccessService;
   realtime: Realtime;

@@ -15,6 +15,7 @@ import {
 } from '@workspace/ui';
 import {
   ArrowUpLeft,
+  Bell,
   Copy,
   Download,
   CornerUpRight,
@@ -47,6 +48,8 @@ export interface PageMenuProps {
   /** Omitted for database rows. */
   onExport?(): void;
   onTrash(): void;
+  /** Following the page (a server workspace): read when the menu opens. */
+  follow?: { get(): Promise<boolean>; set(on: boolean): Promise<void> };
   /** Suggest edits: on, and its toggle (null when it's always on: they may only comment). */
   suggest?: { on: boolean; toggle: (() => void) | null };
 }
@@ -101,7 +104,9 @@ export function PageMenu({
   onExport,
   onTrash,
   suggest,
+  follow,
 }: PageMenuProps) {
+  const [following, setFollowing] = useState<boolean | null>(null);
   // Computed when the menu opens rather than on every render of the page.
   const [stats, setStats] = useState<{ words: number; now: number } | null>(null);
   const [history, setHistory] = useState(false);
@@ -115,11 +120,12 @@ export function PageMenu({
       )}
       <Menu
         modal={false}
-        onOpenChange={(open) =>
+        onOpenChange={(open) => {
           setStats(
             open ? { words: pageDoc ? countWords(pageText(pageDoc)) : 0, now: Date.now() } : null,
-          )
-        }
+          );
+          if (open && follow) follow.get().then(setFollowing, () => setFollowing(null));
+        }}
       >
         <MenuTrigger asChild>
           <IconButton label="Page options">
@@ -173,6 +179,20 @@ export function PageMenu({
             <span className="flex-1">Lock page</span>
             <Toggle on={page.locked} />
           </MenuItem>
+          {follow && following !== null && (
+            <MenuItem
+              icon={<Bell size={14} />}
+              onSelect={(e) => {
+                e.preventDefault();
+                const next = !following;
+                setFollowing(next);
+                follow.set(next).catch(() => setFollowing(!next));
+              }}
+            >
+              <span className="flex-1">Follow page</span>
+              <Toggle on={following} />
+            </MenuItem>
+          )}
           {suggest && (
             <MenuItem
               icon={<PenLine size={14} />}

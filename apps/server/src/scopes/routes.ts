@@ -383,9 +383,17 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
       ) {
         return fail(reply, 400, 'invalid', 'No such group.');
       }
+      const { rows: had } = await store.pool.query(
+        'SELECT 1 FROM scope_access WHERE scope_id = $1 AND principal = $2',
+        [scopeId, principal],
+      );
       await store.scopes.setAccess(scopeId, principal, request.body.role);
       request.log.info({ workspaceId: id, scopeId, principal, role: request.body.role }, 'access');
       await ctx.access.changed(id);
+      // Someone added (not a role changed): tell them.
+      if (request.body.role && had.length === 0 && principal.startsWith('user:')) {
+        await ctx.notifier.accessGranted(id, scopeId, request.auth!.user.id, [principal.slice(5)]);
+      }
       return { ok: true };
     },
   );

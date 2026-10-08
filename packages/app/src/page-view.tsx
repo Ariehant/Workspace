@@ -530,6 +530,8 @@ export interface PageViewProps {
   onTrash(id: PageId): void;
   /** Share the page (a server workspace). */
   onShare?(id: PageId): void;
+  /** Following pages (a server workspace): their comments reach the inbox. */
+  follow?: { get(id: PageId): Promise<boolean>; set(id: PageId, on: boolean): Promise<void> };
 }
 
 function useWorkspacePageModel(pageId: PageId): PageModel | null {
@@ -561,6 +563,7 @@ export function PageView({
   onMove,
   onTrash,
   onShare,
+  follow,
 }: PageViewProps) {
   const { pages } = useApp();
   const model = useWorkspacePageModel(pageId);
@@ -604,6 +607,12 @@ export function PageView({
             onSaveAsTemplate={() => onSaveAsTemplate(pageId)}
             onExport={onExport ? () => onExport(pageId) : undefined}
             onTrash={() => onTrash(pageId)}
+            follow={
+              follow && {
+                get: () => follow.get(pageId),
+                set: (on) => follow.set(pageId, on),
+              }
+            }
             suggest={
               isDatabase || !comments.canComment
                 ? undefined

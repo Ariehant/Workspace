@@ -16,6 +16,7 @@ import { asideDir, registerExport } from './export';
 import { registerFileScheme, registerFiles } from './files';
 import { registerImport } from './import';
 import { registerIpc } from './ipc';
+import { registerNotifications } from './notifications';
 import { registerPresence } from './presence';
 import { openPage } from './reminders';
 import { ReminderScheduler } from './reminders';
@@ -56,6 +57,8 @@ const reminders = new ReminderScheduler(store);
 const versionInterval = Number(process.env.WORKSPACE_VERSION_INTERVAL_MS);
 const manager = new DocManager(store, {
   onRemindersChanged: () => reminders.check(),
+  // While syncing, only this person's own @remind mentions remind them here.
+  reminderOwner: (): string | null => sync.syncedUser()?.id ?? null,
   versionIntervalMs:
     Number.isFinite(versionInterval) && versionInterval > 0 ? versionInterval : undefined,
 });
@@ -284,6 +287,7 @@ registerExport({
 registerImport({ manager, dbPath, dataDir, onFiles: () => sync.fileAdded() });
 registerSyncIpc(sync);
 registerPresence(sync);
+registerNotifications(sync, store, manager, reminders);
 
 // A second launch (e.g. the desktop opening a workspace:// link) hands over to us.
 app.on('second-instance', (_event, argv) => {

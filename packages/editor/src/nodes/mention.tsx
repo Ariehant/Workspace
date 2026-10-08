@@ -324,7 +324,14 @@ export const Mention = Node.create({
               ? { kind: 'page', pageId: item.page.id }
               : item.kind === 'person'
                 ? { kind: 'person', userId: item.person.id }
-                : { kind: 'date', date: item.date, reminder: item.reminder };
+                : {
+                    kind: 'date',
+                    date: item.date,
+                    reminder: item.reminder,
+                    userId: item.reminder
+                      ? (editor.storage.uiBridge.ref.current.services?.people.me ?? null)
+                      : null,
+                  };
           e.chain()
             .focus()
             .insertContentAt(range, [

@@ -231,6 +231,13 @@ export class SyncHub {
     }
   }
 
+  /** Send a notification (JSON) to every connection of `userId` in the workspace. */
+  deliver(workspaceId: string, userId: string, payload: string): void {
+    for (const c of this.workspaces.get(workspaceId)?.connections ?? []) {
+      if (c.userId === userId) c.sendNotify(payload);
+    }
+  }
+
   /** @internal Send presence to a doc's watchers who may read it (not `except`). */
   relay(
     workspace: WorkspaceState,
@@ -415,6 +422,16 @@ export class SyncConnection {
     this.closed = true;
     for (const docId of [...this.watching]) this.unwatch(docId);
     this.hub.detach(this, this.workspace);
+  }
+
+  /** The signed-in user (null for connections without one, in tests). */
+  get userId(): string | null {
+    return this.access.userId ?? null;
+  }
+
+  /** @internal A notification for this connection's user. */
+  sendNotify(payload: string): void {
+    this.send({ type: 'notify', payload });
   }
 
   /** @internal Another connection's presence on a doc this one watches. */

@@ -815,6 +815,14 @@ export class SqliteStore {
       .run(reminder.pageId, reminder.blockId, reminder.fireAt);
   }
 
+  /** Has this reminder fired here (null: there's no such reminder)? */
+  reminderFired(reminder: Pick<Reminder, 'pageId' | 'blockId' | 'fireAt'>): boolean | null {
+    const row = this.db
+      .prepare('SELECT fired FROM reminders WHERE page_id = ? AND block_id = ? AND fire_at = ?')
+      .get(reminder.pageId, reminder.blockId, reminder.fireAt) as { fired: number } | undefined;
+    return row ? row.fired === 1 : null;
+  }
+
   /** When the next unfired reminder is due, or `null` if none is pending. */
   nextReminderAt(): number | null {
     const row = this.db

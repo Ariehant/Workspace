@@ -12,6 +12,10 @@ export const IPC = {
   presenceUpdate: 'presence:update',
   /** main -> renderer: sync reconnected; announce again. */
   presenceRejoin: 'presence:rejoin',
+  /** main -> renderer: a notification from the server. */
+  notification: 'notification:new',
+  /** main -> renderer: a system notification was clicked (open what it's about). */
+  notificationOpen: 'notification:open',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   search: 'search:query',

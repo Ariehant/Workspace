@@ -11,12 +11,22 @@ async function main(): Promise<void> {
   const store = new PgStore(config.databaseUrl);
   const files = createFileStorage(config.files);
   // Long update logs are merged hourly (docs with more than 500 stored updates).
-  const app = buildServer({ config, store, files, sync: { compactEveryMs: 3_600_000 } });
+  // Due reminders are looked for every 30 seconds (tests make it shorter).
+  const reminderPollMs = Number(process.env.REMINDER_POLL_MS) || undefined;
+  const app = buildServer({
+    config,
+    store,
+    files,
+    sync: { compactEveryMs: 3_600_000 },
+    notify: { reminderPollMs },
+  });
   const version = await store.migrate();
   app.log.info({ schema: version }, 'database ready');
   await app.listen({ host: config.host, port: config.port });
   // Index whatever arrived while the server was down (or before search existed).
   void app.indexer.catchUp().catch((error: unknown) => app.log.error({ err: error }, 'indexing'));
+  // Notify about what arrived while it was down, and fire reminders that came due.
+  void app.notifier.start().catch((error: unknown) => app.log.error({ err: error }, 'notifier'));
 
   let stopping = false;
   const stop = (signal: string) => {

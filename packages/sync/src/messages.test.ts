@@ -82,6 +82,7 @@ describe('messages', () => {
       { type: 'revoke', docIds: ['p', 'q'], scopes: ['s9'] },
       { type: 'revoke', docIds: [], scopes: [] },
       { type: 'awareness', docId: 'page', update: bytes(1, 2) },
+      { type: 'notify', payload: '{"kind":"mention","text":"Ada → ✓"}' },
     ];
     for (const m of server) expect(decodeServer(encodeServer(m))).toEqual(m);
   });

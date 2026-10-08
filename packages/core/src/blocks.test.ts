@@ -87,13 +87,19 @@ describe('blocks', () => {
     reminder.setAttribute('kind', 'date');
     reminder.setAttribute('date', '2026-10-05');
     reminder.setAttribute('reminder', true as unknown as string);
+    const mine = new Y.XmlElement('mention');
+    mine.setAttribute('kind', 'date');
+    mine.setAttribute('date', '2026-10-07');
+    mine.setAttribute('reminder', 'true');
+    mine.setAttribute('userId', 'ada');
     const plainDate = new Y.XmlElement('mention');
     plainDate.setAttribute('kind', 'date');
     plainDate.setAttribute('date', '2026-10-06');
-    p.insert(0, [new Y.XmlText('Order  servos '), reminder, plainDate]);
+    p.insert(0, [new Y.XmlText('Order  servos '), reminder, plainDate, mine]);
     getPageContent(doc).insert(0, [p, paragraph('no reminders here')]);
     expect(readReminders(doc)).toEqual([
-      { blockId: 'block-7', date: '2026-10-05', text: 'Order servos' },
+      { blockId: 'block-7', date: '2026-10-05', text: 'Order servos', userId: null },
+      { blockId: 'block-7', date: '2026-10-07', text: 'Order servos', userId: 'ada' },
     ]);
   });
 });

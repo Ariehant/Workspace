@@ -10,6 +10,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
+import { parseNotification, type NotificationData } from '@workspace/core';
 import {
   LocalSyncStore,
   SYNC_ACCESS,
@@ -90,6 +91,10 @@ export class SyncService {
     onAwareness?: (docId: string, update: Uint8Array) => void;
     onRejoin?: () => void;
   } = {};
+  /** Where the server's notifications go (the windows and the system); see `notifications.ts`. */
+  onNotification?: (notification: NotificationData) => void;
+  /** The time zone was sent this run (the server computes reminders in it). */
+  private zoneSent = false;
   private api: ServerApi | null = null;
   private socket: WebSocket | null = null;
   private lastHeard = 0;
@@ -154,6 +159,15 @@ export class SyncService {
   syncedUser(): { id: string; name: string } | null {
     const account = this.account;
     return this.config && account ? { id: account.id, name: account.name } : null;
+  }
+
+  /** Tell the server where this person is: their reminders fire at 9:00 there. */
+  private async sendTimeZone() {
+    if (this.zoneSent) return;
+    this.zoneSent = true;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const result = await this.team({ method: 'PATCH', path: 'me', body: { timeZone } });
+    if ('error' in result) this.zoneSent = false;
   }
 
   /** A team API call (members, invites, groups, `me`) for the renderer, with our token. */
@@ -326,11 +340,18 @@ export class SyncService {
       // Presence: others on the docs this device's windows show.
       onAwareness: (docId, update) => this.presence.onAwareness?.(docId, update),
       onPresenceRejoin: () => this.presence.onRejoin?.(),
+      onNotify: (payload) => {
+        const notification = parseNotification(payload);
+        if (notification) this.onNotification?.(notification);
+      },
     });
     for (const docId of this.presenceDocs) client.presence.watch(docId);
     client.onStatus((status) => {
       this.status = status;
-      if (status.state === 'live') void this.uploadFiles();
+      if (status.state === 'live') {
+        void this.uploadFiles();
+        void this.sendTimeZone();
+      }
       this.emit();
     });
     this.client = client;

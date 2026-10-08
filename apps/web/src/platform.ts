@@ -3,7 +3,7 @@
  * the docs on screen), search, files and settings over the API.
  */
 import type { AccountInfo, Platform, ScopeInfo } from '@workspace/app';
-import type { PresenceHandlers } from '@workspace/core';
+import { parseNotification, type NotificationData, type PresenceHandlers } from '@workspace/core';
 import { PartialClient } from '@workspace/sync';
 import { ApiError, api, type Me } from './api';
 
@@ -42,6 +42,11 @@ export function createWebPlatform(options: {
   let resolveScope: ((docId: string) => string | null) | null = null;
   // Presence: one handler per doc shown (the app keeps one awareness each).
   const presenceHandlers = new Map<string, PresenceHandlers>();
+  const notificationListeners = new Set<(n: NotificationData) => void>();
+  // Reminders fire at 9:00 where this person is.
+  void api('PATCH', '/api/auth/me', {
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }).catch(() => {});
   const client = new PartialClient({
     deviceId: crypto.randomUUID(),
     onUpdate: (docId, update) => {
@@ -65,6 +70,10 @@ export function createWebPlatform(options: {
     onAwareness: (docId, update) => presenceHandlers.get(docId)?.onUpdate(update),
     onPresenceRejoin: () => {
       for (const handlers of presenceHandlers.values()) handlers.onRejoin();
+    },
+    onNotify: (payload) => {
+      const notification = parseNotification(payload);
+      if (notification) for (const listener of notificationListeners) listener(notification);
     },
     connect: (handlers) => {
       // The session cookie authenticates the socket (same origin).
@@ -205,6 +214,12 @@ export function createWebPlatform(options: {
       },
       setResolver: (resolve) => {
         resolveScope = resolve;
+      },
+    },
+    notifications: {
+      onNotification: (listener) => {
+        notificationListeners.add(listener);
+        return () => void notificationListeners.delete(listener);
       },
     },
     team: {

@@ -19,8 +19,9 @@ People on the same page see each other (M4): avatars in the page header, named c
 editor, a dot in the sidebar on pages others are viewing, and avatars on database rows others
 have open. Comments work too (M5): comment on selected text or on the whole page, reply,
 @-mention, react and resolve, in a comments panel. People who may only comment suggest edits
-instead, and someone who may edit accepts or rejects them. Next are an inbox and publishing to
-the web.
+instead, and someone who may edit accepts or rejects them. The inbox (M6) collects mentions,
+comments and replies on pages you follow, reminders and pages shared with you, live, with
+desktop notifications. Next is publishing to the web.
 
 ## What works today
 

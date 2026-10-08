@@ -46,7 +46,14 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import type { AccountInfo, SyncInfo } from './platform';
 import { SyncIndicator } from './sync-settings';
 import { Trash } from './trash';
@@ -98,6 +105,8 @@ export interface SidebarProps {
   account?: AccountInfo;
   /** The workspace is on a server: its members and the account's profile. */
   team?: { onMembers(): void; onProfile(): void };
+  /** The inbox button (a server workspace), styled like the others here. */
+  inbox?: (className: string) => ReactNode;
   /** May the person change this page (add inside, move, trash)? Default: yes. */
   canEdit?(id: PageId): boolean;
   /** Others viewing each page now (a dot by the page). */
@@ -213,6 +222,7 @@ export function Sidebar(props: SidebarProps) {
         <span className="flex-1 text-left">Search</span>
         <kbd className="font-sans text-xs text-faint">Ctrl+K</kbd>
       </button>
+      {props.inbox?.(navButton)}
       <button type="button" onClick={() => onCreate(null)} className={navButton}>
         <SquarePen size={16} />
         New page

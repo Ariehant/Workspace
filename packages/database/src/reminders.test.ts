@@ -22,6 +22,13 @@ describe('date reminders', () => {
       new Date(2026, 9, 20, 14, 45).getTime(),
     );
     expect(dateReminderTime({ start: '2026-10-20' })).toBeNull();
+    // In someone else's time zone (the server).
+    expect(dateReminderTime({ start: '2026-10-20', reminder: '1d' }, 'Asia/Tokyo')).toBe(
+      Date.UTC(2026, 9, 19, 0),
+    );
+    expect(dateReminderTime({ start: '2026-10-20T15:00', reminder: '15m' }, 'Europe/London')).toBe(
+      Date.UTC(2026, 9, 20, 13, 45),
+    );
   });
 
   it('are read from live rows', () => {

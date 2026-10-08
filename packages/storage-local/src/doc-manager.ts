@@ -38,6 +38,11 @@ export interface DocManagerOptions {
   /** Called after a page's reminders were re-indexed (to reschedule notifications). */
   onRemindersChanged?: () => void;
   /**
+   * Who uses this device (the account, while syncing): `@remind` mentions someone else set
+   * aren't theirs to be reminded of. Null: every reminder is.
+   */
+  reminderOwner?: () => string | null;
+  /**
    * Page history: a snapshot is taken before an edit when the last one is older than
    * this (so every editing session starts from a saved version).
    */
@@ -82,6 +87,7 @@ export class DocManager {
   private readonly compactThreshold: number;
   private readonly indexDelayMs: number;
   private readonly onRemindersChanged: () => void;
+  private readonly reminderOwner: () => string | null;
   private readonly versionIntervalMs: number;
   private readonly now: () => number;
   /** Time of each doc's newest version (cached from the store). */
@@ -98,6 +104,7 @@ export class DocManager {
     this.compactThreshold = options.compactThreshold ?? 200;
     this.indexDelayMs = options.indexDelayMs ?? 750;
     this.onRemindersChanged = options.onRemindersChanged ?? (() => {});
+    this.reminderOwner = options.reminderOwner ?? (() => null);
     this.versionIntervalMs = options.versionIntervalMs ?? 10 * 60_000;
     this.now = options.now ?? Date.now;
     this.store.pruneVersions(this.now());
@@ -469,6 +476,11 @@ export class DocManager {
   private readonly syncedHosts = new Map<string, Set<string>>();
 
   /** A doc that may not be open (read-only): from memory, or from its stored updates. */
+  /** People's names: the members doc's, else the workspace's users (for notifications). */
+  userNames(): ReadonlyMap<string, string> {
+    return userNames(this.workspace, this.storedDoc(MEMBERS_DOC_ID));
+  }
+
   private storedDoc(docId: string): Y.Doc | null {
     const open = this.docs.get(docId)?.doc;
     if (open) return open;
@@ -510,7 +522,9 @@ export class DocManager {
     this.store.setPageBody(docId, text);
     this.store.replaceReminders(
       docId,
-      readReminders(doc).flatMap(({ blockId, date, text }, index) => {
+      readReminders(doc).flatMap(({ blockId, date, text, userId }, index) => {
+        const me = this.reminderOwner();
+        if (userId && me && userId !== me) return [];
         const fireAt = reminderTime(date);
         // Blocks always have ids in the editor; fall back to position for older content.
         return fireAt === null ? [] : [{ blockId: blockId ?? `#${index}`, fireAt, text }];

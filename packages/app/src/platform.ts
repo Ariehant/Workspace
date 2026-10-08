@@ -1,4 +1,4 @@
-import type { DocTransport, User } from '@workspace/core';
+import type { DocTransport, NotificationData, NotificationKind, User } from '@workspace/core';
 import type { FileRef, LinkPreview } from '@workspace/editor';
 import type { ThemePreference } from '@workspace/ui';
 
@@ -99,6 +99,20 @@ export interface Platform {
   team?: TeamPlatform;
   /** The scopes the person can read (a server workspace); see `ScopesPlatform`. */
   scopes?: ScopesPlatform;
+  /** Notifications from the server as they arrive (a server workspace; the inbox). */
+  notifications?: NotificationsPlatform;
+}
+
+/** The server's notifications, live (the list itself is the team API's). */
+export interface NotificationsPlatform {
+  onNotification(listener: (notification: NotificationData) => void): () => void;
+  /** A system notification was clicked: show what it's about. */
+  onOpen?(listener: (notification: NotificationData) => void): () => void;
+  /** Which kinds show as system notifications (the desktop; a missing kind: yes). */
+  systemKinds?: {
+    get(): Promise<Partial<Record<NotificationKind, boolean>>>;
+    set(kinds: Partial<Record<NotificationKind, boolean>>): void;
+  };
 }
 
 /**

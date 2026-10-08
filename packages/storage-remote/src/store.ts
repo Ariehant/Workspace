@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import { Accounts } from './accounts';
 import { migrate } from './migrations';
 import { SearchIndex } from './search';
+import { Notifications } from './notifications';
 import { Scopes } from './scopes';
 import { Teams } from './teams';
 
@@ -14,6 +15,8 @@ export interface LoggedUpdate {
   data: Uint8Array;
   /** The device that pushed it (null for compacted rows). */
   deviceId: string | null;
+  /** Who made it (null for compacted rows and the server's own). */
+  userId?: string | null;
 }
 
 export interface NewUpdate {
@@ -54,6 +57,7 @@ export class PgStore {
   readonly search: SearchIndex;
   readonly teams: Teams;
   readonly scopes: Scopes;
+  readonly notifications: Notifications;
 
   constructor(connectionString: string, options: { max?: number } = {}) {
     this.pool = new pg.Pool({ connectionString, max: options.max ?? 10 });
@@ -63,6 +67,7 @@ export class PgStore {
     this.search = new SearchIndex(this.pool);
     this.teams = new Teams(this.pool);
     this.scopes = new Scopes(this.pool);
+    this.notifications = new Notifications(this.pool);
   }
 
   migrate(): Promise<number> {
@@ -228,8 +233,9 @@ export class PgStore {
       doc_id: string;
       data: Buffer;
       device_id: string | null;
+      user_id: string | null;
     }>(
-      `SELECT seq, doc_id, data, device_id FROM doc_updates
+      `SELECT seq, doc_id, data, device_id, user_id FROM doc_updates
        WHERE workspace_id = $1 AND seq > $2 ORDER BY seq LIMIT $3`,
       [workspaceId, cursor, limit],
     );
@@ -238,6 +244,7 @@ export class PgStore {
       docId: r.doc_id,
       data: toBytes(r.data),
       deviceId: r.device_id,
+      userId: r.user_id,
     }));
   }
 
@@ -255,6 +262,17 @@ export class PgStore {
     const { rows } = await this.pool.query<{ data: Buffer }>(
       'SELECT data FROM doc_updates WHERE workspace_id = $1 AND doc_id = $2 ORDER BY seq',
       [workspaceId, docId],
+    );
+    if (rows.length === 0) return null;
+    return Y.mergeUpdates(rows.map((r) => toBytes(r.data)));
+  }
+
+  /** A doc as it was at log position `seq` (its updates up to it merged), or null. */
+  async docStateAt(workspaceId: string, docId: string, seq: number): Promise<Uint8Array | null> {
+    const { rows } = await this.pool.query<{ data: Buffer }>(
+      `SELECT data FROM doc_updates WHERE workspace_id = $1 AND doc_id = $2 AND seq <= $3
+       ORDER BY seq`,
+      [workspaceId, docId, seq],
     );
     if (rows.length === 0) return null;
     return Y.mergeUpdates(rows.map((r) => toBytes(r.data)));

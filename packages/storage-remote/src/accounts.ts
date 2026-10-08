@@ -163,6 +163,19 @@ export class Accounts {
     await this.pool.query('UPDATE users SET name = $2 WHERE id = $1', [userId, name.trim()]);
   }
 
+  /** The IANA time zone the person's reminders are computed in (null: UTC). */
+  async setTimeZone(userId: string, timeZone: string | null): Promise<void> {
+    await this.pool.query('UPDATE users SET time_zone = $2 WHERE id = $1', [userId, timeZone]);
+  }
+
+  async timeZones(userIds: readonly string[]): Promise<Map<string, string>> {
+    const { rows } = await this.pool.query<{ id: string; time_zone: string | null }>(
+      'SELECT id, time_zone FROM users WHERE id = ANY($1::uuid[])',
+      [userIds],
+    );
+    return new Map(rows.map((r) => [r.id, r.time_zone ?? 'UTC']));
+  }
+
   async setAvatar(userId: string, avatar: string | null): Promise<void> {
     await this.pool.query('UPDATE users SET avatar = $2 WHERE id = $1', [userId, avatar]);
   }

@@ -1,3 +1,4 @@
+import { isTimeZone } from '@workspace/core';
 import { createHash } from 'node:crypto';
 import type { SessionKind, User } from '@workspace/storage-remote';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -219,7 +220,7 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
   }));
 
   // Name and picture. Both show in every workspace the account is in (members docs).
-  app.patch<{ Body: { name?: string; avatar?: string | null } }>(
+  app.patch<{ Body: { name?: string; avatar?: string | null; timeZone?: string } }>(
     '/api/auth/me',
     {
       preHandler: signedIn,
@@ -227,12 +228,17 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
         body: {
           type: 'object',
           minProperties: 1,
-          properties: { name, avatar: { type: ['string', 'null'], maxLength: MAX_AVATAR_LENGTH } },
+          properties: {
+            name,
+            avatar: { type: ['string', 'null'], maxLength: MAX_AVATAR_LENGTH },
+            // Where the person is: their reminders fire at 9:00 there.
+            timeZone: { type: 'string', maxLength: 64 },
+          },
         },
       },
     },
     async (request, reply) => {
-      const { name: newName, avatar } = request.body;
+      const { name: newName, avatar, timeZone } = request.body;
       const userId = request.auth!.user.id;
       if (newName !== undefined && !newName.trim()) {
         return fail(reply, 400, 'invalid', 'Enter your name.');
@@ -241,6 +247,13 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
         return fail(reply, 400, 'invalid', 'The picture must be a PNG, JPEG or WebP image.');
       }
       if (newName !== undefined) await accounts.setName(userId, newName);
+      if (timeZone !== undefined) {
+        if (!isTimeZone(timeZone)) return fail(reply, 400, 'invalid', 'Unknown time zone.');
+        await accounts.setTimeZone(userId, timeZone);
+        if (newName === undefined && avatar === undefined) {
+          return { user: publicUser((await accounts.userById(userId))!) };
+        }
+      }
       if (avatar !== undefined) await accounts.setAvatar(userId, avatar);
       await ctx.members.refreshFor(userId);
       return { user: publicUser((await accounts.userById(userId))!) };

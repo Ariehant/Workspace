@@ -88,6 +88,8 @@ export interface PageReminder {
   date: string;
   /** Text of the block the reminder sits in, for the notification. */
   text: string;
+  /** Who set it (in a synced workspace): only they are reminded. */
+  userId: string | null;
 }
 
 /** Reminder mentions (`@remind …`) anywhere in a page. */
@@ -101,6 +103,7 @@ export function readReminders(doc: Y.Doc): PageReminder[] {
             blockId: typeof block.props.id === 'string' ? block.props.id : null,
             date: String(child.props.date),
             text: block.text.replace(/\s+/g, ' ').trim(),
+            userId: typeof child.props.userId === 'string' ? child.props.userId : null,
           });
         }
       }

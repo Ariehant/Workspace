@@ -1,6 +1,7 @@
 import {
   DocClient,
   MEMBERS_DOC_ID,
+  type NotificationData,
   buildPageTree,
   TRASH_RETENTION_MS,
   createPage,
@@ -64,6 +65,8 @@ import { duplicatePage } from './page-actions';
 import { SyncDialog, useSyncInfo } from './sync-settings';
 import { MembersDialog, ProfileDialog } from './members-dialog';
 import { useTeam } from './team';
+import { InboxButton, useInbox } from './inbox';
+import { requestThread } from './comments';
 import { createWelcomePage } from './welcome';
 import { TabBar } from './tab-bar';
 import { useNewTabIntent, useTabScroll } from './tabs';
@@ -242,6 +245,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const { databases, pages, user } = useApp();
   const syncInfo = useSyncInfo(platform.sync);
   const team = useTeam(platform, syncInfo);
+  const inbox = useInbox(team ? (platform.team ?? null) : null, platform.notifications);
   // Rows of databases loading in, found through links or history.
   const registryVersion = useRegistryVersion();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -604,18 +608,33 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
 
   // Links (workspace://page/…) and reminder notifications.
   const nonce = useRef(0);
-  useEffect(
-    () =>
-      platform.onNavigate((pageId, blockId) => {
-        const go = () => {
-          navigate(pageId);
-          if (blockId) setBlockTarget({ pageId, blockId, nonce: ++nonce.current });
-        };
-        if (exists(pageId)) go();
-        // A row: find and load its database first.
-        else void databases.locate(pageId).then((databaseId) => databaseId && go());
-      }),
-    [platform, exists, navigate, databases],
+  const showPage = useCallback(
+    (pageId: PageId, blockId: string | null) => {
+      const go = () => {
+        navigate(pageId);
+        if (blockId) setBlockTarget({ pageId, blockId, nonce: ++nonce.current });
+      };
+      if (exists(pageId)) go();
+      // A row: find and load its database first.
+      else void databases.locate(pageId).then((databaseId) => databaseId && go());
+    },
+    [exists, navigate, databases],
+  );
+  useEffect(() => platform.onNavigate(showPage), [platform, showPage]);
+
+  // A notification (the inbox's, or a system one clicked): its page, at its block or thread.
+  const openNotification = useCallback(
+    (n: NotificationData) => {
+      if (!n.pageId) return;
+      if (n.threadId) requestThread(n.pageId, n.threadId);
+      showPage(n.pageId, n.blockId);
+    },
+    [showPage],
+  );
+  useEffect(() => platform.notifications?.onOpen?.(openNotification), [platform, openNotification]);
+  const followApi = useMemo(
+    () => (inbox ? { get: inbox.api.following, set: inbox.api.setFollowing } : undefined),
+    [inbox?.api], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const chrome = {
@@ -639,6 +658,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       onMove={setMoving}
       onTrash={trash}
       onShare={team && scoped ? setSharing : undefined}
+      follow={followApi}
       isFavorite={favorites.includes(currentPageId)}
       onToggleFavorite={() => toggleFavorite(currentPageId)}
     />
@@ -708,6 +728,13 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
               backup: can(platform, 'backup'),
             }}
             account={platform.account}
+            inbox={
+              inbox
+                ? (className) => (
+                    <InboxButton inbox={inbox} className={className} onOpen={openNotification} />
+                  )
+                : undefined
+            }
             team={
               team
                 ? {

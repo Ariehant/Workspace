@@ -10,7 +10,7 @@
  *   push {items: localId, doc, update, scope}    updates {cursor, items}    (catch-up and live)
  *   open {doc} / close {doc}  (partial)          caught-up {cursor}         (after the first catch-up)
  *   watch {doc} / unwatch {doc}                  awareness {doc, update}    (presence: others on a doc)
- *   awareness {doc, update}
+ *   awareness {doc, update}                      notify {payload}           (a notification, as JSON)
  *                                                ack {items: localId, seq, denied}
  *                                                state {doc, update}        (reply to open; or the
  *                                                                            server's copy after a denial)
@@ -26,11 +26,14 @@
  * Version 3 adds presence: a client watches the docs it shows and sends y-protocols
  * awareness updates for them (cursors, who's here); the server stamps each state with the
  * signed-in account and relays it to the others watching the doc who may read it.
+ *
+ * Version 4 adds notifications: the server sends each of a user's connections the
+ * notifications made for them (mentions, replies, reminders…) as they happen.
  */
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Largest message a client may send (the server's WebSocket limit). */
 export const MAX_CLIENT_MESSAGE_BYTES = 16 * 1024 * 1024;
@@ -43,6 +46,8 @@ export const MAX_DOC_ID_LENGTH = 128;
 const DEVICE_ID_LENGTH = 128;
 /** Largest awareness update a client may send (a few cursors' worth of JSON). */
 export const MAX_AWARENESS_BYTES = 64 * 1024;
+/** Largest notification the server sends (JSON). */
+export const MAX_NOTIFY_BYTES = 64 * 1024;
 
 export type SyncMode = 'replica' | 'partial';
 
@@ -109,6 +114,8 @@ export type ServerMessage =
   | { type: 'revoke'; docIds: string[]; scopes: string[] }
   /** Others' presence on a watched doc (y-protocols awareness, `user` set by the server). */
   | { type: 'awareness'; docId: string; update: Uint8Array }
+  /** A notification for the signed-in user (JSON; see `@workspace/core` notifications). */
+  | { type: 'notify'; payload: string }
   | { type: 'error'; code: string; message: string };
 
 /** WebSocket close codes the server uses (4000–4999 are free for applications). */
@@ -145,6 +152,7 @@ const T = {
   unwatch: 6,
   awarenessIn: 7,
   awarenessOut: 19,
+  notify: 20,
 } as const;
 
 // --- Encoding ----------------------------------------------------------------------------
@@ -260,6 +268,10 @@ export function encodeServer(message: ServerMessage): Uint8Array {
       encoding.writeVarUint(e, T.awarenessOut);
       encoding.writeVarString(e, message.docId);
       encoding.writeVarUint8Array(e, message.update);
+      break;
+    case 'notify':
+      encoding.writeVarUint(e, T.notify);
+      encoding.writeVarString(e, message.payload);
       break;
   }
   return encoding.toUint8Array(e);
@@ -449,6 +461,9 @@ export function decodeServer(data: Uint8Array): ServerMessage {
         docId: r.docId(),
         update: r.bytes(Number.MAX_SAFE_INTEGER),
       };
+      break;
+    case T.notify:
+      message = { type: 'notify', payload: r.string(MAX_NOTIFY_BYTES) };
       break;
     default:
       throw new ProtocolError('Unknown message type');

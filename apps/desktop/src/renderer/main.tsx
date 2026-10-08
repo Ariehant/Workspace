@@ -1,11 +1,13 @@
 import { App, type AppCommand, type Platform, type TeamMethod } from '@workspace/app';
-import type { PresenceHandlers } from '@workspace/core';
+import { parseNotification, type PresenceHandlers } from '@workspace/core';
 import '@workspace/editor/editor.css';
 import '@workspace/ui/styles.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 const api = window.workspace;
+/** Which kinds show as system notifications (the main process reads it too). */
+const SYSTEM_KINDS = 'notifications.desktop';
 
 /** Presence: one handler per doc this window shows (the app keeps one awareness each). */
 const presenceHandlers = new Map<string, PresenceHandlers>();
@@ -68,6 +70,23 @@ const platform: Platform = {
   scopes: {
     get: async () => (await api.sync.status()).scopes,
     onChange: (listener) => api.sync.onChange((info) => listener(info.scopes)),
+  },
+  // The server's notifications (while syncing), relayed by the main process.
+  notifications: {
+    onNotification: (listener) =>
+      api.notifications.on((n) => {
+        const parsed = parseNotification(JSON.stringify(n));
+        if (parsed) listener(parsed);
+      }),
+    onOpen: (listener) =>
+      api.notifications.onOpen((n) => {
+        const parsed = parseNotification(JSON.stringify(n));
+        if (parsed) listener(parsed);
+      }),
+    systemKinds: {
+      get: async () => (await api.settings.get<Record<string, boolean>>(SYSTEM_KINDS)) ?? {},
+      set: (kinds) => api.settings.set(SYSTEM_KINDS, kinds),
+    },
   },
   // Works while this workspace syncs (the app only offers it then).
   team: {

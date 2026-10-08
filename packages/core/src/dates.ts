@@ -110,7 +110,72 @@ export function formatDate(iso: string, now = new Date()): string {
 /** Default reminder time on the chosen day: 9:00 local. */
 export const REMINDER_HOUR = 9;
 
-export function reminderTime(iso: string): number | null {
+export function reminderTime(iso: string, timeZone?: string): number | null {
   const d = fromIsoDate(iso);
-  return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate(), REMINDER_HOUR).getTime() : null;
+  if (!d) return null;
+  return timeZone
+    ? zonedTime(d.getFullYear(), d.getMonth() + 1, d.getDate(), REMINDER_HOUR, 0, timeZone)
+    : new Date(d.getFullYear(), d.getMonth(), d.getDate(), REMINDER_HOUR).getTime();
+}
+
+const zoneFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** How far `timeZone`'s wall clock is ahead of UTC at instant `t` (ms). */
+function zoneOffset(t: number, timeZone: string): number {
+  let format = zoneFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    });
+    zoneFormats.set(timeZone, format);
+  }
+  const parts: Record<string, number> = {};
+  for (const p of format.formatToParts(t))
+    if (p.type !== 'literal') parts[p.type] = Number(p.value);
+  const wall = Date.UTC(
+    parts.year!,
+    parts.month! - 1,
+    parts.day!,
+    parts.hour!,
+    parts.minute!,
+    parts.second!,
+  );
+  return wall - Math.floor(t / 1000) * 1000;
+}
+
+/** Is `timeZone` an IANA zone this runtime knows ("Europe/Berlin")? */
+export function isTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The instant (ms) a wall-clock time happens in an IANA time zone (`month` from 1). For
+ * the server, which computes others' reminders; an unknown zone is taken as UTC.
+ */
+export function zonedTime(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): number {
+  const wall = Date.UTC(year, month - 1, day, hour, minute);
+  if (!isTimeZone(timeZone)) return wall;
+  // Twice: the offset at the guess may differ from the offset at the answer (DST).
+  let t = wall - zoneOffset(wall, timeZone);
+  t = wall - zoneOffset(t, timeZone);
+  return t;
 }

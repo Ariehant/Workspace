@@ -166,6 +166,17 @@ export interface PageComments {
   setDraft(anchor: RangeAnchor | null): void;
 }
 
+// --- Opening a thread from elsewhere (the inbox) -----------------------------------------
+
+let threadRequest: { pageId: string; threadId: string } | null = null;
+const threadListeners = new Set<() => void>();
+
+/** Show this thread in the page's comments panel (now, or when the page opens). */
+export function requestThread(pageId: string, threadId: string): void {
+  threadRequest = { pageId, threadId };
+  for (const listener of [...threadListeners]) listener();
+}
+
 /** A page's comments while mounted (`role`: the person's access to the page). */
 export function usePageComments(pageId: PageId | null, role: TreeRole): PageComments {
   const { client, user } = useApp();
@@ -187,6 +198,19 @@ export function usePageComments(pageId: PageId | null, role: TreeRole): PageComm
   const canEdit = roleAllows(role, 'edit');
   const suggesting = canComment && (!canEdit || suggestChosen);
   useEffect(() => host.setSuggesting(suggesting), [host, suggesting]);
+
+  // The inbox asked for one of this page's threads.
+  useEffect(() => {
+    const take = () => {
+      if (!pageId || threadRequest?.pageId !== pageId) return;
+      host.setActive(threadRequest.threadId);
+      threadRequest = null;
+      setPanelOpen(true);
+    };
+    take();
+    threadListeners.add(take);
+    return () => void threadListeners.delete(take);
+  }, [host, pageId]);
 
   useEffect(() => {
     host.setHandlers({

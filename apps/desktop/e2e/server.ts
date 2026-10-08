@@ -46,6 +46,7 @@ export async function startSyncServer(
       FILES_DIR: join(root, 'server-files'),
       SIGNUP: 'open',
       LOG_LEVEL: 'warn',
+      REMINDER_POLL_MS: '1000',
       ...(options.web ? { WEB_DIR: webDir } : {}),
     },
     stdio: ['ignore', 'inherit', 'inherit'],

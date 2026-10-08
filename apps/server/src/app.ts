@@ -14,6 +14,8 @@ import { smtpMailer, type Mailer } from './mailer';
 import { inviteRoutes, memberRoutes } from './members/routes';
 import { scopeRoutes } from './scopes/routes';
 import { MembersDoc } from './members/members-doc';
+import { Notifier } from './notify/notifier';
+import { notificationRoutes } from './notify/routes';
 import { Indexer } from './search/indexer';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
@@ -27,6 +29,8 @@ declare module 'fastify' {
   interface FastifyInstance {
     /** The search indexer (main.ts starts its catch-up after listening). */
     indexer: Indexer;
+    /** Notifications (main.ts starts it after listening). */
+    notifier: Notifier;
   }
 }
 
@@ -39,6 +43,8 @@ export interface ServerDeps {
   sync?: SyncOptions;
   /** Search index: wait this long after changes before indexing. */
   indexDelayMs?: number;
+  /** Notifications: wait this long after changes; look for due reminders this often. */
+  notify?: { delayMs?: number; reminderPollMs?: number; now?: () => number };
   /** Sends invite emails (default: SMTP from the config, or none). */
   mailer?: Mailer | null;
 }
@@ -51,6 +57,7 @@ export function buildServer({
   oidc,
   sync,
   indexDelayMs,
+  notify,
   mailer,
 }: ServerDeps): FastifyInstance {
   const app = Fastify({
@@ -84,19 +91,29 @@ export function buildServer({
     appendFromServer: (workspaceId, updates) => live().hub.appendFromServer(workspaceId, updates),
     disconnect: (workspaceId, userId, removed) => live().disconnect(workspaceId, userId, removed),
   };
+  const access = new AccessService(store);
+  const notifier = new Notifier(store, access, {
+    ...notify,
+    deliver: (workspaceId, userId, notification) =>
+      endpoint?.hub.deliver(workspaceId, userId, JSON.stringify(notification)),
+    onError: (error, workspaceId) =>
+      app.log.error({ err: error, workspaceId }, 'notifications failed'),
+  });
   const ctx: ServerContext = {
     config,
     store,
     files,
     oidc: oidc ?? new OidcClients(config),
     indexer,
-    access: new AccessService(store),
+    notifier,
+    access,
     realtime,
     members: new MembersDoc({ store, append: realtime.appendFromServer }),
     mailer: mailer === undefined ? smtpMailer(config) : mailer,
   };
   app.decorate('indexer', indexer);
-  app.addHook('onClose', () => indexer.close());
+  app.decorate('notifier', notifier);
+  app.addHook('onClose', () => Promise.all([indexer.close(), notifier.close()]));
 
   app.decorateRequest('auth', null);
   void app.register(cookie);
@@ -163,6 +180,7 @@ export function buildServer({
     memberRoutes(scope, ctx);
     inviteRoutes(scope, ctx);
     scopeRoutes(scope, ctx);
+    notificationRoutes(scope, ctx);
   });
   webApp(app, config.webDir);
   endpoint = syncEndpoint(app, ctx, sync);
