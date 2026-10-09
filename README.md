@@ -29,7 +29,9 @@ Notion-compatible API, see [docs/PHASE6.md](docs/PHASE6.md)) is under way. M1 is
 can be shared as "Can edit content" (rows, not properties or views, checked by the server), the
 server can edit docs on someone's behalf through the same checks, and it has a job queue. M2 adds
 forms: a database's form view, filled in from the app (even by people who may only view it) or,
-shared by link, by anyone in a browser, with each response a new row.
+shared by link, by anyone in a browser, with each response a new row. M3 adds automations: when a page is added, a property is
+edited or on a schedule, the server edits the page, adds pages, notifies people or sends a
+signed webhook, acting with the access of the person who made it.
 
 ## What works today
 

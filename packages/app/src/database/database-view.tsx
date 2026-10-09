@@ -77,6 +77,7 @@ import {
   GanttChart,
   BarChart3,
   ClipboardList,
+  Zap,
   Lock,
   ArrowUpRight,
   MoreHorizontal,
@@ -110,6 +111,8 @@ import { CalendarView, dateProperties } from './calendar';
 import { TimelineView } from './timeline';
 import { NewButton } from './templates-menu';
 import { FormView } from './form-view';
+import { AutomationsDialog } from './automations-dialog';
+import { teamApi } from '../team';
 
 // recharts is large: load it when a chart is shown.
 const ChartView = lazy(() => import('./chart'));
@@ -190,7 +193,7 @@ export function DatabaseView({
   const ctx = useDisplayContext();
   // Who has which row open (their avatars show on the rows).
   const viewers = useRowPresence(databaseId, loaded?.handle.doc ?? null);
-  const { user, workspace, pages } = useApp();
+  const { user, workspace, pages, platform } = useApp();
   // Rows take "can edit content"; the database itself (properties, views, settings) takes
   // "can edit", and is shown as if locked otherwise.
   const role = pages.role(databaseId);
@@ -214,6 +217,7 @@ export function DatabaseView({
   const [search, setSearch] = useState<string | null>(null);
   const [dragTab, setDragTab] = useState<string | null>(null);
   const [editingDescription, setEditingDescription] = useState(false);
+  const [automationsOpen, setAutomationsOpen] = useState(false);
 
   const views = snapshot ? viewsOf(snapshot, viewSet) : [];
   const saved = views.find((v) => v.id === activeId) ?? views[0];
@@ -499,6 +503,23 @@ export function DatabaseView({
               </span>
             )}
           </>
+        )}
+        {structureEditable && platform.team && (
+          <IconButton
+            label="Automations"
+            onClick={() => setAutomationsOpen(true)}
+            data-testid="automations-button"
+          >
+            <Zap size={15} />
+          </IconButton>
+        )}
+        {automationsOpen && (
+          <AutomationsDialog
+            handle={handle}
+            properties={properties}
+            team={platform.team ? teamApi(platform.team) : null}
+            onClose={() => setAutomationsOpen(false)}
+          />
         )}
         {structureEditable && (
           <DatabaseOptions

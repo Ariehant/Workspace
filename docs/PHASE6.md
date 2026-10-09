@@ -1,6 +1,6 @@
 # Phase 6: Automations and API
 
-**Status:** in progress. M1 (the content role, server edits with an author, and the job queue) and M2 (forms) are done.
+**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms) and M3 (automations on the server) are done.
 
 ## Context
 
@@ -462,29 +462,99 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - **Desktop E2E:** run twice, 133 of 133 each time.
 - **Web E2E:** 3 of 3.
 
-### M3: automations on the server (≈ 5 days)
+### M3: automations on the server ✅
 
-- **`packages/automations`:** the automation model in the database doc, `matchTriggers`, conditions, `planActions` and values (fixed, now, triggering person, copied), with unit tests over before/after snapshots.
-- **Server:**
-  - the `automations` log follower, with the 3 s merge per page
-  - jobs: `automation.run`, `automation.schedule`, `deliver`
-  - bot attribution and no loops
-  - permission checks as the creator, and pausing
-  - run logs; failures in the inbox
-- **Webhooks out:** the SSRF guard (checked at connect time), limits and signatures.
-- **App:**
-  - **Automations panel** (a ⚡ button in the database toolbar): a list with on/off switches; a trigger, condition and action editor; the run log.
-  - **Buttons:** the Send webhook and Send notification steps.
-- **Tests:**
-  - trigger matching: added page, property edited to a value, schedules across DST, merged edits
-  - no loops: an automation that edits the property it watches runs once
-  - permission loss pauses the automation
-  - the webhook guard: private, loopback and metadata addresses, DNS rebinding, redirects, size and time limits
-  - retries and backoff
-  - signatures verify
-- **E2E:**
-  - "When Status is set to Done, set Completed to now and notify the owner": Bob sets Done, and Completed fills in on everyone's screen. Ada gets a notification.
-  - A webhook to a local test receiver (with `WEBHOOK_ALLOW_PRIVATE` in the test server) arrives signed.
+**Changed from the plan:**
+
+- **No `packages/automations`:** the model is `packages/database/src/automations.ts`. It needs the database's rows, filters and values, and nothing else uses it.
+- **Delay:** a run starts 3 s after the change that triggers it (a job's `runAt`), and reads the page then. Several edits to a page in that time give one run per automation and change.
+- **Run log:** the automation's last runs come from the job queue (`automation.run` jobs, which the queue keeps for a week), not a separate table.
+- **Not done (left for later):**
+  - "Edit pages in another database, matching a filter".
+  - Send email.
+  - Turning an automation off after 10 failed runs in a row.
+  - The conditions editor: the model and the server apply a condition, but the panel can't set one yet.
+  - A scheduled automation's actions act on no page: they can add a page, notify and send a webhook.
+- **Moved to M4:** the Send webhook and Send notification steps on buttons.
+
+**Model** (`packages/database/src/automations.ts`):
+
+- **Stored** in the database doc's `automations` map: name, `enabled`, `createdBy`, a trigger, an optional condition (a view filter) and actions.
+- **Triggers:**
+  - a page is added (not a template)
+  - a property is edited, optionally to a value
+  - a schedule: every day, week or month, at a time, in a time zone
+- **Actions:**
+  - **Edit property** on the page.
+  - **Add a page** to the database.
+  - **Notify** people, and the people in a person property.
+  - **Send a webhook.**
+- **Values:** fixed, now, the person who triggered it, or copied from a property of the page.
+- **Functions:**
+  - `triggeredBy(automations, before, after, …)` compares the rows before and after a change.
+  - `planActions` turns a run into effects.
+  - `nextRun(schedule, after)` works in the schedule's time zone, so DST doesn't move it.
+
+**Server:**
+
+- **Migration 12:** `automation_secrets`, the `automation` notification kind, and an index for runs by workspace and kind.
+- **The `automations` log follower:**
+  - **What it reads:** the changes to databases that have automations, one author's run of updates at a time, with the row state before and after.
+  - **Skipped:** compacted history, and changes made by the bot.
+  - **What it queues:** one `automation.run` job per start, in the same transaction as the follower's position. It also keeps each schedule's next `automation.schedule` job queued.
+- **The automations bot:** each workspace has one, with an id derived from the workspace. The members doc lists it as a removed member named "Automations", so its edits show a name and it can't sign in.
+- **A run:**
+  - **Pausing:** if the maker can no longer edit the database, the run stops and tells them ("Paused…", once per automation).
+  - **Edits:** made through `ctx.docs.edit`, checked as the maker and recorded as the bot. So they pass the same checks as the maker's own client, and they start no automations.
+  - **Notifications:** go to the inbox.
+  - **Webhooks:** each one is a `webhook.deliver` job.
+  - **Failures:** a run that fails stays failed (no retry).
+- **Webhooks out** (`webhooks/deliver.ts`):
+  - **Address check:** HTTPS only; private, loopback, link-local, CGNAT and metadata addresses are refused. The check is on the resolved address, and the connection is made to that same address.
+  - **Limits:** no redirects, 10 s, a 1 MB body, and 4 KB read back.
+  - **Signature:** `X-Notion-Signature: sha256=<hmac>`, with the automation's secret.
+  - **Retries:** a 5xx, a 429 or a network error is retried with the queue's backoff (5 tries). Any other 4xx fails at once. On the last failure, the maker is told.
+  - **Overrides:** `WEBHOOK_ALLOW_PRIVATE` and `WEBHOOK_ALLOW_HTTP` relax the checks for a server on its own network.
+- **REST:**
+  - `GET …/automations/:databaseId/:automationId/runs`: anyone who can see the database.
+  - `…/secret`: only people who can edit it.
+
+**App:**
+
+- **The ⚡ Automations button** in a database's toolbar. It is shown on a server to people who can edit the database.
+- **The list:** on/off, edit and delete.
+- **The editor:**
+  - name and trigger ("Set to" for a property; the day, time and time zone for a schedule)
+  - actions, each with its values
+  - people to notify, and a message
+  - the webhook URL
+  - the recent runs
+- **Elsewhere:** the inbox says "Automation <name>", and desktop notifications do too. The desktop allows the automations routes.
+
+**Tests:**
+
+- **`automations.test.ts` (database):**
+  - stored in the doc
+  - page added: not for templates or edits
+  - "set to" fires once
+  - conditions
+  - every kind of value
+  - schedules across DST
+- **`automations.test.ts` (server):**
+  - **"When Status is set to Done":** Completed and Owner are set and Ada is told. It runs once, and the bot is the author.
+  - **No loops:** an automation that edits the property it watches runs once.
+  - **Pausing:** a maker who loses edit access pauses the automation and is told.
+  - **Webhooks:** signed, and retried after a 500. The secret is for editors only.
+  - **Schedules:** they run at their time, and the next one lines up.
+  - **Delivery:** refuses private addresses and http unless allowed; doesn't follow redirects; gives up on slow receivers.
+
+**E2E** (`automations.spec.ts`):
+
+- Ada makes "Log new tasks" on her desktop: when a page is added, set Logged to now, notify her, and send a webhook to a local receiver.
+- She adds a task. Logged fills in live, and her inbox says "Automation Log new tasks".
+- The receiver gets one POST, with the page and a valid signature.
+
+**Runs:** see below.
 
 ### M4: automations on a local-only desktop (≈ 2 days, cut first)
 

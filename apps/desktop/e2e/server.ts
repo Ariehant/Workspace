@@ -47,6 +47,9 @@ export async function startSyncServer(
       SIGNUP: 'open',
       LOG_LEVEL: 'warn',
       REMINDER_POLL_MS: '1000',
+      // Automations' webhooks reach test receivers on this machine.
+      WEBHOOK_ALLOW_PRIVATE: 'true',
+      WEBHOOK_ALLOW_HTTP: 'true',
       ...(options.web ? { WEB_DIR: webDir } : {}),
     },
     stdio: ['ignore', 'inherit', 'inherit'],

@@ -202,6 +202,19 @@ export function teamApi(team: TeamPlatform) {
       r<{ link: string | null }>('PUT', `forms/${databaseId}/${viewId}/link`),
     removeFormLink: (databaseId: string, viewId: string) =>
       r<{ link: string | null }>('DELETE', `forms/${databaseId}/${viewId}/link`),
+    // Automations (Phase 6 M3): recent runs, and the webhook signing secret.
+    automationRuns: (databaseId: string, automationId: string) =>
+      r<{
+        runs: {
+          id: string;
+          at: number;
+          status: 'done' | 'failed' | 'pending';
+          error: string | null;
+          result: unknown;
+        }[];
+      }>('GET', `automations/${databaseId}/${automationId}/runs`),
+    automationSecret: (databaseId: string, automationId: string) =>
+      r<{ secret: string }>('GET', `automations/${databaseId}/${automationId}/secret`),
   };
 }
 
