@@ -1,6 +1,6 @@
 # Phase 6: Automations and API
 
-**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms) and M3 (automations on the server) are done.
+**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) and M4 (automations on a local desktop, and button webhook and notification steps) are done.
 
 ## Context
 
@@ -560,11 +560,81 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - **Desktop E2E:** run twice, 135 of 135 each time.
 - **Web E2E:** 3 of 3.
 
-### M4: automations on a local-only desktop (≈ 2 days, cut first)
+### M4: automations on a local-only desktop, and button steps ✅
 
-- **Host:** the automations host in the desktop main process, for workspaces that aren't synced. It follows local doc changes, runs schedules while the app is open, catches up missed runs at start, and sends webhooks from main.
-- **Hand-over:** turning sync on hands automations to the server; the desktop stops running them.
-- **E2E:** a local workspace runs an automation and a scheduled one with a fast test clock (`AUTOMATION_CLOCK` in E2E, like `REMINDER_POLL_MS`).
+**Changed from the plan:**
+
+- **Where the host lives:** `LocalAutomations` is in `packages/storage-local`, next to the doc manager it follows, so it has unit tests. The desktop's main process only wires it up (`apps/desktop/src/main/automations.ts`).
+- **The test clock:** E2E moves the host's clock forward (`__automationClockOffset`, and `WORKSPACE_AUTOMATION_CLOCK_OFFSET_MS` at start) instead of `AUTOMATION_CLOCK`.
+- **Button webhooks:** signed with one secret per workspace (not per button). Anyone who can edit some page can see it (they could add a button anyway).
+- **Not done:** an inbox for a local workspace. A local automation's or button's notification is a desktop notification.
+
+**The desktop host** (`LocalAutomations`):
+
+- **Following changes:**
+  - Each database with automations keeps a starting copy, taken when it's loaded or when its first automation appears (`DocManager.onLoad`, new).
+  - Changes are looked at 3 s after they stop, against that copy, with `triggeredBy` as on the server; then the copy moves on.
+- **No loops:**
+  - What an automation writes has its own origin (`AUTOMATION_ORIGIN`). It goes straight into the starting copy, so it's never seen as a change.
+  - Before it writes, changes still waiting are looked at first, so the copy is never behind.
+- **Runs:**
+  - One at a time, with `planActions` as on the server.
+  - Edits act as the automation's maker.
+  - "Notify" shows a desktop notification.
+  - The run log is the last 200 runs, kept in settings.
+- **Schedules:**
+  - Each counts from its last run (a new or changed one counts from now).
+  - They run while the app is open (checked at least every minute).
+  - One missed while the app was closed runs once at the next start, not once per missed time.
+- **Webhooks:**
+  - Sent from the main process, signed with the automation's secret (`X-Notion-Signature`, as on the server).
+  - Tried again after a network error, a 5xx or a 429 (5 s, 30 s, 2 min). A failure shows a notification.
+  - There is no private-address guard: it's the person's own computer and network.
+- **Hand-over:**
+  - While the workspace syncs, the server runs automations. The host only keeps its copies up to date, so turning sync off doesn't replay old changes.
+  - Turning sync on uploads the database docs, and the server's follower picks up their automations and schedules.
+
+**Button steps** (`packages/core` `ButtonStep`):
+
+- **New steps:**
+  - **Send webhook:** a URL. It POSTs `{source: {type: 'button', pageId, userId}, data, triggeredAt}`, where `data` is a row's title and properties, or a page's title.
+  - **Send notification:** people and a message.
+- **On a server:**
+  - `POST /api/workspaces/:id/buttons/webhook`: queued as a `webhook.deliver` job, through the same guard, retries and signature as an automation's. If it fails for good, the person who pressed it is told.
+  - `POST …/buttons/notify`: only members who can see the page are told (an `automation` notification titled with the button's label).
+  - Both need someone who can edit the doc the button is in (the page, or a button property's database).
+  - `GET …/buttons/secret` gives the button secret.
+- **On a local desktop:** the main process sends the webhook and shows the notification.
+
+**App:**
+
+- **The ⚡ Automations button** is offered on a local desktop too. Its run log and "Show signing secret" come from the server or from the device.
+- **The button editor** offers Send webhook (with "Show signing secret") and Send notification, wherever there's a server or a device to send them.
+- **Fixed:** whether there's a server to ask (`useTeam`) is now in the app context. The form view used the platform's team API, which the desktop always has, so filling in a form on an unsynced desktop went to the server and failed (M2).
+- **Fixed in `DocManager.close`:** it now flushes before clearing the delayed-index timer, since a flush can start a new one.
+
+**Tests:**
+
+- **`automations.test.ts` (storage-local):**
+  - **"Set to Done":** Completed is set and the person is told, once, and windows see it.
+  - **No loops:** an automation that edits the property it watches runs once.
+  - **Webhooks:** signed, tried again after a 500; a 404 isn't, and its failure is shown.
+  - **While syncing:** nothing runs.
+  - **Schedules:** they run at their time, and one missed while closed runs once.
+  - **Origin:** an automation's edits carry its origin.
+- **`automations.test.ts` (server), button steps:**
+  - A button webhook is signed with the button secret.
+  - A bad URL gets a 400, and an unknown page a 404.
+  - A notification reaches a member and skips a non-member.
+  - People who can only view can't press (403).
+
+**E2E** (`local-automations.spec.ts`, no server):
+
+- **Page added:** "Log chores" fills in Logged, shows a notification, and sends a webhook whose signature matches the secret the editor shows. The run log says Done.
+- **Schedule:** a daily schedule runs once the clock passes its time. After restarting four days later, it runs once more (not three times).
+- **Button:** "Ping the lab" sends a signed webhook with the page's title, and a notification.
+
+**Runs:** see below.
 
 ### M5: integrations, tokens, and the API core (≈ 6 days)
 

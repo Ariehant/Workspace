@@ -1,7 +1,8 @@
 /**
  * A database's automations (Phase 6 M3): the list (on and off), an editor for one (its
  * trigger and its actions), and its recent runs. They're stored in the database doc;
- * the server runs them, so they're offered in a workspace on a server.
+ * the server runs them in a workspace on a server, and the desktop in one that isn't
+ * (Phase 6 M4).
  */
 import { newId } from '@workspace/core';
 import {
@@ -23,6 +24,7 @@ import { Button, Dialog, DialogContent, IconButton, cn } from '@workspace/ui';
 import { Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../context';
+import type { AutomationRun, Platform } from '../platform';
 import type { TeamApi } from '../team';
 import { useDisplayContext } from './hooks';
 
@@ -73,15 +75,33 @@ export function triggerText(trigger: AutomationTrigger, properties: readonly Pro
   return `Every ${s.every}${day} at ${s.time}`;
 }
 
+/** Where a workspace's automations run: its server, or this device. */
+export interface AutomationsHost {
+  runs(databaseId: string, automationId: string): Promise<AutomationRun[]>;
+  secret(databaseId: string, automationId: string): Promise<string>;
+}
+
+/** The server when there is one, else the device (if it runs them); null: neither. */
+export function automationsHost(team: TeamApi | null, platform: Platform): AutomationsHost | null {
+  if (team) {
+    return {
+      runs: async (d, a) => (await team.automationRuns(d, a)).runs,
+      secret: async (d, a) => (await team.automationSecret(d, a)).secret,
+    };
+  }
+  const local = platform.automations;
+  return local ? { runs: local.runs, secret: local.secret } : null;
+}
+
 export function AutomationsDialog({
   handle,
   properties,
-  team,
+  host,
   onClose,
 }: {
   handle: DatabaseHandle;
   properties: readonly Property[];
-  team: TeamApi | null;
+  host: AutomationsHost;
   onClose(): void;
 }) {
   const { user } = useApp();
@@ -112,7 +132,7 @@ export function AutomationsDialog({
               key={editing.id}
               initial={editing}
               properties={properties}
-              team={team}
+              host={host}
               databaseId={handle.id}
               onSave={(a) => {
                 setAutomation(handle.doc, a);
@@ -182,14 +202,14 @@ export function AutomationsDialog({
 function AutomationEditor({
   initial,
   properties,
-  team,
+  host,
   databaseId,
   onSave,
   onCancel,
 }: {
   initial: Automation;
   properties: readonly Property[];
-  team: TeamApi | null;
+  host: AutomationsHost;
   databaseId: string;
   onSave(a: Automation): void;
   onCancel(): void;
@@ -279,6 +299,7 @@ function AutomationEditor({
                 personIds={personIds}
                 names={people.users}
                 scheduled={scheduled}
+                secret={() => host.secret(databaseId, a.id)}
                 onChange={(next) => setAction(i, next)}
               />
             </div>
@@ -305,7 +326,7 @@ function AutomationEditor({
         </select>
       </section>
 
-      {team && <RunLog team={team} databaseId={databaseId} automationId={a.id} />}
+      <RunLog host={host} databaseId={databaseId} automationId={a.id} />
 
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
@@ -446,6 +467,7 @@ function ActionEditor({
   personIds,
   names,
   scheduled,
+  secret,
   onChange,
 }: {
   action: AutomationAction;
@@ -453,6 +475,8 @@ function ActionEditor({
   personIds: readonly string[];
   names: ReadonlyMap<string, string>;
   scheduled: boolean;
+  /** The automation's webhook signing secret (for setting up a receiver). */
+  secret(): Promise<string>;
   onChange(a: AutomationAction): void;
 }) {
   switch (action.kind) {
@@ -543,6 +567,7 @@ function ActionEditor({
           <span className="text-xs text-muted">
             A POST of the page as JSON, signed with this automation’s secret (X-Notion-Signature).
           </span>
+          <SecretReveal secret={secret} />
         </div>
       );
   }
@@ -729,30 +754,19 @@ function TextValue({
 
 // --- Runs ----------------------------------------------------------------------------
 
-interface Run {
-  id: string;
-  at: number;
-  status: 'done' | 'failed' | 'pending';
-  error: string | null;
-  result: unknown;
-}
-
 function RunLog({
-  team,
+  host,
   databaseId,
   automationId,
 }: {
-  team: TeamApi;
+  host: AutomationsHost;
   databaseId: string;
   automationId: string;
 }) {
-  const [runs, setRuns] = useState<Run[] | null>(null);
+  const [runs, setRuns] = useState<AutomationRun[] | null>(null);
   useEffect(() => {
-    team.automationRuns(databaseId, automationId).then(
-      (r) => setRuns(r.runs),
-      () => setRuns([]),
-    );
-  }, [team, databaseId, automationId]);
+    host.runs(databaseId, automationId).then(setRuns, () => setRuns([]));
+  }, [host, databaseId, automationId]);
   if (!runs || runs.length === 0) return null;
   return (
     <section className="flex flex-col gap-1" data-testid="automation-runs">
@@ -781,3 +795,32 @@ const skipped = (result: unknown) => {
       ? `Skipped (${reason})`
       : null;
 };
+
+/** A webhook signing secret, shown on request (for setting up the receiver). */
+export function SecretReveal({ secret }: { secret(): Promise<string> }) {
+  const [value, setValue] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (value) {
+    return (
+      <code className="select-all break-all text-xs" data-testid="webhook-secret">
+        {value}
+      </code>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2">
+      <button
+        type="button"
+        className="self-start text-xs text-accent hover:underline"
+        onClick={() =>
+          secret().then(setValue, (e: unknown) =>
+            setError(e instanceof Error ? e.message : 'Couldn’t get the secret'),
+          )
+        }
+      >
+        Show signing secret
+      </button>
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </span>
+  );
+}

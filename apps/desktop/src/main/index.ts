@@ -12,6 +12,7 @@ import {
 import { unzipSync } from 'fflate';
 import { BrowserWindow, Menu, app, nativeTheme, powerMonitor, shell } from 'electron';
 import type { ThemeSource } from '../shared/ipc';
+import { createAutomations } from './automations';
 import { asideDir, registerExport } from './export';
 import { registerFileScheme, registerFiles } from './files';
 import { registerImport } from './import';
@@ -76,6 +77,8 @@ const sync = new SyncService({
       : shell.openExternal(url),
   replaceWorkspace: (settings) => replaceWorkspace(settings),
 });
+// A workspace that isn't synced runs its own automations (the server does while syncing).
+const automations = createAutomations(manager, store, sync);
 
 interface WindowBounds {
   x?: number;
@@ -167,6 +170,7 @@ function restoreWorkspace(path: string): void {
   readBackupManifest(entries); // a readable error before anything is touched
   restoring = true;
   reminders.stop();
+  automations.close();
   for (const window of BrowserWindow.getAllWindows()) window.destroy();
   manager.close();
   store.close();
@@ -204,6 +208,7 @@ function restoreWorkspace(path: string): void {
 function replaceWorkspace(settings: CarrySettings): void {
   restoring = true;
   reminders.stop();
+  automations.close();
   sync.stop();
   for (const window of BrowserWindow.getAllWindows()) window.destroy();
   manager.close();
@@ -326,7 +331,10 @@ app.whenReady().then(() => {
   sync.start();
   // Back from sleep: reconnect now rather than at the next backoff step.
   powerMonitor.on('resume', () => sync.retryNow());
-  if (!smokeTest) reminders.check();
+  if (!smokeTest) {
+    reminders.check();
+    automations.start();
+  }
   nativeTheme.themeSource = store.getSetting<ThemeSource>('ui.theme') ?? 'system';
   Menu.setApplicationMenu(buildMenu(() => createWindow(), isDev));
   // Handle workspace:// links system-wide (the .deb also registers the MIME type).
@@ -348,6 +356,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   reminders.stop();
+  automations.close();
   sync.stop();
   manager.close();
   store.close();

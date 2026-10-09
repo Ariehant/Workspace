@@ -54,6 +54,10 @@ export type ButtonStep =
   /** Database button property only: set properties on the row the button is in. */
   | { kind: 'editThisRow'; values: Record<string, unknown> }
   | { kind: 'openPage'; pageId: string }
+  /** POST the page (or the row) as JSON to a URL, signed (Phase 6 M4). */
+  | { kind: 'webhook'; url: string; headers: Record<string, string> }
+  /** Tell people (their inbox on a server; a notification on a local desktop). */
+  | { kind: 'notify'; people: string[]; message: string }
   /** Ask first; the following steps run only if confirmed. */
   | { kind: 'confirm'; message: string };
 

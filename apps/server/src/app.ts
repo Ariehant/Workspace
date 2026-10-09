@@ -27,6 +27,7 @@ import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
 import { formRoutes } from './forms/routes';
 import { automationRoutes } from './automations/routes';
+import { buttonRoutes } from './buttons/routes';
 import { settingsRoutes } from './settings-routes';
 import { webApp } from './web';
 import { workspaceRoutes } from './workspaces';
@@ -243,6 +244,7 @@ export function buildServer({
     siteRoutes(scope, ctx, site);
     formRoutes(scope, ctx);
     automationRoutes(scope, ctx);
+    buttonRoutes(scope, ctx);
   });
   webApp(app, config.webDir);
   endpoint = syncEndpoint(app, ctx, sync);

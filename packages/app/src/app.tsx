@@ -177,6 +177,7 @@ export function App({ platform }: { platform: Platform }) {
   }, [platform]);
 
   const members = useDoc(client, MEMBERS_DOC_ID);
+  const team = useTeam(platform, useSyncInfo(platform.sync));
   const base = useMemo(() => {
     if (!workspace || !user) return null;
     const databases = new DatabaseRegistry(client, platform, workspace);
@@ -205,8 +206,8 @@ export function App({ platform }: { platform: Platform }) {
     [client, user],
   );
   const context = useMemo(
-    () => (base ? { ...base, members, presence } : null),
-    [base, members, presence],
+    () => (base ? { ...base, members, presence, team } : null),
+    [base, members, presence, team],
   );
   if (!workspace || !settings || !context) return null;
   if (print) {
@@ -242,9 +243,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const sections = useMemo(() => buildSections(workspace, tree), [workspace, tree]);
   /** The workspace is on a server (its pages are in scopes: teamspaces, private, shared). */
   const scoped = sections.some((s) => s.kind !== 'local');
-  const { databases, pages, user } = useApp();
+  const { databases, pages, user, team } = useApp();
   const syncInfo = useSyncInfo(platform.sync);
-  const team = useTeam(platform, syncInfo);
   const inbox = useInbox(team ? (platform.team ?? null) : null, platform.notifications);
   // Rows of databases loading in, found through links or history.
   const registryVersion = useRegistryVersion();

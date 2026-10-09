@@ -45,6 +45,9 @@ const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [/^forms\/[\w-]{1,128}\/[\w-]{1,128}\/link$/, ['GET', 'PUT', 'DELETE']],
   // Automations (Phase 6 M3): recent runs, and the webhook signing secret.
   [/^automations\/[\w-]{1,128}\/[\w-]{1,128}\/(runs|secret)$/, ['GET']],
+  // A button's webhook and notification steps (Phase 6 M4).
+  [/^buttons\/(webhook|notify)$/, ['POST']],
+  [/^buttons\/secret$/, ['GET']],
 ];
 const MAX_TEAM_BODY = 128 * 1024;
 

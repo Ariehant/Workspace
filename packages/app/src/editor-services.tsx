@@ -21,7 +21,7 @@ import { runButton } from './buttons/run-button';
 
 /** What the editor of page (or row) `pageId` needs from the app. */
 export function useEditorServices(pageId: PageId): EditorServices {
-  const { workspace, platform, client, pages, databases, user, members } = useApp();
+  const { workspace, platform, client, pages, databases, user, members, team } = useApp();
   const { navigate, openRow } = useNavigation();
   return useMemo(
     () => ({
@@ -46,7 +46,8 @@ export function useEditorServices(pageId: PageId): EditorServices {
       },
       runButton: (config, hooks) =>
         runButton(config, {
-          app: { databases, workspace, user, pages },
+          app: { databases, workspace, user, pages, team, platform },
+          pageId,
           navigate,
           openRow: (rowId, databaseId) => openRow(rowId, databaseId, 'sidePeek'),
           insertBlocks: hooks.insertBlocks,
@@ -94,6 +95,6 @@ export function useEditorServices(pageId: PageId): EditorServices {
         subscribe: (listener) => observeMathMacros(workspaceDataDoc(workspace), listener),
       },
     }),
-    [workspace, platform, client, pages, databases, user, members, pageId, navigate, openRow],
+    [workspace, platform, client, pages, databases, user, members, team, pageId, navigate, openRow],
   );
 }

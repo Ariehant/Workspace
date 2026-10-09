@@ -83,6 +83,7 @@ export class DocManager {
   private readonly docs = new Map<string, LoadedDoc>();
   private readonly listeners = new Set<UpdateListener>();
   private readonly resetListeners = new Set<(docId: string) => void>();
+  private readonly loadListeners = new Set<(docId: string, doc: Y.Doc) => void>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly compactThreshold: number;
   private readonly indexDelayMs: number;
@@ -196,6 +197,20 @@ export class DocManager {
   onUpdate(listener: UpdateListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * A doc was loaded from storage (before any new update is applied to it): watchers
+   * that compare a doc's states (local automations) take their starting point here.
+   */
+  onLoad(listener: (docId: string, doc: Y.Doc) => void): () => void {
+    this.loadListeners.add(listener);
+    return () => this.loadListeners.delete(listener);
+  }
+
+  /** The doc, while it's loaded (read it; change it only through `applyUpdate`). */
+  loaded(docId: string): Y.Doc | null {
+    return this.docs.get(docId)?.doc ?? null;
   }
 
   /** Load (or reuse) a document and return its full state. Pair with `release`. */
@@ -373,9 +388,10 @@ export class DocManager {
   }
 
   close(): void {
+    // Flushed first: indexing a database can line up its new rows' content.
+    this.flush();
     if (this.storedTimer) clearTimeout(this.storedTimer);
     this.storedTimer = null;
-    this.flush();
     for (const { doc } of this.docs.values()) doc.destroy();
     this.docs.clear();
     this.listeners.clear();
@@ -400,6 +416,7 @@ export class DocManager {
       this.scheduleIndex(docId);
     });
     this.docs.set(docId, { doc, refs: 0 });
+    for (const listener of this.loadListeners) listener(docId, doc);
     return doc;
   }
 

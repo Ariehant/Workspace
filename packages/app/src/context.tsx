@@ -5,6 +5,7 @@ import type { DatabaseRegistry } from './database/registry';
 import type { PageDirectory } from './pages';
 import type { Platform } from './platform';
 import type { PresenceHub } from './presence';
+import type { TeamApi } from './team';
 
 export interface AppContextValue {
   platform: Platform;
@@ -21,6 +22,11 @@ export interface AppContextValue {
   members: Y.Doc | null;
   /** Who else is on the docs this window shows. */
   presence: PresenceHub | null;
+  /**
+   * The workspace's server, when there is one to ask: always on the web, on the desktop
+   * while it syncs this workspace. Null: a local workspace (the desktop does it itself).
+   */
+  team: TeamApi | null;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

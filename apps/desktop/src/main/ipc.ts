@@ -145,12 +145,7 @@ export function registerIpc(
   ipcMain.handle(IPC.user, () => {
     const account = syncedUser();
     if (account) return account;
-    let id = store.getSetting<string>('app.userId');
-    if (!id) {
-      id = randomUUID();
-      store.setSetting('app.userId', id);
-    }
-    return { id, name: osUserName() };
+    return { id: localUserId(store), name: osUserName() };
   });
 
   ipcMain.on(IPC.themeSet, (_event, theme: unknown) => {
@@ -172,4 +167,14 @@ function osUserName(): string {
   } catch {
     return 'Me';
   }
+}
+
+/** The local user's id: kept for this install (made on first use). */
+export function localUserId(store: SqliteStore): string {
+  let id = store.getSetting<string>('app.userId');
+  if (!id) {
+    id = randomUUID();
+    store.setSetting('app.userId', id);
+  }
+  return id;
 }

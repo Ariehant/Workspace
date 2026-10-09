@@ -101,6 +101,39 @@ export interface Platform {
   scopes?: ScopesPlatform;
   /** Notifications from the server as they arrive (a server workspace; the inbox). */
   notifications?: NotificationsPlatform;
+  /**
+   * Automations and button steps the host runs itself, for a workspace that isn't on a
+   * server (the desktop). With a server (`team`), the server runs them instead.
+   */
+  automations?: LocalAutomationsPlatform;
+}
+
+/** An automation's run, as its run log shows it. */
+export interface AutomationRun {
+  id: string;
+  at: number;
+  rowId: string | null;
+  status: 'done' | 'failed' | 'pending';
+  error: string | null;
+  result: unknown;
+}
+
+export interface LocalAutomationsPlatform {
+  /** An automation's recent runs, newest first. */
+  runs(databaseId: string, automationId: string): Promise<AutomationRun[]>;
+  /** The secret an automation's webhooks are signed with. */
+  secret(databaseId: string, automationId: string): Promise<string>;
+  /** The secret button webhooks are signed with. */
+  buttonSecret(): Promise<string>;
+  /** A button's "Send webhook" step. */
+  buttonWebhook(request: {
+    url: string;
+    headers: Record<string, string>;
+    body: unknown;
+    label: string;
+  }): void;
+  /** A button's "Send notification" step (shown on this device). */
+  buttonNotify(request: { title: string; body: string; pageId: string | null }): void;
 }
 
 /** The server's notifications, live (the list itself is the team API's). */

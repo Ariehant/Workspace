@@ -1,4 +1,10 @@
-import { App, type AppCommand, type Platform, type TeamMethod } from '@workspace/app';
+import {
+  App,
+  type AppCommand,
+  type AutomationRun,
+  type Platform,
+  type TeamMethod,
+} from '@workspace/app';
 import { parseNotification, type PresenceHandlers } from '@workspace/core';
 import '@workspace/editor/editor.css';
 import '@workspace/ui/styles.css';
@@ -87,6 +93,15 @@ const platform: Platform = {
       get: async () => (await api.settings.get<Record<string, boolean>>(SYSTEM_KINDS)) ?? {},
       set: (kinds) => api.settings.set(SYSTEM_KINDS, kinds),
     },
+  },
+  // Run here while this workspace isn't synced (the app asks the server otherwise).
+  automations: {
+    runs: async (databaseId, automationId) =>
+      (await api.automations.runs(databaseId, automationId)) as AutomationRun[],
+    secret: api.automations.secret,
+    buttonSecret: api.automations.buttonSecret,
+    buttonWebhook: api.automations.buttonWebhook,
+    buttonNotify: api.automations.buttonNotify,
   },
   // Works while this workspace syncs (the app only offers it then).
   team: {

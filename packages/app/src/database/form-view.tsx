@@ -43,9 +43,9 @@ import {
   cn,
 } from '@workspace/ui';
 import { ArrowDown, ArrowUp, Check, Eye, Link, Pencil, Plus, Share2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApp } from '../context';
-import { teamApi, type TeamApi } from '../team';
+import type { TeamApi } from '../team';
 import { PropertyIcon } from './cells';
 import { useDisplayContext } from './hooks';
 
@@ -67,8 +67,7 @@ export function FormView({
   structureEditable: boolean;
   databaseTitle: string;
 }) {
-  const { platform, pages } = useApp();
-  const team = useMemo(() => (platform.team ? teamApi(platform.team) : null), [platform.team]);
+  const { pages, team } = useApp();
   const [mode, setMode] = useState<'build' | 'fill'>(structureEditable ? 'build' : 'fill');
   const building = structureEditable && mode === 'build';
   const canShare = roleAllows(pages.role(handle.id), 'full');

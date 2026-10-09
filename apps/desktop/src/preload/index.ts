@@ -133,6 +133,21 @@ const api = {
     team: (request: TeamRequest): Promise<Result<unknown>> =>
       ipcRenderer.invoke(IPC.syncTeam, request),
   },
+  automations: {
+    runs: (databaseId: string, automationId: string): Promise<unknown[]> =>
+      ipcRenderer.invoke(IPC.automationRuns, databaseId, automationId),
+    secret: (databaseId: string, automationId: string): Promise<string> =>
+      ipcRenderer.invoke(IPC.automationSecret, databaseId, automationId),
+    buttonSecret: (): Promise<string> => ipcRenderer.invoke(IPC.buttonSecret),
+    buttonWebhook: (request: {
+      url: string;
+      headers: Record<string, string>;
+      body: unknown;
+      label: string;
+    }): void => ipcRenderer.send(IPC.buttonWebhook, request),
+    buttonNotify: (request: { title: string; body: string; pageId: string | null }): void =>
+      ipcRenderer.send(IPC.buttonNotify, request),
+  },
   ready: (): void => ipcRenderer.send(IPC.ready),
 };
 

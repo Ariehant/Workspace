@@ -35,6 +35,7 @@ import {
 import { Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../context';
+import { SecretReveal } from '../database/automations-dialog';
 import { useDatabase, useDisplayContext } from '../database/hooks';
 import { RuleFields } from '../database/view-controls';
 import { useEditorServices } from '../editor-services';
@@ -87,6 +88,8 @@ const STEP_LABELS: Record<ButtonStep['kind'], string> = {
   editThisRow: 'Edit this page',
   openPage: 'Open page',
   confirm: 'Show confirmation',
+  webhook: 'Send webhook',
+  notify: 'Send notification',
 };
 
 const inputClass =
@@ -116,10 +119,13 @@ function ButtonDialog({
         ? config.steps.map((s, j) => (j === i ? step : s))
         : config.steps.filter((_, j) => j !== i),
     });
+  const { team, platform } = useApp();
+  // Webhooks and notifications go out through the server, or the desktop that runs them.
+  const outward: ButtonStep['kind'][] = team || platform.automations ? ['webhook', 'notify'] : [];
   const kinds: ButtonStep['kind'][] =
     request.mode === 'block'
-      ? ['insertBlocks', 'addPage', 'editPages', 'openPage', 'confirm']
-      : ['editThisRow', 'addPage', 'editPages', 'openPage', 'confirm'];
+      ? ['insertBlocks', 'addPage', 'editPages', 'openPage', ...outward, 'confirm']
+      : ['editThisRow', 'addPage', 'editPages', 'openPage', ...outward, 'confirm'];
   const newStep = (kind: ButtonStep['kind']): ButtonStep => {
     switch (kind) {
       case 'insertBlocks':
@@ -134,6 +140,10 @@ function ButtonDialog({
         return { kind, pageId: '' };
       case 'confirm':
         return { kind, message: 'Are you sure?' };
+      case 'webhook':
+        return { kind, url: '', headers: {} };
+      case 'notify':
+        return { kind, people: [], message: '' };
     }
   };
   return (
@@ -326,7 +336,83 @@ function StepFields({
           />
         </Field>
       );
+    case 'webhook':
+      return <WebhookFields step={step} onChange={onChange} />;
+    case 'notify':
+      return <NotifyFields step={step} onChange={onChange} />;
   }
+}
+
+function WebhookFields({
+  step,
+  onChange,
+}: {
+  step: Extract<ButtonStep, { kind: 'webhook' }>;
+  onChange(step: ButtonStep): void;
+}) {
+  const { team, platform } = useApp();
+  const secret = team
+    ? async () => (await team.buttonSecret()).secret
+    : platform.automations?.buttonSecret;
+  return (
+    <>
+      <Field label="URL">
+        <input
+          aria-label="Webhook URL"
+          placeholder="https://"
+          value={step.url}
+          onChange={(e) => onChange({ ...step, url: e.target.value.trim() })}
+          className={`${inputClass} w-80`}
+        />
+      </Field>
+      <p className="text-xs text-muted">
+        A POST of the page as JSON, signed with the workspace’s button secret (X-Notion-Signature).
+      </p>
+      {secret && <SecretReveal secret={secret} />}
+    </>
+  );
+}
+
+function NotifyFields({
+  step,
+  onChange,
+}: {
+  step: Extract<ButtonStep, { kind: 'notify' }>;
+  onChange(step: ButtonStep): void;
+}) {
+  const people = useDisplayContext();
+  const ids = people.people ?? [...people.users.keys()];
+  return (
+    <>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {ids.map((id) => (
+          <label key={id} className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={step.people.includes(id)}
+              onChange={(e) =>
+                onChange({
+                  ...step,
+                  people: e.target.checked
+                    ? [...step.people, id]
+                    : step.people.filter((p) => p !== id),
+                })
+              }
+            />
+            {people.users.get(id) ?? 'Someone'}
+          </label>
+        ))}
+      </div>
+      <Field label="Message">
+        <input
+          aria-label="Notification message"
+          value={step.message}
+          onChange={(e) => onChange({ ...step, message: e.target.value })}
+          className={`${inputClass} w-64`}
+        />
+      </Field>
+    </>
+  );
 }
 
 /** The button's template blocks, edited like a page. */

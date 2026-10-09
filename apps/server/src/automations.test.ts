@@ -366,6 +366,71 @@ describe('automations', () => {
   });
 });
 
+describe('button steps (Phase 6 M4)', () => {
+  it('a webhook goes out signed, a notification reaches members who can see the page, viewers can’t press', async () => {
+    const w = await world();
+    const hook = await receiver();
+    const press = (token: string, body: object) =>
+      w.call('POST', `/api/workspaces/${w.ws}/buttons/webhook`, token, body);
+    const pressed = await press(w.ada.token, {
+      docId: 'tasks',
+      pageId: 'r1',
+      url: hook.url,
+      headers: { 'x-team': 'ops' },
+      data: { title: 'Grease the gears' },
+      label: 'Ship it',
+    });
+    expect(pressed.status).toBe(202);
+    await until(() => hook.got.length === 1, 'button webhook');
+    const { body, headers } = hook.got[0]!;
+    expect(JSON.parse(body)).toMatchObject({
+      source: { type: 'button', pageId: 'r1', userId: w.ada.id },
+      data: { title: 'Grease the gears' },
+    });
+    expect(headers['x-team']).toBe('ops');
+    const secret = (await w.call('GET', `/api/workspaces/${w.ws}/buttons/secret`, w.ada.token)).body
+      .secret as string;
+    expect(headers['x-notion-signature']).toBe(signature(secret, body));
+    // Not a web address, or a page that isn't there.
+    expect((await press(w.ada.token, { docId: 'tasks', url: 'ftp://files.lab.io' })).status).toBe(
+      400,
+    );
+    expect((await press(w.ada.token, { docId: 'nowhere', url: hook.url })).status).toBe(404);
+
+    const notify = await w.call('POST', `/api/workspaces/${w.ws}/buttons/notify`, w.ada.token, {
+      docId: 'tasks',
+      pageId: 'r1',
+      people: [w.bob.id, '00000000-0000-4000-8000-000000000000'],
+      message: 'Ready to ship',
+      label: 'Ship it',
+    });
+    expect(notify.body).toEqual({ sent: 1 });
+    const bobs = await w.store.notifications.list(w.ws, w.bob.id);
+    expect(bobs.find((n) => n.kind === 'automation')).toMatchObject({
+      title: 'Ship it',
+      text: 'Ready to ship',
+      pageId: 'r1',
+    });
+
+    // Everyone may only view T now: Bob can't press its buttons. (He still sees the secret:
+    // he can edit his own private pages, and put a button there.)
+    await w.call('PUT', `/api/workspaces/${w.ws}/scopes/${w.T}/access`, w.ada.token, {
+      principal: 'workspace',
+      role: 'view',
+    });
+    expect((await press(w.bob.token, { docId: 'tasks', url: hook.url })).status).toBe(403);
+    expect(
+      (
+        await w.call('POST', `/api/workspaces/${w.ws}/buttons/notify`, w.bob.token, {
+          docId: 'tasks',
+          people: [w.ada.id],
+          message: 'Hi',
+        })
+      ).status,
+    ).toBe(403);
+  });
+});
+
 describe('webhook delivery', () => {
   it('refuses private and local addresses unless allowed, and http unless allowed', async () => {
     for (const address of [

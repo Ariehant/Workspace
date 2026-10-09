@@ -61,6 +61,14 @@ export const IPC = {
   syncRetry: 'sync:retry',
   /** Members, invites, groups and the profile, on the synced workspace's server. */
   syncTeam: 'sync:team',
+  /** Automations this device runs (a workspace that isn't synced): an automation's runs. */
+  automationRuns: 'automations:runs',
+  automationSecret: 'automations:secret',
+  buttonSecret: 'buttons:secret',
+  /** A button's "Send webhook" step, sent from the main process. */
+  buttonWebhook: 'buttons:webhook',
+  /** A button's "Send notification" step, shown on this device. */
+  buttonNotify: 'buttons:notify',
 } as const;
 
 export type TeamMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';

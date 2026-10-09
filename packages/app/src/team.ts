@@ -4,7 +4,7 @@
  */
 import type { WorkspaceRole } from '@workspace/core';
 import { useMemo } from 'react';
-import type { Platform, SyncInfo, TeamPlatform } from './platform';
+import type { AutomationRun, Platform, SyncInfo, TeamPlatform } from './platform';
 
 export interface MemberInfo {
   id: string;
@@ -204,17 +204,26 @@ export function teamApi(team: TeamPlatform) {
       r<{ link: string | null }>('DELETE', `forms/${databaseId}/${viewId}/link`),
     // Automations (Phase 6 M3): recent runs, and the webhook signing secret.
     automationRuns: (databaseId: string, automationId: string) =>
-      r<{
-        runs: {
-          id: string;
-          at: number;
-          status: 'done' | 'failed' | 'pending';
-          error: string | null;
-          result: unknown;
-        }[];
-      }>('GET', `automations/${databaseId}/${automationId}/runs`),
+      r<{ runs: AutomationRun[] }>('GET', `automations/${databaseId}/${automationId}/runs`),
     automationSecret: (databaseId: string, automationId: string) =>
       r<{ secret: string }>('GET', `automations/${databaseId}/${automationId}/secret`),
+    // A button's webhook and notification steps (Phase 6 M4), as the person who pressed it.
+    buttonWebhook: (request: {
+      docId: string;
+      pageId: string | null;
+      url: string;
+      headers: Record<string, string>;
+      data: unknown;
+      label: string;
+    }) => r<{ queued: boolean }>('POST', 'buttons/webhook', request),
+    buttonNotify: (request: {
+      docId: string;
+      pageId: string | null;
+      people: string[];
+      message: string;
+      label: string;
+    }) => r<{ sent: number }>('POST', 'buttons/notify', request),
+    buttonSecret: () => r<{ secret: string }>('GET', 'buttons/secret'),
   };
 }
 

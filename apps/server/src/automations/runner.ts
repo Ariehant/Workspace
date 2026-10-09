@@ -72,13 +72,26 @@ interface SchedulePayload {
   runAt: number;
 }
 
-interface DeliverPayload {
+export interface DeliverPayload {
+  /** The automation's database (a button's: the doc the button is in). */
   databaseId: string;
   automationId: string;
   url: string;
   headers: Record<string, string>;
-  body: WebhookBody;
+  body: WebhookBody | ButtonWebhookBody;
+  /** A button's webhook: who pressed it (told if it fails), signed with the button secret. */
+  button?: { userId: string; label: string; pageId: string | null };
 }
+
+/** What a button's "Send webhook" step sends. */
+export interface ButtonWebhookBody {
+  source: { type: 'button'; pageId: string | null; userId: string };
+  data: unknown;
+  triggeredAt: string;
+}
+
+/** Button webhooks are signed with one secret per workspace (kept with automations'). */
+export const BUTTON_SECRET = { databaseId: '*', automationId: 'buttons' } as const;
 
 type Ctx = Pick<
   ServerContext,
@@ -404,10 +417,11 @@ export class Automations {
   private async deliver(job: Job): Promise<unknown> {
     const workspaceId = job.workspaceId!;
     const p = job.payload as DeliverPayload;
+    const key = p.button ? BUTTON_SECRET : p;
     const secret = await this.ctx.store.automationSecrets.get(
       workspaceId,
-      p.databaseId,
-      p.automationId,
+      key.databaseId,
+      key.automationId,
     );
     try {
       const response = await deliver(p.url, p.body, secret, p.headers, this.ctx.config.webhooks);
@@ -419,16 +433,26 @@ export class Automations {
     } catch (error) {
       const permanent = error instanceof PermanentJobError;
       if (permanent || job.attempts >= job.maxAttempts) {
-        const loaded = await this.load(workspaceId, p.databaseId, p.automationId);
-        if (loaded) {
-          const host = safeHost(p.url);
+        const text = `Webhook to ${safeHost(p.url)} failed: ${error instanceof Error ? error.message : String(error)}`;
+        if (p.button) {
           await this.ctx.notifier.automationNotice(workspaceId, {
-            userId: loaded.automation.createdBy,
+            userId: p.button.userId,
             databaseId: p.databaseId,
-            pageId: p.body.data?.id ?? null,
-            title: loaded.automation.name,
-            text: `Webhook to ${host} failed: ${error instanceof Error ? error.message : String(error)}`,
+            pageId: p.button.pageId,
+            title: p.button.label || 'Button',
+            text,
           });
+        } else {
+          const loaded = await this.load(workspaceId, p.databaseId, p.automationId);
+          if (loaded) {
+            await this.ctx.notifier.automationNotice(workspaceId, {
+              userId: loaded.automation.createdBy,
+              databaseId: p.databaseId,
+              pageId: (p.body as WebhookBody).data?.id ?? null,
+              title: loaded.automation.name,
+              text,
+            });
+          }
         }
       }
       throw error;
