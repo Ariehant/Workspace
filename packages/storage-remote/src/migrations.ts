@@ -496,6 +496,33 @@ export const MIGRATIONS: string[] = [
     CHECK (kind IN ('mention', 'comment', 'reply', 'reminder', 'access', 'form', 'automation'));
   CREATE INDEX jobs_workspace_kind ON jobs (workspace_id, kind, created_at DESC);
   `,
+  // 13: Phase 6 M5. Integrations: each is a bot user, in its workspace with the "bot" role
+  // (pages are shared with it like with a person), and an API token stored as a hash.
+  `
+  ALTER TABLE workspace_members DROP CONSTRAINT workspace_members_role_check;
+  ALTER TABLE workspace_members ADD CONSTRAINT workspace_members_role_check
+    CHECK (role IN ('owner', 'admin', 'member', 'guest', 'bot'));
+
+  CREATE TABLE integrations (
+    id uuid PRIMARY KEY REFERENCES users ON DELETE CASCADE,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    name text NOT NULL,
+    icon text,
+    capabilities jsonb NOT NULL,
+    created_by uuid REFERENCES users ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX integrations_workspace ON integrations (workspace_id, created_at);
+
+  CREATE TABLE integration_tokens (
+    integration_id uuid PRIMARY KEY REFERENCES integrations ON DELETE CASCADE,
+    token_hash bytea NOT NULL UNIQUE,
+    -- The token's last characters, to tell tokens apart in settings.
+    hint text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    last_used_at timestamptz
+  );
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

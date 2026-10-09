@@ -8,3 +8,4 @@ export * from './notifications';
 export * from './pages';
 export * from './jobs';
 export * from './forms';
+export * from './integrations';

@@ -164,7 +164,8 @@ export class Notifier {
 
   /** Store and deliver one, if its person may read its doc. */
   private async notify(access: WorkspaceAccess, n: NewNotification): Promise<void> {
-    if (!access.isMember(n.userId)) return;
+    // Integrations' bots aren't told anything (they have no inbox).
+    if (!access.isMember(n.userId) || access.isBot(n.userId)) return;
     if (n.docId && !access.canRead(access.roles(n.userId), n.docId)) return;
     const stored = await this.store.notifications.add(n);
     if (stored) this.options.deliver?.(n.workspaceId, n.userId, toData(stored));

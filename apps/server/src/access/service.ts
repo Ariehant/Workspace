@@ -69,6 +69,11 @@ export class WorkspaceAccess {
     return this.model.members.some((m) => m.userId === userId);
   }
 
+  /** An integration's bot (Phase 6 M5): not a person (no notifications, no private pages). */
+  isBot(userId: string): boolean {
+    return this.model.members.some((m) => m.userId === userId && m.role === 'bot');
+  }
+
   /** Everyone in the workspace (guests too). */
   memberIds(): string[] {
     return this.model.members.map((m) => m.userId);
@@ -325,6 +330,7 @@ export class AccessService {
     const missing = model.members.filter(
       (m) =>
         m.role !== 'guest' &&
+        m.role !== 'bot' &&
         !model.scopes.some((s) => s.kind === 'private' && s.ownerId === m.userId),
     );
     if (missing.length === 0) return model;

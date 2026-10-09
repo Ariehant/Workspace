@@ -4,7 +4,7 @@
  * difference and appends that like any other update, so devices get it live or when
  * they catch up.
  */
-import { MEMBERS_DOC_ID, getMembersMap, writeMembers } from '@workspace/core';
+import { MEMBERS_DOC_ID, getMembersMap, writeMembers, type WorkspaceRole } from '@workspace/core';
 import type { PgStore } from '@workspace/storage-remote';
 import * as Y from 'yjs';
 
@@ -60,11 +60,24 @@ export class MembersDoc {
     const state = await store.docState(workspaceId, MEMBERS_DOC_ID);
     if (state) Y.applyUpdate(doc, state);
     const before = Y.encodeStateVector(doc);
+    // (Bots aren't people: integrations are named as former members, as `ensureBot` does.)
     const members = await store.teams.members(workspaceId);
-    const changed = writeMembers(
+    let changed = writeMembers(
       doc,
-      members.map((m) => ({ id: m.userId, name: m.name, avatar: m.avatar, role: m.role })),
+      members.map((m) => ({
+        id: m.userId,
+        name: m.name,
+        avatar: m.avatar,
+        role: m.role as WorkspaceRole,
+      })),
     );
+    const map = getMembersMap(doc);
+    for (const bot of await store.integrations.list(workspaceId)) {
+      const existing = map.get(bot.id);
+      if (existing?.removed && existing.name === bot.name && existing.avatar === bot.icon) continue;
+      map.set(bot.id, { name: bot.name, avatar: bot.icon, role: 'member', removed: true });
+      changed = true;
+    }
     if (!changed) return;
     const update = Y.encodeStateAsUpdate(doc, before);
     await this.deps.append(workspaceId, [{ docId: MEMBERS_DOC_ID, data: update }]);

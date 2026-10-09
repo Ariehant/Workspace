@@ -31,7 +31,8 @@ export function rolesFor(model: AccessModel, userId: string): Map<string, ScopeR
   if (!member) return roles;
   const principals = new Set([`user:${userId}`]);
   for (const g of model.groups) if (g.userId === userId) principals.add(`group:${g.groupId}`);
-  if (member.role !== 'guest') principals.add('workspace');
+  // Guests and integrations' bots see only what's shared with them.
+  if (member.role !== 'guest' && member.role !== 'bot') principals.add('workspace');
   const manager = member.role === 'owner' || member.role === 'admin';
 
   const own = new Map<string, ScopeRole>();

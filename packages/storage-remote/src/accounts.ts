@@ -218,7 +218,7 @@ export class Accounts {
     const { rows } = await this.pool.query<SessionRow & { u: UserRow }>(
       `SELECT s.*, row_to_json(u) AS u FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
-         AND u.disabled_at IS NULL`,
+         AND u.disabled_at IS NULL AND u.kind = 'person'`,
       [hashSecret(token)],
     );
     const row = rows[0];

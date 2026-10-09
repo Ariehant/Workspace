@@ -47,7 +47,13 @@ export interface Group {
 }
 
 /** How much a role may do, for "never lower someone by accepting an invite". */
-export const ROLE_RANK: Record<MemberRole, number> = { guest: 0, member: 1, admin: 2, owner: 3 };
+export const ROLE_RANK: Record<MemberRole, number> = {
+  bot: -1,
+  guest: 0,
+  member: 1,
+  admin: 2,
+  owner: 3,
+};
 
 type InviteRow = {
   id: string;
@@ -86,7 +92,7 @@ export class Teams {
     }>(
       `SELECT m.user_id, u.name, u.email, u.avatar, m.role, m.created_at, u.disabled_at
        FROM workspace_members m JOIN users u ON u.id = m.user_id
-       WHERE m.workspace_id = $1 ORDER BY m.created_at, u.name`,
+       WHERE m.workspace_id = $1 AND m.role <> 'bot' ORDER BY m.created_at, u.name`,
       [workspaceId],
     );
     return rows.map((r) => ({
@@ -118,7 +124,8 @@ export class Teams {
   async setRole(workspaceId: string, userId: string, role: MemberRole): Promise<boolean> {
     return this.withWorkspaceLock(workspaceId, async (client) => {
       const current = await roleIn(client, workspaceId, userId);
-      if (!current) return false;
+      // An integration's bot keeps its role (it goes with the integration).
+      if (!current || current === 'bot' || role === 'bot') return false;
       if (current === 'owner' && role !== 'owner' && (await owners(client, workspaceId)) <= 1) {
         return false;
       }
@@ -134,7 +141,7 @@ export class Teams {
   async removeMember(workspaceId: string, userId: string): Promise<boolean> {
     return this.withWorkspaceLock(workspaceId, async (client) => {
       const current = await roleIn(client, workspaceId, userId);
-      if (!current) return false;
+      if (!current || current === 'bot') return false;
       if (current === 'owner' && (await owners(client, workspaceId)) <= 1) return false;
       await client.query(
         `DELETE FROM group_members g USING groups gr
