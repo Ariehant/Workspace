@@ -3,7 +3,7 @@ import type pg from 'pg';
 import type { MemberRole } from './store';
 
 export type ScopeKind = 'teamspace' | 'private' | 'shared';
-export type ScopeRole = 'full' | 'edit' | 'comment' | 'view';
+export type ScopeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
 /** Who can find a teamspace: anyone (and join it), anyone (added by its members), or only its members. */
 export type ScopeVisibility = 'open' | 'closed' | 'private';
 

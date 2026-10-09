@@ -10,7 +10,7 @@
  */
 import type { AccessModel, ScopeRole } from '@workspace/storage-remote';
 
-export const RANK: Record<ScopeRole, number> = { view: 1, comment: 2, edit: 3, full: 4 };
+export const RANK: Record<ScopeRole, number> = { view: 1, comment: 2, content: 3, edit: 4, full: 5 };
 
 export const atLeast = (role: ScopeRole | undefined, needed: ScopeRole) =>
   role !== undefined && RANK[role] >= RANK[needed];

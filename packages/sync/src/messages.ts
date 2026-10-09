@@ -72,8 +72,8 @@ export interface AccessScope {
   role: ScopeRole;
 }
 
-export type ScopeRole = 'full' | 'edit' | 'comment' | 'view';
-const ROLES: readonly ScopeRole[] = ['full', 'edit', 'comment', 'view'];
+export type ScopeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
+const ROLES: readonly ScopeRole[] = ['full', 'edit', 'content', 'comment', 'view'];
 const KINDS: readonly AccessScope['kind'][] = ['teamspace', 'private', 'shared'];
 /** Most scopes in an access message. */
 export const MAX_SCOPES = 10_000;

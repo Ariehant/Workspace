@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { AccessService } from './access/service';
 import { adminRoutes } from './admin-routes';
 import { csrfGuard } from './auth/context';
+import { DocEditor } from './docs-edit';
 import { OidcClients } from './auth/oidc';
 import { authRoutes } from './auth/routes';
 import type { Config } from './config';
@@ -20,6 +21,7 @@ import { pageRoutes } from './publish/routes';
 import { Site, siteRoutes } from './publish/site';
 import { notificationRoutes } from './notify/routes';
 import { Indexer } from './search/indexer';
+import { JobRunner, type JobRunnerOptions } from './jobs/runner';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
 import { settingsRoutes } from './settings-routes';
@@ -36,6 +38,10 @@ declare module 'fastify' {
     notifier: Notifier;
     /** Page history (main.ts starts it after listening). */
     history: HistoryKeeper;
+    /** The job queue's runner (main.ts starts it after listening). */
+    jobs: JobRunner;
+    /** Edits the server makes to docs for someone (forms, automations, the API). */
+    docs: DocEditor;
   }
 }
 
@@ -54,6 +60,8 @@ export interface ServerDeps {
   history?: HistoryOptions;
   /** Sends invite emails (default: SMTP from the config, or none). */
   mailer?: Mailer | null;
+  /** The job queue: how often to look for due jobs, and retry waits (tests shorten them). */
+  jobs?: JobRunnerOptions;
 }
 
 /** The HTTP server and its routes (listening is up to the caller). */
@@ -67,6 +75,7 @@ export function buildServer({
   notify,
   history: historyOptions,
   mailer,
+  jobs: jobOptions,
 }: ServerDeps): FastifyInstance {
   const app = Fastify({
     logger:
@@ -96,7 +105,8 @@ export function buildServer({
     return endpoint;
   };
   const realtime: ServerContext['realtime'] = {
-    appendFromServer: (workspaceId, updates) => live().hub.appendFromServer(workspaceId, updates),
+    appendFromServer: (workspaceId, updates, userId) =>
+      live().hub.appendFromServer(workspaceId, updates, userId),
     disconnect: (workspaceId, userId, removed) => live().disconnect(workspaceId, userId, removed),
   };
   const access = new AccessService(store);
@@ -111,6 +121,11 @@ export function buildServer({
     ...historyOptions,
     onError: (error) => app.log.error({ err: error }, 'page history failed'),
   });
+  const jobs = new JobRunner(store, {
+    ...jobOptions,
+    onError: (error, job) =>
+      app.log.error({ err: error, job: job?.id, kind: job?.kind }, 'job failed'),
+  });
   const ctx: ServerContext = {
     config,
     store,
@@ -119,15 +134,21 @@ export function buildServer({
     indexer,
     notifier,
     history,
+    jobs,
     access,
     realtime,
+    docs: new DocEditor(store, access, realtime),
     members: new MembersDoc({ store, append: realtime.appendFromServer }),
     mailer: mailer === undefined ? smtpMailer(config) : mailer,
   };
   app.decorate('indexer', indexer);
   app.decorate('notifier', notifier);
   app.decorate('history', history);
-  app.addHook('onClose', () => Promise.all([indexer.close(), notifier.close(), history.close()]));
+  app.decorate('jobs', jobs);
+  app.decorate('docs', ctx.docs);
+  app.addHook('onClose', () =>
+    Promise.all([indexer.close(), notifier.close(), history.close(), jobs.close()]),
+  );
   const site = new Site(ctx);
 
   app.decorateRequest('auth', null);

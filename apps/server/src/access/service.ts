@@ -7,7 +7,13 @@
  * One server process is assumed: another process's changes aren't seen until a reload
  * (Postgres LISTEN/NOTIFY would be the way to run several).
  */
-import { MEMBERS_DOC_ID, checkCommentsChange, isCommentsDocId } from '@workspace/core';
+import {
+  MEMBERS_DOC_ID,
+  checkCommentsChange,
+  isCommentsDocId,
+  isTreeDocId,
+} from '@workspace/core';
+import { checkRowsOnlyChange, isDatabaseDoc, rowsMap } from '@workspace/database';
 import * as Y from 'yjs';
 import type { AccessModel, PgStore, Scope, ScopeRole } from '@workspace/storage-remote';
 import type { AccessScope, DocPolicy } from '@workspace/sync';
@@ -20,7 +26,10 @@ export type AccessEvent =
   | { kind: 'model'; workspaceId: string }
   | { kind: 'moved'; workspaceId: string; docIds: string[]; from: string; to: string };
 
-/** The role needed to write a doc: comments need "comment", everything else "edit". */
+/**
+ * The role needed to write a doc: comments need "comment", everything else "edit". With
+ * "content", databases (their rows only, see `checkUpdate`) and their rows' pages too.
+ */
 export const roleToWrite = (docId: string): ScopeRole =>
   docId.startsWith('comments:') ? 'comment' : 'edit';
 
@@ -29,6 +38,9 @@ export class WorkspaceAccess {
   private readonly roleCache = new Map<string, Map<string, ScopeRole>>();
   /** scope id -> its docs */
   private readonly docsOf = new Map<string, Set<string>>();
+  /** Databases, and a row's page -> its database (as seen so far; for "content"). */
+  private readonly databases = new Set<string>();
+  private readonly rowOf = new Map<string, string>();
 
   constructor(
     readonly workspaceId: string,
@@ -95,11 +107,20 @@ export class WorkspaceAccess {
     let scope = this.placements.get(docId);
     if (scope === undefined) {
       const target = hint && this.scope(hint) ? hint : this.model.defaultScopeId;
-      if (!target || !atLeast(roles.get(target), needed)) return false;
+      if (!target) return false;
+      const role = roles.get(target);
+      // A new row's page, in a database they may add rows to.
+      const allowed =
+        atLeast(role, needed) || (role === 'content' && (await this.isRowIn(target, docId)));
+      if (!allowed) return false;
       scope = await this.store.scopes.place(this.workspaceId, docId, target);
       this.setPlacement(docId, scope);
+      return true;
     }
-    return atLeast(roles.get(scope), needed);
+    const role = roles.get(scope);
+    if (atLeast(role, needed)) return true;
+    if (role !== 'content') return false;
+    return (await this.isDatabase(docId)) || (await this.isRowIn(scope, docId));
   }
 
   /**
@@ -130,8 +151,10 @@ export class WorkspaceAccess {
   }
 
   /**
-   * What a comments doc update contains: the sender's own threads, comments, reactions
-   * and decisions only (see `checkCommentsChange`). Other docs aren't looked into.
+   * What an update contains, where the role allows only some changes: a comments doc
+   * takes the sender's own threads, comments, reactions and decisions (see
+   * `checkCommentsChange`); a database written with "content" takes changes to its rows
+   * only (see `checkRowsOnlyChange`). Other docs aren't looked into.
    */
   async checkUpdate(
     roles: Roles,
@@ -140,19 +163,66 @@ export class WorkspaceAccess {
     update: Uint8Array,
     earlier: Uint8Array[],
   ): Promise<boolean> {
-    if (!isCommentsDocId(docId)) return true;
-    const role = roles.get(this.placements.get(docId) ?? '');
-    const before = new Y.Doc();
+    const scope = this.placements.get(docId) ?? '';
+    const role = roles.get(scope);
+    const comments = isCommentsDocId(docId);
+    if (!comments && (role !== 'content' || (await this.isRowIn(scope, docId)))) return true;
+    const before = await this.stateOf(docId, earlier);
+    try {
+      if (comments) {
+        const problem = checkCommentsChange(before, update, {
+          userId,
+          canEdit: atLeast(role, 'edit'),
+          canManage: atLeast(role, 'full'),
+        });
+        return problem === null;
+      }
+      if (!isDatabaseDoc(before) || checkRowsOnlyChange(before, update) !== null) return false;
+      // Its new rows' pages may be written next (in this push, before it's stored).
+      Y.applyUpdate(before, update);
+      for (const rowId of rowsMap(before).keys()) this.rowOf.set(rowId, docId);
+      return true;
+    } finally {
+      before.destroy();
+    }
+  }
+
+  /** A doc's stored state, with `earlier` updates (of the same push) on top. */
+  private async stateOf(docId: string, earlier: Uint8Array[] = []): Promise<Y.Doc> {
+    const doc = new Y.Doc();
     const state = await this.store.docState(this.workspaceId, docId);
-    if (state) Y.applyUpdate(before, state);
-    for (const u of earlier) Y.applyUpdate(before, u);
-    const problem = checkCommentsChange(before, update, {
-      userId,
-      canEdit: atLeast(role, 'edit'),
-      canManage: atLeast(role, 'full'),
-    });
-    before.destroy();
-    return problem === null;
+    if (state) Y.applyUpdate(doc, state);
+    for (const u of earlier) Y.applyUpdate(doc, u);
+    return doc;
+  }
+
+  private async isDatabase(docId: string): Promise<boolean> {
+    if (this.databases.has(docId)) return true;
+    const doc = await this.stateOf(docId);
+    try {
+      if (!isDatabaseDoc(doc)) return false;
+      this.databases.add(docId);
+      for (const rowId of rowsMap(doc).keys()) this.rowOf.set(rowId, docId);
+      return true;
+    } finally {
+      doc.destroy();
+    }
+  }
+
+  /**
+   * Is `docId` the page of a row of a database in `scopeId`? Rows not seen yet are looked
+   * for in the scope's databases (only for someone with "content", on a miss).
+   */
+  private async isRowIn(scopeId: string, docId: string): Promise<boolean> {
+    const known = this.rowOf.get(docId);
+    if (known !== undefined) return this.placements.get(known) === scopeId;
+    for (const id of this.docsIn(scopeId)) {
+      if (id === docId || isCommentsDocId(id) || isTreeDocId(id)) continue;
+      await this.isDatabase(id);
+      if (this.rowOf.has(docId)) break;
+    }
+    const database = this.rowOf.get(docId);
+    return database !== undefined && this.placements.get(database) === scopeId;
   }
 
   /**

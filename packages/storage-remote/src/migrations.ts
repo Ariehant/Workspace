@@ -423,6 +423,45 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (workspace_id, page_id, day, viewer)
   );
   `,
+  // 10: Phase 6 M1. The "content" role (rows of a database, not its properties or
+  // views), bot users (integrations, automations), and the job queue.
+  `
+  ALTER TABLE scope_access DROP CONSTRAINT scope_access_role_check;
+  ALTER TABLE scope_access ADD CONSTRAINT scope_access_role_check
+    CHECK (role IN ('full', 'edit', 'content', 'comment', 'view'));
+  ALTER TABLE scopes DROP CONSTRAINT scopes_join_role_check;
+  ALTER TABLE scopes ADD CONSTRAINT scopes_join_role_check
+    CHECK (join_role IN ('full', 'edit', 'content', 'comment', 'view'));
+
+  ALTER TABLE users ADD COLUMN kind text NOT NULL DEFAULT 'person'
+    CHECK (kind IN ('person', 'bot'));
+
+  -- Work done outside a request (webhooks, scheduled automations, digests). A job is
+  -- written in the same transaction as what caused it; workers take due ones with
+  -- FOR UPDATE SKIP LOCKED, so several servers never run the same job.
+  CREATE TABLE jobs (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id uuid REFERENCES workspaces ON DELETE CASCADE,
+    kind text NOT NULL,
+    payload jsonb NOT NULL DEFAULT '{}',
+    -- At most one open job per key (e.g. one next run of a schedule).
+    key text,
+    run_at timestamptz NOT NULL DEFAULT now(),
+    attempts int NOT NULL DEFAULT 0,
+    max_attempts int NOT NULL DEFAULT 6,
+    locked_until timestamptz,
+    last_error text,
+    result jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    done_at timestamptz,
+    failed_at timestamptz
+  );
+  CREATE INDEX jobs_due ON jobs (run_at) WHERE done_at IS NULL AND failed_at IS NULL;
+  CREATE UNIQUE INDEX jobs_open_key ON jobs (key)
+    WHERE key IS NOT NULL AND done_at IS NULL AND failed_at IS NULL;
+  CREATE INDEX jobs_finished ON jobs (coalesce(done_at, failed_at))
+    WHERE done_at IS NOT NULL OR failed_at IS NOT NULL;
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

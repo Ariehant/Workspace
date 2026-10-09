@@ -19,7 +19,7 @@ export const isTreeDocId = (docId: string): boolean =>
   docId === 'workspace' || docId.startsWith('tree:');
 
 export type TreeKind = 'teamspace' | 'private' | 'shared' | 'local';
-export type TreeRole = 'full' | 'edit' | 'comment' | 'view';
+export type TreeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
 
 export interface TreeInfo {
   /** The tree doc's id: `workspace`, or `tree:<scopeId>`. */
@@ -38,7 +38,7 @@ export interface Tree {
   doc: Y.Doc;
 }
 
-const RANK: Record<TreeRole, number> = { view: 1, comment: 2, edit: 3, full: 4 };
+const RANK: Record<TreeRole, number> = { view: 1, comment: 2, content: 3, edit: 4, full: 5 };
 
 /** Does `role` allow at least `needed`? */
 export const roleAllows = (role: TreeRole | null | undefined, needed: TreeRole): boolean =>

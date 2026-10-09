@@ -28,6 +28,7 @@ async function main(): Promise<void> {
   // Notify about what arrived while it was down, and fire reminders that came due.
   void app.notifier.start().catch((error: unknown) => app.log.error({ err: error }, 'notifier'));
   void app.history.start().catch((error: unknown) => app.log.error({ err: error }, 'history'));
+  app.jobs.start();
 
   let stopping = false;
   const stop = (signal: string) => {

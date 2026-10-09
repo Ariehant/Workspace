@@ -20,7 +20,7 @@ import type { ServerContext } from '../context';
 
 const uuid = { type: 'string', format: 'uuid' } as const;
 const scopeName = { type: 'string', maxLength: 100 } as const;
-const role = { type: 'string', enum: ['full', 'edit', 'comment', 'view'] } as const;
+const role = { type: 'string', enum: ['full', 'edit', 'content', 'comment', 'view'] } as const;
 // (A type list, not anyOf: type coercion would turn null into '' for the string branch.)
 const icon = { type: ['string', 'null'], maxLength: 64 } as const;
 const description = { type: 'string', maxLength: 1000 } as const;

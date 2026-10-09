@@ -201,13 +201,15 @@ export class SyncHub {
 
   /**
    * Append updates the server made itself (e.g. to the members doc) and send them to the
-   * workspace's connections, in order with everything else.
+   * workspace's connections, in order with everything else. `userId`: who they're made
+   * for (a form's submitter, an integration's bot), stored as their author.
    */
   async appendFromServer(
     workspaceId: string,
     updates: { docId: string; data: Uint8Array }[],
+    userId: string | null = null,
   ): Promise<number[]> {
-    const rows = updates.map((u) => ({ ...u, deviceId: null, userId: null }));
+    const rows = updates.map((u) => ({ ...u, deviceId: null, userId }));
     const workspace = this.workspaces.get(workspaceId);
     if (workspace) return this.append(workspace, rows);
     // Nobody is connected: store them; whoever connects next catches up from the log.
