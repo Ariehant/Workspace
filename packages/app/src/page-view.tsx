@@ -624,6 +624,7 @@ export function PageView({
             onDuplicate={() => onDuplicate(pageId)}
             onMove={() => onMove(pageId)}
             onCopyLink={() => void navigator.clipboard.writeText(pageUrl(pageId))}
+            onConnections={onShare ? () => onShare(pageId) : undefined}
             onSaveAsTemplate={() => onSaveAsTemplate(pageId)}
             onExport={onExport ? () => onExport(pageId) : undefined}
             onTrash={() => onTrash(pageId)}

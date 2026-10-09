@@ -15,6 +15,7 @@ import { PgStore } from '@workspace/storage-remote';
 import { createTestDatabase } from '@workspace/storage-remote/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
+import { APIResponseError, Client, collectPaginatedAPI, isFullPage } from '@notionhq/client';
 import { buildServer } from './app';
 import { loadConfig } from './config';
 import { FsStorage } from './files';
@@ -165,7 +166,7 @@ async function world(
     expect(res.status).toBe(200);
     return S as { id: string; treeDoc: string };
   };
-  return { app, store, ws, call, v1, ada, bob, bot, share, a, settled, ids: { stock, kind } };
+  return { app, store, ws, call, v1, ada, bob, bot, share, a, settled, port, ids: { stock, kind } };
 }
 
 const ROBOTS = '0e1f2a3b-0000-4000-8000-000000000001';
@@ -543,5 +544,48 @@ describe('endpoints', () => {
       v,
     );
     expect((search.body.results as Json[]).map((r) => r.object)).toEqual(['data_source']);
+  });
+});
+
+describe('the official SDK', () => {
+  it('works against the server (2025-09-03), errors included', async () => {
+    const w = await world();
+    await w.share('edit');
+    const notion = new Client({
+      auth: w.bot.token,
+      baseUrl: `http://127.0.0.1:${w.port}`,
+      retry: false,
+    });
+    const me = await notion.users.me({});
+    expect(me).toMatchObject({ type: 'bot', name: 'Lab bot' });
+
+    const source = await notion.dataSources.retrieve({ data_source_id: PARTS });
+    expect(Object.keys((source as { properties: object }).properties)).toContain('Stock');
+    const created = await notion.pages.create({
+      parent: { data_source_id: PARTS },
+      properties: {
+        Name: { title: [{ text: { content: 'Bearing' } }] },
+        Stock: { number: 120 },
+      },
+    });
+    const page = await notion.pages.retrieve({ page_id: created.id });
+    expect(isFullPage(page) && page.properties.Stock).toMatchObject({ number: 120 });
+    await notion.pages.update({ page_id: created.id, properties: { Stock: { number: 119 } } });
+
+    const rows = await collectPaginatedAPI(notion.dataSources.query, {
+      data_source_id: PARTS,
+      page_size: 1,
+      sorts: [{ property: 'Stock', direction: 'ascending' }],
+    });
+    expect(
+      rows.map((r) => (isFullPage(r) ? (r.properties.Stock as { number: number }).number : null)),
+    ).toEqual([4, 40, 119]);
+
+    const found = await notion.search({ query: 'bear' });
+    expect(found.results.map((r) => r.id)).toEqual([created.id]);
+
+    const missing = await notion.pages.retrieve({ page_id: SECRETS }).catch((e: unknown) => e);
+    expect(missing).toBeInstanceOf(APIResponseError);
+    expect((missing as APIResponseError).code).toBe('object_not_found');
   });
 });

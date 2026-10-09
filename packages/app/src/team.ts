@@ -224,6 +224,21 @@ export function teamApi(team: TeamPlatform) {
       label: string;
     }) => r<{ sent: number }>('POST', 'buttons/notify', request),
     buttonSecret: () => r<{ secret: string }>('GET', 'buttons/secret'),
+    // Integrations (Phase 6 M5): settings (owners and admins), and the list (members).
+    integrations: () => r<{ integrations: IntegrationInfo[] }>('GET', 'integrations'),
+    createIntegration: (body: { name: string; icon?: string | null }) =>
+      r<{ integration: IntegrationInfo; token: string }>('POST', 'integrations', body),
+    updateIntegration: (
+      id: string,
+      body: {
+        name?: string;
+        icon?: string | null;
+        capabilities?: Partial<IntegrationCapabilities>;
+      },
+    ) => r<{ integration: IntegrationInfo }>('PATCH', `integrations/${id}`, body),
+    rotateIntegrationToken: (id: string) =>
+      r<{ token: string }>('POST', `integrations/${id}/token`),
+    deleteIntegration: (id: string) => r<{ ok: true }>('DELETE', `integrations/${id}`),
   };
 }
 
@@ -240,6 +255,29 @@ export interface PublishedPage extends PublishSettings {
   pageId: string;
   url: string;
   publishedAt: number;
+}
+
+/** What an integration may do through the API. */
+export interface IntegrationCapabilities {
+  readContent: boolean;
+  updateContent: boolean;
+  insertContent: boolean;
+  readComments: boolean;
+  insertComments: boolean;
+  userInfo: 'none' | 'noEmail' | 'email';
+}
+
+/** An integration (its settings only for owners and admins). */
+export interface IntegrationInfo {
+  /** Its bot's id (shared with as `user:<id>`). */
+  id: string;
+  name: string;
+  icon: string | null;
+  capabilities?: IntegrationCapabilities;
+  createdAt?: number;
+  /** The token's last characters. */
+  tokenHint?: string | null;
+  lastUsedAt?: number | null;
 }
 
 export type TeamApi = ReturnType<typeof teamApi>;

@@ -33,7 +33,10 @@ shared by link, by anyone in a browser, with each response a new row. M3 adds au
 edited or on a schedule, the server edits the page, adds pages, notifies people or sends a
 signed webhook, acting with the access of the person who made it. M4 runs them on a desktop
 whose workspace isn't synced too (schedules included, catching up after the app was closed),
-and buttons can send a webhook or a notification.
+and buttons can send a webhook or a notification. M5 adds integrations and the API: owners make
+an integration with a token, connect pages to it, and it uses Notion's API (`/v1`, the
+official SDK works) on those pages: users, pages, databases and data sources, queries and
+search.
 
 ## What works today
 

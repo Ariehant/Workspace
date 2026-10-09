@@ -25,6 +25,7 @@ import {
   Lock,
   MoreHorizontal,
   PenLine,
+  Plug,
   Trash2,
 } from 'lucide-react';
 import { useBacklinksMode, type BacklinksMode } from './backlinks';
@@ -43,6 +44,8 @@ export interface PageMenuProps {
   /** Omitted where pages can't be moved (database rows). */
   onMove?(): void;
   onCopyLink(): void;
+  /** Integrations connected to the page (a server workspace): opens Share → Connections. */
+  onConnections?(): void;
   /** Omitted for database rows. */
   onSaveAsTemplate?(): void;
   /** Omitted for database rows. */
@@ -102,6 +105,7 @@ export function PageMenu({
   onDuplicate,
   onMove,
   onCopyLink,
+  onConnections,
   onSaveAsTemplate,
   onExport,
   onTrash,
@@ -240,6 +244,15 @@ export function PageMenu({
           {onMove && (
             <MenuItem icon={<CornerUpRight size={14} />} onSelect={onMove}>
               Move to
+            </MenuItem>
+          )}
+          {onConnections && (
+            <MenuItem
+              icon={<Plug size={14} />}
+              onSelect={onConnections}
+              data-testid="page-menu-connections"
+            >
+              Connections
             </MenuItem>
           )}
           <MenuItem icon={<Link2 size={14} />} onSelect={onCopyLink}>

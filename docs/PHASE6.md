@@ -1,6 +1,6 @@
 # Phase 6: Automations and API
 
-**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) and M4 (automations on a local desktop, and button webhook and notification steps) are done.
+**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) M4 (automations on a local desktop, and button webhook and notification steps) and M5 (integrations and the API core) are done.
 
 ## Context
 
@@ -642,24 +642,105 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
   - **The private-pages test** (run 1): a shared page took more than 15 s to reach the other desktop. Its spec, rerun three times: 6 of 6.
 - **Web E2E:** 3 of 3.
 
-### M5: integrations, tokens, and the API core (≈ 6 days)
+### M5: integrations, tokens, and the API core ✅
 
-- **Storage:** migration 11, the `integrations` and `integration_tokens` tables; bot users in the members doc.
-- **Settings → Integrations** (owners and admins): new, name and icon, capabilities, the token shown once, rotate, delete.
-- **Connections in the page menu:** share a page with an integration.
-- **The `/v1` server plugin:**
-  - **Auth:** bearer `ntn_…`, hashed lookup, capabilities.
-  - **Versions:** the `Notion-Version` header (missing → `missing_version`).
-  - **Notion conventions:** the error shapes, pagination, the rate limiter per integration, and request size limits.
-- **`packages/api-model`:** properties both ways, rich text both ways (the property side; blocks are M6), filters and sorts (Notion JSON → our filter model), page and database objects.
-- **Endpoints:** users, pages (create in a database or a page, retrieve, update, trash, property items), databases (create, retrieve, update, query), data sources (`2025-09-03`), and search.
-- **Tests:**
-  - each endpoint, against the shapes in Notion's API reference
-  - every property type, both ways
-  - filters: each operator, compound and nested
-  - access: an integration sees only what was shared with it, through inheritance and after an unshare
-  - capabilities, rate limits, version handling
-  - a token used on `/api` is refused, and a cookie on `/v1`
+**Changed from the plan:**
+
+- **Migration 13**, not 11 (M2 and M3 took 11 and 12).
+- **A "bot" workspace role:**
+  - An integration's bot is in `workspace_members` with the "bot" role.
+  - It gets no "everyone in the workspace" access and no private pages.
+  - It's left out of the members list, gets no notifications, and can't hold a session (sessions are looked up for people only).
+  - Role changes and removal don't apply to it.
+- **Connections** are a section of the share dialog (people above, integrations below). The page menu's "Connections" opens it.
+- **Filters run as Notion's, on our rows** (`compileFilter`), rather than being turned into our filter model. Relations match by page id, and `equals` on text is exact, as in Notion.
+- **Search** reads the trees and databases shared with the integration (titles containing the query), not the search index, which lags a moment behind writes.
+- **A data source's id is its database's**, since there's one each.
+- **Not done (later):**
+  - **M6:** page content (`children`), and signed file URLs (stored files' URLs point at the signed-in file route).
+  - Filters on rollups with `any`/`every`/`none`.
+  - Images as icons and covers: emoji icons and removing are supported.
+  - New status options.
+  - Writing stored files (external ones are supported).
+
+**Storage** (`packages/storage-remote`, migration 13):
+
+- `integrations` (its bot user's id, name, icon, capabilities) and `integration_tokens` (a SHA-256 hash and the last four characters).
+- `Integrations`: create (the bot user, its membership and the first token, in one transaction), update, rotate, remove (the bot, its token and everything shared with it), and `byToken`.
+
+**Server:**
+
+- **Settings** (`/api/workspaces/:id/integrations`): owners and admins create, change capabilities, rotate the token (shown once) and delete. Members see names and icons, to connect pages.
+- **The `/v1` plugin:**
+  - **Auth:** `Bearer ntn_…` only. Session tokens and cookies get `unauthorized` there, and API tokens get 401 on `/api`.
+  - **Versions:** `Notion-Version` is required (`missing_version`). From 2025-09-03, databases have data sources.
+  - **Errors:** Notion's shapes and codes, including `invalid_json` and `invalid_request_url`.
+  - **Limits:** 500 KB per request, and a token bucket per integration (3 a second, bursts of 30) with `Retry-After`.
+- **`ApiView`**, per request:
+  - **Reading:** what the bot reads, found by id (pages and databases in the trees of its scopes; rows by their database), with formulas, rollups and relations computed. Related databases it can't read take no part.
+  - **Writing:** through `ctx.docs.edit` as the bot. Two-way relations write the other database after.
+- **Endpoints:**
+  - **Users:** list, retrieve, and `me` (the bot).
+  - **Pages:**
+    - create, as a row in a database or a page under a page
+    - retrieve
+    - update properties, icon, cover (removal) and trash
+    - property items (paginated for titles, text, people and relations)
+  - **Databases:** create (only the properties asked for), retrieve, update (title, description, add, rename, retype and delete properties), and query (filters, sorts, paging, `filter_properties`).
+  - **Data sources:** retrieve, update and query. Creating one is refused.
+  - **Search.**
+- **`packages/api-model`:**
+  - Property schemas and values both ways, for every type.
+  - Rich text for property values.
+  - Ids (dashed and not), versions, filters and sorts.
+  - Page, database, data source, user and list objects.
+  - Dates with times are read and written as UTC.
+  - Two properties with one name get keys "Name" and "Name (2)".
+
+**App:**
+
+- **Members → Integrations** (owners and admins):
+  - make one (its token is shown once, with Copy)
+  - capabilities
+  - "People": none, without emails, or with them
+  - a new token (the old one stops at once)
+  - delete
+- **Share → Connections:** connect an integration with edit or view access, change it, remove it.
+- **Desktop:** the integration routes are allowed.
+
+**Tests:**
+
+- **`api-model.test.ts`:**
+  - ids and versions; rich text
+  - every stored type both ways, new options, and what's refused
+  - schemas
+  - filters: text, numbers, checkboxes, selects, multi-selects, people, dates, timestamps, compound and nested, and refused ones
+  - sorts; list paging
+- **`api.test.ts` (server):**
+  - **Settings:** made by owners only; members see names; the token is never listed; rotate and delete end the old token.
+  - **Bots aren't people:** a bot isn't in the members list, and is in the members doc as a former member.
+  - **Auth:** tokens and sessions are refused on each other's routes, and so are cookies on `/v1`. A missing version, an unknown URL and bad JSON are refused.
+  - **The rate limit**, with `Retry-After`.
+  - **Access:**
+    - Nothing is visible until a page is shared; then that page, its sub-page and its database's rows are, but not the rest.
+    - After unsharing, nothing again.
+    - With view access, writes are refused; missing capabilities are refused.
+  - **Users,** with and without emails.
+  - **Pages:**
+    - a row made with four types and a new option, by the bot, and on the desktop
+    - changes, bad property names and values
+    - property items, trash
+    - a sub-page; a page under one it can't see is 404
+  - **Databases:** retrieve, query (compound filter, sort, paging), create with a relation, change the schema.
+  - **2025-09-03:** data sources.
+  - **The official SDK** (`@notionhq/client` 5, a dev dependency): `users.me`, `dataSources.retrieve` and `query` (paginated with `collectPaginatedAPI`), `pages.create`, `retrieve` and `update`, `search`, and an `object_not_found` error.
+
+**E2E** (`integrations.spec.ts`):
+
+- Ada makes "Lab bot" in Members → Integrations and copies the token. The API sees nothing yet.
+- She connects "Parts" (Share → Connections). The API finds it, queries its rows, and adds "Stepper motor" with a new tag, which appears on her desktop.
+
+**Runs:** see below.
 
 ### M6: blocks, comments and files in the API (≈ 4 days)
 

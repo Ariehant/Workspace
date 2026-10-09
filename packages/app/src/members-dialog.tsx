@@ -15,8 +15,9 @@ import {
   type Profile,
   type TeamApi,
 } from './team';
+import { IntegrationsPanel } from './integrations-settings';
 
-type Tab = 'members' | 'guests' | 'groups' | 'invites';
+type Tab = 'members' | 'guests' | 'groups' | 'invites' | 'integrations';
 
 const input =
   'h-8 rounded-md border border-line bg-transparent px-2 text-sm text-fg outline-none placeholder:text-faint focus:border-accent';
@@ -105,7 +106,12 @@ export function MembersDialog({
     ['members', 'Members', (members ?? []).filter((m) => m.role !== 'guest').length],
     ['guests', 'Guests', (members ?? []).filter((m) => m.role === 'guest').length],
     ['groups', 'Groups', groups.length],
-    ...(manager ? ([['invites', 'Invites', invites.length]] as [Tab, string, number][]) : []),
+    ...(manager
+      ? ([
+          ['invites', 'Invites', invites.length],
+          ['integrations', 'Integrations', null],
+        ] as [Tab, string, number | null][])
+      : []),
   ];
 
   return (
@@ -167,6 +173,7 @@ export function MembersDialog({
             {members !== null && tab === 'groups' && (
               <Groups groups={groups} members={members} manager={manager} act={act} team={team} />
             )}
+            {tab === 'integrations' && manager && <IntegrationsPanel team={team} />}
             {tab === 'invites' && manager && (
               <Invites invites={invites} onRevoke={(id) => void act(() => team.revokeInvite(id))} />
             )}

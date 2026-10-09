@@ -10,7 +10,13 @@ import { Check, Link } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { sectionName } from './scope-actions';
 import { AccessRow, usePrincipals } from './teamspace-dialogs';
-import { SCOPE_ROLE_LABELS, type ScopeDetails, type ScopeRole, type TeamApi } from './team';
+import {
+  SCOPE_ROLE_LABELS,
+  type IntegrationInfo,
+  type ScopeDetails,
+  type ScopeRole,
+  type TeamApi,
+} from './team';
 import { PublishSection } from './publish-section';
 
 const select =
@@ -37,7 +43,25 @@ export function ShareDialog({
   const [role, setRole] = useState<ScopeRole>('edit');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const { members, groups, describe } = usePrincipals(team);
+  const { members, groups, describe: describePerson } = usePrincipals(team);
+  const [integrations, setIntegrations] = useState<IntegrationInfo[]>([]);
+  const [connection, setConnection] = useState('');
+  const [connectionRole, setConnectionRole] = useState<ScopeRole>('edit');
+  useEffect(() => {
+    let alive = true;
+    team.integrations().then(
+      (r) => alive && setIntegrations(r.integrations),
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, [team]);
+  const bots = new Map(integrations.map((i) => [`user:${i.id}`, i]));
+  const describe = (principal: string) => {
+    const bot = bots.get(principal);
+    return bot ? { name: bot.name, avatar: null, id: principal } : describePerson(principal);
+  };
 
   const reload = useCallback(
     () =>
@@ -81,6 +105,17 @@ export function ShareDialog({
       await team.setAccess(target.id, principal, role);
       setPrincipal('');
     });
+
+  const connect = () =>
+    act(async () => {
+      if (!connection || !here) return;
+      const target = own ?? (await team.sharePage(pageId, here.id)).scope;
+      await team.setAccess(target.id, connection, connectionRole);
+      setConnection('');
+    });
+  // People and groups above; integrations (their bots) under Connections.
+  const peopleEntries = entries.filter((e) => !bots.has(e.principal));
+  const connected = entries.filter((e) => bots.has(e.principal));
 
   const everyone = own?.access?.find((e) => e.principal === 'workspace')?.role ?? null;
 
@@ -154,7 +189,7 @@ export function ShareDialog({
 
               <div className="text-xs font-medium text-muted">Who has access</div>
               <ul>
-                {entries.map((entry) => {
+                {peopleEntries.map((entry) => {
                   const who = describe(entry.principal);
                   const target = own ?? here;
                   return (
@@ -173,12 +208,80 @@ export function ShareDialog({
                     />
                   );
                 })}
-                {entries.length === 0 && (
+                {peopleEntries.length === 0 && (
                   <li className="py-1 text-sm text-faint">
                     {own ? 'Only people with access to where it was shared from.' : 'Just you.'}
                   </li>
                 )}
               </ul>
+
+              <div className="text-xs font-medium text-muted">Connections</div>
+              <ul data-testid="connections">
+                {connected.map((entry) => (
+                  <AccessRow
+                    roles={['edit', 'view']}
+                    key={entry.principal}
+                    entry={entry}
+                    name={describe(entry.principal).name}
+                    avatar={null}
+                    note={own ? undefined : `from ${sectionTitle(here, tree?.info.name)}`}
+                    canChange={!!own && own.role === 'full'}
+                    onRole={(r) =>
+                      void act(() => team.setAccess((own ?? here).id, entry.principal, r))
+                    }
+                    onRemove={() =>
+                      void act(() => team.setAccess((own ?? here).id, entry.principal, null))
+                    }
+                  />
+                ))}
+              </ul>
+              {canShare && integrations.some((i) => !taken.has(`user:${i.id}`)) && (
+                <form
+                  className="flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void connect();
+                  }}
+                >
+                  <select
+                    aria-label="Integration"
+                    value={connection}
+                    onChange={(e) => setConnection(e.target.value)}
+                    className={`${select} min-w-0 flex-1`}
+                  >
+                    <option value="">Connect an integration…</option>
+                    {integrations
+                      .filter((i) => !taken.has(`user:${i.id}`))
+                      .map((i) => (
+                        <option key={i.id} value={`user:${i.id}`}>
+                          {i.icon ? `${i.icon} ` : ''}
+                          {i.name}
+                        </option>
+                      ))}
+                  </select>
+                  <select
+                    aria-label="Integration access"
+                    value={connectionRole}
+                    onChange={(e) => setConnectionRole(e.target.value as ScopeRole)}
+                    className={select}
+                  >
+                    <option value="edit">{SCOPE_ROLE_LABELS.edit}</option>
+                    <option value="view">{SCOPE_ROLE_LABELS.view}</option>
+                  </select>
+                  <Button
+                    type="submit"
+                    disabled={!connection || busy}
+                    data-testid="connect-integration"
+                  >
+                    Connect
+                  </Button>
+                </form>
+              )}
+              {connected.length === 0 && integrations.length === 0 && (
+                <p className="text-xs text-faint">
+                  No integrations yet: owners and admins add them in Members → Integrations.
+                </p>
+              )}
 
               {own && (
                 <>
