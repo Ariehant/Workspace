@@ -40,6 +40,9 @@ const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [/^pages\/[\w-]{1,128}\/publish$/, ['GET', 'PUT', 'DELETE']],
   [/^pages\/[\w-]{1,128}\/analytics$/, ['GET']],
   [/^pages\/[\w-]{1,128}\/views$/, ['POST']],
+  // Forms (Phase 6 M2): responses, and public links.
+  [/^forms\/[\w-]{1,128}\/[\w-]{1,128}\/submit$/, ['POST']],
+  [/^forms\/[\w-]{1,128}\/[\w-]{1,128}\/link$/, ['GET', 'PUT', 'DELETE']],
 ];
 const MAX_TEAM_BODY = 128 * 1024;
 

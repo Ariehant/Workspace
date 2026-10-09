@@ -24,6 +24,7 @@ import { Indexer } from './search/indexer';
 import { JobRunner, type JobRunnerOptions } from './jobs/runner';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
+import { formRoutes } from './forms/routes';
 import { settingsRoutes } from './settings-routes';
 import { webApp } from './web';
 import { workspaceRoutes } from './workspaces';
@@ -219,6 +220,7 @@ export function buildServer({
     notificationRoutes(scope, ctx);
     pageRoutes(scope, ctx, site, history);
     siteRoutes(scope, ctx, site);
+    formRoutes(scope, ctx);
   });
   webApp(app, config.webDir);
   endpoint = syncEndpoint(app, ctx, sync);

@@ -1,6 +1,6 @@
 import type pg from 'pg';
 
-export type NotificationKindName = 'mention' | 'comment' | 'reply' | 'reminder' | 'access';
+export type NotificationKindName = 'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form';
 
 export interface NewNotification {
   workspaceId: string;

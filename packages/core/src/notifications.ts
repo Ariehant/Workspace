@@ -7,13 +7,15 @@ import type * as Y from 'yjs';
 import { readBlocks, type Block } from './blocks';
 import { mentionsIn, type ThreadData } from './comments';
 
-export type NotificationKind = 'mention' | 'comment' | 'reply' | 'reminder' | 'access';
+/** `form`: a response to a form whose maker asked to be told (Phase 6). */
+export type NotificationKind = 'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form';
 export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'mention',
   'comment',
   'reply',
   'reminder',
   'access',
+  'form',
 ];
 
 /** A notification as clients get it (over the socket, and from the list endpoint). */

@@ -42,6 +42,7 @@ const KIND_LABELS: Record<NotificationKind, string> = {
   reply: 'Replies',
   reminder: 'Reminders',
   access: 'Pages shared with you',
+  form: 'Responses to your forms',
 };
 
 /** The server's notification endpoints (through the host's team API). */
@@ -166,6 +167,12 @@ function Headline({ n, actor, page }: { n: NotificationData; actor: string; page
       return (
         <>
           {who} shared {where} with you
+        </>
+      );
+    case 'form':
+      return (
+        <>
+          {n.actorId ? who : 'Someone'} responded to {where}
         </>
       );
   }

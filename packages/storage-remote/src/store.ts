@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import * as Y from 'yjs';
 import { Accounts } from './accounts';
+import { FormLinks } from './forms';
 import { Jobs } from './jobs';
 import { migrate } from './migrations';
 import { SearchIndex } from './search';
@@ -62,6 +63,7 @@ export class PgStore {
   readonly notifications: Notifications;
   readonly pages: Pages;
   readonly jobs: Jobs;
+  readonly formLinks: FormLinks;
 
   constructor(connectionString: string, options: { max?: number } = {}) {
     this.pool = new pg.Pool({ connectionString, max: options.max ?? 10 });
@@ -74,6 +76,7 @@ export class PgStore {
     this.notifications = new Notifications(this.pool);
     this.pages = new Pages(this.pool);
     this.jobs = new Jobs(this.pool);
+    this.formLinks = new FormLinks(this.pool);
   }
 
   migrate(): Promise<number> {

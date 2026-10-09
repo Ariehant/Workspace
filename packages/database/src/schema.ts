@@ -191,7 +191,8 @@ export interface FileValue {
   mime?: string;
 }
 
-export type ViewType = 'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'chart';
+export type ViewType =
+  'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'chart' | 'form';
 
 export const VIEW_TYPES: { type: ViewType; label: string }[] = [
   { type: 'table', label: 'Table' },
@@ -201,7 +202,37 @@ export const VIEW_TYPES: { type: ViewType; label: string }[] = [
   { type: 'calendar', label: 'Calendar' },
   { type: 'timeline', label: 'Timeline' },
   { type: 'chart', label: 'Chart' },
+  { type: 'form', label: 'Form' },
 ];
+
+/**
+ * Who may fill in a form: whoever can see its database (in the app), or also anyone with
+ * its link (a public page, no account needed).
+ */
+export type FormAudience = 'access' | 'public';
+
+/** One question of a form: a property of the database, as asked. */
+export interface FormQuestion {
+  propertyId: string;
+  /** Asked as this (the property's name when empty). */
+  label: string;
+  description: string;
+  required: boolean;
+}
+
+/** A form view's settings (its responses are the database's new rows). */
+export interface FormConfig {
+  title: string;
+  description: string;
+  questions: FormQuestion[];
+  audience: FormAudience;
+  /** Shown after submitting. */
+  submittedMessage: string;
+  /** Notify the form's creator of each response. */
+  notify: boolean;
+  /** Who made the form (notified of responses). */
+  createdBy: string | null;
+}
 
 export type TimelineZoom = 'hours' | 'day' | 'week' | 'biweek' | 'month' | 'quarter' | 'year';
 
@@ -352,6 +383,8 @@ export interface ViewConfig {
   /** Timeline: arrows between dependent rows (see `DatabaseMeta.dependencies`). */
   showDependencies: boolean;
   chart: ChartConfig;
+  /** Form views: questions and settings. */
+  form: FormConfig;
   /**
    * The template "New" uses in this view: a template id, `'none'` for an empty page,
    * or null for the database's default.
@@ -481,6 +514,15 @@ export const DEFAULT_VIEW_CONFIG: ViewConfig = {
     legend: true,
     labels: false,
     hideEmpty: false,
+  },
+  form: {
+    title: '',
+    description: '',
+    questions: [],
+    audience: 'access',
+    submittedMessage: 'Thanks! Your response was recorded.',
+    notify: false,
+    createdBy: null,
   },
   defaultTemplateId: null,
 };

@@ -1,6 +1,6 @@
 # Phase 6: Automations and API
 
-**Status:** in progress. M1 is done (the content role, server edits with an author, and the job queue).
+**Status:** in progress. M1 (the content role, server edits with an author, and the job queue) and M2 (forms) are done.
 
 ## Context
 
@@ -383,30 +383,78 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - **Reruns:** both specs, three times each, passed 30 of 30.
 - **Web E2E:** 3 of 3.
 
-### M2: forms (≈ 4 days)
+### M2: forms ✅
 
-- **Model** (`packages/database`):
-  - the `form` view type and its config
-  - `validateSubmission(schema, form, answers)`
-  - `submissionRow` (the values for `addRow`)
-- **App:**
-  - the form builder (questions, required, descriptions, drag to reorder, add a question as a new property)
-  - Fill (in the app)
-  - Share form (audience, the link, a new link)
-  - responses arrive as rows, with "Submitted by" (`createdBy`)
-- **Server:**
-  - the submit endpoint
-  - `/f/<token>`: the public form page (rendered, no JS, strict CSP), its POST, the "submitted" page
-  - the rate limit, honeypot and size limits
-  - an optional notification for each response
-- **Desktop:** filling in a local workspace; the submit endpoint added to the team routes when synced.
-- **Tests:**
-  - validation per property type
-  - the audiences: a viewer can submit when allowed and not otherwise; a non-member only through a public link
-  - an anonymous public submission creates a row with `createdBy: null`
-  - the link turned off after a new one is made
-  - the CSP and `noindex` headers
-- **E2E:** Ada builds a form and shares a public link. Someone signed out fills it in a browser, and the row appears live on Ada's desktop. Bob (view-only) submits from the app.
+**Changed from the plan:**
+
+- **Two audiences, not three:**
+  - **"People who can see this database"** fill the form in the app.
+  - **"Anyone with the link"** use the public page.
+
+  "Anyone in the workspace" would need a signed-in link page for people who can't see the database; it is left for later.
+
+- **Where the public link's token lives:** in the database (`form_links`), never in the doc. Anyone who can read the database could otherwise copy it, and making a new link must turn the old one off.
+- **Questions are reordered** with up and down buttons, not dragged.
+- **Not done:** file questions, and a cover on the form.
+
+**Model** (`packages/database`):
+
+- **The view type:** `form`, with `FormConfig` on every view (title, description, questions, audience, the message after submitting, `notify`, `createdBy`). A new form view asks every property it can, title first (`defaultForm`).
+- **`validateSubmission(properties, form, answers, { members })`** returns the row's title and stored values, or an error per question. It refuses:
+  - anything that isn't a question
+  - a missing required answer (a required checkbox must be ticked)
+  - text over 2,000 characters
+  - URLs that aren't http(s), emails and phone numbers that don't look like one
+  - options that don't exist
+  - people who aren't members (or any person, when no members are given)
+  - computed and file properties
+- **`answersFromFields`** reads an HTML form post: numbers are parsed, checkboxes are ticked when present, and repeated fields become lists.
+
+**Server:**
+
+- **Migration 11:** `form_links` (one token per form), and the `form` notification kind.
+- **`POST /api/workspaces/:id/forms/:databaseId/:viewId/submit`:**
+  - **Who:** anyone who can see the database (view is enough: the server writes the row, as a trusted `DocEditor` edit with the submitter as author).
+  - **Errors:** 400 with the errors, and nothing is written.
+  - **Not found:** 404 for a non-member or a view that isn't a form.
+- **`GET`, `PUT`, `DELETE …/link`:**
+  - Anyone who can see the database can read the link.
+  - Only someone with full access can make a new one (the old one stops working) or turn it off.
+- **`GET` and `POST /f/<token>`:**
+  - **When it works:** only while the form's audience is "anyone with the link" and the token is current; otherwise 404.
+  - **The page:** plain HTML, no script, `noindex`, and a strict CSP (`default-src 'none'`, `form-action 'self'`).
+  - **Person questions** aren't asked there.
+  - **Errors:** a refused post shows the form again, with the errors and what was typed.
+  - **Spam:** a hidden honeypot field (filled in, nothing is kept), and 10 posts a minute per address.
+  - **The row:** anonymous (`createdBy: null`).
+- **Notifications:** "Notify me of each response" sends the form's maker a `form` notification (inbox, and desktop notifications) for responses by others.
+
+**App:**
+
+- **The form view**, offered in "Add a view".
+- **Edit form** (for people who can edit the database): title and description; questions with a label, a description and Required; reorder and remove; add a question from a property or as a new property; the message after submitting; notify me.
+- **Preview / fill:** an input per type.
+  - On a server, the response goes to the server.
+  - In a workspace that isn't synced, the row is added locally.
+- **Share form** (on a server): who can fill it in, and the link (create, copy, new link, turn off).
+- **Elsewhere:** a form has no filter, sort or New toolbar. The inbox says "… responded to <form>". The desktop allows the forms routes.
+
+**Tests:**
+
+- **`forms.test.ts` (database):** a new form's questions; valid answers become values; every kind of wrong answer; dropped properties; HTML posts.
+- **`forms.test.ts` (server):**
+  - **From the app:** a view-only member's response is written by the server, arrives live, and has its author and a notification for the maker. Bad answers write nothing. A non-member, or a table view, is 404.
+  - **Public links:** only full access makes one. A link shows nothing until the form is public. Then the page has its CSP and no script, and doesn't ask person questions.
+  - **Public posts:** a response becomes an anonymous row. A missing required answer comes back with what was typed. An extra field is refused. The honeypot keeps nothing.
+  - **Changing the link:** a new link ends the old one, and turning it off ends it.
+  - **Rate limit:** the 11th post a minute is refused.
+
+**E2E** (`forms.spec.ts`):
+
+- Ada builds "Order a part" on her desktop: a renamed, required title question and a new number question.
+- She answers it in the app; leaving out the required answer is refused first.
+- She shares it with anyone who has the link. Someone signed out answers it in a browser.
+- The row appears on her desktop, and her inbox says "Someone responded to Order a part".
 
 ### M3: automations on the server (≈ 5 days)
 

@@ -2,6 +2,7 @@ import { PageField, applyTextDiff, newId, type PageOptions } from '@workspace/co
 import { generateKeyBetween } from 'fractional-indexing';
 import * as Y from 'yjs';
 import { renameInFormula } from './formula/engine';
+import { defaultForm } from './forms';
 import { cellText, propertyKind, optionsOf } from './properties';
 import {
   DEFAULT_VIEW_CONFIG,
@@ -116,6 +117,10 @@ export function readView(map: YMap): View {
     chart: {
       ...DEFAULT_VIEW_CONFIG.chart,
       ...((map.get('chart') as ViewConfig['chart'] | undefined) ?? {}),
+    },
+    form: {
+      ...DEFAULT_VIEW_CONFIG.form,
+      ...((map.get('form') as ViewConfig['form'] | undefined) ?? {}),
     },
   };
 }
@@ -653,6 +658,7 @@ function viewTypeDefaults(doc: Y.Doc, type: ViewType): Partial<ViewConfig> {
   if (type === 'board') return { groupBy: defaultBoardGroupBy(doc) };
   if (type === 'calendar' || type === 'timeline') return { dateProperty: defaultDateProperty(doc) };
   if (type === 'chart') return { chart: { ...DEFAULT_VIEW_CONFIG.chart, x: defaultChartX(doc) } };
+  if (type === 'form') return { form: defaultForm(readProperties(doc)) };
   return {};
 }
 

@@ -69,6 +69,11 @@ export class WorkspaceAccess {
     return this.model.members.some((m) => m.userId === userId);
   }
 
+  /** Everyone in the workspace (guests too). */
+  memberIds(): string[] {
+    return this.model.members.map((m) => m.userId);
+  }
+
   roles(userId: string): Roles {
     let roles = this.roleCache.get(userId);
     if (!roles) this.roleCache.set(userId, (roles = rolesFor(this.model, userId)));

@@ -27,7 +27,9 @@ passes: three accounts on two desktops and the web app, crafted clients that try
 the checks, and the Docker stack with a second account. Phase 6 (automations, forms and a
 Notion-compatible API, see [docs/PHASE6.md](docs/PHASE6.md)) is under way. M1 is done: a database
 can be shared as "Can edit content" (rows, not properties or views, checked by the server), the
-server can edit docs on someone's behalf through the same checks, and it has a job queue.
+server can edit docs on someone's behalf through the same checks, and it has a job queue. M2 adds
+forms: a database's form view, filled in from the app (even by people who may only view it) or,
+shared by link, by anyone in a browser, with each response a new row.
 
 ## What works today
 

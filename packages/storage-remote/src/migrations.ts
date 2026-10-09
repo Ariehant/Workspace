@@ -462,6 +462,23 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX jobs_finished ON jobs (coalesce(done_at, failed_at))
     WHERE done_at IS NOT NULL OR failed_at IS NOT NULL;
   `,
+  // 11: Phase 6 M2. Forms: public links (a token per form, only here, never in a doc),
+  // and notifications of responses.
+  `
+  CREATE TABLE form_links (
+    token text PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    database_id text NOT NULL,
+    view_id text NOT NULL,
+    created_by uuid REFERENCES users ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, database_id, view_id)
+  );
+
+  ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
+  ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
+    CHECK (kind IN ('mention', 'comment', 'reply', 'reminder', 'access', 'form'));
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

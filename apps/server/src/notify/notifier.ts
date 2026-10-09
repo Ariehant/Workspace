@@ -208,6 +208,32 @@ export class Notifier {
     }
   }
 
+  /** A response to a form whose maker asked to be told (`userId`: the maker). */
+  async formResponse(
+    workspaceId: string,
+    response: {
+      userId: string;
+      databaseId: string;
+      rowId: string;
+      formTitle: string;
+      title: string;
+      actorId: string | null;
+    },
+  ): Promise<void> {
+    const access = await this.access.workspace(workspaceId);
+    await this.notify(access, {
+      workspaceId,
+      userId: response.userId,
+      kind: 'form',
+      pageId: response.rowId,
+      title: response.formTitle,
+      actorId: response.actorId,
+      text: response.title || 'Untitled',
+      // Shown while the maker can still see the database.
+      docId: response.databaseId,
+    });
+  }
+
   // --- Following the log --------------------------------------------------------------
 
   private async follow(workspaceId: string): Promise<void> {

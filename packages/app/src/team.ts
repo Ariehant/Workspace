@@ -193,6 +193,15 @@ export function teamApi(team: TeamPlatform) {
         `pages/${pageId}/analytics`,
       ),
     view: (pageId: string) => r<{ ok: true }>('POST', `pages/${pageId}/views`),
+    // Forms (Phase 6 M2): responses, written by the server; public links.
+    submitForm: (databaseId: string, viewId: string, answers: Record<string, unknown>) =>
+      r<{ rowId: string }>('POST', `forms/${databaseId}/${viewId}/submit`, { answers }),
+    formLink: (databaseId: string, viewId: string) =>
+      r<{ link: string | null }>('GET', `forms/${databaseId}/${viewId}/link`),
+    newFormLink: (databaseId: string, viewId: string) =>
+      r<{ link: string | null }>('PUT', `forms/${databaseId}/${viewId}/link`),
+    removeFormLink: (databaseId: string, viewId: string) =>
+      r<{ link: string | null }>('DELETE', `forms/${databaseId}/${viewId}/link`),
   };
 }
 

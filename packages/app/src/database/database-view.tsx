@@ -12,6 +12,7 @@ import {
   runView,
   updateFilterTree,
   updateView,
+  defaultForm,
   updateViewColumn,
   viewColumns,
   viewsOf,
@@ -75,6 +76,7 @@ import {
   CalendarDays,
   GanttChart,
   BarChart3,
+  ClipboardList,
   Lock,
   ArrowUpRight,
   MoreHorizontal,
@@ -107,6 +109,7 @@ import { ListView } from './list';
 import { CalendarView, dateProperties } from './calendar';
 import { TimelineView } from './timeline';
 import { NewButton } from './templates-menu';
+import { FormView } from './form-view';
 
 // recharts is large: load it when a chart is shown.
 const ChartView = lazy(() => import('./chart'));
@@ -119,6 +122,7 @@ const VIEW_ICONS: Record<ViewType, LucideIcon> = {
   calendar: CalendarDays,
   timeline: GanttChart,
   chart: BarChart3,
+  form: ClipboardList,
 };
 
 export function ViewIcon({ type, size = 14 }: { type: ViewType; size?: number }) {
@@ -257,6 +261,7 @@ export function DatabaseView({
   const ruleCount = countRules(view.filter);
   const sortNames = view.sorts.map((s) => byId.get(s.propertyId)?.name).filter(Boolean);
   const showBar = ruleCount > 0 || view.sorts.length > 0;
+  const isForm = view.type === 'form';
 
   const toolbarButton = (active: boolean) =>
     cn(
@@ -363,6 +368,12 @@ export function DatabaseView({
                             ? `${label} ${views.length + 1}`
                             : label,
                           type,
+                          // A form remembers who made it (told of responses, if they ask).
+                          ...(type === 'form' && {
+                            config: {
+                              form: { ...defaultForm(snapshot.properties), createdBy: user.id },
+                            },
+                          }),
                         }),
                       )
                     }
@@ -375,111 +386,119 @@ export function DatabaseView({
           )}
         </div>
 
-        {/* Toolbar */}
-        <Popover
-          open={panel === 'filter' || panel === 'advanced'}
-          onOpenChange={(o) => !o && setPanel(null)}
-        >
-          <PopoverAnchor asChild>
-            <button
-              type="button"
-              className={toolbarButton(ruleCount > 0)}
-              onClick={() => setPanel(advanced ? 'advanced' : panel === 'filter' ? null : 'filter')}
+        {/* Toolbar (a form has none: it isn't a list of rows) */}
+        {!isForm && (
+          <>
+            <Popover
+              open={panel === 'filter' || panel === 'advanced'}
+              onOpenChange={(o) => !o && setPanel(null)}
             >
-              <ListFilter size={15} /> <span className="max-md:hidden">Filter</span>
-            </button>
-          </PopoverAnchor>
-          <PopoverContent
-            align="end"
-            // Focus coming back from a closing chip popover shouldn't close this one.
-            onFocusOutside={(e) => e.preventDefault()}
-          >
-            {panel === 'advanced' && view.filter ? (
-              <FilterGroupEditor
-                root={view.filter}
-                properties={properties}
-                ctx={viewCtx}
-                onChange={setFilter}
-              />
+              <PopoverAnchor asChild>
+                <button
+                  type="button"
+                  className={toolbarButton(ruleCount > 0)}
+                  onClick={() =>
+                    setPanel(advanced ? 'advanced' : panel === 'filter' ? null : 'filter')
+                  }
+                >
+                  <ListFilter size={15} /> <span className="max-md:hidden">Filter</span>
+                </button>
+              </PopoverAnchor>
+              <PopoverContent
+                align="end"
+                // Focus coming back from a closing chip popover shouldn't close this one.
+                onFocusOutside={(e) => e.preventDefault()}
+              >
+                {panel === 'advanced' && view.filter ? (
+                  <FilterGroupEditor
+                    root={view.filter}
+                    properties={properties}
+                    ctx={viewCtx}
+                    onChange={setFilter}
+                  />
+                ) : (
+                  <PropertyPicker
+                    properties={properties}
+                    label="Filter by…"
+                    onPick={(p) => addFilter(p.id)}
+                  />
+                )}
+              </PopoverContent>
+            </Popover>
+            <Popover open={panel === 'sort'} onOpenChange={(o) => !o && setPanel(null)}>
+              <PopoverAnchor asChild>
+                <button
+                  type="button"
+                  className={toolbarButton(view.sorts.length > 0)}
+                  onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
+                >
+                  <ArrowUpDown size={15} /> <span className="max-md:hidden">Sort</span>
+                </button>
+              </PopoverAnchor>
+              <PopoverContent align="end">
+                {view.sorts.length === 0 ? (
+                  <PropertyPicker
+                    properties={properties}
+                    label="Sort by…"
+                    onPick={(p) =>
+                      setViewQuery({ sorts: [{ propertyId: p.id, direction: 'asc' }] })
+                    }
+                  />
+                ) : (
+                  <SortEditor
+                    sorts={view.sorts}
+                    properties={properties}
+                    onChange={(sorts) => setViewQuery({ sorts })}
+                  />
+                )}
+              </PopoverContent>
+            </Popover>
+            <Popover open={panel === 'group'} onOpenChange={(o) => !o && setPanel(null)}>
+              <PopoverAnchor asChild>
+                <button
+                  type="button"
+                  className={toolbarButton(view.groupBy !== null)}
+                  disabled={!viewsEditable}
+                  onClick={() => setPanel(panel === 'group' ? null : 'group')}
+                >
+                  <Layers size={15} /> <span className="max-md:hidden">Group</span>
+                </button>
+              </PopoverAnchor>
+              <PopoverContent align="end">
+                <GroupEditor
+                  properties={properties}
+                  groupBy={view.groupBy}
+                  subGroupBy={view.subGroupBy}
+                  groups={result.groups}
+                  onChange={(changes) => updateView(doc, view.id, changes)}
+                />
+              </PopoverContent>
+            </Popover>
+            {search === null ? (
+              <IconButton label="Search" onClick={() => setSearch('')}>
+                <Search size={15} />
+              </IconButton>
             ) : (
-              <PropertyPicker
-                properties={properties}
-                label="Filter by…"
-                onPick={(p) => addFilter(p.id)}
-              />
+              <span className="flex h-7 items-center gap-1 rounded border border-line px-1.5">
+                <Search size={14} className="text-faint" />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setSearch(null);
+                  }}
+                  onBlur={() => !search && setSearch(null)}
+                  placeholder="Type to search…"
+                  aria-label="Search in view"
+                  className="w-36 bg-transparent text-sm outline-none"
+                />
+                <button type="button" aria-label="Clear search" onClick={() => setSearch(null)}>
+                  <X size={13} className="text-faint" />
+                </button>
+              </span>
             )}
-          </PopoverContent>
-        </Popover>
-        <Popover open={panel === 'sort'} onOpenChange={(o) => !o && setPanel(null)}>
-          <PopoverAnchor asChild>
-            <button
-              type="button"
-              className={toolbarButton(view.sorts.length > 0)}
-              onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
-            >
-              <ArrowUpDown size={15} /> <span className="max-md:hidden">Sort</span>
-            </button>
-          </PopoverAnchor>
-          <PopoverContent align="end">
-            {view.sorts.length === 0 ? (
-              <PropertyPicker
-                properties={properties}
-                label="Sort by…"
-                onPick={(p) => setViewQuery({ sorts: [{ propertyId: p.id, direction: 'asc' }] })}
-              />
-            ) : (
-              <SortEditor
-                sorts={view.sorts}
-                properties={properties}
-                onChange={(sorts) => setViewQuery({ sorts })}
-              />
-            )}
-          </PopoverContent>
-        </Popover>
-        <Popover open={panel === 'group'} onOpenChange={(o) => !o && setPanel(null)}>
-          <PopoverAnchor asChild>
-            <button
-              type="button"
-              className={toolbarButton(view.groupBy !== null)}
-              disabled={!viewsEditable}
-              onClick={() => setPanel(panel === 'group' ? null : 'group')}
-            >
-              <Layers size={15} /> <span className="max-md:hidden">Group</span>
-            </button>
-          </PopoverAnchor>
-          <PopoverContent align="end">
-            <GroupEditor
-              properties={properties}
-              groupBy={view.groupBy}
-              subGroupBy={view.subGroupBy}
-              groups={result.groups}
-              onChange={(changes) => updateView(doc, view.id, changes)}
-            />
-          </PopoverContent>
-        </Popover>
-        {search === null ? (
-          <IconButton label="Search" onClick={() => setSearch('')}>
-            <Search size={15} />
-          </IconButton>
-        ) : (
-          <span className="flex h-7 items-center gap-1 rounded border border-line px-1.5">
-            <Search size={14} className="text-faint" />
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setSearch(null);
-              }}
-              onBlur={() => !search && setSearch(null)}
-              placeholder="Type to search…"
-              aria-label="Search in view"
-              className="w-36 bg-transparent text-sm outline-none"
-            />
-            <button type="button" aria-label="Clear search" onClick={() => setSearch(null)}>
-              <X size={13} className="text-faint" />
-            </button>
-          </span>
+          </>
         )}
         {structureEditable && (
           <DatabaseOptions
@@ -488,7 +507,7 @@ export function DatabaseView({
             onEditDescription={() => setEditingDescription(true)}
           />
         )}
-        {editable && (
+        {editable && !isForm && (
           <NewButton
             handle={handle}
             snapshot={snapshot}
@@ -500,7 +519,7 @@ export function DatabaseView({
       </div>
 
       {/* Sorts and filters in effect */}
-      {showBar && (
+      {showBar && !isForm && (
         <div
           className="flex flex-wrap items-center gap-1.5 border-b border-line py-1.5"
           data-testid="filter-bar"
@@ -612,6 +631,17 @@ export function DatabaseView({
             onOpenRow: open,
           };
           if (view.type === 'board') return <BoardView {...props} />;
+          if (view.type === 'form') {
+            return (
+              <FormView
+                handle={handle}
+                snapshot={snapshot}
+                view={view}
+                structureEditable={structureEditable}
+                databaseTitle={databaseTitle}
+              />
+            );
+          }
           if (view.type === 'list') return <ListView {...props} />;
           if (view.type === 'calendar') return <CalendarView {...props} />;
           if (view.type === 'timeline') return <TimelineView {...props} />;
@@ -624,7 +654,7 @@ export function DatabaseView({
           }
           return <GalleryView {...props} />;
         })()}
-      {result.rows.length === 0 && (ruleCount > 0 || search) && (
+      {!isForm && result.rows.length === 0 && (ruleCount > 0 || search) && (
         <p className="py-3 text-sm text-faint" data-testid="no-results">
           No results
         </p>
