@@ -24,3 +24,4 @@ export * from './buttons';
 export * from './bundle';
 export * from './check';
 export * from './forms';
+export * from './automations';

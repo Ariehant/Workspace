@@ -1,6 +1,7 @@
 import type pg from 'pg';
 
-export type NotificationKindName = 'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form';
+export type NotificationKindName =
+  'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form' | 'automation';
 
 export interface NewNotification {
   workspaceId: string;
@@ -334,8 +335,14 @@ export class Notifications {
     return rows[0]?.seq ?? 0;
   }
 
-  async setFollowerSeq(workspaceId: string, name: string, seq: number): Promise<void> {
-    await this.pool.query(
+  /** Move a follower on (in a transaction's `db`, with what it found, if given). */
+  async setFollowerSeq(
+    workspaceId: string,
+    name: string,
+    seq: number,
+    db: Pick<pg.Pool, 'query'> | pg.PoolClient = this.pool,
+  ): Promise<void> {
+    await db.query(
       `INSERT INTO log_followers (workspace_id, name, seq) VALUES ($1, $2, $3)
        ON CONFLICT (workspace_id, name) DO UPDATE SET seq = greatest(log_followers.seq, excluded.seq)`,
       [workspaceId, name, seq],

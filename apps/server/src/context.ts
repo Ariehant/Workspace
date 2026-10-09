@@ -1,5 +1,6 @@
 import type { PgStore } from '@workspace/storage-remote';
 import type { AccessService } from './access/service';
+import type { Automations } from './automations/runner';
 import type { DocEditor } from './docs-edit';
 import type { OidcClients } from './auth/oidc';
 import type { Config } from './config';
@@ -42,6 +43,8 @@ export interface ServerContext {
   history: HistoryKeeper;
   /** The job queue's runner: handlers per kind (jobs are added with `store.jobs`). */
   jobs: JobRunner;
+  /** Database automations: follows the log, runs them (set once the context exists). */
+  automations: Automations;
   /** Who may read and write which docs (scopes, roles, placements). */
   access: AccessService;
   realtime: Realtime;

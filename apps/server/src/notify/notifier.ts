@@ -234,6 +234,33 @@ export class Notifier {
     });
   }
 
+  /** An automation's "send notification", or a problem with one (to its maker). */
+  async automationNotice(
+    workspaceId: string,
+    notice: {
+      userId: string;
+      databaseId: string;
+      pageId: string | null;
+      title: string;
+      text: string;
+      key?: string;
+    },
+  ): Promise<void> {
+    const access = await this.access.workspace(workspaceId);
+    await this.notify(access, {
+      workspaceId,
+      userId: notice.userId,
+      kind: 'automation',
+      pageId: notice.pageId ?? notice.databaseId,
+      title: notice.title,
+      actorId: null,
+      text: notice.text.slice(0, 500),
+      // Shown while they can still see the database.
+      docId: notice.databaseId,
+      key: notice.key ?? null,
+    });
+  }
+
   // --- Following the log --------------------------------------------------------------
 
   private async follow(workspaceId: string): Promise<void> {

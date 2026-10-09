@@ -22,9 +22,11 @@ import { Site, siteRoutes } from './publish/site';
 import { notificationRoutes } from './notify/routes';
 import { Indexer } from './search/indexer';
 import { JobRunner, type JobRunnerOptions } from './jobs/runner';
+import { Automations, type AutomationOptions } from './automations/runner';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
 import { formRoutes } from './forms/routes';
+import { automationRoutes } from './automations/routes';
 import { settingsRoutes } from './settings-routes';
 import { webApp } from './web';
 import { workspaceRoutes } from './workspaces';
@@ -43,6 +45,8 @@ declare module 'fastify' {
     jobs: JobRunner;
     /** Edits the server makes to docs for someone (forms, automations, the API). */
     docs: DocEditor;
+    /** Database automations (main.ts starts their catch-up after listening). */
+    automations: Automations;
   }
 }
 
@@ -59,6 +63,8 @@ export interface ServerDeps {
   notify?: { delayMs?: number; reminderPollMs?: number; now?: () => number };
   /** Page history: how long a doc must be quiet before a snapshot, and how often to look. */
   history?: HistoryOptions;
+  /** Automations: how long after changes to look at them (tests shorten it). */
+  automations?: AutomationOptions;
   /** Sends invite emails (default: SMTP from the config, or none). */
   mailer?: Mailer | null;
   /** The job queue: how often to look for due jobs, and retry waits (tests shorten them). */
@@ -77,6 +83,7 @@ export function buildServer({
   history: historyOptions,
   mailer,
   jobs: jobOptions,
+  automations: automationOptions,
 }: ServerDeps): FastifyInstance {
   const app = Fastify({
     logger:
@@ -141,14 +148,28 @@ export function buildServer({
     docs: new DocEditor(store, access, realtime),
     members: new MembersDoc({ store, append: realtime.appendFromServer }),
     mailer: mailer === undefined ? smtpMailer(config) : mailer,
+    // Made just below: it needs the context.
+    automations: null as unknown as Automations,
   };
+  ctx.automations = new Automations(ctx, {
+    ...automationOptions,
+    onError: (error, workspaceId) =>
+      app.log.error({ err: error, workspaceId }, 'automations failed'),
+  });
   app.decorate('indexer', indexer);
   app.decorate('notifier', notifier);
   app.decorate('history', history);
   app.decorate('jobs', jobs);
   app.decorate('docs', ctx.docs);
+  app.decorate('automations', ctx.automations);
   app.addHook('onClose', () =>
-    Promise.all([indexer.close(), notifier.close(), history.close(), jobs.close()]),
+    Promise.all([
+      indexer.close(),
+      notifier.close(),
+      history.close(),
+      ctx.automations.close(),
+      jobs.close(),
+    ]),
   );
   const site = new Site(ctx);
 
@@ -221,6 +242,7 @@ export function buildServer({
     pageRoutes(scope, ctx, site, history);
     siteRoutes(scope, ctx, site);
     formRoutes(scope, ctx);
+    automationRoutes(scope, ctx);
   });
   webApp(app, config.webDir);
   endpoint = syncEndpoint(app, ctx, sync);

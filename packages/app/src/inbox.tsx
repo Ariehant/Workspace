@@ -43,6 +43,7 @@ const KIND_LABELS: Record<NotificationKind, string> = {
   reminder: 'Reminders',
   access: 'Pages shared with you',
   form: 'Responses to your forms',
+  automation: 'Automations',
 };
 
 /** The server's notification endpoints (through the host's team API). */
@@ -173,6 +174,12 @@ function Headline({ n, actor, page }: { n: NotificationData; actor: string; page
       return (
         <>
           {n.actorId ? who : 'Someone'} responded to {where}
+        </>
+      );
+    case 'automation':
+      return (
+        <>
+          Automation <span className="font-medium">{n.title}</span>
         </>
       );
   }

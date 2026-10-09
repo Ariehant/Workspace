@@ -365,9 +365,10 @@ describe('SyncHub', () => {
     await until(() => ofType(a.received, 'caught-up').length > 0);
     expect(await hub.appendFromServer(WS, [{ docId: 'members', data: edit('two') }])).toEqual([2]);
     await until(() => ofType(a.received, 'updates').flatMap((m) => m.items).length >= 2);
+    // Stored as the server's (compacted rows are the ones with no device).
     expect((await store.since(WS, 0, 10)).map((r) => [r.seq, r.deviceId])).toEqual([
-      [1, null],
-      [2, null],
+      [1, 'server'],
+      [2, 'server'],
     ]);
   });
 

@@ -29,6 +29,11 @@ export interface Config {
   oidcAllowInsecure: boolean;
   /** Where invite emails go out; without it, whoever invites copies the link. */
   smtp: { url: string; from: string } | null;
+  /**
+   * Webhooks (automations, later integrations): by default only to public https
+   * addresses. A self-hosted server may allow its own network, and http (development).
+   */
+  webhooks: { allowPrivate: boolean; allowHttp: boolean };
 }
 
 export interface OidcProvider {
@@ -131,6 +136,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     oidc,
     oidcAllowInsecure: env.OIDC_ALLOW_INSECURE === 'true',
     smtp: smtpUrl && smtpFrom ? { url: smtpUrl, from: smtpFrom } : null,
+    webhooks: {
+      allowPrivate: env.WEBHOOK_ALLOW_PRIVATE === 'true',
+      allowHttp: env.WEBHOOK_ALLOW_HTTP === 'true',
+    },
   };
   if (problems.length) throw new ConfigError(`Invalid configuration:\n- ${problems.join('\n- ')}`);
   return config;

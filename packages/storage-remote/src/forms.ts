@@ -81,3 +81,20 @@ export class FormLinks {
     );
   }
 }
+
+/** Webhook signing secrets of automations (Phase 6 M3), one each, made when first needed. */
+export class AutomationSecrets {
+  constructor(private readonly pool: pg.Pool) {}
+
+  async get(workspaceId: string, databaseId: string, automationId: string): Promise<string> {
+    const { rows } = await this.pool.query<{ secret: string }>(
+      `INSERT INTO automation_secrets (workspace_id, database_id, automation_id, secret)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (workspace_id, database_id, automation_id)
+       DO UPDATE SET secret = automation_secrets.secret
+       RETURNING secret`,
+      [workspaceId, databaseId, automationId, `whsec_${randomBytes(24).toString('base64url')}`],
+    );
+    return rows[0]!.secret;
+  }
+}

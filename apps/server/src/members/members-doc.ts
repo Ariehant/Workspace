@@ -4,7 +4,7 @@
  * difference and appends that like any other update, so devices get it live or when
  * they catch up.
  */
-import { MEMBERS_DOC_ID, writeMembers } from '@workspace/core';
+import { MEMBERS_DOC_ID, getMembersMap, writeMembers } from '@workspace/core';
 import type { PgStore } from '@workspace/storage-remote';
 import * as Y from 'yjs';
 
@@ -34,6 +34,24 @@ export class MembersDoc {
   /** Refresh every workspace a user is in (they renamed themselves or changed picture). */
   async refreshFor(userId: string): Promise<void> {
     for (const id of await this.deps.store.teams.workspaceIdsOf(userId)) await this.refresh(id);
+  }
+
+  /**
+   * Name a bot (e.g. the automations bot) in the members doc, so what it writes shows
+   * its name. It's listed as a former member: never offered as a person to pick.
+   */
+  async ensureBot(workspaceId: string, id: string, name: string): Promise<void> {
+    const { store } = this.deps;
+    const doc = new Y.Doc();
+    const state = await store.docState(workspaceId, MEMBERS_DOC_ID);
+    if (state) Y.applyUpdate(doc, state);
+    const map = getMembersMap(doc);
+    const existing = map.get(id);
+    if (existing && existing.name === name && existing.removed) return;
+    const before = Y.encodeStateVector(doc);
+    map.set(id, { name, avatar: null, role: 'member', removed: true });
+    const update = Y.encodeStateAsUpdate(doc, before);
+    await this.deps.append(workspaceId, [{ docId: MEMBERS_DOC_ID, data: update }]);
   }
 
   private async write(workspaceId: string): Promise<void> {

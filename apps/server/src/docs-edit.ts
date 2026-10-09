@@ -17,6 +17,8 @@ import type { Realtime } from './context';
 export type EditAuthor =
   /** A person or a bot: checked as their own client's push would be. */
   | { userId: string }
+  /** Checked as person `as` (an automation's maker), recorded as `userId` (its bot). */
+  | { as: string; userId: string }
   /** Allowed by the caller already (e.g. a form's audience); null: anonymous. */
   | { trusted: true; userId: string | null };
 
@@ -86,10 +88,11 @@ export class DocEditor {
       const update = Y.mergeUpdates(updates);
       if (!('trusted' in author)) {
         const access = await this.access.workspace(workspaceId);
-        const roles = access.roles(author.userId);
+        const checked = 'as' in author ? author.as : author.userId;
+        const roles = access.roles(checked);
         const allowed =
           (await access.canWrite(roles, docId, scope)) &&
-          (await access.checkUpdate(roles, author.userId, docId, update, []));
+          (await access.checkUpdate(roles, checked, docId, update, []));
         if (!allowed) throw new EditRefused(docId);
       } else {
         // A new doc goes where the caller says (they checked it may): never unplaced,

@@ -21,6 +21,7 @@ const VERBS: Record<NotificationKind, string> = {
   reminder: 'Reminder',
   access: 'shared with you',
   form: 'responded to',
+  automation: 'Automation',
 };
 
 /** No window of the app has focus (tests can say so: windows under Xvfb never lose it). */
@@ -80,7 +81,9 @@ export function registerNotifications(
           ? `${actor} ${VERBS.access}`
           : n.kind === 'form'
             ? `${actor ?? 'Someone'} ${VERBS.form} ${page}`
-            : `${actor} ${VERBS[n.kind]} in ${page}`;
+            : n.kind === 'automation'
+              ? `${VERBS.automation}: ${n.title}`
+              : `${actor} ${VERBS[n.kind]} in ${page}`;
     const body = n.text || page;
     if (process.env.WORKSPACE_E2E) {
       // Lets end-to-end tests observe notifications without a notification daemon.

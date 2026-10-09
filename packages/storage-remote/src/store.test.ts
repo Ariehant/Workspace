@@ -26,9 +26,9 @@ const read = (state: Uint8Array | null) => {
 
 describe('PgStore', () => {
   it('migrates idempotently', async () => {
-    expect(await store.migrate()).toBe(11);
+    expect(await store.migrate()).toBe(12);
     const { rows } = await store.pool.query('SELECT count(*)::int AS n FROM schema_migrations');
-    expect(rows[0].n).toBe(11);
+    expect(rows[0].n).toBe(12);
   });
 
   it('keeps an ordered update log per workspace', async () => {

@@ -23,6 +23,9 @@ import {
 } from './messages';
 import { PresenceRoom, decodeAwareness, presenceColor, type PresenceUser } from './presence';
 
+/** The device the server's own updates are stored as coming from. */
+export const SERVER_DEVICE = 'server';
+
 export interface LoggedRow {
   seq: number;
   docId: string;
@@ -202,14 +205,16 @@ export class SyncHub {
   /**
    * Append updates the server made itself (e.g. to the members doc) and send them to the
    * workspace's connections, in order with everything else. `userId`: who they're made
-   * for (a form's submitter, an integration's bot), stored as their author.
+   * for (a form's submitter, an integration's bot), stored as their author. They're
+   * stored as from the device `SERVER_DEVICE`, so they aren't mistaken for compacted
+   * rows (which have no device).
    */
   async appendFromServer(
     workspaceId: string,
     updates: { docId: string; data: Uint8Array }[],
     userId: string | null = null,
   ): Promise<number[]> {
-    const rows = updates.map((u) => ({ ...u, deviceId: null, userId }));
+    const rows = updates.map((u) => ({ ...u, deviceId: SERVER_DEVICE, userId }));
     const workspace = this.workspaces.get(workspaceId);
     if (workspace) return this.append(workspace, rows);
     // Nobody is connected: store them; whoever connects next catches up from the log.

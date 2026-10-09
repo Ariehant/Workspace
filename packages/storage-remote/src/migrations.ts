@@ -479,6 +479,23 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
     CHECK (kind IN ('mention', 'comment', 'reply', 'reminder', 'access', 'form'));
   `,
+  // 12: Phase 6 M3. Automations: each one's webhook signing secret (kept here, never in
+  // the doc everyone can read), and notifications from automations.
+  `
+  CREATE TABLE automation_secrets (
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    database_id text NOT NULL,
+    automation_id text NOT NULL,
+    secret text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, database_id, automation_id)
+  );
+
+  ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
+  ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
+    CHECK (kind IN ('mention', 'comment', 'reply', 'reminder', 'access', 'form', 'automation'));
+  CREATE INDEX jobs_workspace_kind ON jobs (workspace_id, kind, created_at DESC);
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

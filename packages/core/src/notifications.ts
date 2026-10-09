@@ -7,8 +7,12 @@ import type * as Y from 'yjs';
 import { readBlocks, type Block } from './blocks';
 import { mentionsIn, type ThreadData } from './comments';
 
-/** `form`: a response to a form whose maker asked to be told (Phase 6). */
-export type NotificationKind = 'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form';
+/**
+ * `form`: a response to a form whose maker asked to be told; `automation`: an
+ * automation's "send notification", or a problem with one (Phase 6).
+ */
+export type NotificationKind =
+  'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form' | 'automation';
 export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'mention',
   'comment',
@@ -16,6 +20,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'reminder',
   'access',
   'form',
+  'automation',
 ];
 
 /** A notification as clients get it (over the socket, and from the list endpoint). */

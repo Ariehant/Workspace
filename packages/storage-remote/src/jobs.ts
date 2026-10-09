@@ -171,6 +171,22 @@ export class Jobs {
     return rows.map(toJob);
   }
 
+  /** A workspace's latest jobs of a kind whose payload has `key` = `value` (newest first). */
+  async recentWhere(
+    workspaceId: string,
+    kind: string,
+    key: string,
+    value: string,
+    limit = 50,
+  ): Promise<Job[]> {
+    const { rows } = await this.pool.query<JobRow>(
+      `SELECT * FROM jobs WHERE workspace_id = $1 AND kind = $2 AND payload ->> $3 = $4
+       ORDER BY created_at DESC LIMIT $5`,
+      [workspaceId, kind, key, value, limit],
+    );
+    return rows.map(toJob);
+  }
+
   /**
    * Housekeeping: jobs whose last attempt's worker died are marked failed, and jobs
    * finished before `before` are deleted. Returns how many were deleted.
