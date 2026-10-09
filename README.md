@@ -24,7 +24,8 @@ comments and replies on pages you follow, reminders and pages shared with you, l
 desktop notifications. Pages can be published to the web (M7), readable without signing in,
 and the server keeps backlinks and page history, so the web app has them too. The exit check
 passes: three accounts on two desktops and the web app, crafted clients that try to get around
-the checks, and the Docker stack with a second account. Next is Phase 6 (automations and API).
+the checks, and the Docker stack with a second account. Phase 6 (automations, forms and a
+Notion-compatible API, see [docs/PHASE6.md](docs/PHASE6.md)) is planned and starting.
 
 ## What works today
 

@@ -1,0 +1,502 @@
+# Phase 6: Automations and API
+
+**Status:** planned. Nothing started yet.
+
+## Context
+
+Phases 0–5 are complete on the branch `ccr-9cd9bc27-ksa6p1` (see [PHASE5.md](PHASE5.md) for collaboration). One Phase 3 check is still open: running the importer on a real Notion export.
+
+Phase 6 goal from the roadmap ([PLAN.md](PLAN.md) §4): **"API conformance tests pass."** The roadmap's scope for this phase, from the feature list (§3):
+
+- **Database automations:** triggers on property changes and on schedules, with actions that set a property, add a page, send a notification or call a webhook.
+- **The form view** for databases.
+- **A public REST API** compatible in shape with Notion's: pages, blocks, databases and data sources, search and users. It comes with integration tokens and webhooks.
+- **The "can edit content" database role,** moved here from Phase 5: rows are writable, the database's properties and views are not.
+- **Email notification digests,** moved here from Phase 5 to come with the job queue.
+
+The roadmap budgets 3–4 weeks. The estimate below comes to about 6 weeks, with eight steps: seven milestones and the exit check. If time runs short, cut these, in this order:
+
+1. automations on a local-only desktop (M4)
+2. email digests (in M7)
+3. the newer `2025-09-03` API version (data sources as their own objects)
+
+**Already in place (reused, not rebuilt):**
+
+- **Date reminders** (in the roadmap's list for this phase) were done in Phase 5 M6. The server fires them, in the person's time zone, to the inbox and the desktop.
+- **Server-authored doc edits:**
+  - `SyncHub.appendFromServer` (`packages/sync/src/hub.ts`) appends a Yjs update to the workspace log and broadcasts it to everyone connected.
+  - Moving pages between scopes (`apps/server/src/scopes/routes.ts`) and the members doc already edit docs this way.
+  - Forms, automations and the API write rows and pages through the same path.
+- **The database engine** (`packages/database`):
+  - `addRow`, `setCell`, `trashRow` and the other row helpers.
+  - The query (`query.ts`), filter (`filter.ts`) and sort code, plus formulas, relations and rollups.
+  - All of it is pure and runs unchanged on the server.
+- **Block content, both ways:**
+  - Reading: `readContent` (`packages/exporters/src/content.ts`, with marks and inline nodes) and `readBlocks` (`packages/core/src/blocks.ts`).
+  - Writing: `appendContent` and `parseMarkdown` (`packages/editor/src/content.ts`), already used by the importers on a headless schema.
+- **Log followers:** the search indexer, the notifier and the history keeper each follow a workspace's log with their own cursor (`log_followers`). Automations and webhooks are two more followers.
+- **Access:**
+  - `WorkspaceAccess.canWrite` and `checkUpdate` (`apps/server/src/access/service.ts`).
+  - `checkUpdate` already validates a comment-role write by applying it to a copy and diffing it (`checkCommentsChange` in `packages/core/src/comments.ts`). The content role is checked the same way.
+- **Sharing to a person** (Phase 5 M3). An integration is shared with in the same way, as a bot user.
+- **The inbox and notifications** (Phase 5 M6), for the "send a notification" action and for automation failures.
+- **Buttons** (Phase 3 M1, `packages/core/src/synced.ts` and `packages/app/src/buttons/run-button.ts`). Their steps are the model for automation actions; buttons gain the webhook and notification steps.
+
+**Not in Phase 6:**
+
+| Item                                                               | Goes to                                                                                          |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Public (OAuth) integrations listed for other workspaces            | Not planned for v1: internal integrations with tokens cover self-hosting                         |
+| Automations that call AI, or "send to Slack/Gmail" actions         | Not planned (no AI; the webhook action covers outside services)                                  |
+| Automations triggering other automations                           | Not planned: as in Notion, changes an automation makes don't start automations                   |
+| Form logic (skip to a question based on an answer), file questions | File questions in M2 if time allows; conditional logic not planned for v1                        |
+| A Redis/BullMQ worker                                              | Not needed: the job queue is a Postgres table (see below). Redis can come later if load needs it |
+
+## Architecture
+
+### The job queue: a Postgres table, not Redis
+
+The roadmap planned Redis and BullMQ for the jobs that run outside a request: webhook deliveries, scheduled automations and email digests. A table in the Postgres the server already has does the same job with one less service to run and back up:
+
+- **Table:** `jobs(id, workspace_id, kind, payload jsonb, run_at, attempts, max_attempts, last_error, locked_until, done_at)`.
+- **Atomic enqueue:** a job is written in the same transaction as what caused it. For example, the follower's cursor moves forward together with the jobs it found, so a crash never loses or doubles one.
+- **Workers:** the server takes jobs with `SELECT … FOR UPDATE SKIP LOCKED`. That is safe even with several server processes, which keeps the door open for running more than one.
+- **Retries:** exponential backoff (1 min, 5 min, 30 min, 2 h, 8 h), then the job is marked failed and its owner is told in the inbox.
+- **Clean-up:** finished jobs are kept for 7 days for the run logs, then deleted.
+
+The Phase 5 reminder poll (`setInterval` in the notifier) stays as it is. Scheduled automations use the queue.
+
+### Server-authored edits, with an author
+
+`appendFromServer` writes `userId: null` today. It gains an `author` argument, which is either a person or a bot:
+
+- **Forms:** the person who submits, or nobody for an anonymous public form.
+- **Automations:** the automation's bot user.
+- **The API:** the integration's bot user.
+
+The update log then says who made every change, and history ("Edited by …") shows it.
+
+A helper, `ctx.docs.edit(workspaceId, docId, author, (doc) => …)`, does each edit in four steps:
+
+1. Load the doc's merged state.
+2. Run the change.
+3. Encode only the difference.
+4. Check the difference with the same `checkUpdate` a client push goes through, then append it.
+
+The server's own writes pass the access checks too, so a bug in the API can't write where its caller couldn't.
+
+The `createdBy` and `updatedBy` fields of a row come from the client today. From now on the server checks them on every push: a row's `createdBy` (when it is created) and `updatedBy` must be the pushing user (or bot).
+
+### The "can edit content" role
+
+The roles become full > edit > **content** > comment > view.
+
+**What content allows, in a database:**
+
+- adding, editing, trashing and reordering rows (the `rows` map), and editing their pages (each row's own doc)
+- comments, as with the comment role
+
+**What content does not allow:**
+
+- changing the `schema`, `views` or `meta` maps
+- editing the database page itself
+
+On a page that isn't a database or a row, content means comment.
+
+**How the server enforces it:** `checkUpdate` gains `checkRowsChange(before, update)`. Like the comments check, it applies the update to a copy and refuses one that touches anything outside `rows`.
+
+**Why not split the rows into their own doc:** Phase 5 had planned to move rows into a separate `rows:<dbId>` doc, with a migration on every client. Checking the change gets the same result without the migration, and it has a proven model in the comments check. The split stays possible later if large databases need it for performance (Phase 7).
+
+**In the app:** the role appears in the share menu only for databases. With it:
+
+- The views toolbar keeps filters and sorts working as a local, unsaved state, as Notion does for people who can't edit views.
+- Property headers can't be renamed or deleted.
+- New property and New view are hidden.
+
+### Forms
+
+A form is a new view type, `form`, in the database doc. Its config holds:
+
+- **Questions:** each is a property id, with a label, a description, whether it is required, and its order.
+- **The form's own details:** title, description and cover.
+- **Who can submit:**
+  - people with access to the database (at least comment)
+  - anyone in the workspace
+  - anyone with the link (public)
+- **Afterwards:** a "submitted" message, and an optional notification to the creator for each response.
+
+**Submitting:** the server creates the row, through `ctx.docs.edit` with the submitter as author.
+
+- Someone who can only view the database can still submit to a form that allows it, which is the point of forms. The row is written by the server, not by the submitter's client.
+- `POST /api/workspaces/:id/forms/:viewId/submit` checks each answer against its property's type and options. Unknown questions, a missing required answer, wrong types and over-long text are refused (400 with the field).
+
+**Public forms:**
+
+- **Where they live:** `/f/<token>`, a server-rendered page in the style of published pages (Phase 5 M7), with a strict CSP and `noindex`.
+- **The token:** random, and stored with the view. A new link can be made, which turns the old one off.
+- **No JavaScript:** a plain HTML `<form>` that posts back to the same URL.
+- **Spam limits:** a rate limit per IP and per form, a size limit, and a hidden honeypot field.
+- **Who can create one:** only someone with full access to the database.
+- **Submitter:** "Anonymous" (`createdBy: null`), or the signed-in person if they have a session.
+
+**In the app:**
+
+- **The form builder** is the view itself. Questions can be dragged, added from the properties, or added as a new property.
+- **Preview and Fill** submits from the app.
+- **Share form** offers the audience settings and the link.
+
+**On a local-only desktop:** the form can be filled in the app, as a local edit. Links and audiences need a server, so they are hidden there (`Platform.features`).
+
+**Answer types:** text, number, select, multi-select, status, date, checkbox, URL, email, phone and person. Files are added if time allows, through the existing upload endpoint with a form-scoped upload token. Computed properties (formula, rollup, created/edited, unique ID, button) can't be questions.
+
+### Automations
+
+An automation belongs to a database. It is stored in the database doc's `automations` map, so it syncs, shows in history, and is copied with the database. It holds:
+
+- **Triggers** (any one of them starts it):
+  - a page is added
+  - a property is edited, optionally "to" a value (e.g. Status is Done)
+  - every day, week or month at a time, in a time zone
+- **Conditions:** an optional filter on the page, reusing the view filter model and `filter.ts`.
+- **Actions,** run in order:
+  - **Edit property:** on the page that triggered it, or on all pages of another database matching a filter, to a value. Values can be fixed, "now", "the person who triggered it", or copied from the page.
+  - **Add page to** a database, with values.
+  - **Send notification** to people, or to the people in a person property.
+  - **Send webhook:** an HTTPS POST to a URL, with the page's properties as JSON and custom headers.
+  - **Send email:** only when SMTP is configured.
+- **Settings:** `enabled`, `createdBy`, and the bot user it acts as.
+
+**Where it runs.** `packages/automations` is pure and does no I/O:
+
+- `matchTriggers(before, after, automation)` diffs the row snapshots before and after a change, the way `commentEvents` does in Phase 5.
+- `planActions` turns the actions into concrete edits and jobs.
+
+It has two hosts:
+
+- **The server** (M3), an `automations` log follower. For each change it diffs the database's rows, finds the automations it triggers, and enqueues one job per run. The job applies the edits through `ctx.docs.edit`, as the automation's bot user, and enqueues webhook and email jobs.
+  - Scheduled triggers are queue jobs that enqueue their next run when they finish.
+- **The desktop main process** (M4), for a workspace that isn't synced. It does the same from local doc changes:
+  - Webhooks are sent from the main process.
+  - Schedules run while the app is open, with a missed run caught up at start.
+  - In a synced workspace, the desktop leaves automations to the server.
+
+**Rules:**
+
+- **No loops:** a change made by an automation (its author is an automation bot) never triggers automations. A run's edits are attributed to that bot.
+- **Permissions:** an automation acts with the access of the person who made it. If they lose edit access to a database the automation touches, it pauses and they are told.
+- **Batching:** several changes to one page within 3 seconds count as one, so typing a title doesn't fire once per keystroke. This matches Notion's own delay.
+- **Run log:** each automation keeps its last 50 runs (when, trigger, outcome and error), shown in its settings.
+- **Failures:** a webhook that keeps failing marks the run failed and tells the automation's creator in the inbox. After 10 failed runs in a row, the automation turns itself off.
+
+**Buttons** gain the same "Send webhook" and "Send notification" steps. A button runs in the app, so in a synced workspace these steps call the server (`POST /api/workspaces/:id/buttons/webhook`, which checks that the person can edit the page). On a local-only desktop, the main process sends them.
+
+### Webhooks leave the server safely
+
+Webhook actions, button webhooks and integration webhooks (M7) all go out through one `deliver` job:
+
+- **HTTPS only,** except to `localhost` when `WEBHOOK_ALLOW_HTTP` is set (for development).
+- **No private or local addresses:** after DNS resolution, loopback, private, link-local, CGNAT and metadata addresses are refused. The check runs on the resolved address, at connect time, so DNS rebinding can't get round it. `WEBHOOK_ALLOW_PRIVATE` turns this off for a self-hosted server that needs to reach its own network.
+- **Limits:** no redirects followed, a 10 s timeout, a 1 MB request body, and response bodies are read only up to 4 KB, for the run log.
+- **Signature:** every delivery is signed with HMAC-SHA256 of the body, using a secret per automation or per subscription, sent as `X-Notion-Signature: sha256=…`.
+
+### The public API
+
+**Notion-compatible shape.** The API is Notion's, at `/v1/…` on the server's own domain. This lets existing integrations and the official SDKs (`@notionhq/client` with `baseUrl`) work against it. The `Notion-Version` header picks the shape:
+
+- **`2022-06-28`:** databases are queried directly (`POST /v1/databases/:id/query`). This is the version most existing code uses.
+- **`2025-09-03`:** a database has data sources (`GET /v1/data_sources/:id`, `POST /v1/data_sources/:id/query`). Each of our databases has exactly one data source, with its own id that maps to the database. Linked views are not data sources.
+
+**Endpoints:**
+
+- **Users:** `GET /v1/users`, `GET /v1/users/:id`, `GET /v1/users/me` (the bot).
+- **Pages:**
+  - `POST /v1/pages` (in a page or a database, with properties, children, icon and cover)
+  - `GET /v1/pages/:id`, `PATCH /v1/pages/:id` (properties, icon, cover, `in_trash`/`archived`)
+  - `GET /v1/pages/:id/properties/:propertyId`, paginated for titles, rich text, relations and rollups
+- **Databases:**
+  - `POST /v1/databases`, `GET /v1/databases/:id`, `PATCH /v1/databases/:id` (title, properties)
+  - `POST /v1/databases/:id/query`, with Notion's filter and sort JSON (compound `and`/`or`, nested two deep, as Notion allows)
+- **Data sources** (`2025-09-03`): retrieve, query, create and update.
+- **Blocks:**
+  - `GET /v1/blocks/:id`, `PATCH /v1/blocks/:id`, `DELETE /v1/blocks/:id`
+  - `GET /v1/blocks/:id/children`, `PATCH /v1/blocks/:id/children` (append, with `after`)
+- **Search:** `POST /v1/search`, with a query, a filter by object type, a sort by last edited time, and pagination.
+- **Comments:** `GET /v1/comments?block_id=`, `POST /v1/comments` (on a page, or in a discussion).
+
+**Notion's conventions:**
+
+- **Pagination:** `start_cursor`, `page_size` (≤ 100), `has_more` and `next_cursor`.
+- **Errors:** `{object: "error", status, code, message}`, with Notion's codes: `invalid_json`, `invalid_request_url`, `invalid_request`, `validation_error`, `missing_version`, `unauthorized`, `restricted_resource`, `object_not_found`, `conflict_error`, `rate_limited`, `internal_server_error`.
+- **Limits:**
+  - 2,000 characters per rich-text item
+  - 100 blocks per append, two levels deep
+  - 1,000 block elements and 500 KB per request
+  - 3 requests per second per integration on average, with bursts; `429` with `Retry-After` beyond that
+- **Ids:** UUIDs; dashed and undashed forms are both accepted.
+
+**Conversion.** `packages/api-model` is pure and maps between our docs and Notion's JSON:
+
+- **Rich text:** our marks (bold, italic, strikethrough, underline, code, color, link) and inline nodes (page mention, person mention, date mention, inline equation) map to Notion's `rich_text` items with `annotations`.
+- **Blocks** map type by type: paragraph, headings 1–3 (with `is_toggleable`), bulleted, numbered and to-do items, toggle, quote, callout, divider, code, equation, image, video, audio, file, pdf, bookmark, embed, table and table rows, column lists and columns, child page, child database, synced block, link to page, table of contents and breadcrumb. Anything else reads as `unsupported`.
+  - **Block ids:** our blocks need stable ids, which they don't all have today. M6 adds a `blockId` attribute to every top-level and nested block node. It is set when a block is created, and once for existing blocks when a doc is first read by the API, as a server edit.
+- **Properties:** every property type, both ways. Computed values (formulas, rollups, created and edited times and people, unique IDs) come out in Notion's shapes and are refused on write, as Notion does.
+- **Files:** our attachments come out as `file` objects with a URL signed for one hour (`/api/files/…?sig=`). External URLs come out as `external`.
+
+**Writes.** API writes go through `ctx.docs.edit` as the integration's bot user. The server now depends on `@workspace/editor` for its headless schema (`appendContent`), as the importers do: ProseMirror only, no DOM.
+
+### Integrations and tokens
+
+An internal integration belongs to a workspace and is made by an owner or admin, in Settings → Integrations.
+
+**Its bot user:**
+
+- Each integration is a bot user (`users.kind = 'bot'`), and a member of the workspace with the `bot` role.
+- It is in the members doc, so mentions and "Edited by" show its name and icon.
+- It is not counted as a person, can't sign in, and gets no notifications.
+
+**Its token:**
+
+- The token is shown once and stored hashed (`integration_tokens`). It can be rotated, which turns the old one off at once.
+- It starts with `ntn_` so existing tooling recognises it.
+
+**Capabilities**, checked on every request (`restricted_resource` otherwise):
+
+- read content, update content, insert content
+- read comments, insert comments
+- user information: none, without emails, or with emails
+
+**Access, as in Notion:**
+
+- An integration sees only pages shared with it: in a page's menu, Connections → Add, which is a share to its bot user, at edit or view access.
+- Sharing is inherited down the tree, as for people. The same `AccessService` decides, so an integration can never see more than what was shared with it.
+- Search returns only those pages.
+
+**API keys are not sessions.** They are refused on every `/api/…` route, and session cookies are refused on `/v1/…`. CSRF doesn't apply, since there is no cookie.
+
+### Integration webhooks
+
+An integration can have one webhook subscription: a URL plus the events it wants. It works like Notion's:
+
+- **Verification:** when it is set up, the server POSTs a `verification_token`. An admin pastes that token into the integration's settings to turn deliveries on. The token is also the signing secret (`X-Notion-Signature`).
+- **Events:**
+  - `page.created`, `page.properties_updated`, `page.content_updated`, `page.moved`
+  - `page.deleted`, `page.undeleted`, `page.locked`, `page.unlocked`
+  - `database.created`, `database.schema_updated`, `database.deleted`
+  - `comment.created`, `comment.updated`, `comment.deleted`
+- **Payload:** ids only (entity, workspace, author and timestamp). The receiver fetches what it needs through the API, as with Notion.
+- **Source:** a `webhooks` log follower. It sends events only for pages the integration can read, at the time they are sent.
+- **Batching:** content updates to one page within a minute are merged into one event.
+- **Delivery:** through the `deliver` job, with retries for 24 hours. A subscription whose deliveries fail for 3 days is paused, and the integration's owner is told.
+
+### Email digests
+
+When SMTP is configured, people get an email for inbox items they haven't seen (Phase 5 M6), as a queue job:
+
+- **When:** immediately for mentions (after 10 minutes unseen), or daily, or never. This is a per-person setting.
+- **One email per person:** it covers all the unread items at that point, so there is never one email per comment.
+- **Contents:** only the titles of pages the person can still read, rechecked when the email is sent.
+- **Unsubscribe:** a one-click link (`List-Unsubscribe`, RFC 8058).
+
+## Milestones
+
+### M1: the content role, attributed server edits, the job queue (≈ 4 days)
+
+**Server:**
+
+- `appendFromServer` takes an author; `ctx.docs.edit` loads, edits, diffs, checks and appends.
+- The `content` role in `roles.ts` and the access model.
+- `checkRowsChange` validates content-role writes.
+- `createdBy` and `updatedBy` are checked on every push.
+
+**Storage:** migration 10:
+
+- the `jobs` table, with the `JobQueue` (enqueue in a transaction, claim, complete, fail with backoff, and clean-up)
+- the `content` role in the scope access checks
+- `users.kind`, for bots in M5
+
+**App:**
+
+- "Can edit content" in the share menu for databases.
+- The database UI for the role: rows editable; schema, views and the page read-only; filters and sorts local and unsaved.
+
+**Tests:**
+
+- The authorization matrix gains the content role: rows allowed; schema, views, meta and the page refused, on the socket and through `ctx.docs.edit`.
+- Forged `createdBy`/`updatedBy` are refused.
+- The queue: two workers never take the same job; a crash mid-job lets it run again after the lock expires; backoff; clean-up.
+
+**E2E:** Ada shares a database with Bob as "can edit content". Bob adds and edits rows, can't rename a property or add a view, and a crafted push that changes the schema is refused.
+
+### M2: forms (≈ 4 days)
+
+- **Model** (`packages/database`):
+  - the `form` view type and its config
+  - `validateSubmission(schema, form, answers)`
+  - `submissionRow` (the values for `addRow`)
+- **App:**
+  - the form builder (questions, required, descriptions, drag to reorder, add a question as a new property)
+  - Fill (in the app)
+  - Share form (audience, the link, a new link)
+  - responses arrive as rows, with "Submitted by" (`createdBy`)
+- **Server:**
+  - the submit endpoint
+  - `/f/<token>`: the public form page (rendered, no JS, strict CSP), its POST, the "submitted" page
+  - the rate limit, honeypot and size limits
+  - an optional notification for each response
+- **Desktop:** filling in a local workspace; the submit endpoint added to the team routes when synced.
+- **Tests:**
+  - validation per property type
+  - the audiences: a viewer can submit when allowed and not otherwise; a non-member only through a public link
+  - an anonymous public submission creates a row with `createdBy: null`
+  - the link turned off after a new one is made
+  - the CSP and `noindex` headers
+- **E2E:** Ada builds a form and shares a public link. Someone signed out fills it in a browser, and the row appears live on Ada's desktop. Bob (view-only) submits from the app.
+
+### M3: automations on the server (≈ 5 days)
+
+- **`packages/automations`:** the automation model in the database doc, `matchTriggers`, conditions, `planActions` and values (fixed, now, triggering person, copied), with unit tests over before/after snapshots.
+- **Server:**
+  - the `automations` log follower, with the 3 s merge per page
+  - jobs: `automation.run`, `automation.schedule`, `deliver`
+  - bot attribution and no loops
+  - permission checks as the creator, and pausing
+  - run logs; failures in the inbox
+- **Webhooks out:** the SSRF guard (checked at connect time), limits and signatures.
+- **App:**
+  - **Automations panel** (a ⚡ button in the database toolbar): a list with on/off switches; a trigger, condition and action editor; the run log.
+  - **Buttons:** the Send webhook and Send notification steps.
+- **Tests:**
+  - trigger matching: added page, property edited to a value, schedules across DST, merged edits
+  - no loops: an automation that edits the property it watches runs once
+  - permission loss pauses the automation
+  - the webhook guard: private, loopback and metadata addresses, DNS rebinding, redirects, size and time limits
+  - retries and backoff
+  - signatures verify
+- **E2E:**
+  - "When Status is set to Done, set Completed to now and notify the owner": Bob sets Done, and Completed fills in on everyone's screen. Ada gets a notification.
+  - A webhook to a local test receiver (with `WEBHOOK_ALLOW_PRIVATE` in the test server) arrives signed.
+
+### M4: automations on a local-only desktop (≈ 2 days, cut first)
+
+- **Host:** the automations host in the desktop main process, for workspaces that aren't synced. It follows local doc changes, runs schedules while the app is open, catches up missed runs at start, and sends webhooks from main.
+- **Hand-over:** turning sync on hands automations to the server; the desktop stops running them.
+- **E2E:** a local workspace runs an automation and a scheduled one with a fast test clock (`AUTOMATION_CLOCK` in E2E, like `REMINDER_POLL_MS`).
+
+### M5: integrations, tokens, and the API core (≈ 6 days)
+
+- **Storage:** migration 11, the `integrations` and `integration_tokens` tables; bot users in the members doc.
+- **Settings → Integrations** (owners and admins): new, name and icon, capabilities, the token shown once, rotate, delete.
+- **Connections in the page menu:** share a page with an integration.
+- **The `/v1` server plugin:**
+  - **Auth:** bearer `ntn_…`, hashed lookup, capabilities.
+  - **Versions:** the `Notion-Version` header (missing → `missing_version`).
+  - **Notion conventions:** the error shapes, pagination, the rate limiter per integration, and request size limits.
+- **`packages/api-model`:** properties both ways, rich text both ways (the property side; blocks are M6), filters and sorts (Notion JSON → our filter model), page and database objects.
+- **Endpoints:** users, pages (create in a database or a page, retrieve, update, trash, property items), databases (create, retrieve, update, query), data sources (`2025-09-03`), and search.
+- **Tests:**
+  - each endpoint, against the shapes in Notion's API reference
+  - every property type, both ways
+  - filters: each operator, compound and nested
+  - access: an integration sees only what was shared with it, through inheritance and after an unshare
+  - capabilities, rate limits, version handling
+  - a token used on `/api` is refused, and a cookie on `/v1`
+
+### M6: blocks, comments and files in the API (≈ 4 days)
+
+- **Block ids:** a `blockId` attribute on block nodes (in `@workspace/editor` and `@workspace/core`), set on creation and once for existing blocks.
+- **`packages/api-model`:** blocks both ways for every type listed above; `unsupported` for the rest; nesting (children, two levels per append).
+- **Endpoints:**
+  - blocks: retrieve, update, delete, list children, append children (with `after`)
+  - comments: list, create on a page or in a discussion
+  - page creation with `children`
+- **Files:** signed file URLs for `file` objects; external files kept as URLs.
+- **Tests:**
+  - **Round trip:** a page made in the app is read through the API, written to a new page, and read back with no loss in any block type.
+  - **Concurrency:** appends while someone edits the same page live both survive (Yjs merges, and the server edit is a normal update).
+  - block ids stay stable through edits.
+
+### M7: integration webhooks and email digests (≈ 3 days)
+
+- **Webhooks:** the subscription settings and verification, the `webhooks` log follower and its events, merged content updates, access filtering at send time, delivery and pausing.
+- **Email digests:** the per-person setting (immediate for mentions, daily, never), the digest job, one email per person, `List-Unsubscribe` and the unsubscribe route.
+- **Tests:**
+  - each event fires once for its change, and never for pages the integration can't read
+  - the signature verifies with Notion's documented method
+  - digests: one email per person, nothing about pages they've lost access to, unsubscribe works (a local SMTP sink, as Phase 5's invite tests use)
+
+### Exit check (≈ 2 days)
+
+- **API conformance:** `apps/server/src/api.conformance.test.ts` drives the server with the official `@notionhq/client` SDK, pointed at it with `baseUrl`, against both versions. Each step's response must match the SDK's types and Notion's documented shapes:
+  1. Create a database with every writable property type, add pages with values and content, and query with nested filters and sorts.
+  2. Paginate the results; append, update and delete blocks; comment.
+  3. Search, list users, and handle the errors (`object_not_found` for unshared pages, `validation_error`, `rate_limited` with `Retry-After`).
+- **A real-world check:** a few published open-source Notion API scripts (e.g. a CSV importer and a Markdown exporter that use the SDK) run against the server unchanged, to the same result as against Notion. Their output is compared.
+- **Scenario E2E:**
+  - An integration made in Settings is shared with a database.
+  - An outside script adds a page through the API, which appears live on a desktop.
+  - The page's automation runs, its webhook reaches a test receiver, and the integration's own webhook reports `page.created` and `page.properties_updated`.
+  - A public form submission starts the same automation.
+  - A content-role member can edit rows but not the schema.
+- **The Docker stack:** the API, a webhook, and a public form through Caddy with TLS.
+
+## Packages
+
+```
+packages/
+  automations/     new: automation model, trigger matching, action planning (no I/O)
+  api-model/       new: Notion-shaped JSON <-> our docs (properties, rich text, blocks, filters)
+  database/        the form view, submission validation, the rows-only check
+  storage-remote/  jobs, integrations and tokens, bot users
+apps/
+  server/          ctx.docs.edit, job queue workers, automations and webhooks followers,
+                   forms (/f), the /v1 API, digests
+```
+
+New dependencies:
+
+- `@notionhq/client`, as a dev dependency only, for the conformance tests
+- no Redis; no new runtime services
+
+## Critical files
+
+- **New:**
+  - `packages/automations/src/{model.ts, triggers.ts, actions.ts}`
+  - `packages/api-model/src/{rich-text.ts, properties.ts, blocks.ts, filters.ts, objects.ts}`
+  - `apps/server/src/{jobs/*, docs-edit.ts, forms/*, automations/*, api/*, webhooks/*, digests/*}`
+  - `packages/app/src/{database/form-view.tsx, database/automations/*, integrations-settings.tsx}`
+- **Modified:**
+  - `packages/sync/src/hub.ts`: `appendFromServer` with an author
+  - `apps/server/src/access/{roles.ts, service.ts}`: the content role and `checkRowsChange`
+  - `packages/database/src/schema.ts`: the `form` view type and the `automations` map
+  - `packages/core/src/synced.ts`: button webhook and notification steps
+  - `packages/editor/src/*`: block ids
+  - `apps/desktop/src/main/sync/ipc.ts`: new team routes (forms, automations, integrations)
+  - `packages/storage-remote/src/migrations.ts`: migrations 10 and 11
+
+## Verification
+
+- **Unit tests (Vitest):**
+  - trigger matching, conditions and action planning
+  - form validation for every property type
+  - Notion JSON conversion both ways: properties, rich text, blocks and filters
+  - the rows-only check
+  - the webhook address guard
+- **Integration tests (Vitest + throwaway Postgres):**
+  - the job queue under concurrency and crashes
+  - the authorization matrix with the content role and bots
+  - each API endpoint
+  - followers (automations, webhooks) through catch-up
+  - digests
+- **Conformance:** the official SDK against the server, both versions.
+- **E2E (Playwright):** forms, automations, integrations and the content role across desktops, the web app and a signed-out browser, plus the exit check scenario as its own spec.
+- **Before every push:**
+  - `pnpm lint`, `pnpm typecheck`, `pnpm test` and the Prettier check
+  - the desktop E2E, run twice
+  - the web E2E
+- **Security review before sign-off:**
+  - tokens are hashed and scoped by capability
+  - an integration sees only what's shared with it
+  - every server-authored write passes the same checks as a client's
+  - webhooks can't reach private addresses
+  - public forms write only answers to their own questions
+  - no automation acts beyond its creator's access
