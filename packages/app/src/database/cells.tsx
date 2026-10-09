@@ -64,7 +64,7 @@ import { PageIcon } from '@workspace/editor';
 import { useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../context';
 import { useNavigation } from '../navigation';
-import { useDatabase } from './hooks';
+import { useCanEditProperties, useDatabase } from './hooks';
 import { runButton } from '../buttons/run-button';
 
 // --- Icons and pills -------------------------------------------------------------------
@@ -479,6 +479,8 @@ function PopoverBody(props: CellEditorProps) {
 
 function OptionsEditor({ handle, row, property, initialText, onDone }: CellEditorProps) {
   const { user } = useApp();
+  // New options and option settings change the property, not just the row.
+  const canEditOptions = useCanEditProperties(handle);
   const multi = property.type === 'multiSelect';
   const status = property.type === 'status';
   const [query, setQuery] = useState(initialText ?? '');
@@ -497,7 +499,7 @@ function OptionsEditor({ handle, row, property, initialText, onDone }: CellEdito
   const exact = options.some((o) => o.name.toLowerCase() === q);
   const items: ({ kind: 'option'; option: SelectOption } | { kind: 'create' })[] = [
     ...matches.map((option) => ({ kind: 'option' as const, option })),
-    ...(q && !exact ? [{ kind: 'create' as const }] : []),
+    ...(q && !exact && canEditOptions ? [{ kind: 'create' as const }] : []),
   ];
   const index = Math.min(active, Math.max(items.length - 1, 0));
 
@@ -560,22 +562,24 @@ function OptionsEditor({ handle, row, property, initialText, onDone }: CellEdito
           <OptionPill option={option} status={status} />
         </span>
         {selected.includes(option.id) && <Check size={14} className="text-muted" />}
-        <IconButton
-          label={`Edit ${option.name}`}
-          size="sm"
-          className="invisible group-hover:visible"
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditing(option.id);
-          }}
-        >
-          <MoreHorizontal size={14} />
-        </IconButton>
+        {canEditOptions && (
+          <IconButton
+            label={`Edit ${option.name}`}
+            size="sm"
+            className="invisible group-hover:visible"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(option.id);
+            }}
+          >
+            <MoreHorizontal size={14} />
+          </IconButton>
+        )}
       </div>
     );
   };
 
-  const editingOption = options.find((o) => o.id === editing);
+  const editingOption = canEditOptions ? options.find((o) => o.id === editing) : undefined;
   if (editingOption) {
     return (
       <OptionSettings
@@ -628,7 +632,13 @@ function OptionsEditor({ handle, row, property, initialText, onDone }: CellEdito
       </div>
       <div role="listbox" aria-label="Options" className="max-h-72 overflow-y-auto p-1">
         <p className="px-2 py-1 text-xs text-muted">
-          {options.length ? 'Select an option or create one' : 'Type to create an option'}
+          {!canEditOptions
+            ? options.length
+              ? 'Select an option'
+              : 'No options yet'
+            : options.length
+              ? 'Select an option or create one'
+              : 'Type to create an option'}
         </p>
         {status
           ? STATUS_GROUPS.map((group) => {
@@ -641,7 +651,7 @@ function OptionsEditor({ handle, row, property, initialText, onDone }: CellEdito
               ) : null;
             })
           : matches.map(renderOption)}
-        {q && !exact && (
+        {q && !exact && canEditOptions && (
           <div
             role="option"
             aria-selected={index === items.length - 1}

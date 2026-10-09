@@ -190,7 +190,12 @@ export function PageHeader({
           className="flex h-7 items-center gap-1 rounded px-2 text-xs text-muted"
           title="Ask someone with full access to change this"
         >
-          <Eye size={12} /> {access === 'comment' ? 'Can comment' : 'View only'}
+          <Eye size={12} />{' '}
+          {access === 'content'
+            ? 'Can edit content'
+            : access === 'comment'
+              ? 'Can comment'
+              : 'View only'}
         </span>
       )}
       {people.length > 0 && (
@@ -650,7 +655,8 @@ export function PageView({
             />
             <div className="mt-2">
               {isDatabase ? (
-                <DatabaseView databaseId={pageId} editable={editable} />
+                // Its rows may be editable without the page ("can edit content").
+                <DatabaseView databaseId={pageId} editable={!meta.locked && !model.trashed} />
               ) : (
                 <>
                   <PageBody

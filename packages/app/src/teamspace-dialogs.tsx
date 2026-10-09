@@ -190,6 +190,7 @@ export function AccessRow({
   avatar,
   canChange,
   note,
+  roles = ROLES,
   onRole,
   onRemove,
 }: {
@@ -198,9 +199,12 @@ export function AccessRow({
   avatar: string | null;
   canChange: boolean;
   note?: string;
+  /** The roles offered (a database's add "can edit content"); its own is always shown. */
+  roles?: ScopeRole[];
   onRole(role: ScopeRole): void;
   onRemove(): void;
 }) {
+  const offered = roles.includes(entry.role) ? roles : [...roles, entry.role];
   return (
     <li className="flex h-9 items-center gap-2" data-testid="access-row">
       <Avatar id={entry.principal} name={name} src={avatar} size={22} />
@@ -215,7 +219,7 @@ export function AccessRow({
         onChange={(e) => onRole(e.target.value as ScopeRole)}
         className={select}
       >
-        {ROLES.map((r) => (
+        {offered.map((r) => (
           <option key={r} value={r}>
             {SCOPE_ROLE_LABELS[r]}
           </option>

@@ -25,7 +25,9 @@ desktop notifications. Pages can be published to the web (M7), readable without 
 and the server keeps backlinks and page history, so the web app has them too. The exit check
 passes: three accounts on two desktops and the web app, crafted clients that try to get around
 the checks, and the Docker stack with a second account. Phase 6 (automations, forms and a
-Notion-compatible API, see [docs/PHASE6.md](docs/PHASE6.md)) is planned and starting.
+Notion-compatible API, see [docs/PHASE6.md](docs/PHASE6.md)) is under way. M1 is done: a database
+can be shared as "Can edit content" (rows, not properties or views, checked by the server), the
+server can edit docs on someone's behalf through the same checks, and it has a job queue.
 
 ## What works today
 

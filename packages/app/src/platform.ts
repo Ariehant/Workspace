@@ -126,7 +126,7 @@ export interface ScopeInfo {
   treeDoc: string;
   /** The scope it inherits access from ('' if none). */
   parent: string;
-  role: 'full' | 'edit' | 'comment' | 'view';
+  role: 'full' | 'edit' | 'content' | 'comment' | 'view';
 }
 
 export interface ScopesPlatform {

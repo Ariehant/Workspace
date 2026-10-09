@@ -64,7 +64,7 @@ import {
   TextCellEditor,
   isEditable,
 } from './cells';
-import { useDatabase, useDisplayContext } from './hooks';
+import { useCanEditProperties, useDatabase, useDisplayContext } from './hooks';
 
 function rowPageModel(
   handle: DatabaseHandle,
@@ -135,6 +135,7 @@ export function PropertiesPanel({
 }) {
   const base = useDisplayContext();
   const ctx = { ...base, pages: snapshot.related };
+  const canEditProperties = useCanEditProperties(handle);
   const [editing, setEditing] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [formulaFor, setFormulaFor] = useState<string | null>(null);
@@ -195,7 +196,7 @@ export function PropertiesPanel({
         </button>
       )}
       <div className="flex flex-wrap items-center gap-1">
-        {editable && !snapshot.meta.lockProperties && (
+        {editable && canEditProperties && (
           <Menu>
             <MenuTrigger asChild>
               <button
@@ -229,7 +230,7 @@ export function PropertiesPanel({
             </MenuContent>
           </Menu>
         )}
-        {editable && (emptyCount > 0 || hideEmpty) && (
+        {editable && canEditProperties && (emptyCount > 0 || hideEmpty) && (
           <button
             type="button"
             onClick={() => {
@@ -265,8 +266,11 @@ function PropertyRow({
   onEdit(on: boolean): void;
 }) {
   const { user } = useApp();
-  // Formulas are edited as a whole (their expression), from the value too.
-  const canEdit = editable && (isEditable(property.type) || property.type === 'formula');
+  // Formulas are edited as a whole (their expression, part of the property), from the
+  // value too.
+  const canEditProperties = useCanEditProperties(handle);
+  const canEdit =
+    editable && (isEditable(property.type) || (property.type === 'formula' && canEditProperties));
   const toggle = () =>
     editable && setCell(handle.doc, row.id, property.id, row.values[property.id] !== true, user.id);
   const editorProps = { handle, row, property, ctx, onDone: () => onEdit(false) };
@@ -333,8 +337,9 @@ function RowContent({
   useScrollToBlock(articleRef, pageDoc ? (blockTarget ?? null) : null);
   if (!found) return <div className="h-24" aria-busy="true" />;
   const { handle, snapshot, row, model } = found;
-  // As its database: read-only for someone who may only view or comment.
-  const editable = !row.locked && !model.trashed && roleAllows(pages.role(rowId), 'edit');
+  // As its database: read-only for someone who may only view or comment ("can edit
+  // content" edits rows and their pages).
+  const editable = !row.locked && !model.trashed && roleAllows(pages.role(rowId), 'content');
   return (
     <>
       {row.isTemplate && (

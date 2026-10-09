@@ -1,6 +1,6 @@
 # Phase 6: Automations and API
 
-**Status:** planned. Nothing started yet.
+**Status:** in progress. M1 is done (the content role, server edits with an author, and the job queue).
 
 ## Context
 
@@ -85,7 +85,13 @@ A helper, `ctx.docs.edit(workspaceId, docId, author, (doc) => …)`, does each e
 
 The server's own writes pass the access checks too, so a bug in the API can't write where its caller couldn't.
 
-The `createdBy` and `updatedBy` fields of a row come from the client today. From now on the server checks them on every push: a row's `createdBy` (when it is created) and `updatedBy` must be the pushing user (or bot).
+The `createdBy` and `updatedBy` fields of a row come from the client, and stay that way. Checking them on every push was planned, but legitimate pushes carry other people's ids:
+
+- rows made before sync was turned on carry the desktop's local id
+- undo puts back the previous editor
+- restoring a version brings back rows made by others
+
+The update log's author (`doc_updates.user_id`, set by the server) is the record that can be trusted, and history shows it.
 
 ### The "can edit content" role
 
@@ -299,33 +305,72 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 
 ## Milestones
 
-### M1: the content role, attributed server edits, the job queue (≈ 4 days)
+### M1: the content role, attributed server edits, the job queue ✅
 
 **Server:**
 
-- `appendFromServer` takes an author; `ctx.docs.edit` loads, edits, diffs, checks and appends.
-- The `content` role in `roles.ts` and the access model.
-- `checkRowsChange` validates content-role writes.
-- `createdBy` and `updatedBy` are checked on every push.
+- **Authors on server edits:** `appendFromServer` takes an author (stored as `doc_updates.user_id`).
+- **`DocEditor` (`ctx.docs`, `apps/server/src/docs-edit.ts`):**
+  - **One edit:** it loads a doc's merged state, runs a change, and keeps only the updates the change made (none: nothing is stored).
+  - **The checks:** for someone (a person, later a bot), the result passes the same `canWrite` and `checkUpdate` as their own client's push, or the edit throws `EditRefused`.
+  - **Trusted edits** (the caller decided, e.g. a form's audience) must say where a new doc goes. An unplaced doc would be readable by anyone, so one is never left unplaced.
+  - Edits to one doc run one at a time.
+- **The `content` role** ranks between edit and comment.
+  - **Allowed:** a database doc (but only changes to its rows), its rows' pages (including a new row's page in the same push as the row), and comments.
+  - **Elsewhere** in the scope it acts as comment.
+- **`checkRowsOnlyChange`** (`packages/database/src/check.ts`) decodes the update and finds, for every item it adds or deletes, which top-level map that item is in. Anything outside `rows` is refused, including a row edit bundled with a schema edit, and updates that depend on changes the server lacks.
+- **Rows the access service knows:** it learns which docs are databases, and the rows of each, as it reads them. A row's page it hasn't seen is looked for in the scope's databases, for someone with "content" only, and only on a miss.
+- **Not done:** checking `createdBy`/`updatedBy` on pushes (see above for why).
 
 **Storage:** migration 10:
 
-- the `jobs` table, with the `JobQueue` (enqueue in a transaction, claim, complete, fail with backoff, and clean-up)
-- the `content` role in the scope access checks
-- `users.kind`, for bots in M5
+- **Constraints:** the role is added to the role checks.
+- **`users.kind`:** `person` or `bot`.
+- **The `jobs` table** and `store.jobs`:
+  - enqueue, optionally in a transaction
+  - claim (with `SKIP LOCKED`; the attempt counts when claimed)
+  - complete, with a result
+  - fail, with a retry time or giving up
+  - one open job per key
+  - clean-up: a job whose last attempt's worker died is marked failed, and finished jobs are deleted after a week
+- **The `JobRunner`** (`apps/server/src/jobs/runner.ts`, `ctx.jobs`) holds a handler per kind and polls for due jobs. It retries after 1 min, 5 min, 30 min, 2 h and 8 h. `PermanentJobError` gives up at once. `main.ts` starts it after listening.
 
 **App:**
 
-- "Can edit content" in the share menu for databases.
-- The database UI for the role: rows editable; schema, views and the page read-only; filters and sorts local and unsaved.
+- "Can edit content" is offered in the share dialog for databases. Access rows show the role, and offer it for databases.
+- **What the role sees in a database:**
+  - Rows are editable.
+  - The views and properties are shown as locked: no new property or view, and no database settings or description.
+  - Select options can't be created or edited, whether in the cell editor or by pasting.
+  - Formulas can't be edited.
+  - Row pages are editable.
+  - The badge reads "Can edit content".
+- **Filters and sorts of your own:** someone who can't save a view (this role, a viewer, a locked database) can still filter and sort it. The change applies only in that window, marked "Only you see these", with Reset.
+- **Fixed along the way:** an inline database ignored the person's role (it was always editable, and the server refused the edits). It now follows the role, title included.
 
 **Tests:**
 
-- The authorization matrix gains the content role: rows allowed; schema, views, meta and the page refused, on the socket and through `ctx.docs.edit`.
-- Forged `createdBy`/`updatedBy` are refused.
-- The queue: two workers never take the same job; a crash mid-job lets it run again after the lock expires; backoff; clean-up.
+- **`check.test.ts`:** row adds, edits, moves, trashing and deletes are allowed. Properties, views, settings, unknown parts, a mixed update, a deletion-only schema change, pending updates and malformed input are refused.
+- **`content-role.test.ts`** (real server):
+  - **Over the socket:** Gus, with "content", edits a row, adds a row with its page in one push, writes a row's page and comments. His new property and his renamed view are undone, and so are his edits to a non-row page and to the tree. A new doc that isn't a row's page isn't stored.
+  - **Through `app.docs`:** a row is added as Gus and arrives live on Ada's device, with Gus as the author in the log. His property and his non-row edit are refused. Five concurrent edits to one doc keep all five rows. A trusted edit without a scope is refused; with one, the doc is placed and reaches Gus.
+  - **The runner:** results are kept, a flaky job succeeds on its third try, and a permanent failure stops at once.
+- **`jobs.test.ts`:**
+  - order and locking
+  - eight claims from two stores on 40 jobs take each once
+  - retry, then give up
+  - a crashed worker's job runs again, and its last attempt is marked failed
+  - keys
+  - enqueue in a rolled-back transaction leaves nothing
+  - clean-up and recent jobs
 
-**E2E:** Ada shares a database with Bob as "can edit content". Bob adds and edits rows, can't rename a property or add a view, and a crafted push that changes the schema is refused.
+**E2E** (`content-role.spec.ts`):
+
+- Ada shares "Tasks" with Bob as "Can edit content" from the share dialog.
+- On his desktop, Bob sees the badge, and no Add a property, Add a view or database options.
+- He adds a row, which Ada sees live.
+- Typing a new tag offers no "Create".
+- His filter shows "Only you see these", and Ada's view stays unfiltered.
 
 ### M2: forms (≈ 4 days)
 

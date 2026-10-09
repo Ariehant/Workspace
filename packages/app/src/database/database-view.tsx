@@ -1,4 +1,4 @@
-import { getPage, getPageTitleText, isInTrash, setPageTitle } from '@workspace/core';
+import { getPage, getPageTitleText, isInTrash, roleAllows, setPageTitle } from '@workspace/core';
 import {
   setMeta,
   ensureViewSet,
@@ -29,6 +29,7 @@ import {
   setViewType,
   type CardPreview,
   type CardSize,
+  type ViewConfig,
   type ViewType,
 } from '@workspace/database';
 import { PageIcon } from '@workspace/editor';
@@ -85,7 +86,15 @@ import {
   ListTree,
   GitBranch,
 } from 'lucide-react';
-import { Suspense, lazy, useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useApp } from '../context';
 import { useDocVersion } from '../hooks';
 import { useNavigation } from '../navigation';
@@ -168,12 +177,31 @@ function useActiveView(viewSet: string): [string | null, (id: string) => void] {
 }
 
 /** A database's view tabs, toolbar and the active view. */
-export function DatabaseView({ databaseId, viewSet = databaseId, editable }: DatabaseViewProps) {
+export function DatabaseView({
+  databaseId,
+  viewSet = databaseId,
+  editable: allowed,
+}: DatabaseViewProps) {
   const loaded = useDatabase(databaseId);
   const ctx = useDisplayContext();
   // Who has which row open (their avatars show on the rows).
   const viewers = useRowPresence(databaseId, loaded?.handle.doc ?? null);
-  const { user, workspace } = useApp();
+  const { user, workspace, pages } = useApp();
+  // Rows take "can edit content"; the database itself (properties, views, settings) takes
+  // "can edit", and is shown as if locked otherwise.
+  const role = pages.role(databaseId);
+  const editable = allowed && roleAllows(role, 'content');
+  const structureEditable = allowed && roleAllows(role, 'edit');
+  const stored = loaded?.snapshot;
+  const snapshot = useMemo(
+    () =>
+      stored && !structureEditable
+        ? { ...stored, meta: { ...stored.meta, lockViews: true, lockProperties: true } }
+        : stored,
+    [stored, structureEditable],
+  );
+  // Filters and sorts changed by someone who can't save the view: theirs alone, here.
+  const [own, setOwn] = useState<Record<string, Pick<ViewConfig, 'filter' | 'sorts'>>>({});
   const databaseTitle = getPage(workspace, databaseId)?.title || 'Untitled';
   const { openRow } = useNavigation();
   const [activeId, setActiveId] = useActiveView(viewSet);
@@ -183,11 +211,11 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
   const [dragTab, setDragTab] = useState<string | null>(null);
   const [editingDescription, setEditingDescription] = useState(false);
 
-  const snapshot = loaded?.snapshot;
   const views = snapshot ? viewsOf(snapshot, viewSet) : [];
-  const view = views.find((v) => v.id === activeId) ?? views[0];
+  const saved = views.find((v) => v.id === activeId) ?? views[0];
+  const view = saved && own[saved.id] ? { ...saved, ...own[saved.id] } : saved;
   // A linked view block gets its own first view (a copy of the source's) when shown.
-  const needsViews = !!loaded && viewSet !== databaseId && views.length === 0 && editable;
+  const needsViews = !!loaded && viewSet !== databaseId && views.length === 0 && structureEditable;
   useEffect(() => {
     if (needsViews && loaded) ensureViewSet(loaded.handle.doc, viewSet, databaseId);
   }, [needsViews, loaded, viewSet, databaseId]);
@@ -203,8 +231,18 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
   const open = (rowId: string) => openRow(rowId, databaseId, view.openPagesIn);
   const properties = snapshot.properties;
   const byId = new Map(properties.map((p) => [p.id, p]));
+  // A locked database keeps its data editable but not its views or properties.
+  const viewsEditable = editable && !snapshot.meta.lockViews;
+  const setViewQuery = (changes: Partial<Pick<ViewConfig, 'filter' | 'sorts'>>) => {
+    if (viewsEditable) updateView(doc, view.id, changes);
+    else
+      setOwn((all) => ({
+        ...all,
+        [view.id]: { filter: view.filter, sorts: view.sorts, ...changes },
+      }));
+  };
   const setFilter = (filter: FilterGroup | null) =>
-    updateView(doc, view.id, { filter: filter && filter.filters.length ? filter : null });
+    setViewQuery({ filter: filter && filter.filters.length ? filter : null });
   const addFilter = (propertyId: string) => {
     const property = byId.get(propertyId);
     if (!property) return;
@@ -220,9 +258,6 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
   const sortNames = view.sorts.map((s) => byId.get(s.propertyId)?.name).filter(Boolean);
   const showBar = ruleCount > 0 || view.sorts.length > 0;
 
-  // A locked database keeps its data editable but not its views or properties.
-  const viewsEditable = editable && !snapshot.meta.lockViews;
-
   const toolbarButton = (active: boolean) =>
     cn(
       'flex h-7 items-center gap-1 rounded px-1.5 text-sm hover:bg-hover',
@@ -234,7 +269,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
       {(snapshot.meta.description || editingDescription) && (
         <DatabaseDescription
           value={snapshot.meta.description}
-          editable={editable}
+          editable={structureEditable}
           autoFocus={editingDescription}
           onChange={(description) => {
             setMeta(doc, { description });
@@ -349,7 +384,6 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
             <button
               type="button"
               className={toolbarButton(ruleCount > 0)}
-              disabled={!viewsEditable}
               onClick={() => setPanel(advanced ? 'advanced' : panel === 'filter' ? null : 'filter')}
             >
               <ListFilter size={15} /> <span className="max-md:hidden">Filter</span>
@@ -381,7 +415,6 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
             <button
               type="button"
               className={toolbarButton(view.sorts.length > 0)}
-              disabled={!viewsEditable}
               onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
             >
               <ArrowUpDown size={15} /> <span className="max-md:hidden">Sort</span>
@@ -392,15 +425,13 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
               <PropertyPicker
                 properties={properties}
                 label="Sort by…"
-                onPick={(p) =>
-                  updateView(doc, view.id, { sorts: [{ propertyId: p.id, direction: 'asc' }] })
-                }
+                onPick={(p) => setViewQuery({ sorts: [{ propertyId: p.id, direction: 'asc' }] })}
               />
             ) : (
               <SortEditor
                 sorts={view.sorts}
                 properties={properties}
-                onChange={(sorts) => updateView(doc, view.id, { sorts })}
+                onChange={(sorts) => setViewQuery({ sorts })}
               />
             )}
           </PopoverContent>
@@ -450,7 +481,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
             </button>
           </span>
         )}
-        {editable && (
+        {structureEditable && (
           <DatabaseOptions
             handle={handle}
             meta={snapshot.meta}
@@ -524,7 +555,7 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
               );
             })
           )}
-          {ruleCount > 0 && !advanced && editable && (
+          {ruleCount > 0 && !advanced && (
             <button
               type="button"
               onClick={() => setPanel('filter')}
@@ -532,6 +563,25 @@ export function DatabaseView({ databaseId, viewSet = databaseId, editable }: Dat
             >
               <Plus size={12} /> Add filter
             </button>
+          )}
+          {own[view.id] && (
+            <span
+              className="ml-auto flex items-center gap-1 text-xs text-faint"
+              data-testid="own-view"
+            >
+              Only you see these
+              <button
+                type="button"
+                onClick={() =>
+                  setOwn((all) =>
+                    Object.fromEntries(Object.entries(all).filter(([id]) => id !== view.id)),
+                  )
+                }
+                className="rounded px-1.5 py-0.5 text-muted hover:bg-hover"
+              >
+                Reset
+              </button>
+            </span>
           )}
         </div>
       )}
@@ -1026,7 +1076,7 @@ function ViewMenu({
 
 /** An inline database inside a page: its title (open as full page) above the views. */
 export function InlineDatabase({ databaseId, viewSet }: { databaseId: string; viewSet?: string }) {
-  const { workspace, platform } = useApp();
+  const { workspace, platform, pages } = useApp();
   const { navigate } = useNavigation();
   useDocVersion(workspace); // title, icon and trash state
   const page = getPage(workspace, databaseId);
@@ -1038,7 +1088,10 @@ export function InlineDatabase({ databaseId, viewSet }: { databaseId: string; vi
     <div className="my-2" data-testid="inline-database">
       <div className="group flex items-center gap-2 pb-1" data-testid="inline-database-title">
         {page.icon && <PageIcon icon={page.icon} size={20} fileUrl={platform.fileUrl} />}
-        <DatabaseTitle databaseId={databaseId} readOnly={trashed} />
+        <DatabaseTitle
+          databaseId={databaseId}
+          readOnly={trashed || !roleAllows(pages.role(databaseId), 'edit')}
+        />
         {viewSet && (
           <span
             className="flex items-center gap-0.5 text-xs text-faint"

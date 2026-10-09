@@ -109,7 +109,7 @@ export interface SyncScope {
   name: string;
   treeDoc: string;
   parent: string;
-  role: 'full' | 'edit' | 'comment' | 'view';
+  role: 'full' | 'edit' | 'content' | 'comment' | 'view';
 }
 
 export interface SyncServerInfo {

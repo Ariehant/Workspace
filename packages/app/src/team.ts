@@ -26,7 +26,7 @@ export interface PendingInvite {
 
 export type InviteRole = Exclude<WorkspaceRole, 'owner'>;
 
-export type ScopeRole = 'full' | 'edit' | 'comment' | 'view';
+export type ScopeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
 export type ScopeVisibility = 'open' | 'closed' | 'private';
 
 /** Who gets what in a scope: `user:<id>`, `group:<id>` or `workspace` (every member). */
@@ -65,6 +65,7 @@ export interface TeamspaceListing extends Omit<ScopeDetails, 'role' | 'access'> 
 export const SCOPE_ROLE_LABELS: Record<ScopeRole, string> = {
   full: 'Full access',
   edit: 'Can edit',
+  content: 'Can edit content',
   comment: 'Can comment',
   view: 'Can view',
 };
@@ -72,6 +73,7 @@ export const SCOPE_ROLE_LABELS: Record<ScopeRole, string> = {
 export const SCOPE_ROLE_HINTS: Record<ScopeRole, string> = {
   full: 'Edit and share with others',
   edit: 'Edit, but not share',
+  content: 'Edit rows, not properties or views',
   comment: 'View and comment',
   view: 'View only',
 };

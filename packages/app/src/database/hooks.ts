@@ -1,4 +1,4 @@
-import { workspaceDataDoc } from '@workspace/core';
+import { roleAllows, workspaceDataDoc } from '@workspace/core';
 import {
   type DatabaseHandle,
   type DatabaseSnapshot,
@@ -16,6 +16,15 @@ const subscribeMinute = (onChange: () => void) => {
 /** The current minute, re-rendering as it changes (for `now()` in formulas). */
 export function useMinute(): number {
   return useSyncExternalStore(subscribeMinute, () => Math.floor(Date.now() / MINUTE) * MINUTE);
+}
+
+/**
+ * May the person change this database's properties (columns, select options), not just
+ * its rows? Not with "can edit content", nor while its properties are locked.
+ */
+export function useCanEditProperties(handle: DatabaseHandle): boolean {
+  const { pages } = useApp();
+  return roleAllows(pages.role(handle.id), 'edit') && !handle.snapshot().meta.lockProperties;
 }
 
 /**

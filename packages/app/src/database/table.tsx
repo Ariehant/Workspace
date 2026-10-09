@@ -105,6 +105,7 @@ import {
   writeCell,
 } from './actions';
 import { FormulaEditor } from './formula-editor';
+import { useCanEditProperties } from './hooks';
 import { editButton } from '../buttons/button-dialog';
 import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup';
 import {
@@ -278,6 +279,7 @@ export function TableView({
 }: TableViewProps) {
   const { user } = useApp();
   const doc = handle.doc;
+  const canEditProperties = useCanEditProperties(handle);
   const gridRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<CellRef | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -413,14 +415,23 @@ export function TableView({
     const kind = propertyKind(property.type);
     if (kind.computed) return;
     const parsed = kind.parse(text, property, ctx);
+    // New select options change the property: without that right, only existing ones.
+    const created = new Set(canEditProperties ? [] : (parsed.newOptions ?? []).map((o) => o.id));
+    const value = Array.isArray(parsed.value)
+      ? parsed.value.filter((id) => !created.has(id as string))
+      : created.has(parsed.value as string)
+        ? null
+        : parsed.value;
     doc.transact(() => {
-      for (const option of parsed.newOptions ?? []) addOption(doc, property.id, option);
+      if (canEditProperties) {
+        for (const option of parsed.newOptions ?? []) addOption(doc, property.id, option);
+      }
       writeCell(
         databases,
         handle,
         row.id,
         property,
-        property.type === 'title' ? text : parsed.value,
+        property.type === 'title' ? text : value,
         user.id,
       );
     });

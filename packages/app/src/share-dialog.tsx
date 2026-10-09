@@ -17,6 +17,8 @@ const select =
   'h-8 rounded-md border border-line bg-surface px-1.5 text-sm text-fg outline-none focus:border-accent disabled:opacity-60';
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const ROLES: ScopeRole[] = ['full', 'edit', 'comment', 'view'];
+/** A database also offers "can edit content" (its rows, not its properties or views). */
+const DATABASE_ROLES: ScopeRole[] = ['full', 'edit', 'content', 'comment', 'view'];
 
 export function ShareDialog({
   team,
@@ -48,6 +50,7 @@ export function ShareDialog({
   useEffect(() => void reload(), [reload]);
 
   const page = getPage(forest, pageId);
+  const roles = page?.kind === 'database' ? DATABASE_ROLES : ROLES;
   const tree = forest.treeOf(pageId);
   const here = scopes?.find((s) => s.id === tree?.info.scope) ?? null;
   // Shared on its own: the top page of its own scope (its parent is somewhere else).
@@ -133,7 +136,7 @@ export function ShareDialog({
                     onChange={(e) => setRole(e.target.value as ScopeRole)}
                     className={select}
                   >
-                    {ROLES.map((r) => (
+                    {roles.map((r) => (
                       <option key={r} value={r}>
                         {SCOPE_ROLE_LABELS[r]}
                       </option>
@@ -156,6 +159,7 @@ export function ShareDialog({
                   const target = own ?? here;
                   return (
                     <AccessRow
+                      roles={roles}
                       key={entry.principal}
                       entry={entry}
                       name={who.name}
@@ -211,7 +215,7 @@ export function ShareDialog({
                       className={select}
                     >
                       <option value="none">No access</option>
-                      {ROLES.map((r) => (
+                      {roles.map((r) => (
                         <option key={r} value={r}>
                           {SCOPE_ROLE_LABELS[r]}
                         </option>

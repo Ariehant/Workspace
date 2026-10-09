@@ -7,12 +7,7 @@
  * One server process is assumed: another process's changes aren't seen until a reload
  * (Postgres LISTEN/NOTIFY would be the way to run several).
  */
-import {
-  MEMBERS_DOC_ID,
-  checkCommentsChange,
-  isCommentsDocId,
-  isTreeDocId,
-} from '@workspace/core';
+import { MEMBERS_DOC_ID, checkCommentsChange, isCommentsDocId, isTreeDocId } from '@workspace/core';
 import { checkRowsOnlyChange, isDatabaseDoc, rowsMap } from '@workspace/database';
 import * as Y from 'yjs';
 import type { AccessModel, PgStore, Scope, ScopeRole } from '@workspace/storage-remote';
