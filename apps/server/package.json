@@ -15,6 +15,7 @@
     "@fastify/cookie": "^11.1.2",
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/static": "^9.3.0",
+    "@workspace/api-model": "workspace:*",
     "@workspace/core": "workspace:*",
     "@workspace/database": "workspace:*",
     "@workspace/exporters": "workspace:*",

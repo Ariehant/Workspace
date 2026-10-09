@@ -28,6 +28,8 @@ import { fileRoutes } from './files-routes';
 import { formRoutes } from './forms/routes';
 import { automationRoutes } from './automations/routes';
 import { buttonRoutes } from './buttons/routes';
+import { apiRoutes, type ApiOptions } from './api/plugin';
+import { integrationRoutes } from './integrations/routes';
 import { settingsRoutes } from './settings-routes';
 import { webApp } from './web';
 import { workspaceRoutes } from './workspaces';
@@ -66,6 +68,8 @@ export interface ServerDeps {
   history?: HistoryOptions;
   /** Automations: how long after changes to look at them (tests shorten it). */
   automations?: AutomationOptions;
+  /** The public API's rate limit per integration (tests lower or raise it). */
+  api?: ApiOptions;
   /** Sends invite emails (default: SMTP from the config, or none). */
   mailer?: Mailer | null;
   /** The job queue: how often to look for due jobs, and retry waits (tests shorten them). */
@@ -85,6 +89,7 @@ export function buildServer({
   mailer,
   jobs: jobOptions,
   automations: automationOptions,
+  api: apiOptions,
 }: ServerDeps): FastifyInstance {
   const app = Fastify({
     logger:
@@ -245,7 +250,9 @@ export function buildServer({
     formRoutes(scope, ctx);
     automationRoutes(scope, ctx);
     buttonRoutes(scope, ctx);
+    integrationRoutes(scope, ctx);
   });
+  apiRoutes(app, ctx, apiOptions);
   webApp(app, config.webDir);
   endpoint = syncEndpoint(app, ctx, sync);
 

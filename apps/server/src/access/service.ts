@@ -69,6 +69,11 @@ export class WorkspaceAccess {
     return this.model.members.some((m) => m.userId === userId);
   }
 
+  /** The database a row belongs to, if known here (rows of databases looked into). */
+  databaseOfRow(rowId: string): string | undefined {
+    return this.rowOf.get(rowId);
+  }
+
   /** An integration's bot (Phase 6 M5): not a person (no notifications, no private pages). */
   isBot(userId: string): boolean {
     return this.model.members.some((m) => m.userId === userId && m.role === 'bot');

@@ -134,6 +134,9 @@ importers:
       '@fastify/static':
         specifier: ^9.3.0
         version: 9.3.0
+      '@workspace/api-model':
+        specifier: workspace:*
+        version: link:../../packages/api-model
       '@workspace/core':
         specifier: workspace:*
         version: link:../../packages/core
