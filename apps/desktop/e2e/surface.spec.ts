@@ -189,7 +189,13 @@ test('lock views and properties; a description under the title', async ({ launch
   await (await options()).getByRole('menuitem', { name: /Lock views/ }).click();
   await window.keyboard.press('Escape');
   await expect(db(window).getByRole('button', { name: 'Add a view' })).toHaveCount(0);
-  await expect(db(window).getByRole('button', { name: 'Filter', exact: true })).toBeDisabled();
+  // Filters still work, for this window only (Phase 6 M1): the view isn't changed.
+  await db(window).getByRole('button', { name: 'Filter', exact: true }).click();
+  await window.getByTestId('property-picker').getByRole('button', { name: 'Name' }).click();
+  await expect(db(window).getByTestId('own-view')).toBeVisible();
+  await window.keyboard.press('Escape');
+  await db(window).getByTestId('own-view').getByRole('button', { name: 'Reset' }).click();
+  await expect(db(window).getByTestId('filter-bar')).toHaveCount(0);
   // Data stays editable.
   await addRow(window, 'Gearbox');
   await expect(titles(window)).toHaveText(['Servo', 'Gearbox']);
