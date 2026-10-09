@@ -372,6 +372,17 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - Typing a new tag offers no "Create".
 - His filter shows "Only you see these", and Ada's view stays unfiltered.
 
+**Fixed along the way: the role on the wire.** Roles are sent by index. "content" first went in the middle of the list, so a client built before it read "comment" as "view". It now goes at the end, and the sync protocol moves to version 5: older clients are told to update instead of misreading the new role.
+
+**Runs:**
+
+- **Desktop E2E, run 1:** 130 of 131 passed.
+- **Run 2:** 129 of 131. The failures were in two tests:
+  - **The locked-view test** (both runs) still expected Filter to be disabled. A locked view now filters for that window only, and the test checks that.
+  - **The page cover test** (run 2): the worker took too long to close, a flake also seen in Phase 5.
+- **Reruns:** both specs, three times each, passed 30 of 30.
+- **Web E2E:** 3 of 3.
+
 ### M2: forms (≈ 4 days)
 
 - **Model** (`packages/database`):
