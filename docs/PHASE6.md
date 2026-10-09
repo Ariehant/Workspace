@@ -554,7 +554,11 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - She adds a task. Logged fills in live, and her inbox says "Automation Log new tasks".
 - The receiver gets one POST, with the page and a valid signature.
 
-**Runs:** see below.
+**Runs:**
+
+- **Unit tests:** 854 passed (3 skipped).
+- **Desktop E2E:** run twice, 135 of 135 each time.
+- **Web E2E:** 3 of 3.
 
 ### M4: automations on a local-only desktop (≈ 2 days, cut first)
 
