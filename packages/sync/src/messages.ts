@@ -29,11 +29,14 @@
  *
  * Version 4 adds notifications: the server sends each of a user's connections the
  * notifications made for them (mentions, replies, reminders…) as they happen.
+ *
+ * Version 5 adds the "content" role (a database's rows, not its properties or views),
+ * which older clients can't read.
  */
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Largest message a client may send (the server's WebSocket limit). */
 export const MAX_CLIENT_MESSAGE_BYTES = 16 * 1024 * 1024;
@@ -73,7 +76,8 @@ export interface AccessScope {
 }
 
 export type ScopeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
-const ROLES: readonly ScopeRole[] = ['full', 'edit', 'content', 'comment', 'view'];
+/** Roles on the wire, by index (new ones go at the end). */
+const ROLES: readonly ScopeRole[] = ['full', 'edit', 'comment', 'view', 'content'];
 const KINDS: readonly AccessScope['kind'][] = ['teamspace', 'private', 'shared'];
 /** Most scopes in an access message. */
 export const MAX_SCOPES = 10_000;
