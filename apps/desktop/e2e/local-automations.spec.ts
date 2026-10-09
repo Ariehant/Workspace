@@ -163,6 +163,8 @@ test('a button sends a signed webhook and a notification from the desktop', asyn
   await W.getByRole('button', { name: 'New page', exact: true }).click();
   await W.getByLabel('Page title').fill('Robot log');
   await W.getByLabel('Page title').press('Enter');
+  // Typing goes to the page only once its editor has the focus.
+  await expect(W.getByTestId('page-editor').first()).toBeFocused();
   await W.keyboard.type('/button');
   await expect(W.getByTestId('slash-menu').getByRole('option').first()).toBeVisible();
   await W.keyboard.press('Enter');

@@ -740,7 +740,12 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - Ada makes "Lab bot" in Members → Integrations and copies the token. The API sees nothing yet.
 - She connects "Parts" (Share → Connections). The API finds it, queries its rows, and adds "Stepper motor" with a new tag, which appears on her desktop.
 
-**Runs:** see below.
+**Runs:**
+
+- **Unit tests:** 885 passed (3 skipped).
+- **Desktop E2E, run 1:** 140 of 140.
+- **Run 2:** 139 of 140. The M4 button test typed before the new page's editor had the focus. It now waits for the focus, as the other specs do, and passed three runs out of three.
+- **Web E2E:** 3 of 3.
 
 ### M6: blocks, comments and files in the API (≈ 4 days)
 
