@@ -456,6 +456,12 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - She shares it with anyone who has the link. Someone signed out answers it in a browser.
 - The row appears on her desktop, and her inbox says "Someone responded to Order a part".
 
+**Runs:**
+
+- **Unit tests:** 841 passed (3 skipped).
+- **Desktop E2E:** run twice, 133 of 133 each time.
+- **Web E2E:** 3 of 3.
+
 ### M3: automations on the server (≈ 5 days)
 
 - **`packages/automations`:** the automation model in the database doc, `matchTriggers`, conditions, `planActions` and values (fixed, now, triggering person, copied), with unit tests over before/after snapshots.
