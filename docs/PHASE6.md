@@ -634,7 +634,13 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - **Schedule:** a daily schedule runs once the clock passes its time. After restarting four days later, it runs once more (not three times).
 - **Button:** "Ping the lab" sends a signed webhook with the page's title, and a notification.
 
-**Runs:** see below.
+**Runs:**
+
+- **Unit tests:** 861 passed (3 skipped).
+- **Desktop E2E, run 1:** 136 of 138. Run 2: 137 of 138. The failures, both seen before, both pass on rerun:
+  - **The page icon test** (both runs): the worker took too long to close after the test passed, the flake seen in M1 and Phase 5. Rerun 24 times in its spec and 6 times alone: all passed.
+  - **The private-pages test** (run 1): a shared page took more than 15 s to reach the other desktop. Its spec, rerun three times: 6 of 6.
+- **Web E2E:** 3 of 3.
 
 ### M5: integrations, tokens, and the API core (≈ 6 days)
 
