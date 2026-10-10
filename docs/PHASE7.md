@@ -24,7 +24,6 @@ The roadmap's scope for this phase, and what earlier phases left for it:
   - server-side export and PDF for the web app, and offline storage in the web app (Phase 4)
   - formatting inside text property values (found by the Phase 6 conformance test)
   - the desktop E2E teardown hang (the page icon test, on every full run since Phase 6)
-  - the Phase 3 check with a real Notion export, which needs a sample export
 - **The v1.0 sign-off:** the feature inventory in [PLAN.md §3](PLAN.md#3-feature-inventory-parity-target-ai-excluded),
   side by side with Notion; a license; the first release.
 
@@ -50,6 +49,9 @@ steps: six milestones and the release check. If time runs short, cut these, in t
 - **A link check** (`scripts/check-links.mjs`): every relative link and `#anchor` in the
   repository's Markdown files must resolve (GitHub's heading slugs, numbered duplicates
   included). It runs in `pnpm lint`, so in CI, and `--external` checks web links on demand.
+- **Dropped:** the Phase 3 check with a real Notion export. There's no export to test with, and
+  the workspace will be built from scratch rather than imported. The importer stays, tested
+  against generated fixtures and our own exports.
 - **Fixed on the way:** the "Tasks and projects" template's timeline now runs from Start to End
   (it showed one-day bars); the packages' description no longer calls the server "planned";
   `.env.example` says that email also sends digests.
@@ -168,8 +170,6 @@ steps: six milestones and the release check. If time runs short, cut these, in t
   app, imports, exports and the API.
 - **The E2E teardown hang:** find why closing the app after the page icon test hangs late in a
   long worker, and fix it.
-- **The real Notion export:** run the importer on a sample export when one is available, and fix
-  what it shows.
 
 ## Milestones
 
@@ -208,8 +208,7 @@ steps: six milestones and the release check. If time runs short, cut these, in t
 ### M6: gaps (≈ 1.5 weeks)
 
 - Image crop, the Unsplash gallery, export and PDF for the web app, offline storage in the web
-  app, formatted text properties, the E2E teardown hang, and the real Notion export (if a sample
-  arrives).
+  app, formatted text properties and the E2E teardown hang.
 - **Tests:** per item; the full desktop E2E passing every test, twice.
 
 ### Release check (≈ 0.5 weeks)

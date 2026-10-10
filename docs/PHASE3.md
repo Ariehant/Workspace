@@ -1,6 +1,6 @@
 # Phase 3: Power features
 
-**Status:** M1–M6 done. The exit check's last step, a real Notion export, is still to run.
+**Status:** done. The exit check's last step, a real Notion export, was skipped: there was no export to test with, and the workspace will be built from scratch rather than imported (decided in Phase 7).
 
 ## Context
 
@@ -309,6 +309,7 @@ The roadmap budgets 3–4 weeks. Import/export is the largest part and the one t
 - **Round trip:** export our own fixture workspaces (including the Phase 2 template rebuilds) to Markdown + CSV, import that, and compare. Text, structure, property values and links must match. Losses must be the documented ones only (for example, view settings in the Markdown variant).
 - **Backup round trip:** backup → restore is byte-identical at the Yjs level.
 - **Real samples:** generated fixtures follow Notion's documented export layout, but Notion changes it from time to time. Before signing off, run the importer on at least one real export from a current Notion workspace and fix what it finds.
+  - **Skipped** (decided in Phase 7): no real export was available, and the workspace will be built from scratch. The importer stays, tested against the generated fixtures and our own exports. If an import from a current Notion export goes wrong, that export becomes a fixture and the bug is fixed then.
 
 ## Packages
 
