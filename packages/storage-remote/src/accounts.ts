@@ -18,6 +18,9 @@ export interface UserWithPassword extends User {
 
 export type SessionKind = 'web' | 'desktop';
 
+/** Emails about unread notifications: mentions soon after, a daily digest, or none. */
+export type EmailDigest = 'mentions' | 'daily' | 'never';
+
 export interface Session {
   id: string;
   userId: string;
@@ -413,6 +416,50 @@ export class Accounts {
     );
     const r = rows[0];
     return r ? { userId: r.user_id, deviceName: r.device_name, challenge: r.challenge } : null;
+  }
+
+  // --- Email (Phase 6 M7) -----------------------------------------------------------------
+
+  /** When to email someone about unread notifications, and their unsubscribe token. */
+  async emailPrefs(
+    userId: string,
+  ): Promise<{ digest: EmailDigest; token: string; email: string; name: string } | null> {
+    const { rows } = await this.pool.query<{
+      email_digest: EmailDigest;
+      unsubscribe_token: string;
+      email: string;
+      name: string;
+    }>(
+      `SELECT email_digest, unsubscribe_token, email, name FROM users
+       WHERE id = $1 AND kind = 'person' AND disabled_at IS NULL`,
+      [userId],
+    );
+    const r = rows[0];
+    return r
+      ? { digest: r.email_digest, token: r.unsubscribe_token, email: r.email, name: r.name }
+      : null;
+  }
+
+  async setEmailDigest(userId: string, digest: EmailDigest): Promise<void> {
+    await this.pool.query('UPDATE users SET email_digest = $2 WHERE id = $1', [userId, digest]);
+  }
+
+  /** One-click unsubscribe: no more emails, if the token is the person's. */
+  async unsubscribe(userId: string, token: string): Promise<boolean> {
+    const { rowCount } = await this.pool.query(
+      `UPDATE users SET email_digest = 'never' WHERE id = $1 AND unsubscribe_token = $2`,
+      [userId, token],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  /** People's names, by id. */
+  async names(userIds: readonly string[]): Promise<Map<string, string>> {
+    const { rows } = await this.pool.query<{ id: string; name: string }>(
+      'SELECT id, name FROM users WHERE id = ANY($1::uuid[])',
+      [userIds],
+    );
+    return new Map(rows.map((r) => [r.id, r.name]));
   }
 
   // --- Settings (the web app's, per user) -----------------------------------------------

@@ -3,9 +3,14 @@
  * Members → Integrations and copies its token. The API sees nothing until she connects
  * her database "Parts" to it (Share → Connections); then it reads the rows, and a row it
  * adds appears on her desktop, live. (M6) On a page she connects, it reads her text as
- * blocks, adds its own after it, and comments; she sees both on her desktop.
+ * blocks, adds its own after it, and comments; she sees both on her desktop. (M7) She sets
+ * up its webhook, verifies it with the token sent to it, and a row she adds is reported,
+ * signed.
  */
+import { createHmac } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { createServer, type IncomingMessage } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
@@ -23,8 +28,23 @@ let root: string;
 let ada: Launched;
 let token = '';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const received: { body: string; json: any; headers: IncomingMessage['headers'] }[] = [];
+const receiver = createServer((req, res) => {
+  let body = '';
+  req.on('data', (c: Buffer) => (body += c.toString()));
+  req.on('end', () => {
+    received.push({ body, json: JSON.parse(body), headers: req.headers });
+    res.end('ok');
+  });
+});
+let hookUrl = '';
+let partsId = '';
+
 test.beforeAll(async () => {
   test.setTimeout(120_000);
+  await new Promise<void>((r) => receiver.listen(0, '127.0.0.1', r));
+  hookUrl = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/notion`;
   root = mkdtempSync(join(tmpdir(), 'workspace-integrations-'));
   server = await startSyncServer(root);
   if (shotsDir) mkdirSync(shotsDir, { recursive: true });
@@ -33,6 +53,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await ada?.app.close().catch(() => {});
   await server?.stop();
+  await new Promise((r) => receiver.close(r));
   if (root) rmSync(root, { recursive: true, force: true });
 });
 
@@ -121,6 +142,7 @@ test('connected to "Parts", the API reads its rows and adds one, live on the des
     filter: { property: 'object', value: 'database' },
   });
   const database = found.body.results[0];
+  partsId = database.id;
   expect(database).toMatchObject({ object: 'database', title: [{ plain_text: 'Parts' }] });
   const rows = await api('POST', `/databases/${database.id}/query`, {
     sorts: [{ property: 'Name', direction: 'ascending' }],
@@ -214,4 +236,47 @@ test('on a connected page, the API reads the blocks, adds its own, and comments'
     A.getByTestId('page-comments').getByTestId('comment-body').filter({ hasText: 'within limits' }),
   ).toHaveCount(1, { timeout: 15_000 });
   await shot(A, 'integrations-4-blocks-and-comment');
+});
+
+test('a webhook: verified with the token sent to it, then events for connected pages', async () => {
+  const A = ada.window;
+  await A.getByRole('button', { name: 'Members', exact: true }).click();
+  const members = A.getByTestId('members-dialog');
+  await members.getByRole('tab', { name: 'Integrations' }).click();
+  const hook = members.getByTestId('webhook-settings');
+  await expect(hook.getByTestId('webhook-status')).toHaveText('Off');
+  await hook.getByRole('button', { name: 'Set up' }).click();
+  await hook.getByLabel('Webhook URL').fill(hookUrl);
+  await hook.getByLabel('comment.created').check();
+  await shot(A, 'integrations-5-webhook-setup');
+  await hook.getByTestId('webhook-save').click();
+  await expect(hook.getByTestId('webhook-status')).toHaveText('Waiting for verification');
+  await expect.poll(() => received.length, { timeout: 15_000 }).toBe(1);
+  const token = received[0]!.json.verification_token as string;
+  expect(token).toMatch(/^secret_/);
+  await hook.getByLabel('Verification token').fill(token);
+  await hook.getByRole('button', { name: 'Verify' }).click();
+  await expect(hook.getByTestId('webhook-status')).toHaveText('On');
+  await shot(A, 'integrations-6-webhook-on');
+  await A.keyboard.press('Escape');
+
+  await A.getByTestId('sidebar-page-title').filter({ hasText: 'Parts' }).click();
+  await addRow(A, 'Gear motor');
+  await expect
+    .poll(() => received.filter((r) => r.json.type === 'page.created').length, {
+      timeout: 20_000,
+    })
+    .toBe(1);
+  const event = received.find((r) => r.json.type === 'page.created')!;
+  expect(event.json).toMatchObject({
+    entity: { type: 'page' },
+    data: { parent: { id: partsId, type: 'database' } },
+    integration_id: expect.any(String),
+  });
+  // Signed with the verification token, as Notion documents.
+  expect(event.headers['x-notion-signature']).toBe(
+    `sha256=${createHmac('sha256', token).update(event.body).digest('hex')}`,
+  );
+  const page = await api('GET', `/pages/${event.json.entity.id}`);
+  expect(page.body.properties.Name.title[0].plain_text).toBe('Gear motor');
 });

@@ -61,6 +61,11 @@ export class WorkspaceAccess {
     return this.model.scopes.find((s) => s.id === id);
   }
 
+  /** Every scope's tree doc. */
+  treeDocs(): string[] {
+    return this.model.scopes.map((s) => s.treeDoc);
+  }
+
   get defaultScopeId(): string | null {
     return this.model.defaultScopeId;
   }

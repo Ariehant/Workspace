@@ -523,6 +523,35 @@ export const MIGRATIONS: string[] = [
     last_used_at timestamptz
   );
   `,
+  // 14: Phase 6 M7. An integration's webhook subscription (its verification token is also
+  // its signing secret), and email digests: each person's setting, a token for one-click
+  // unsubscribe, and which notifications were emailed.
+  `
+  CREATE TABLE integration_webhooks (
+    integration_id uuid PRIMARY KEY REFERENCES integrations ON DELETE CASCADE,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    url text NOT NULL,
+    events text[] NOT NULL,
+    verification_token text NOT NULL,
+    verified_at timestamptz,
+    -- Events are sent for changes after this log position (where it was when verified).
+    from_seq bigint,
+    paused_at timestamptz,
+    -- Since when deliveries have been failing (null: the last one went through).
+    failing_since timestamptz,
+    last_error text,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX integration_webhooks_workspace ON integration_webhooks (workspace_id);
+
+  ALTER TABLE users ADD COLUMN email_digest text NOT NULL DEFAULT 'mentions'
+    CHECK (email_digest IN ('mentions', 'daily', 'never'));
+  ALTER TABLE users ADD COLUMN unsubscribe_token text NOT NULL
+    DEFAULT replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+  ALTER TABLE notifications ADD COLUMN emailed_at timestamptz;
+  CREATE INDEX notifications_to_email ON notifications (user_id)
+    WHERE read_at IS NULL AND archived_at IS NULL AND emailed_at IS NULL;
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

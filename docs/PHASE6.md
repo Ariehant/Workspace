@@ -1,6 +1,6 @@
 # Phase 6: Automations and API
 
-**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) M4 (automations on a local desktop, and button webhook and notification steps), M5 (integrations and the API core) and M6 (blocks, comments and files in the API) are done.
+**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) M4 (automations on a local desktop, and button webhook and notification steps), M5 (integrations and the API core), M6 (blocks, comments and files in the API) and M7 (integration webhooks and email digests) are done. The exit check is next.
 
 ## Context
 
@@ -822,14 +822,98 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - **Run 2:** 140 of 141. `access.spec.ts` waited 15 s for a page shared with everyone to reach Bob's desktop (the timing flake seen before, outside the API). It passed three reruns out of three.
 - **Web E2E:** 3 of 3.
 
-### M7: integration webhooks and email digests (≈ 3 days)
+### M7: integration webhooks and email digests ✅
 
-- **Webhooks:** the subscription settings and verification, the `webhooks` log follower and its events, merged content updates, access filtering at send time, delivery and pausing.
-- **Email digests:** the per-person setting (immediate for mentions, daily, never), the digest job, one email per person, `List-Unsubscribe` and the unsubscribe route.
-- **Tests:**
-  - each event fires once for its change, and never for pages the integration can't read
-  - the signature verifies with Notion's documented method
-  - digests: one email per person, nothing about pages they've lost access to, unsubscribe works (a local SMTP sink, as Phase 5's invite tests use)
+**Changed from the plan:**
+
+- **Migration 14**, for the webhook subscriptions and the digests' columns.
+- **Webhook payloads** follow Notion's:
+  - the event's `id`, `timestamp`, `type`, `entity` and `authors` (people, or `bot` for integrations and automations)
+  - `workspace_id` and `workspace_name`, `subscription_id`, `integration_id` and `attempt_number`
+  - `data.parent`, plus `updated_properties` (property ids, or `title`) and, for comments, `page_id`
+- **Merging:** a page's `page.content_updated` waits a minute, and changes in that minute join it. Other events of one pass over the log (a burst of edits) are merged per entity.
+- **Which changes count:** those after the subscription was verified (and, after a pause, after it was resumed: nothing from the pause is sent later). An integration's own changes are reported too, as Notion does.
+- **Not reported:** renaming or moving a database. Notion has no `database.undeleted` either.
+- **Retries:** 8 attempts over about a day (1 min, 5 min, 30 min, 2 h, then 8 h each).
+- **The pause notice** reaches the integration's maker in the inbox, as an automation notice (no new inbox kind).
+- **Email setting:** one per account (every workspace), in Your profile. Mentions is the default.
+- **Mentions mode:** the email goes out only if a mention is still unread after 10 minutes. It then covers everything else unread too.
+- **Unsubscribe** is at `/email/unsubscribe`, outside `/api` (mail clients can't send its client header). Opening the link shows a page with one button, so a mail scanner that follows it changes nothing. The POST unsubscribes.
+- **Tests** use an in-memory mailer rather than an SMTP sink.
+
+**Storage** (migration 14):
+
+- `integration_webhooks`:
+  - per integration: the URL, the events and the verification token (also the signing secret)
+  - when it was verified, and the log position events start from
+  - whether it's paused, and since when deliveries have been failing (with the last error)
+- `users.email_digest` (`mentions`, `daily` or `never`), `users.unsubscribe_token`, and `notifications.emailed_at`.
+- `IntegrationWebhooks`:
+  - set: a new URL gets a new token and needs verifying again; the same URL only changes the events
+  - verify, remove, `delivered` and `failed`, pause and resume
+
+**Server:**
+
+- **Settings** (owners and admins, `…/integrations/:id/webhook`):
+  - `PUT` `{url, events}`: a new URL is POSTed `{verification_token}`
+  - `POST …/verify` `{token}`, `…/resend`, `…/resume`, and `DELETE`
+  - The integrations list shows each one's webhook: URL, events, verified, paused, failing since and the last error. It never shows the token.
+- **`WebhookEvents`** (a log follower, `webhooks`):
+  - Each changed doc is replayed author by author on the doc as it was:
+    - **Trees:** pages and databases made, moved (sharing a page moves it to another tree, which counts as a move), trashed, restored, locked and renamed.
+    - **Databases:** rows made, changed, trashed, restored and locked, and schema changes.
+    - **Comments docs:** comments made, edited and deleted.
+    - **Any other page's doc:** content changes.
+  - Each subscription that wants an event gets a delivery job, enqueued with the cursor's move. Nothing is diffed while no subscription is on.
+- **Delivery** (`integration.webhook` jobs):
+  - At send time, the job checks that the subscription is still on and wants the event, and that the integration can read the doc. That means the doc's scope is shared with it and it has the capability (`readComments` for comments). Unplaced docs count as unreadable.
+  - Signed `X-Notion-Signature` with the token, through the existing webhook guard.
+  - A delivery that fails for good marks the subscription as failing. After 3 days of failing, it's paused and the maker is told.
+- **`EmailDigests`** (`email.digest` jobs, one open per person):
+  - **Scheduling:**
+    - A stored notification lines up the person's email: 10 minutes later for a mention, or at their next 9:00 for a daily digest.
+    - The job takes every unread item not emailed yet, in every workspace, and drops those whose doc they can no longer read.
+  - **The email:**
+    - One email: a line per item with the page's current title, what was said, and a link.
+    - A footer saying why they get it, with the unsubscribe link, and `List-Unsubscribe` and `List-Unsubscribe-Post` headers.
+    - What was sent is marked as emailed.
+  - **Settings:** `GET` and `PUT /api/auth/me/email` (also whether the server sends email at all).
+
+**App:**
+
+- **Members → Integrations:** a Webhook section per integration:
+  - status: Off, Waiting for verification, On or Paused
+  - URL and events (grouped as Pages, Databases and Comments)
+  - the verification token field, with Send again
+  - Resume after a pause, failures shown, and remove
+- **Your profile:** "Email me about my inbox": when I'm mentioned, a daily digest, or never. It's disabled when the server doesn't send email.
+- **Hosts:** `me/…` paths go to `/api/auth/…` on the web and the desktop. The desktop allows the webhook routes.
+
+**Tests:**
+
+- **`webhooks.test.ts`:**
+  - **Verification:** bad URLs and unknown events are refused. Nothing is sent before verification, and a wrong token doesn't verify. Settings never show the token.
+  - **Signature:** the first event verifies with Notion's documented check (HMAC-SHA256 of the raw body with the token, compared in constant time). A new URL gets a new token, and the old URL gets nothing more.
+  - **Every event once:** created, renamed, content (two edits, one event), locked, unlocked, moved, trashed, restored, a database made, a row made, the schema changed, the row changed (with the property id) and trashed, and a comment made, edited and deleted. That's 16 events, each once.
+  - **Access:** nothing for Secrets (not shared), and a content change is never sent when the page is unshared within the minute it waits.
+  - **Only the events asked for.**
+  - **Failures:** 8 attempts, numbered, then failing. Three days of that: paused, with "Webhook paused" in Ada's inbox and in settings. Nothing is sent while paused; after Resume, changes from then on; nothing after removal.
+- **`digests.test.ts`:**
+  - 9:00 in the person's time zone.
+  - **Mentions:**
+    - Two mentions give one email, without the page in a teamspace everyone lost meanwhile.
+    - The email has the link and the unsubscribe headers.
+    - The next two mentions give one email with only those. A mention read in time gives none.
+  - **Unsubscribe:** the page, then the one-click POST (a wrong token is refused), then no more emails.
+  - **Daily:** one job at Bob's next 9:00 in Tokyo, and one email with both items when it runs. Ada (never) gets none.
+  - **No mail server:** settings say so.
+
+**E2E** (`integrations.spec.ts`): Ada sets up Lab bot's webhook in Members → Integrations and pastes the token her receiver got; the status turns to On. She adds "Gear motor" to Parts, and her receiver gets `page.created` for it, signed with the token. The API reads it back by the event's id.
+
+**Runs:**
+
+- **Unit tests:** 903 passed (3 skipped).
+- **Desktop E2E and web E2E:** running.
 
 ### Exit check (≈ 2 days)
 

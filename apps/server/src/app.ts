@@ -23,6 +23,9 @@ import { notificationRoutes } from './notify/routes';
 import { Indexer } from './search/indexer';
 import { JobRunner, type JobRunnerOptions } from './jobs/runner';
 import { Automations, type AutomationOptions } from './automations/runner';
+import { WebhookEvents, type WebhookEventsOptions } from './webhooks/integration-events';
+import { EmailDigests, type DigestOptions } from './notify/digests';
+import { emailRoutes } from './notify/email-routes';
 import { syncEndpoint, type SyncOptions } from './sync/endpoint';
 import { fileRoutes } from './files-routes';
 import { formRoutes } from './forms/routes';
@@ -50,6 +53,8 @@ declare module 'fastify' {
     docs: DocEditor;
     /** Database automations (main.ts starts their catch-up after listening). */
     automations: Automations;
+    /** Integrations' webhook events (main.ts starts their catch-up after listening). */
+    webhooks: WebhookEvents;
   }
 }
 
@@ -68,6 +73,10 @@ export interface ServerDeps {
   history?: HistoryOptions;
   /** Automations: how long after changes to look at them (tests shorten it). */
   automations?: AutomationOptions;
+  /** Email digests: how long a mention waits unread (tests shorten it). */
+  digests?: DigestOptions;
+  /** Integration webhooks: delays and merging (tests shorten them). */
+  webhookEvents?: WebhookEventsOptions;
   /** The public API's rate limit per integration (tests lower or raise it). */
   api?: ApiOptions;
   /** Sends invite emails (default: SMTP from the config, or none). */
@@ -89,6 +98,8 @@ export function buildServer({
   mailer,
   jobs: jobOptions,
   automations: automationOptions,
+  webhookEvents: webhookOptions,
+  digests: digestOptions,
   api: apiOptions,
 }: ServerDeps): FastifyInstance {
   const app = Fastify({
@@ -124,8 +135,14 @@ export function buildServer({
     disconnect: (workspaceId, userId, removed) => live().disconnect(workspaceId, userId, removed),
   };
   const access = new AccessService(store);
+  // Made once the context exists (it lines up emails for notifications).
+  let digests: EmailDigests | null = null;
   const notifier = new Notifier(store, access, {
     ...notify,
+    onStored: (n) =>
+      void digests
+        ?.noticed(n)
+        .catch((error: unknown) => app.log.error({ err: error }, 'email digest failed')),
     deliver: (workspaceId, userId, notification) =>
       endpoint?.hub.deliver(workspaceId, userId, JSON.stringify(notification)),
     onError: (error, workspaceId) =>
@@ -156,24 +173,33 @@ export function buildServer({
     mailer: mailer === undefined ? smtpMailer(config) : mailer,
     // Made just below: it needs the context.
     automations: null as unknown as Automations,
+    webhooks: null as unknown as WebhookEvents,
   };
   ctx.automations = new Automations(ctx, {
     ...automationOptions,
     onError: (error, workspaceId) =>
       app.log.error({ err: error, workspaceId }, 'automations failed'),
   });
+  ctx.webhooks = new WebhookEvents(ctx, {
+    ...webhookOptions,
+    onError: (error, workspaceId) =>
+      app.log.error({ err: error, workspaceId }, 'webhook events failed'),
+  });
+  digests = new EmailDigests(ctx, digestOptions);
   app.decorate('indexer', indexer);
   app.decorate('notifier', notifier);
   app.decorate('history', history);
   app.decorate('jobs', jobs);
   app.decorate('docs', ctx.docs);
   app.decorate('automations', ctx.automations);
+  app.decorate('webhooks', ctx.webhooks);
   app.addHook('onClose', () =>
     Promise.all([
       indexer.close(),
       notifier.close(),
       history.close(),
       ctx.automations.close(),
+      ctx.webhooks.close(),
       jobs.close(),
     ]),
   );
@@ -251,6 +277,7 @@ export function buildServer({
     automationRoutes(scope, ctx);
     buttonRoutes(scope, ctx);
     integrationRoutes(scope, ctx);
+    emailRoutes(scope, ctx);
   });
   apiRoutes(app, ctx, apiOptions);
   webApp(app, config.webDir);

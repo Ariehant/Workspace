@@ -8,6 +8,8 @@ import {
   avatarFromFile,
   parseEmails,
   type CreatedInvite,
+  type EmailDigest,
+  type EmailSettings,
   type GroupInfo,
   type InviteRole,
   type MemberInfo,
@@ -567,6 +569,56 @@ function Groups({
   );
 }
 
+const DIGESTS: [EmailDigest, string][] = [
+  ['mentions', 'When I’m mentioned (after 10 minutes unread)'],
+  ['daily', 'A daily digest of what I haven’t seen'],
+  ['never', 'Never'],
+];
+
+/** When the server emails you about unread notifications (Phase 6 M7). */
+function EmailSetting({ team }: { team: TeamApi }) {
+  const [settings, setSettings] = useState<EmailSettings | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    team.emailSettings().then(
+      (s) => alive && setSettings(s),
+      (e: unknown) => alive && setError(errorText(e)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [team]);
+  if (!settings) return error ? <p className="text-sm text-danger">{error}</p> : null;
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted">Email me about my inbox</span>
+      <select
+        aria-label="Email me about my inbox"
+        className={input}
+        value={settings.digest}
+        disabled={!settings.available}
+        onChange={(e) => {
+          setError(null);
+          team
+            .setEmailDigest(e.target.value as EmailDigest)
+            .then(setSettings, (err: unknown) => setError(errorText(err)));
+        }}
+      >
+        {DIGESTS.map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+      {!settings.available && (
+        <span className="text-xs text-faint">This server doesn’t send email.</span>
+      )}
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </label>
+  );
+}
+
 /** Your name and picture, shown in every workspace you're in. */
 export function ProfileDialog({ team, onClose }: { team: TeamApi; onClose(): void }) {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -683,6 +735,7 @@ export function ProfileDialog({ team, onClose }: { team: TeamApi; onClose(): voi
               <p className="text-xs text-faint">
                 Your name and picture show to everyone in the workspaces you’re in.
               </p>
+              <EmailSetting team={team} />
             </>
           )}
           {saved && <p className="text-sm text-success">Saved.</p>}

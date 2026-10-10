@@ -11,6 +11,7 @@ import type { HistoryKeeper } from './history/keeper';
 import type { JobRunner } from './jobs/runner';
 import type { Notifier } from './notify/notifier';
 import type { Indexer } from './search/indexer';
+import type { WebhookEvents } from './webhooks/integration-events';
 
 /** The live sync connections, as routes need them. */
 export interface Realtime {
@@ -45,6 +46,8 @@ export interface ServerContext {
   jobs: JobRunner;
   /** Database automations: follows the log, runs them (set once the context exists). */
   automations: Automations;
+  /** Integrations' webhook events: follows the log, delivers them (set with automations). */
+  webhooks: WebhookEvents;
   /** Who may read and write which docs (scopes, roles, placements). */
   access: AccessService;
   realtime: Realtime;

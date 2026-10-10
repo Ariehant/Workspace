@@ -1,12 +1,18 @@
 /**
  * Settings → Integrations (Phase 6 M5, owners and admins): internal integrations that
  * use the API. Each has a token (shown once, when it's made or replaced), what it may
- * do, and sees only the pages connected to it (a page's Share → Connections).
+ * do, and sees only the pages connected to it (a page's Share → Connections). It may have
+ * a webhook (Phase 6 M7): a URL and the events it wants, verified with a token sent there.
  */
 import { Button, IconButton } from '@workspace/ui';
-import { Check, Copy, KeyRound, Loader2, Trash2 } from 'lucide-react';
+import { Check, Copy, KeyRound, Loader2, Trash2, Webhook } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { IntegrationCapabilities, IntegrationInfo, TeamApi } from './team';
+import {
+  WEBHOOK_EVENT_GROUPS,
+  type IntegrationCapabilities,
+  type IntegrationInfo,
+  type TeamApi,
+} from './team';
 
 const input =
   'h-8 rounded-md border border-line bg-transparent px-2 text-sm text-fg outline-none placeholder:text-faint focus:border-accent';
@@ -52,6 +58,164 @@ function TokenOnce({ token, onDone }: { token: string; onDone(): void }) {
         </Button>
         <Button onClick={onDone}>Done</Button>
       </div>
+    </div>
+  );
+}
+
+/** What a new webhook asks for until changed. */
+const DEFAULT_EVENTS = ['page.created', 'page.properties_updated', 'page.content_updated'];
+
+/** An integration's webhook: its URL and events, verification, and pauses. */
+function WebhookSettings({
+  integration,
+  team,
+  act,
+}: {
+  integration: IntegrationInfo;
+  team: TeamApi;
+  act(change: () => Promise<unknown>): Promise<void>;
+}) {
+  const current = integration.webhook ?? null;
+  const [editing, setEditing] = useState(false);
+  const [url, setUrl] = useState(current?.url ?? '');
+  const [events, setEvents] = useState<string[]>(current?.events ?? DEFAULT_EVENTS);
+  const [token, setToken] = useState('');
+  const status = !current
+    ? 'Off'
+    : current.paused
+      ? 'Paused'
+      : current.verified
+        ? 'On'
+        : 'Waiting for verification';
+  const toggle = (event: string, on: boolean) =>
+    setEvents((list) => (on ? [...list, event] : list.filter((e) => e !== event)));
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    void act(async () => {
+      await team.setWebhook(integration.id, { url: url.trim(), events });
+      setEditing(false);
+    });
+  };
+  return (
+    <div
+      className="flex flex-col gap-2 border-t border-line pt-2 text-sm"
+      data-testid="webhook-settings"
+    >
+      <div className="flex items-center gap-2">
+        <Webhook size={14} className="text-muted" aria-hidden />
+        <span className="font-medium">Webhook</span>
+        <span
+          data-testid="webhook-status"
+          className={`rounded px-1.5 text-xs ${
+            status === 'On'
+              ? 'bg-green-500/15 text-green-700 dark:text-green-400'
+              : status === 'Off'
+                ? 'text-faint'
+                : 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+          }`}
+        >
+          {status}
+        </span>
+        {current && (
+          <span className="min-w-0 flex-1 truncate text-xs text-faint">{current.url}</span>
+        )}
+        {!current && <span className="flex-1" />}
+        <Button className="h-7" onClick={() => setEditing((v) => !v)}>
+          {editing ? 'Cancel' : current ? 'Edit' : 'Set up'}
+        </Button>
+        {current && (
+          <IconButton
+            label={`Remove ${integration.name}’s webhook`}
+            size="sm"
+            onClick={() => void act(() => team.removeWebhook(integration.id))}
+          >
+            <Trash2 size={14} />
+          </IconButton>
+        )}
+      </div>
+      {current && !current.verified && !editing && (
+        <form
+          className="flex flex-col gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act(async () => {
+              await team.verifyWebhook(integration.id, token.trim());
+              setToken('');
+            });
+          }}
+        >
+          <p className="text-muted">
+            A verification token was sent to the URL (as{' '}
+            <code className="text-xs">verification_token</code>). Paste it here to start deliveries.
+          </p>
+          <div className="flex gap-2">
+            <input
+              aria-label="Verification token"
+              placeholder="secret_…"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              className={`${input} min-w-0 flex-1`}
+            />
+            <Button type="submit" variant="primary" disabled={!token.trim()}>
+              Verify
+            </Button>
+            <Button onClick={() => void act(() => team.resendWebhookToken(integration.id))}>
+              Send again
+            </Button>
+          </div>
+        </form>
+      )}
+      {current?.paused && (
+        <div className="flex items-center gap-2 text-muted">
+          <span className="flex-1">
+            Paused after 3 days of failed deliveries
+            {current.lastError ? ` (${current.lastError})` : ''}.
+          </span>
+          <Button onClick={() => void act(() => team.resumeWebhook(integration.id))}>Resume</Button>
+        </div>
+      )}
+      {current && !current.paused && current.failingSince && (
+        <p className="text-muted">
+          Deliveries failing since {new Date(current.failingSince).toLocaleString()}
+          {current.lastError ? `: ${current.lastError}` : ''}.
+        </p>
+      )}
+      {editing && (
+        <form className="flex flex-col gap-2" onSubmit={save} data-testid="webhook-editor">
+          <input
+            aria-label="Webhook URL"
+            placeholder="https://example.com/notion-webhook"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className={input}
+          />
+          {WEBHOOK_EVENT_GROUPS.map(([group, list]) => (
+            <fieldset key={group} className="flex flex-wrap gap-x-4 gap-y-1">
+              <legend className="mb-0.5 text-xs text-faint">{group}</legend>
+              {list.map((event) => (
+                <label key={event} className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={events.includes(event)}
+                    onChange={(e) => toggle(event, e.target.checked)}
+                  />
+                  <code className="text-xs">{event}</code>
+                </label>
+              ))}
+            </fieldset>
+          ))}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!url.trim() || events.length === 0}
+              data-testid="webhook-save"
+            >
+              Save
+            </Button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -206,6 +370,7 @@ export function IntegrationsPanel({ team }: { team: TeamApi }) {
                 </label>
               </div>
             )}
+            {i.capabilities && <WebhookSettings integration={i} team={team} act={act} />}
           </li>
         ))}
       </ul>

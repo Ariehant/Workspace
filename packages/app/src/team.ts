@@ -177,6 +177,9 @@ export function teamApi(team: TeamPlatform) {
     me: async () => (await r<{ user: Profile }>('GET', 'me')).user,
     updateMe: async (change: { name?: string; avatar?: string | null }) =>
       (await r<{ user: Profile }>('PATCH', 'me', change)).user,
+    /** Emails about unread notifications (Phase 6 M7), and whether the server sends any. */
+    emailSettings: () => r<EmailSettings>('GET', 'me/email'),
+    setEmailDigest: (digest: EmailDigest) => r<EmailSettings>('PUT', 'me/email', { digest }),
     // Publishing (Phase 5 M7).
     published: (pageId: string) =>
       r<{ published: PublishedPage | null; suggestedSlug: string }>(
@@ -239,6 +242,16 @@ export function teamApi(team: TeamPlatform) {
     rotateIntegrationToken: (id: string) =>
       r<{ token: string }>('POST', `integrations/${id}/token`),
     deleteIntegration: (id: string) => r<{ ok: true }>('DELETE', `integrations/${id}`),
+    // Its webhook (Phase 6 M7): a new URL is sent a token, pasted back to verify it.
+    setWebhook: (id: string, body: { url: string; events: string[] }) =>
+      r<{ webhook: IntegrationWebhook }>('PUT', `integrations/${id}/webhook`, body),
+    verifyWebhook: (id: string, token: string) =>
+      r<{ webhook: IntegrationWebhook }>('POST', `integrations/${id}/webhook/verify`, { token }),
+    resendWebhookToken: (id: string) =>
+      r<{ ok: true }>('POST', `integrations/${id}/webhook/resend`),
+    resumeWebhook: (id: string) =>
+      r<{ webhook: IntegrationWebhook }>('POST', `integrations/${id}/webhook/resume`),
+    removeWebhook: (id: string) => r<{ ok: true }>('DELETE', `integrations/${id}/webhook`),
   };
 }
 
@@ -278,6 +291,46 @@ export interface IntegrationInfo {
   /** The token's last characters. */
   tokenHint?: string | null;
   lastUsedAt?: number | null;
+  /** Its webhook subscription (owners and admins). */
+  webhook?: IntegrationWebhook | null;
+}
+
+/** An integration's webhook subscription, as settings show it. */
+export interface IntegrationWebhook {
+  url: string;
+  events: string[];
+  verified: boolean;
+  paused: boolean;
+  failingSince: number | null;
+  lastError: string | null;
+}
+
+/** The events a webhook may ask for (Notion's), by group. */
+export const WEBHOOK_EVENT_GROUPS: [string, string[]][] = [
+  [
+    'Pages',
+    [
+      'page.created',
+      'page.properties_updated',
+      'page.content_updated',
+      'page.moved',
+      'page.deleted',
+      'page.undeleted',
+      'page.locked',
+      'page.unlocked',
+    ],
+  ],
+  ['Databases', ['database.created', 'database.schema_updated', 'database.deleted']],
+  ['Comments', ['comment.created', 'comment.updated', 'comment.deleted']],
+];
+
+/** When to email about unread notifications. */
+export type EmailDigest = 'mentions' | 'daily' | 'never';
+
+export interface EmailSettings {
+  digest: EmailDigest;
+  /** False when the server has no mail server set up. */
+  available: boolean;
 }
 
 export type TeamApi = ReturnType<typeof teamApi>;

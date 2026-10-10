@@ -17,6 +17,7 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
  */
 const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [/^me$/, ['GET', 'PATCH']],
+  [/^me\/email$/, ['GET', 'PUT']],
   [/^members$/, ['GET']],
   [new RegExp(`^members/${UUID}$`), ['PATCH', 'DELETE']],
   [/^invites$/, ['GET', 'POST']],
@@ -49,6 +50,9 @@ const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [/^integrations$/, ['GET', 'POST']],
   [/^integrations\/[\w-]{1,128}$/, ['PATCH', 'DELETE']],
   [/^integrations\/[\w-]{1,128}\/token$/, ['POST']],
+  // Its webhook (Phase 6 M7).
+  [/^integrations\/[\w-]{1,128}\/webhook$/, ['PUT', 'DELETE']],
+  [/^integrations\/[\w-]{1,128}\/webhook\/(verify|resend|resume)$/, ['POST']],
   // A button's webhook and notification steps (Phase 6 M4).
   [/^buttons\/(webhook|notify)$/, ['POST']],
   [/^buttons\/secret$/, ['GET']],

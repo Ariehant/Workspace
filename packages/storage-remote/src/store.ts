@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import { Accounts } from './accounts';
 import { AutomationSecrets, FormLinks } from './forms';
 import { Integrations } from './integrations';
+import { IntegrationWebhooks } from './webhooks';
 import { Jobs } from './jobs';
 import { migrate } from './migrations';
 import { SearchIndex } from './search';
@@ -68,6 +69,7 @@ export class PgStore {
   readonly formLinks: FormLinks;
   readonly automationSecrets: AutomationSecrets;
   readonly integrations: Integrations;
+  readonly integrationWebhooks: IntegrationWebhooks;
 
   constructor(connectionString: string, options: { max?: number } = {}) {
     this.pool = new pg.Pool({ connectionString, max: options.max ?? 10 });
@@ -83,6 +85,7 @@ export class PgStore {
     this.formLinks = new FormLinks(this.pool);
     this.automationSecrets = new AutomationSecrets(this.pool);
     this.integrations = new Integrations(this.pool);
+    this.integrationWebhooks = new IntegrationWebhooks(this.pool);
   }
 
   migrate(): Promise<number> {

@@ -177,8 +177,8 @@ export class SyncService {
     const token = this.token;
     if (!config || !account || !token) return { error: 'Sync this workspace with a server first.' };
     const path =
-      request.path === 'me'
-        ? '/api/auth/me'
+      request.path === 'me' || request.path.startsWith('me/')
+        ? `/api/auth/${request.path}`
         : `/api/workspaces/${config.workspaceId}/${request.path}`;
     try {
       const ok = await new ServerApi(account.server, token).call<unknown>(

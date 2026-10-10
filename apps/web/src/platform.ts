@@ -243,7 +243,9 @@ export function createWebPlatform(options: {
       request: (method, path, body) =>
         api(
           method,
-          path === 'me' ? '/api/auth/me' : `/api/workspaces/${workspace.id}/${path}`,
+          path === 'me' || path.startsWith('me/')
+            ? `/api/auth/${path}`
+            : `/api/workspaces/${workspace.id}/${path}`,
           body,
         ),
     },

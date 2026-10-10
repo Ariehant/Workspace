@@ -57,6 +57,7 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
       ctx.indexer.schedule(workspaceId);
       ctx.notifier.schedule(workspaceId);
       ctx.automations.schedule(workspaceId);
+      ctx.webhooks.schedule(workspaceId);
       void ctx.history.follow(workspaceId);
     },
   });
@@ -231,6 +232,7 @@ export function syncEndpoint(app: FastifyInstance, ctx: ServerContext, options: 
         ctx.indexer.schedule(id);
         ctx.notifier.schedule(id);
         ctx.automations.schedule(id);
+        ctx.webhooks.schedule(id);
         app.log.info({ workspaceId: id, docs: changed }, 'compacted');
       }
     }

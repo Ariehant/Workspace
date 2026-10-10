@@ -52,6 +52,8 @@ export interface NotifierOptions {
   reminderPollMs?: number;
   /** Send a notification to the person's open connections. */
   deliver?: (workspaceId: string, userId: string, notification: NotificationData) => void;
+  /** A notification was stored (email digests line up from here). */
+  onStored?: (notification: NewNotification) => void;
   onError?: (error: unknown, workspaceId: string | null) => void;
   now?: () => number;
 }
@@ -168,7 +170,10 @@ export class Notifier {
     if (!access.isMember(n.userId) || access.isBot(n.userId)) return;
     if (n.docId && !access.canRead(access.roles(n.userId), n.docId)) return;
     const stored = await this.store.notifications.add(n);
-    if (stored) this.options.deliver?.(n.workspaceId, n.userId, toData(stored));
+    if (stored) {
+      this.options.deliver?.(n.workspaceId, n.userId, toData(stored));
+      this.options.onStored?.(n);
+    }
   }
 
   /** People were given access to a scope (a teamspace, or a page shared on its own). */
@@ -258,6 +263,25 @@ export class Notifier {
       text: notice.text.slice(0, 500),
       // Shown while they can still see the database.
       docId: notice.databaseId,
+      key: notice.key ?? null,
+    });
+  }
+
+  /** About an integration (its webhook paused), to its maker. */
+  async integrationNotice(
+    workspaceId: string,
+    notice: { userId: string; title: string; text: string; key?: string },
+  ): Promise<void> {
+    const access = await this.access.workspace(workspaceId);
+    await this.notify(access, {
+      workspaceId,
+      userId: notice.userId,
+      kind: 'automation',
+      pageId: null,
+      title: notice.title,
+      actorId: null,
+      text: notice.text.slice(0, 500),
+      docId: null,
       key: notice.key ?? null,
     });
   }

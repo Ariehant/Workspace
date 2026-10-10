@@ -134,6 +134,28 @@ export class Notifications {
     return rows.map(fromRow);
   }
 
+  /** Someone's unread notifications not emailed yet, in every workspace (oldest first). */
+  async toEmail(
+    userId: string,
+    limit = 100,
+  ): Promise<(StoredNotification & { workspaceId: string })[]> {
+    const { rows } = await this.pool.query<Row & { workspace_id: string }>(
+      `SELECT * FROM notifications
+       WHERE user_id = $1 AND read_at IS NULL AND archived_at IS NULL AND emailed_at IS NULL
+       ORDER BY created_at, id LIMIT $2`,
+      [userId, limit],
+    );
+    return rows.map((r) => ({ ...fromRow(r), workspaceId: r.workspace_id }));
+  }
+
+  async markEmailed(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.pool.query(
+      'UPDATE notifications SET emailed_at = now() WHERE id = ANY($1::uuid[])',
+      [ids],
+    );
+  }
+
   /** Unread, not archived (with the doc each needs readable, for the caller to check). */
   async unread(workspaceId: string, userId: string): Promise<{ docId: string | null }[]> {
     const { rows } = await this.pool.query<{ doc_id: string | null }>(

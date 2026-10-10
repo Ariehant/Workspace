@@ -5,9 +5,11 @@ export interface Mail {
   to: string;
   subject: string;
   text: string;
+  /** Extra headers (e.g. `List-Unsubscribe`). */
+  headers?: Record<string, string>;
 }
 
-/** Sends email (invites). Tests use their own. */
+/** Sends email (invites, notification digests). Tests use their own. */
 export interface Mailer {
   send(mail: Mail): Promise<void>;
 }

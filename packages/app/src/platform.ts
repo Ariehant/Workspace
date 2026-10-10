@@ -181,7 +181,7 @@ export type TeamMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 export interface TeamPlatform {
   /**
    * Call the server: `path` is under the workspace (`members`, `invites/<id>`,
-   * `groups/<id>/members/<user>`…), or `me` for the account. Rejects with the server's
+   * `groups/<id>/members/<user>`…), or `me` (and `me/…`) for the account. Rejects with the server's
    * message.
    */
   request<T>(method: TeamMethod, path: string, body?: unknown): Promise<T>;

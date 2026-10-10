@@ -31,6 +31,7 @@ async function main(): Promise<void> {
   void app.automations
     .start()
     .catch((error: unknown) => app.log.error({ err: error }, 'automations'));
+  void app.webhooks.start().catch((error: unknown) => app.log.error({ err: error }, 'webhooks'));
   app.jobs.start();
 
   let stopping = false;

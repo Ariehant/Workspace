@@ -37,7 +37,9 @@ and buttons can send a webhook or a notification. M5 adds integrations and the A
 an integration with a token, connect pages to it, and it uses Notion's API (`/v1`, the
 official SDK works) on those pages: users, pages, databases and data sources, queries and
 search. M6 adds page content (blocks: read, appended, changed and deleted by id, while people
-edit the same page live), comments, and signed links to stored files.
+edit the same page live), comments, and signed links to stored files. M7 adds integration
+webhooks (Notion's events, verified and signed, only for pages the integration can read) and
+email digests of unread notifications (after a mention, or daily), with one-click unsubscribe.
 
 ## What works today
 
