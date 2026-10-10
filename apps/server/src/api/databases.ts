@@ -320,7 +320,8 @@ async function query(api: ApiView, found: DatabaseLocated, body: Body, filterPro
     rows,
     (r) => r.row.id,
     parsePaging(body),
-    'page_or_database',
+    // (From 2025-09-03, lists of pages and data sources.)
+    api.version === '2025-09-03' ? 'page_or_data_source' : 'page_or_database',
     ({ row }) =>
       pageObject(
         {

@@ -113,7 +113,7 @@ Tooling: TypeScript strict, ESLint, Prettier, Vitest for unit tests, Playwright 
 | **3. Power features** (3–4 wk) ✅ done (real-export check pending), plan: [PHASE3.md](PHASE3.md) | Synced blocks, buttons, page history, backlinks, templates gallery, multi-window/tabs, import/export (Notion zip first), Mermaid/KaTeX/code | A real Notion export imports with no meaningful loss |
 | **4. Sync server** (4–5 wk) ✅ done, plan: [PHASE4.md](PHASE4.md) | Docker Compose stack, auth (email/password + OIDC), Hocuspocus sync, attachment upload to MinIO, device sync, web app build | Two devices for one user stay in sync, including after offline edits |
 | **5. Collaboration** (5–6 wk) ✅ done, plan: [PHASE5.md](PHASE5.md) | Workspaces, members, guests, permissions, presence and cursors, comments, inbox and notifications, publish to web | Several users co-edit with the correct permission checks |
-| **6. Automation & API** (3–4 wk) planned, plan: [PHASE6.md](PHASE6.md) | Database automations, forms, reminders (done in Phase 5), public REST API, webhooks, integration tokens; the "can edit content" database role (moved from Phase 5); a Postgres job queue instead of Redis | API conformance tests pass |
+| **6. Automation & API** (3–4 wk) ✅ done, plan: [PHASE6.md](PHASE6.md) | Database automations, forms, reminders (done in Phase 5), public REST API, webhooks, integration tokens; the "can edit content" database role (moved from Phase 5); a Postgres job queue instead of Redis | API conformance tests pass |
 | **7. Polish & release** (ongoing) | Performance (pages with 10k blocks, databases with 50k rows using virtualized views), accessibility, i18n, auto-update, signed packages | Release v1.0 |
 
 ## 5. Ubuntu packaging and running

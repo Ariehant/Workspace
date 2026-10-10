@@ -1,6 +1,6 @@
 # Phase 6: Automations and API
 
-**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) M4 (automations on a local desktop, and button webhook and notification steps), M5 (integrations and the API core), M6 (blocks, comments and files in the API) and M7 (integration webhooks and email digests) are done. The exit check is next.
+**Status:** done. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) M4 (automations on a local desktop, and button webhook and notification steps), M5 (integrations and the API core), M6 (blocks, comments and files in the API) and M7 (integration webhooks and email digests) are done, and the exit check passes.
 
 ## Context
 
@@ -916,7 +916,7 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - **Desktop E2E:** 142 of 142, twice.
 - **Web E2E:** 3 of 3.
 
-### Exit check (≈ 2 days)
+### Exit check ✅
 
 - **API conformance:** `apps/server/src/api.conformance.test.ts` drives the server with the official `@notionhq/client` SDK, pointed at it with `baseUrl`, against both versions. Each step's response must match the SDK's types and Notion's documented shapes:
   1. Create a database with every writable property type, add pages with values and content, and query with nested filters and sorts.
@@ -930,6 +930,50 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
   - A public form submission starts the same automation.
   - A content-role member can edit rows but not the schema.
 - **The Docker stack:** the API, a webhook, and a public form through Caddy with TLS.
+
+**Done:**
+
+- **API conformance** (`api.conformance.test.ts`): the official SDK (`@notionhq/client` 5.27, with `baseUrl`), in both versions. For 2022-06-28, it uses the SDK's `request` for the calls the SDK no longer has.
+  1. **Databases:**
+     - Two databases are made: "Suppliers", and "Parts" with every writable type: title, text, number, select, multi-select, date, people, files, checkbox, URL, email, phone and relation, plus a formula, created and edited time and by, and a unique ID.
+     - The schema comes back with each type and the select options' colors. In 2025-09-03 it comes from the data source; the database lists one data source.
+     - Four pages are made with a value of every type (a new multi-select option among them) and content. Each value comes back (the formula computed, the unique ID numbered, created by the bot), and every page passes `isFullPage`.
+     - A query with an `and` holding an `or`, sorted.
+  2. **Paging, blocks and comments:**
+     - The same query one result at a time, following `next_cursor`, gives the same results.
+     - Blocks are listed with `collectPaginatedAPI`, appended after a block (a toggle with a child), changed, retrieved and deleted, and every one passes `isFullBlock`.
+     - A comment and a reply pass `isFullComment`.
+  3. **Search, users and errors:**
+     - Search; users pass `isFullUser` (people without emails, and the bot); `users.me`.
+     - `object_not_found` (404) for a page not shared, `validation_error` for a property that doesn't exist, `unauthorized` for a bad token.
+     - `rate_limited` (429) with `Retry-After` and Notion's error body.
+- **Found by it, and fixed:** from 2025-09-03, queries and search return lists of type `page_or_data_source`, as Notion's do. They said `page_or_database`.
+- **A known difference:** text properties hold plain text, so formatting inside a text property's value (bold, links) isn't kept. Titles and page content keep theirs.
+- **Real-world check** (`real-world.test.ts`), with two published tools on the official SDK, unchanged (dev dependencies):
+  - `@tryfabric/martian` (Markdown to Notion blocks) makes a page's content.
+  - `notion-to-md` (Notion to Markdown, as exporters and static site generators use it) reads the page back by walking its blocks and children through the SDK.
+  - The document includes headings, bold, italic, a link, inline code, to-dos, numbered and nested lists, a quote, code and a table. It comes back as the same Markdown, in `notion-to-md`'s style.
+- **Changed from the plan:**
+  - npm has no published CSV importer to run unchanged, so the importer is martian (Markdown) and the exporter is notion-to-md.
+  - Without a Notion account here, the comparison is with the input document, not with Notion's output.
+  - martian drops `---` (it makes no dividers), so the document has none.
+- **Scenario E2E** (`phase6-exit.spec.ts`, two desktops and a browser):
+  - **Setup:** Ada makes "Orders", with an automation (when a page is added: fill in "Logged", call a webhook). She also makes "Shop bot" in Members → Integrations, sets up and verifies its webhook, and connects it to "Orders".
+  - **An outside script** (plain `fetch`, 2025-09-03) adds "Order #1001":
+    - it appears on Ada's desktop, live
+    - "Logged" is filled in, and the automation's webhook arrives
+    - the integration's webhook reports `page.created` (by the bot) and `page.properties_updated` (by the automations bot, one property), every event signed with the verification token
+  - **A signed-out visitor** answers the public form: "Order #1002" appears, the automation runs and its webhook arrives, and the integration reports `page.created`.
+  - **Bob**, with "Can edit content", sees no "Add a property" or "Add a view". He adds "Order #1003": Ada sees it, the automation fills it in for him too, and the integration reports it as made by a person.
+- **The Docker stack** (`stack.smoke.test.ts`, run in CI against the stack behind Caddy with TLS):
+  - A new case: an integration connected to a database calls the API (`users.me`, a page with content, its blocks, a query), and a public form takes a response signed out.
+  - The integration's webhook is verified and reports the new page. This part runs when `STACK_WEBHOOK_HOST` is set: CI sets it, with a CI-only override (`infra/docker-compose.ci.yml`) that lets the server reach the runner.
+  - Docker isn't available here, so the case was run against the bundled server (`dist/main.js`) on a local Postgres instead: all 3 cases passed, the webhook included.
+
+**Runs:**
+
+- **Unit tests:** 910 passed (4 skipped: the stack smoke cases, without a stack).
+- **Desktop E2E and web E2E:** running.
 
 ## Packages
 

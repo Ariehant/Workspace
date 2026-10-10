@@ -25,7 +25,7 @@ desktop notifications. Pages can be published to the web (M7), readable without 
 and the server keeps backlinks and page history, so the web app has them too. The exit check
 passes: three accounts on two desktops and the web app, crafted clients that try to get around
 the checks, and the Docker stack with a second account. Phase 6 (automations, forms and a
-Notion-compatible API, see [docs/PHASE6.md](docs/PHASE6.md)) is under way. M1 is done: a database
+Notion-compatible API, see [docs/PHASE6.md](docs/PHASE6.md)) is done. M1 is done: a database
 can be shared as "Can edit content" (rows, not properties or views, checked by the server), the
 server can edit docs on someone's behalf through the same checks, and it has a job queue. M2 adds
 forms: a database's form view, filled in from the app (even by people who may only view it) or,
@@ -39,7 +39,10 @@ official SDK works) on those pages: users, pages, databases and data sources, qu
 search. M6 adds page content (blocks: read, appended, changed and deleted by id, while people
 edit the same page live), comments, and signed links to stored files. M7 adds integration
 webhooks (Notion's events, verified and signed, only for pages the integration can read) and
-email digests of unread notifications (after a mention, or daily), with one-click unsubscribe.
+email digests of unread notifications (after a mention, or daily), with one-click unsubscribe. The exit
+check passes: the official SDK against both API versions, published Notion tools run unchanged,
+and a scenario where an outside script, an automation, a public form, webhooks and a member
+who may only edit rows all meet. Phase 6 is done.
 
 ## What works today
 

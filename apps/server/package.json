@@ -30,10 +30,12 @@
   },
   "devDependencies": {
     "@notionhq/client": "^5.27.0",
+    "@tryfabric/martian": "1.2.4",
     "@types/node": "^26.6.4",
     "@types/nodemailer": "^8.0.2",
     "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2",
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "notion-to-md": "3.1.9"
   }
 }

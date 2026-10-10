@@ -89,7 +89,8 @@ export function searchRoutes(app: FastifyInstance) {
       hits,
       (h) => h.id,
       paging,
-      'page_or_database',
+      // (From 2025-09-03, lists of pages and data sources.)
+      api.version === '2025-09-03' ? 'page_or_data_source' : 'page_or_database',
       (h) => h,
     );
     const results = [];
