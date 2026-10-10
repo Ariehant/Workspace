@@ -1,0 +1,9 @@
+# CI only: the server may reach the runner (the stack smoke test's webhook receiver).
+# Never use this in production: it lets webhooks reach private addresses.
+services:
+  server:
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    environment:
+      WEBHOOK_ALLOW_PRIVATE: 'true'
+      WEBHOOK_ALLOW_HTTP: 'true'

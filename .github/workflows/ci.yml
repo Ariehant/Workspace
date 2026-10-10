@@ -109,7 +109,7 @@ jobs:
         working-directory: infra
         run: |
           printf 'DOMAIN=localhost\nSIGNUP=open\nPOSTGRES_PASSWORD=ci-password\nS3_ACCESS_KEY_ID=workspace\nS3_SECRET_ACCESS_KEY=ci-secret-key\n' > .env
-          docker compose -f docker-compose.yml -f docker-compose.s3.yml up -d --no-build --wait
+          docker compose -f docker-compose.yml -f docker-compose.s3.yml -f docker-compose.ci.yml up -d --no-build --wait
       - name: Smoke-test through Caddy (HTTPS)
         run: |
           for i in $(seq 1 30); do curl -skf https://localhost/api/ready && break; sleep 2; done
@@ -126,10 +126,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Stack end to end (sync, files, search, web app)
+      - name: Stack end to end (sync, files, search, web app, API, forms, webhooks)
         run: |
           docker compose -f infra/docker-compose.yml -f infra/docker-compose.s3.yml cp caddy:/data/caddy/pki/authorities/local/root.crt "$RUNNER_TEMP/caddy-root.crt"
-          STACK_URL=https://localhost NODE_EXTRA_CA_CERTS="$RUNNER_TEMP/caddy-root.crt" \
+          STACK_URL=https://localhost NODE_EXTRA_CA_CERTS="$RUNNER_TEMP/caddy-root.crt" STACK_WEBHOOK_HOST=host.docker.internal \
             pnpm --filter @workspace/server exec vitest run src/stack.smoke.test.ts
       - name: Logs
         if: failure()

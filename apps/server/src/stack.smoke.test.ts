@@ -7,15 +7,22 @@
  * A device signs up, creates a workspace and syncs with a second device over wss, an
  * attachment goes up and comes back, search finds the page, and the web app is served.
  * Then a second account: it gets only the page shared with it, live, and a published
- * page is public until it's unpublished.
+ * page is public until it's unpublished. Then Phase 6: an integration uses the API, a
+ * public form takes a response, and (with STACK_WEBHOOK_HOST, a name the server reaches
+ * this machine by, and webhooks to private addresses allowed on the stack) the
+ * integration's webhook is verified and reports the new page.
  */
 import { createHash } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { WORKSPACE_DOC_ID, createPage, getPageContent } from '@workspace/core';
+import { addView, initDatabase, readDatabase, updateView } from '@workspace/database';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { TestDevice } from './sync/test-client';
 
 const base = process.env.STACK_URL?.replace(/\/+$/, '');
+const webhookHost = process.env.STACK_WEBHOOK_HOST;
 
 const until = async (done: () => boolean | Promise<boolean>, what: string, ms = 20_000) => {
   const start = Date.now();
@@ -196,6 +203,134 @@ describe.skipIf(!base)('the deployed stack', () => {
     } finally {
       a.client.stop();
       b.client.stop();
+    }
+  }, 60_000);
+
+  it('the API, a public form and an integration webhook, through Caddy', async () => {
+    const stamp = Date.now();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type Json = Record<string, any>;
+    const call = async (method: string, path: string, token: string | null, body?: object) => {
+      const res = await fetch(`${base}${path}`, {
+        method,
+        headers: {
+          'x-workspace-client': 'smoke',
+          ...(body ? { 'content-type': 'application/json' } : {}),
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      expect(res.ok, `${method} ${path}: ${res.status}`).toBe(true);
+      return (await res.json()) as Json;
+    };
+    const ada = await call('POST', '/api/auth/signup', null, {
+      email: `api-${stamp}@lab.io`,
+      name: 'Api',
+      password: 'smoke password',
+      client: 'desktop',
+    });
+    const { workspace } = await call('POST', '/api/workspaces', ada.token, { name: 'API lab' });
+    const ws = `/api/workspaces/${workspace.id}`;
+    const { defaultScopeId } = await call('GET', `${ws}/scopes`, ada.token);
+
+    // A receiver for the integration's webhook, if the server can reach this machine.
+    const got: Json[] = [];
+    const receiver = createServer((req, res) => {
+      let body = '';
+      req.on('data', (c: Buffer) => (body += c.toString()));
+      req.on('end', () => {
+        got.push(JSON.parse(body) as Json);
+        res.end('ok');
+      });
+    });
+    if (webhookHost) await new Promise<void>((r) => receiver.listen(0, '0.0.0.0', r));
+
+    const url = `${base!.replace(/^http/, 'ws')}/api/sync/${workspace.id}`;
+    const a = new TestDevice({ url, token: ada.token, deviceId: 'smoke-api' });
+    try {
+      a.client.start();
+      await until(() => a.client.state.state === 'live', 'live');
+      // A database with a public form.
+      const orders = createPage(a.doc(WORKSPACE_DOC_ID), { title: 'Orders', kind: 'database' });
+      const db = a.doc(orders);
+      initDatabase(db, { databaseId: orders });
+      const formId = addView(db, { viewSet: orders, name: 'Order form', type: 'form' });
+      const form = readDatabase(db).views.find((v) => v.id === formId)!.form!;
+      updateView(db, formId, { form: { ...form, title: 'Place an order', audience: 'public' } });
+      await until(() => a.outbox.length === 0, 'synced');
+
+      // An integration connected to it.
+      const made = await call('POST', `${ws}/integrations`, ada.token, { name: 'Smoke bot' });
+      const bot = { id: made.integration.id as string, token: made.token as string };
+      const { scope } = await call('POST', `${ws}/pages/${orders}/share`, ada.token, {
+        scope: defaultScopeId,
+      });
+      await call('PUT', `${ws}/scopes/${scope.id}/access`, ada.token, {
+        principal: `user:${bot.id}`,
+        role: 'edit',
+      });
+      if (webhookHost) {
+        const port = (receiver.address() as AddressInfo).port;
+        await call('PUT', `${ws}/integrations/${bot.id}/webhook`, ada.token, {
+          url: `http://${webhookHost}:${port}/hook`,
+          events: ['page.created'],
+        });
+        await until(() => got.some((g) => g.verification_token), 'the verification token');
+        const token = got.find((g) => g.verification_token)!.verification_token as string;
+        await call('POST', `${ws}/integrations/${bot.id}/webhook/verify`, ada.token, { token });
+      }
+
+      // The API, through Caddy.
+      const v1 = (method: string, path: string, body?: object) =>
+        fetch(`${base}/v1${path}`, {
+          method,
+          headers: {
+            authorization: `Bearer ${bot.token}`,
+            'notion-version': '2025-09-03',
+            ...(body && { 'content-type': 'application/json' }),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        }).then(async (r) => ({ status: r.status, body: (await r.json()) as Json }));
+      expect((await v1('GET', '/users/me')).body).toMatchObject({ type: 'bot', name: 'Smoke bot' });
+      const page = await v1('POST', '/pages', {
+        parent: { data_source_id: orders },
+        properties: { Name: { title: [{ text: { content: 'From the API' } }] } },
+        children: [{ paragraph: { rich_text: [{ text: { content: 'Through Caddy.' } }] } }],
+      });
+      expect(page.status).toBe(200);
+      const blocks = await v1('GET', `/blocks/${page.body.id}/children`);
+      expect(blocks.body.results[0].paragraph.rich_text[0].plain_text).toBe('Through Caddy.');
+
+      // The public form: answered signed out.
+      const { link } = await call('PUT', `${ws}/forms/${orders}/${formId}/link`, ada.token);
+      const formPath = new URL(link as string).pathname;
+      const shown = await fetch(`${base}${formPath}`);
+      expect(shown.status).toBe(200);
+      expect(await shown.text()).toContain('Place an order');
+      const sent = await fetch(`${base}${formPath}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ title: 'From the form' }).toString(),
+        redirect: 'manual',
+      });
+      expect(sent.status).toBeLessThan(400);
+      const rows = await v1('POST', `/data_sources/${orders}/query`, {
+        sorts: [{ property: 'Name', direction: 'ascending' }],
+      });
+      expect(rows.body.results.map((r: Json) => r.properties.Name.title[0]?.plain_text)).toEqual([
+        'From the API',
+        'From the form',
+      ]);
+
+      if (webhookHost) {
+        await until(
+          () => got.some((g) => g.type === 'page.created' && g.entity.id === page.body.id),
+          'page.created',
+        );
+      }
+    } finally {
+      a.client.stop();
+      receiver.close();
     }
   }, 60_000);
 });
