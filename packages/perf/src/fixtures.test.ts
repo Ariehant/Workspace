@@ -100,7 +100,7 @@ describe('budgets', () => {
   it('fails results over the limit and regressions from the base branch', () => {
     const verdicts = judge(
       {
-        'database.filter': 1600,
+        'database.filter': 2100,
         'database.sort': 400,
         'database.group': 100,
         'page.keystroke.p95': 5,
@@ -109,7 +109,7 @@ describe('budgets', () => {
       { 'database.sort': 300, 'database.group': 95, 'page.keystroke.p95': 3 },
     );
     expect(verdicts.map((v) => [v.metric, v.problem, v.overTarget])).toEqual([
-      ['database.filter', 'over the limit (1500 ms)', true],
+      ['database.filter', 'over the limit (2000 ms)', true],
       ['database.sort', '33% slower than the base branch', true],
       ['database.group', null, false],
       // Under the noise floor: not compared with the base branch.
@@ -117,7 +117,7 @@ describe('budgets', () => {
       ['page.open', null, false],
     ]);
     expect(report(verdicts)).toContain(
-      '| database.group | 100 ms | 300 ms | 1500 ms | 95 ms | ✅ |',
+      '| database.group | 100 ms | 300 ms | 2000 ms | 95 ms | ✅ |',
     );
   });
 

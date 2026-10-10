@@ -96,14 +96,36 @@ async function longestFrame(window: Page, act: () => Promise<void>): Promise<num
  * done), so each case is timed on its own.
  */
 async function quiet(app: ElectronApplication) {
-  let calm = 0;
+  let fast = 0;
   const until = Date.now() + 60_000;
-  while (calm < 3 && Date.now() < until) {
+  while (fast < 3 && Date.now() < until) {
     const start = Date.now();
     await app.evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)));
-    calm = Date.now() - start < 150 ? calm + 1 : 0;
+    fast = Date.now() - start < 150 ? fast + 1 : 0;
   }
 }
+
+/** Wait until the window's frames are short again (the last change has rendered). */
+async function calm(window: Page) {
+  await window.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let last = performance.now();
+        let quietFrames = 0;
+        const until = last + 10_000;
+        const tick = (now: number) => {
+          quietFrames = now - last < 25 ? quietFrames + 1 : 0;
+          last = now;
+          if (quietFrames >= 10 || now > until) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+}
+
+/** One notch of a mouse wheel; a step every frame is fast, continuous scrolling. */
+const WHEEL = 120;
 
 async function scroll(window: Page, steps: number, dy: number) {
   for (let i = 0; i < steps; i++) {
@@ -166,7 +188,7 @@ test(`a ${BLOCKS.toLocaleString('en-US')}-block page and a ${ROWS.toLocaleString
   );
   measured('page.keystroke.p95', p95(keys));
 
-  measured('scroll.frame.max', await longestFrame(window, () => scroll(window, 60, 600)));
+  measured('scroll.frame.max', await longestFrame(window, () => scroll(window, 60, WHEEL)));
 
   // --- The database -----------------------------------------------------------------
   await quiet(app);
@@ -248,12 +270,19 @@ test(`a ${BLOCKS.toLocaleString('en-US')}-block page and a ${ROWS.toLocaleString
 
   // Scrolling each view.
   await quiet(app);
+  await calm(window);
   await window.mouse.move(700, 500);
-  let worst = await longestFrame(window, () => scroll(window, 60, 800));
+  let worst = await longestFrame(window, () => scroll(window, 60, WHEEL));
+  console.log(`scroll Table: ${worst.toFixed(1)} ms`);
   for (const view of ['By status', 'List', 'Gallery']) {
     await db(window).getByRole('tab', { name: view }).click();
+    // Scrolling, not the view's first render, is what's timed.
+    await quiet(app);
+    await calm(window);
     await window.mouse.move(700, 600);
-    worst = Math.max(worst, await longestFrame(window, () => scroll(window, 40, 800)));
+    const frame = await longestFrame(window, () => scroll(window, 60, WHEEL));
+    console.log(`scroll ${view}: ${frame.toFixed(1)} ms`);
+    worst = Math.max(worst, frame);
   }
   console.log(`scroll (views): ${worst.toFixed(1)} ms`);
   measured('scroll.frame.max', Math.max(results['scroll.frame.max'] ?? 0, worst));

@@ -11,6 +11,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "bench": "pnpm --filter @workspace/perf bench",
     "test:e2e": "pnpm --filter @workspace/desktop test:e2e",
     "package": "pnpm --filter @workspace/desktop package",
     "lint": "eslint . && node scripts/check-links.mjs",

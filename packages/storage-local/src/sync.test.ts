@@ -111,6 +111,60 @@ describe('outbox', () => {
     store.close();
   });
 
+  it('queues docs too large to push in one piece as parts', () => {
+    const store = new SqliteStore(join(dir, 'a.db'));
+    const limit = 4 * 1024;
+    const manager = new DocManager(store, { indexDelayMs: 0, pushLimitBytes: limit });
+    let page = '';
+    editWorkspace(manager, (ws) => (page = createPage(ws, { title: 'Long' })));
+    for (let i = 0; i < 40; i++) write(manager, page, `Line ${i}: ${'servo '.repeat(30)}`);
+    const rebuild = () => {
+      const parts = store.outboxPending(1000).filter((e) => e.docId === page);
+      const doc = new Y.Doc();
+      for (const part of parts) {
+        expect(part.update.byteLength).toBeLessThanOrEqual(limit);
+        Y.applyUpdate(doc, part.update);
+      }
+      return { doc, count: parts.length };
+    };
+
+    // Starting to sync: the page's whole state, in parts.
+    manager.queueFullState();
+    const queued = rebuild();
+    expect(queued.count).toBeGreaterThan(2);
+    expect(read(manager, page)).toBe(
+      getPageContent(queued.doc)
+        .toArray()
+        .map((el) => (el as Y.XmlElement).toArray().join(''))
+        .join('|'),
+    );
+
+    // While syncing, one large edit (a paste) also goes in parts.
+    store.outboxClear();
+    manager.setOutbox(true);
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, manager.open(page));
+    const before = Y.encodeStateVector(doc);
+    const content = getPageContent(doc);
+    content.insert(
+      content.length,
+      Array.from({ length: 200 }, (_, i) => paragraph(`pasted ${i} ${'gear '.repeat(10)}`)),
+    );
+    manager.applyUpdate(page, Y.encodeStateAsUpdate(doc, before), 'window-1');
+    manager.release(page);
+    const pasted = rebuild();
+    expect(pasted.count).toBeGreaterThan(1);
+    expect(read(manager, page)).toContain('pasted 199');
+    expect(
+      getPageContent(pasted.doc)
+        .toArray()
+        .map((el) => (el as Y.XmlElement).toArray().join(''))
+        .join('|'),
+    ).toBe(read(manager, page));
+    manager.close();
+    store.close();
+  });
+
   it('keeps sync settings (the token) out of backups', () => {
     const store = new SqliteStore(join(dir, 'a.db'));
     store.setSetting('sync.token', 'secret');

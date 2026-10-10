@@ -1,7 +1,8 @@
 # Phase 7: Polish and release (v1.0)
 
-**Status:** in progress: M1 (performance). The repository's presentation (the README, user
-guides and a link check in CI) was done ahead of the milestones.
+**Status:** in progress. M1 (performance) is done, with two budgets not met yet (opening a
+50,000-row database, and typing in a 10,000-block page). The repository's presentation (the
+README, user guides and a link check in CI) was done ahead of the milestones.
 
 ## Context
 
@@ -173,7 +174,7 @@ steps: six milestones and the release check. If time runs short, cut these, in t
 
 ## Milestones
 
-### M1: performance (in progress)
+### M1: performance ✅ (two budgets not met yet)
 
 **Changed from the plan:**
 
@@ -186,30 +187,32 @@ steps: six milestones and the release check. If time runs short, cut these, in t
 - **Benchmarks are tests** with limits (Vitest for the pure code, Playwright for the app),
   rather than Vitest bench files, so a slow result fails like any test.
 - **Each budget has a target and a limit.** The target is the budget below; the limit is what
-  CI holds each run to. They're equal where the target is met. Where it isn't yet, the limit
-  sits above today's result: a regression still fails, and the report shows the gap.
+  CI holds each run to, above today's results by the spread seen between runs (more where the
+  target isn't met yet). A regression fails, and the report shows the gap to the target.
 - **Two budgets aren't met yet** (see below): opening the 50,000-row database, and typing in
   the 10,000-block page. Both are bound by how the data and the editor are built, not by a
   slow function; the fixes are larger than this milestone.
-- **Found by the first-sync case, and being fixed:** a doc whose state is over 8 MB can't
-  sync. One update may be at most 8 MB, so the 50,000-row database (29 MB) stays in the
-  outbox ("Syncing 1 change"). Large updates will go in chunks.
+- **The first-sync case found a real limit:** a doc over 8 MB couldn't sync at all (one
+  update may be 8 MB at most). Large updates now go in parts; see below.
 
 **Found and fixed** (on the 50,000-row database and the 10,000-block page):
 
-| Problem                                                                                                                                     | Before          | After                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------- |
-| The app's start, with this workspace                                                                                                        | 17 s            | 1.2 s                         |
-| Search index work after one edit to the database (quadratic: full-text rows were updated by page id, which the full-text table can't index) | over 15 min     | 0.15 s                        |
-| Opening a doc in the main process (it was decoded, then encoded again for the window)                                                       | 3.7 s           | 0.05 s                        |
-| The window encoding the whole database again when it loaded (an update listener was already attached)                                       | 2.1 s           | 0                             |
-| Local automations copying the database 3 s after every change, though it had none                                                           | 3.5 s           | 0                             |
-| Formula and rollup values (each number formatted with a new `Intl.NumberFormat`)                                                            | 3.1 s           | 0.42 s                        |
-| A sort or filter recomputing every formula and rollup (the properties were read again on any view change)                                   | 6.8 s           | 0.4 s                         |
-| Leaving a long page (each menu's plugin removal re-rendered all 10,000 blocks)                                                              | 1.5 s           | 0                             |
-| Code highlighting (it walked the whole page twice on every transaction, cursor moves included)                                              | every keystroke | only code blocks that changed |
-| Quick find showing a row (its whole database was loaded first)                                                                              | 2–5 s           | from the search index         |
-| The first edit's page-history snapshot (the doc was encoded again)                                                                          | 0.75 s          | a copy of what's stored       |
+| Problem                                                                                                                                     | Before              | After                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ----------------------------- |
+| The app's start, with this workspace                                                                                                        | 17 s                | 1.2 s                         |
+| Search index work after one edit to the database (quadratic: full-text rows were updated by page id, which the full-text table can't index) | over 15 min         | 0.15 s                        |
+| Opening a doc in the main process (it was decoded, then encoded again for the window)                                                       | 3.7 s               | 0.05 s                        |
+| The window encoding the whole database again when it loaded (an update listener was already attached)                                       | 2.1 s               | 0                             |
+| Local automations copying the database 3 s after every change, though it had none                                                           | 3.5 s               | 0                             |
+| Formula and rollup values (each number formatted with a new `Intl.NumberFormat`)                                                            | 3.1 s               | 0.42 s                        |
+| A sort or filter recomputing every formula and rollup (the properties were read again on any view change)                                   | 6.8 s               | 0.4 s                         |
+| Leaving a long page (each menu's plugin removal re-rendered all 10,000 blocks)                                                              | 1.5 s               | 0                             |
+| Code highlighting (it walked the whole page twice on every transaction, cursor moves included)                                              | every keystroke     | only code blocks that changed |
+| Quick find showing a row (its whole database was loaded first)                                                                              | 2–5 s               | from the search index         |
+| The first edit's page-history snapshot (the doc was encoded again)                                                                          | 0.75 s              | a copy of what's stored       |
+| Syncing a doc over 8 MB (one update may be 8 MB at most, so the database stayed "Syncing 1 change")                                         | never               | in parts, 19–28 s             |
+| A second device's first sync (each part of the database loaded and indexed the whole doc again)                                             | 40–54 s             | 17–26 s                       |
+| The search index preparing each SQL statement again for every row                                                                           | 6 s of a first sync | prepared once                 |
 
 **Storage** (migration 7 of the desktop's SQLite file):
 
@@ -220,6 +223,14 @@ steps: six milestones and the release check. If time runs short, cut these, in t
   `DatabaseHandle` (only changed rows are read again), keeps each row's index entry while the
   row is unchanged, and after an edit writes the rows that changed: their entries, relation
   links (`replaceLinksOf`) and date reminders (`updatePropertyReminders`).
+- **Large updates go to the outbox in parts:** `splitUpdate` (in `packages/sync`) writes an
+  update's structs again as runs of at most 4 MB per client, in clock order, then one part
+  with the deletions. Each part is an ordinary update, so the server and the protocol don't
+  change. An update that can't be read on its own (it builds on structs it doesn't hold) is
+  replaced by the doc's whole state, in parts.
+- **Docs loaded for incoming updates** stay loaded until 3 s after the last one, so a stream
+  of them (a first sync, a doc arriving in parts) loads the doc once.
+- **Prepared statements** are cached in `SqliteStore`.
 - **Windows open docs from what's stored:** `DocManager.openUpdates` returns the stored
   updates without decoding them (`DocClient` applies a list in one transaction). The main
   process then loads the doc while the window decodes it, rather than on the first edit:
@@ -244,16 +255,20 @@ steps: six milestones and the release check. If time runs short, cut these, in t
 
 **Not met yet, and why:**
 
-- **Opening the 50,000-row database** takes 4.3 to 5.6 s. Decoding its Yjs doc (29 MB,
-  1.2 million items) takes about 2 s on its own in the window, then the computed values and the
+- **Opening the 50,000-row database** takes 4.3 to 5.6 s on its own. Decoding its Yjs doc (29 MB,
+  1.2 million items) takes about 2 s of that in the window, then the computed values and the
   first render. Options: load rows progressively (show the first screen, then the rest), or
   keep rows in their own docs. The main process also decodes it once (in parallel, about 3 s);
   moving indexing to a worker thread would remove that.
-- **Typing in the 10,000-block page** takes 115 to 185 ms per keystroke (p95). It grows with the
+- **Typing in the 10,000-block page** takes 105 to 165 ms per keystroke (p95). It grows with the
   page: about 20 ms at 250 blocks, 25 ms at 1,000 and 41 ms at 3,000. Per keystroke, Chromium
   lays out the whole editable element (about 8 ms here), and ProseMirror's view update and
   y-prosemirror each walk the page's top-level blocks. Options: render only the blocks in view,
   or one editable element per block, as Notion does.
+- **Scrolling the board** has frames up to 150 ms (the table, list and gallery stay within
+  50 ms). Not profiled yet.
+- **Filter, sort and group** take about 300 ms of work each, but up to 1.4 s right after the
+  other cases, while the app is still busy with them.
 - **Page history** stores a full copy of a doc per editing session; for this database that's
   29 MB. Storing changes between versions would fix it.
 
@@ -269,16 +284,29 @@ steps: six milestones and the release check. If time runs short, cut these, in t
   second device's first sync of the whole workspace from a server.
 - **Unit tests** for each fix: an index migrated from version 6, writes limited to the rows
   that changed, docs opened without loading, the update listener attached after the stored
-  state, views keeping the properties, incremental code highlighting.
+  state, views keeping the properties, incremental code highlighting, and updates split into
+  parts that rebuild the same doc (in any order, and merged into a copy that has some of it),
+  for a whole state and for a large paste while syncing.
 - **CI:** a `perf` job runs both suites and compares the results with the limits and with the
   base branch's last run (more than 20% slower fails), in the job summary.
 
-**Results so far** (this machine, 4 cores): the pure-code suite all within its limits
-(decode 2.8 s and an edit 67 ms over target); in the app, the long page opens in 0.12 s and
-scrolls at 50 ms frames at worst. The full table comes with the sync fix.
+**Results** (this machine, 4 cores; ranges are across runs, and this machine is noisy):
 
-**Runs so far:** unit tests all pass; desktop E2E 146 of 146 (one helper updated for the new
-open API, then re-run); web E2E 3 of 3.
+| Case                           | Budget       | Result                                                              |
+| ------------------------------ | ------------ | ------------------------------------------------------------------- |
+| Open a page with 10,000 blocks | under 1.5 s  | ✅ 70–120 ms                                                        |
+| Type in that page (p95)        | under 16 ms  | ❌ 105–165 ms                                                       |
+| Open the 50,000-row database   | under 2 s    | ❌ 4.3–5.6 s alone, up to 9.5 s after the other cases               |
+| Filter, sort or group          | under 300 ms | about 300 ms of work each; 0.4–1.4 s measured after the other cases |
+| Scroll the views (worst frame) | 50 ms        | ✅ table 50, list 33, gallery 17, the long page 33; ❌ board 150    |
+| Quick find over 50,000 rows    | under 150 ms | ✅ 108–121 ms                                                       |
+| A second device's first sync   | under 30 s   | ✅ 17–26 s                                                          |
+
+The pure-code suite on the same database: decode 2.5–3.1 s (target 1 s), a snapshot and the
+computed values about 0.5 s each, filter, sort and group 50–150 ms, an edit 63–85 ms (target
+50 ms), the long page's decode about 0.2 s, and search about 45 ms.
+
+**Runs:** unit tests all pass; the desktop and web E2E runs for this commit are recorded in the next one.
 
 ### M2: accessibility (≈ 1 week)
 

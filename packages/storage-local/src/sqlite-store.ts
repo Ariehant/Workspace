@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type StatementSync } from 'node:sqlite';
 
 /**
  * Local persistence for one workspace, in a single SQLite file.
@@ -263,8 +263,17 @@ export class SqliteStore {
     this.migrate();
   }
 
+  /** Prepared statements by SQL: preparing one costs more than running it. */
+  private readonly statements = new Map<string, StatementSync>();
+
+  private stmt(sql: string): StatementSync {
+    let statement = this.statements.get(sql);
+    if (!statement) this.statements.set(sql, (statement = this.db.prepare(sql)));
+    return statement;
+  }
+
   private migrate(): void {
-    const { user_version: version } = this.db.prepare('PRAGMA user_version').get() as {
+    const { user_version: version } = this.stmt('PRAGMA user_version').get() as {
       user_version: number;
     };
     for (let v = version; v < MIGRATIONS.length; v++) {
@@ -290,22 +299,31 @@ export class SqliteStore {
   // --- Yjs document updates -------------------------------------------------
 
   /**
-   * Store an update; with `outbox`, also queue it for the sync server, in the same
-   * transaction (a savepoint, so it nests): a crash can't keep one without the other.
+   * Store an update; with `outbox`, also queue it for the sync server (or, given parts,
+   * those instead: an update too large to push in one piece), in the same transaction (a
+   * savepoint, so it nests): a crash can't keep one without the other.
    */
-  appendUpdate(docId: string, update: Uint8Array, outbox = false): void {
+  appendUpdate(
+    docId: string,
+    update: Uint8Array,
+    outbox: boolean | readonly Uint8Array[] = false,
+  ): void {
     if (!outbox) {
-      this.db
-        .prepare('INSERT INTO doc_updates (doc_id, data, created_at) VALUES (?, ?, ?)')
-        .run(docId, update, Date.now());
+      this.stmt('INSERT INTO doc_updates (doc_id, data, created_at) VALUES (?, ?, ?)').run(
+        docId,
+        update,
+        Date.now(),
+      );
       return;
     }
     this.db.exec('SAVEPOINT append_update');
     try {
-      this.db
-        .prepare('INSERT INTO doc_updates (doc_id, data, created_at) VALUES (?, ?, ?)')
-        .run(docId, update, Date.now());
-      this.outboxAdd(docId, update);
+      this.stmt('INSERT INTO doc_updates (doc_id, data, created_at) VALUES (?, ?, ?)').run(
+        docId,
+        update,
+        Date.now(),
+      );
+      for (const part of outbox === true ? [update] : outbox) this.outboxAdd(docId, part);
       this.db.exec('RELEASE append_update');
     } catch (error) {
       this.db.exec('ROLLBACK TO append_update');
@@ -317,19 +335,19 @@ export class SqliteStore {
   // --- Sync outbox ------------------------------------------------------------
 
   outboxAdd(docId: string, update: Uint8Array): void {
-    this.db.prepare('INSERT INTO sync_outbox (doc_id, data) VALUES (?, ?)').run(docId, update);
+    this.stmt('INSERT INTO sync_outbox (doc_id, data) VALUES (?, ?)').run(docId, update);
   }
 
   /** Updates not yet acknowledged by the server, oldest first. */
   outboxPending(limit: number): { localId: number; docId: string; update: Uint8Array }[] {
-    const rows = this.db
-      .prepare('SELECT id, doc_id, data FROM sync_outbox ORDER BY id LIMIT ?')
-      .all(limit) as { id: number; doc_id: string; data: Uint8Array }[];
+    const rows = this.stmt('SELECT id, doc_id, data FROM sync_outbox ORDER BY id LIMIT ?').all(
+      limit,
+    ) as { id: number; doc_id: string; data: Uint8Array }[];
     return rows.map((r) => ({ localId: r.id, docId: r.doc_id, update: r.data }));
   }
 
   outboxRemove(ids: readonly number[]): void {
-    const remove = this.db.prepare('DELETE FROM sync_outbox WHERE id = ?');
+    const remove = this.stmt('DELETE FROM sync_outbox WHERE id = ?');
     this.transaction(() => {
       for (const id of ids) remove.run(id);
     });
@@ -337,11 +355,11 @@ export class SqliteStore {
 
   /** Forget unsent changes to a doc (the server refused them, or the doc went away). */
   outboxRemoveDoc(docId: string): void {
-    this.db.prepare('DELETE FROM sync_outbox WHERE doc_id = ?').run(docId);
+    this.stmt('DELETE FROM sync_outbox WHERE doc_id = ?').run(docId);
   }
 
   outboxCount(): number {
-    return (this.db.prepare('SELECT count(*) AS n FROM sync_outbox').get() as { n: number }).n;
+    return (this.stmt('SELECT count(*) AS n FROM sync_outbox').get() as { n: number }).n;
   }
 
   outboxClear(): void {
@@ -350,16 +368,14 @@ export class SqliteStore {
 
   /** Attachments the server has (uploaded, or found there). */
   markFileSynced(id: string): void {
-    this.db.prepare('INSERT OR IGNORE INTO sync_files (file_id) VALUES (?)').run(id);
+    this.stmt('INSERT OR IGNORE INTO sync_files (file_id) VALUES (?)').run(id);
   }
 
   /** Local attachments not yet known to be on the server. */
   unsyncedFiles(): FileRecord[] {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM files WHERE id NOT IN (SELECT file_id FROM sync_files) ORDER BY created_at`,
-      )
-      .all() as { id: string; name: string; mime: string; size: number; created_at: number }[];
+    const rows = this.stmt(
+      `SELECT * FROM files WHERE id NOT IN (SELECT file_id FROM sync_files) ORDER BY created_at`,
+    ).all() as { id: string; name: string; mime: string; size: number; created_at: number }[];
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -371,9 +387,9 @@ export class SqliteStore {
 
   unsyncedFileCount(): number {
     return (
-      this.db
-        .prepare('SELECT count(*) AS n FROM files WHERE id NOT IN (SELECT file_id FROM sync_files)')
-        .get() as { n: number }
+      this.stmt(
+        'SELECT count(*) AS n FROM files WHERE id NOT IN (SELECT file_id FROM sync_files)',
+      ).get() as { n: number }
     ).n;
   }
 
@@ -382,26 +398,26 @@ export class SqliteStore {
   }
 
   getUpdates(docId: string): Uint8Array[] {
-    const rows = this.db
-      .prepare('SELECT data FROM doc_updates WHERE doc_id = ? ORDER BY seq')
-      .all(docId) as { data: Uint8Array }[];
+    const rows = this.stmt('SELECT data FROM doc_updates WHERE doc_id = ? ORDER BY seq').all(
+      docId,
+    ) as { data: Uint8Array }[];
     return rows.map((r) => r.data);
   }
 
   /** Replace a document's update log with one merged update. */
   replaceUpdates(docId: string, merged: Uint8Array): void {
     this.transaction(() => {
-      this.db.prepare('DELETE FROM doc_updates WHERE doc_id = ?').run(docId);
+      this.stmt('DELETE FROM doc_updates WHERE doc_id = ?').run(docId);
       this.appendUpdate(docId, merged);
     });
   }
 
   deleteDoc(docId: string): void {
-    this.db.prepare('DELETE FROM doc_updates WHERE doc_id = ?').run(docId);
+    this.stmt('DELETE FROM doc_updates WHERE doc_id = ?').run(docId);
   }
 
   listDocIds(): string[] {
-    const rows = this.db.prepare('SELECT DISTINCT doc_id FROM doc_updates').all() as {
+    const rows = this.stmt('SELECT DISTINCT doc_id FROM doc_updates').all() as {
       doc_id: string;
     }[];
     return rows.map((r) => r.doc_id);
@@ -414,16 +430,14 @@ export class SqliteStore {
     this.transaction(() => {
       const existing = new Map(
         (
-          this.db
-            .prepare(
-              `SELECT id, fts_rowid, parent_id, title, icon, sort_key, in_trash, created_at,
+          this.stmt(
+            `SELECT id, fts_rowid, parent_id, title, icon, sort_key, in_trash, created_at,
                       updated_at
                FROM pages WHERE database_id IS NULL`,
-            )
-            .all() as unknown as StoredEntry[]
+          ).all() as unknown as StoredEntry[]
         ).map((r) => [r.id, r]),
       );
-      const update = this.db.prepare(`
+      const update = this.stmt(`
         UPDATE pages SET parent_id = ?, title = ?, icon = ?, sort_key = ?, in_trash = ?,
           created_at = ?, updated_at = ?
         WHERE id = ?
@@ -476,13 +490,11 @@ export class SqliteStore {
     this.transaction(() => {
       const existing = new Map(
         (
-          this.db
-            .prepare(
-              `SELECT id, fts_rowid, parent_id, title, icon, sort_key, in_trash, created_at,
+          this.stmt(
+            `SELECT id, fts_rowid, parent_id, title, icon, sort_key, in_trash, created_at,
                       updated_at, props
                FROM pages WHERE database_id = ?`,
-            )
-            .all(databaseId) as unknown as StoredEntry[]
+          ).all(databaseId) as unknown as StoredEntry[]
         ).map((r) => [r.id, r]),
       );
       for (const row of rows) {
@@ -509,7 +521,7 @@ export class SqliteStore {
     const added: string[] = [];
     const removed: string[] = [];
     this.transaction(() => {
-      const get = this.db.prepare(
+      const get = this.stmt(
         `SELECT id, database_id, fts_rowid, parent_id, title, icon, sort_key, in_trash,
                 created_at, updated_at, props
          FROM pages WHERE id = ?`,
@@ -550,22 +562,20 @@ export class SqliteStore {
       old.updated_at !== row.updatedAt ||
       old.props !== row.props
     ) {
-      this.db
-        .prepare(
-          `UPDATE pages SET title = ?, icon = ?, sort_key = ?, in_trash = ?, created_at = ?,
+      this.stmt(
+        `UPDATE pages SET title = ?, icon = ?, sort_key = ?, in_trash = ?, created_at = ?,
              updated_at = ?, props = ?
            WHERE id = ?`,
-        )
-        .run(
-          row.title,
-          row.icon,
-          row.sortKey,
-          inTrash,
-          row.createdAt,
-          row.updatedAt,
-          row.props,
-          row.id,
-        );
+      ).run(
+        row.title,
+        row.icon,
+        row.sortKey,
+        inTrash,
+        row.createdAt,
+        row.updatedAt,
+        row.props,
+        row.id,
+      );
     }
     if (old.title !== row.title || old.props !== row.props || old.fts_rowid === null) {
       this.ftsEntry(row.id, row.title, row.props, old.fts_rowid);
@@ -586,23 +596,25 @@ export class SqliteStore {
   ): number {
     if (rowid !== null) {
       if (props === null) {
-        this.db.prepare('UPDATE page_fts SET title = ? WHERE rowid = ?').run(title, rowid);
+        this.stmt('UPDATE page_fts SET title = ? WHERE rowid = ?').run(title, rowid);
       } else {
-        this.db
-          .prepare('UPDATE page_fts SET title = ?, props = ? WHERE rowid = ?')
-          .run(title, props, rowid);
+        this.stmt('UPDATE page_fts SET title = ?, props = ? WHERE rowid = ?').run(
+          title,
+          props,
+          rowid,
+        );
       }
       return rowid;
     }
-    const { lastInsertRowid } = this.db
-      .prepare("INSERT INTO page_fts (page_id, title, body, props) VALUES (?, ?, '', ?)")
-      .run(id, title, props ?? '');
-    this.db.prepare('UPDATE pages SET fts_rowid = ? WHERE id = ?').run(lastInsertRowid, id);
+    const { lastInsertRowid } = this.stmt(
+      "INSERT INTO page_fts (page_id, title, body, props) VALUES (?, ?, '', ?)",
+    ).run(id, title, props ?? '');
+    this.stmt('UPDATE pages SET fts_rowid = ? WHERE id = ?').run(lastInsertRowid, id);
     return Number(lastInsertRowid);
   }
 
   private ftsRowidOf(id: string): number | null {
-    const row = this.db.prepare('SELECT fts_rowid FROM pages WHERE id = ?').get(id) as
+    const row = this.stmt('SELECT fts_rowid FROM pages WHERE id = ?').get(id) as
       { fts_rowid: number | null } | undefined;
     return row?.fts_rowid ?? null;
   }
@@ -615,9 +627,8 @@ export class SqliteStore {
     props: string,
     ftsRowid: number,
   ): void {
-    this.db
-      .prepare(
-        `INSERT INTO pages
+    this.stmt(
+      `INSERT INTO pages
            (id, parent_id, database_id, title, icon, sort_key, in_trash, created_at, updated_at,
             props, fts_rowid)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -627,26 +638,25 @@ export class SqliteStore {
            in_trash = excluded.in_trash, created_at = excluded.created_at,
            updated_at = excluded.updated_at, props = excluded.props,
            fts_rowid = excluded.fts_rowid`,
-      )
-      .run(
-        id,
-        parentId,
-        databaseId,
-        row.title,
-        row.icon,
-        row.sortKey,
-        row.inTrash ? 1 : 0,
-        row.createdAt,
-        row.updatedAt,
-        props,
-        ftsRowid,
-      );
+    ).run(
+      id,
+      parentId,
+      databaseId,
+      row.title,
+      row.icon,
+      row.sortKey,
+      row.inTrash ? 1 : 0,
+      row.createdAt,
+      row.updatedAt,
+      props,
+      ftsRowid,
+    );
   }
 
   /** Ids of a database's rows in the index. */
   rowIdsOf(databaseId: string): string[] {
     return (
-      this.db.prepare('SELECT id FROM pages WHERE database_id = ?').all(databaseId) as {
+      this.stmt('SELECT id FROM pages WHERE database_id = ?').all(databaseId) as {
         id: string;
       }[]
     ).map((r) => r.id);
@@ -657,16 +667,16 @@ export class SqliteStore {
    * a row, `null` if the index doesn't know the id.
    */
   locatePage(id: string): { databaseId: string | null } | null {
-    const row = this.db.prepare('SELECT database_id FROM pages WHERE id = ?').get(id) as
+    const row = this.stmt('SELECT database_id FROM pages WHERE id = ?').get(id) as
       { database_id: string | null } | undefined;
     return row ? { databaseId: row.database_id } : null;
   }
 
   removePageIndex(id: string): void {
     const rowid = this.ftsRowidOf(id);
-    this.db.prepare('DELETE FROM pages WHERE id = ?').run(id);
-    if (rowid !== null) this.db.prepare('DELETE FROM page_fts WHERE rowid = ?').run(rowid);
-    this.db.prepare('DELETE FROM links WHERE source_id = ?').run(id);
+    this.stmt('DELETE FROM pages WHERE id = ?').run(id);
+    if (rowid !== null) this.stmt('DELETE FROM page_fts WHERE rowid = ?').run(rowid);
+    this.stmt('DELETE FROM links WHERE source_id = ?').run(id);
   }
 
   // --- Links (backlinks) ------------------------------------------------------
@@ -675,10 +685,11 @@ export class SqliteStore {
   replaceLinks(sourceId: string, kinds: readonly string[], links: readonly LinkRow[]): void {
     this.transaction(() => {
       const placeholders = kinds.map(() => '?').join(',');
-      this.db
-        .prepare(`DELETE FROM links WHERE source_id = ? AND kind IN (${placeholders})`)
-        .run(sourceId, ...kinds);
-      const insert = this.db.prepare(
+      this.stmt(`DELETE FROM links WHERE source_id = ? AND kind IN (${placeholders})`).run(
+        sourceId,
+        ...kinds,
+      );
+      const insert = this.stmt(
         'INSERT INTO links (source_id, target_id, kind, block_id, snippet) VALUES (?, ?, ?, ?, ?)',
       );
       for (const link of links) {
@@ -708,23 +719,21 @@ export class SqliteStore {
         sources.size <= 500
           ? [...sources.keys()].flatMap(
               (id) =>
-                this.db
-                  .prepare(
-                    'SELECT source_id, target_id, block_id, snippet FROM links WHERE source_id = ? AND kind = ?',
-                  )
-                  .all(id, kind) as Stored[],
+                this.stmt(
+                  'SELECT source_id, target_id, block_id, snippet FROM links WHERE source_id = ? AND kind = ?',
+                ).all(id, kind) as Stored[],
             )
-          : (this.db
-              .prepare('SELECT source_id, target_id, block_id, snippet FROM links WHERE kind = ?')
-              .all(kind) as Stored[]);
+          : (this.stmt(
+              'SELECT source_id, target_id, block_id, snippet FROM links WHERE kind = ?',
+            ).all(kind) as Stored[]);
       for (const link of stored) {
         if (!sources.has(link.source_id)) continue;
         let keys = existing.get(link.source_id);
         if (!keys) existing.set(link.source_id, (keys = []));
         keys.push(key(link.target_id, link.block_id, link.snippet));
       }
-      const remove = this.db.prepare('DELETE FROM links WHERE source_id = ? AND kind = ?');
-      const insert = this.db.prepare(
+      const remove = this.stmt('DELETE FROM links WHERE source_id = ? AND kind = ?');
+      const insert = this.stmt(
         'INSERT INTO links (source_id, target_id, kind, block_id, snippet) VALUES (?, ?, ?, ?, ?)',
       );
       for (const [sourceId, links] of sources) {
@@ -743,9 +752,8 @@ export class SqliteStore {
   /** Live pages and rows that link to `targetId` (one entry per linking block). */
   backlinks(targetId: string, kinds: readonly string[]): Backlink[] {
     const placeholders = kinds.map(() => '?').join(',');
-    const rows = this.db
-      .prepare(
-        `SELECT p.id, p.title, p.icon, p.database_id AS databaseId,
+    const rows = this.stmt(
+      `SELECT p.id, p.title, p.icon, p.database_id AS databaseId,
                 l.block_id AS blockId, l.kind, l.snippet
          FROM links l
          JOIN pages p ON p.id = l.source_id
@@ -753,55 +761,50 @@ export class SqliteStore {
          WHERE l.target_id = ? AND l.kind IN (${placeholders})
            AND p.in_trash = 0 AND COALESCE(d.in_trash, 0) = 0
          ORDER BY p.updated_at DESC`,
-      )
-      .all(targetId, ...kinds) as unknown as Backlink[];
+    ).all(targetId, ...kinds) as unknown as Backlink[];
     return rows.map((r) => ({ ...r }));
   }
 
   /** How many live pages show a synced block (its original included). */
   syncedPlaces(syncedId: string): number {
-    const row = this.db
-      .prepare(
-        `SELECT COUNT(DISTINCT l.source_id) AS n FROM links l
+    const row = this.stmt(
+      `SELECT COUNT(DISTINCT l.source_id) AS n FROM links l
          JOIN pages p ON p.id = l.source_id
          WHERE l.target_id = ? AND l.kind = 'synced' AND p.in_trash = 0`,
-      )
-      .get(syncedId) as { n: number };
+    ).get(syncedId) as { n: number };
     return row.n;
   }
 
   // --- Page history -----------------------------------------------------------
 
   addVersion(docId: string, state: Uint8Array, reason: string, now = Date.now()): number {
-    const result = this.db
-      .prepare('INSERT INTO doc_versions (doc_id, created_at, reason, state) VALUES (?, ?, ?, ?)')
-      .run(docId, now, reason, state);
+    const result = this.stmt(
+      'INSERT INTO doc_versions (doc_id, created_at, reason, state) VALUES (?, ?, ?, ?)',
+    ).run(docId, now, reason, state);
     return Number(result.lastInsertRowid);
   }
 
   /** A doc's versions, newest first. */
   listVersions(docId: string): DocVersion[] {
     return (
-      this.db
-        .prepare(
-          `SELECT id, doc_id AS docId, created_at AS createdAt, reason FROM doc_versions
+      this.stmt(
+        `SELECT id, doc_id AS docId, created_at AS createdAt, reason FROM doc_versions
            WHERE doc_id = ? ORDER BY created_at DESC, id DESC`,
-        )
-        .all(docId) as unknown as DocVersion[]
+      ).all(docId) as unknown as DocVersion[]
     ).map((r) => ({ ...r }));
   }
 
   lastVersionTime(docId: string): number | null {
-    const row = this.db
-      .prepare('SELECT MAX(created_at) AS t FROM doc_versions WHERE doc_id = ?')
-      .get(docId) as { t: number | null };
+    const row = this.stmt('SELECT MAX(created_at) AS t FROM doc_versions WHERE doc_id = ?').get(
+      docId,
+    ) as { t: number | null };
     return row.t;
   }
 
   getVersionState(id: number): { docId: string; state: Uint8Array } | null {
-    const row = this.db
-      .prepare('SELECT doc_id AS docId, state FROM doc_versions WHERE id = ?')
-      .get(id) as { docId: string; state: Uint8Array } | undefined;
+    const row = this.stmt('SELECT doc_id AS docId, state FROM doc_versions WHERE id = ?').get(
+      id,
+    ) as { docId: string; state: Uint8Array } | undefined;
     return row ? { docId: row.docId, state: row.state } : null;
   }
 
@@ -814,14 +817,12 @@ export class SqliteStore {
     let deleted = 0;
     this.transaction(() => {
       deleted += Number(
-        this.db.prepare('DELETE FROM doc_versions WHERE created_at < ?').run(now - maxDays * day)
-          .changes,
+        this.stmt('DELETE FROM doc_versions WHERE created_at < ?').run(now - maxDays * day).changes,
       );
       // Older than a week: keep the newest version of each doc per day.
       deleted += Number(
-        this.db
-          .prepare(
-            `DELETE FROM doc_versions WHERE created_at < ? AND id NOT IN (
+        this.stmt(
+          `DELETE FROM doc_versions WHERE created_at < ? AND id NOT IN (
                SELECT id FROM (
                  SELECT id, ROW_NUMBER() OVER (
                    PARTITION BY doc_id, created_at / ${day}
@@ -830,19 +831,18 @@ export class SqliteStore {
                  FROM doc_versions WHERE created_at < ?
                ) WHERE n = 1
              )`,
-          )
-          .run(now - keepAllDays * day, now - keepAllDays * day).changes,
+        ).run(now - keepAllDays * day, now - keepAllDays * day).changes,
       );
     });
     return deleted;
   }
 
   deleteVersions(docId: string): void {
-    this.db.prepare('DELETE FROM doc_versions WHERE doc_id = ?').run(docId);
+    this.stmt('DELETE FROM doc_versions WHERE doc_id = ?').run(docId);
   }
 
   getPageIndex(id: string): PageIndexRow | null {
-    const row = this.db.prepare('SELECT * FROM pages WHERE id = ?').get(id) as
+    const row = this.stmt('SELECT * FROM pages WHERE id = ?').get(id) as
       Record<string, unknown> | undefined;
     if (!row) return null;
     return {
@@ -859,16 +859,14 @@ export class SqliteStore {
 
   setPageBody(id: string, body: string): void {
     const rowid = this.ftsRowidOf(id);
-    if (rowid !== null)
-      this.db.prepare('UPDATE page_fts SET body = ? WHERE rowid = ?').run(body, rowid);
+    if (rowid !== null) this.stmt('UPDATE page_fts SET body = ? WHERE rowid = ?').run(body, rowid);
   }
 
   search(query: string, limit = 20): SearchResult[] {
     const fts = toFtsQuery(query);
     if (!fts) return [];
-    const rows = this.db
-      .prepare(
-        `SELECT p.id, p.title, p.icon, p.database_id AS databaseId,
+    const rows = this.stmt(
+      `SELECT p.id, p.title, p.icon, p.database_id AS databaseId,
                 snippet(page_fts, -1, '[', ']', '…', 12) AS snippet
          FROM page_fts
          JOIN pages p ON p.id = page_fts.page_id
@@ -876,24 +874,21 @@ export class SqliteStore {
          WHERE page_fts MATCH ? AND p.in_trash = 0 AND COALESCE(d.in_trash, 0) = 0
          ORDER BY bm25(page_fts, 0, 10.0, 1.0, 2.0)
          LIMIT ?`,
-      )
-      .all(fts, limit) as unknown as SearchResult[];
+    ).all(fts, limit) as unknown as SearchResult[];
     return rows.map((r) => ({ ...r }));
   }
 
   // --- Files and link previews ------------------------------------------------
 
   putFileRecord(file: FileRecord): void {
-    this.db
-      .prepare(
-        `INSERT INTO files (id, name, mime, size, created_at) VALUES (?, ?, ?, ?, ?)
+    this.stmt(
+      `INSERT INTO files (id, name, mime, size, created_at) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT (id) DO NOTHING`,
-      )
-      .run(file.id, file.name, file.mime, file.size, file.createdAt);
+    ).run(file.id, file.name, file.mime, file.size, file.createdAt);
   }
 
   getFileRecord(id: string): FileRecord | null {
-    const row = this.db.prepare('SELECT * FROM files WHERE id = ?').get(id) as
+    const row = this.stmt('SELECT * FROM files WHERE id = ?').get(id) as
       { id: string; name: string; mime: string; size: number; created_at: number } | undefined;
     return row
       ? { id: row.id, name: row.name, mime: row.mime, size: row.size, createdAt: row.created_at }
@@ -901,7 +896,7 @@ export class SqliteStore {
   }
 
   listFileRecords(): FileRecord[] {
-    const rows = this.db.prepare('SELECT * FROM files ORDER BY created_at').all() as {
+    const rows = this.stmt('SELECT * FROM files ORDER BY created_at').all() as {
       id: string;
       name: string;
       mime: string;
@@ -918,20 +913,17 @@ export class SqliteStore {
   }
 
   getLinkPreview<T>(url: string, maxAgeMs: number): T | null {
-    const row = this.db
-      .prepare('SELECT data, fetched_at FROM link_previews WHERE url = ?')
-      .get(url) as { data: string; fetched_at: number } | undefined;
+    const row = this.stmt('SELECT data, fetched_at FROM link_previews WHERE url = ?').get(url) as
+      { data: string; fetched_at: number } | undefined;
     if (!row || Date.now() - row.fetched_at > maxAgeMs) return null;
     return JSON.parse(row.data) as T;
   }
 
   putLinkPreview(url: string, data: unknown): void {
-    this.db
-      .prepare(
-        `INSERT INTO link_previews (url, data, fetched_at) VALUES (?, ?, ?)
+    this.stmt(
+      `INSERT INTO link_previews (url, data, fetched_at) VALUES (?, ?, ?)
          ON CONFLICT (url) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at`,
-      )
-      .run(url, JSON.stringify(data), Date.now());
+    ).run(url, JSON.stringify(data), Date.now());
   }
 
   // --- Reminders ------------------------------------------------------------
@@ -950,13 +942,13 @@ export class SqliteStore {
       const scope = `page_id = ? AND block_id NOT LIKE '${PROPERTY_REMINDER}%'`;
       const fired = new Set(
         (
-          this.db
-            .prepare(`SELECT block_id, fire_at FROM reminders WHERE ${scope} AND fired = 1`)
-            .all(pageId) as { block_id: string; fire_at: number }[]
+          this.stmt(`SELECT block_id, fire_at FROM reminders WHERE ${scope} AND fired = 1`).all(
+            pageId,
+          ) as { block_id: string; fire_at: number }[]
         ).map((r) => `${r.block_id}@${r.fire_at}`),
       );
-      this.db.prepare(`DELETE FROM reminders WHERE ${scope}`).run(pageId);
-      const insert = this.db.prepare(
+      this.stmt(`DELETE FROM reminders WHERE ${scope}`).run(pageId);
+      const insert = this.stmt(
         'INSERT OR IGNORE INTO reminders (page_id, block_id, fire_at, text, fired) VALUES (?, ?, ?, ?, ?)',
       );
       for (const r of reminders) {
@@ -984,15 +976,13 @@ export class SqliteStore {
         AND page_id IN (SELECT id FROM pages WHERE database_id = ?)`;
       const fired = new Set(
         (
-          this.db
-            .prepare(
-              `SELECT page_id, block_id, fire_at FROM reminders WHERE ${scope} AND fired = 1`,
-            )
-            .all(databaseId) as { page_id: string; block_id: string; fire_at: number }[]
+          this.stmt(
+            `SELECT page_id, block_id, fire_at FROM reminders WHERE ${scope} AND fired = 1`,
+          ).all(databaseId) as { page_id: string; block_id: string; fire_at: number }[]
         ).map((r) => `${r.page_id}/${r.block_id}@${r.fire_at}`),
       );
-      this.db.prepare(`DELETE FROM reminders WHERE ${scope}`).run(databaseId);
-      const insert = this.db.prepare(
+      this.stmt(`DELETE FROM reminders WHERE ${scope}`).run(databaseId);
+      const insert = this.stmt(
         'INSERT OR IGNORE INTO reminders (page_id, block_id, fire_at, text, fired) VALUES (?, ?, ?, ?, ?)',
       );
       for (const r of reminders) {
@@ -1020,10 +1010,10 @@ export class SqliteStore {
     if (rowIds.length === 0) return;
     this.transaction(() => {
       const ofRow = `page_id = ? AND block_id LIKE '${PROPERTY_REMINDER}%'`;
-      const firedOf = this.db.prepare(
+      const firedOf = this.stmt(
         `SELECT page_id, block_id, fire_at FROM reminders WHERE ${ofRow} AND fired = 1`,
       );
-      const remove = this.db.prepare(`DELETE FROM reminders WHERE ${ofRow}`);
+      const remove = this.stmt(`DELETE FROM reminders WHERE ${ofRow}`);
       const fired = new Set<string>();
       for (const rowId of rowIds) {
         for (const r of firedOf.all(rowId) as {
@@ -1035,7 +1025,7 @@ export class SqliteStore {
         }
         remove.run(rowId);
       }
-      const insert = this.db.prepare(
+      const insert = this.stmt(
         'INSERT OR IGNORE INTO reminders (page_id, block_id, fire_at, text, fired) VALUES (?, ?, ?, ?, ?)',
       );
       for (const r of reminders) {
@@ -1047,14 +1037,12 @@ export class SqliteStore {
   }
 
   dueReminders(now: number): Reminder[] {
-    const rows = this.db
-      .prepare(
-        `SELECT r.page_id, r.block_id, r.fire_at, r.text, p.title
+    const rows = this.stmt(
+      `SELECT r.page_id, r.block_id, r.fire_at, r.text, p.title
          FROM reminders r JOIN pages p ON p.id = r.page_id
          WHERE r.fired = 0 AND r.fire_at <= ? AND p.in_trash = 0
          ORDER BY r.fire_at`,
-      )
-      .all(now) as {
+    ).all(now) as {
       page_id: string;
       block_id: string;
       fire_at: number;
@@ -1071,50 +1059,48 @@ export class SqliteStore {
   }
 
   markReminderFired(reminder: Pick<Reminder, 'pageId' | 'blockId' | 'fireAt'>): void {
-    this.db
-      .prepare('UPDATE reminders SET fired = 1 WHERE page_id = ? AND block_id = ? AND fire_at = ?')
-      .run(reminder.pageId, reminder.blockId, reminder.fireAt);
+    this.stmt(
+      'UPDATE reminders SET fired = 1 WHERE page_id = ? AND block_id = ? AND fire_at = ?',
+    ).run(reminder.pageId, reminder.blockId, reminder.fireAt);
   }
 
   /** Has this reminder fired here (null: there's no such reminder)? */
   reminderFired(reminder: Pick<Reminder, 'pageId' | 'blockId' | 'fireAt'>): boolean | null {
-    const row = this.db
-      .prepare('SELECT fired FROM reminders WHERE page_id = ? AND block_id = ? AND fire_at = ?')
-      .get(reminder.pageId, reminder.blockId, reminder.fireAt) as { fired: number } | undefined;
+    const row = this.stmt(
+      'SELECT fired FROM reminders WHERE page_id = ? AND block_id = ? AND fire_at = ?',
+    ).get(reminder.pageId, reminder.blockId, reminder.fireAt) as { fired: number } | undefined;
     return row ? row.fired === 1 : null;
   }
 
   /** When the next unfired reminder is due, or `null` if none is pending. */
   nextReminderAt(): number | null {
-    const row = this.db
-      .prepare('SELECT MIN(fire_at) AS next FROM reminders WHERE fired = 0')
-      .get() as { next: number | null };
+    const row = this.stmt('SELECT MIN(fire_at) AS next FROM reminders WHERE fired = 0').get() as {
+      next: number | null;
+    };
     return row.next;
   }
 
   deleteReminders(pageId: string): void {
-    this.db.prepare('DELETE FROM reminders WHERE page_id = ?').run(pageId);
+    this.stmt('DELETE FROM reminders WHERE page_id = ?').run(pageId);
   }
 
   // --- Settings -------------------------------------------------------------
 
   getSetting<T>(key: string): T | undefined {
-    const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as
+    const row = this.stmt('SELECT value FROM settings WHERE key = ?').get(key) as
       { value: string } | undefined;
     return row ? (JSON.parse(row.value) as T) : undefined;
   }
 
   setSetting(key: string, value: unknown): void {
-    this.db
-      .prepare(
-        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
-      )
-      .run(key, JSON.stringify(value));
+    this.stmt(
+      'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
+    ).run(key, JSON.stringify(value));
   }
 
   /** Every setting, for backups (except this device's sync settings: the token!). */
   listSettings(): Record<string, unknown> {
-    const rows = this.db.prepare('SELECT key, value FROM settings').all() as {
+    const rows = this.stmt('SELECT key, value FROM settings').all() as {
       key: string;
       value: string;
     }[];
@@ -1126,7 +1112,7 @@ export class SqliteStore {
   }
 
   deleteSetting(key: string): void {
-    this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+    this.stmt('DELETE FROM settings WHERE key = ?').run(key);
   }
 
   close(): void {

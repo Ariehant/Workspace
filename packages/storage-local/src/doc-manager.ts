@@ -27,6 +27,7 @@ import {
   type Property,
   type Row,
 } from '@workspace/database';
+import { MAX_UPDATE_BYTES, splitDocState, splitUpdate } from '@workspace/sync';
 import * as Y from 'yjs';
 import type { LinkRow, PageIndexRow, RowIndexRow, SqliteStore } from './sqlite-store';
 
@@ -51,7 +52,12 @@ export interface DocManagerOptions {
   versionIntervalMs?: number;
   /** The clock (tests). */
   now?: () => number;
+  /** The largest update the sync server takes (tests); larger ones go in parts. */
+  pushLimitBytes?: number;
 }
+
+/** How long a doc loaded only for incoming updates stays loaded after the last one. */
+const IDLE_UNLOAD_MS = 3000;
 
 /** Links found in page content (relations are indexed from databases). */
 const CONTENT_LINK_KINDS = ['mention', 'link', 'pageLink', 'synced', 'linkedDatabase'] as const;
@@ -93,6 +99,7 @@ export class DocManager {
   private readonly reminderOwner: () => string | null;
   private readonly versionIntervalMs: number;
   private readonly now: () => number;
+  private readonly pushLimitBytes: number;
   /** Time of each doc's newest version (cached from the store). */
   private readonly lastVersion = new Map<string, number>();
   /** Docs changed on this device since they were last indexed. */
@@ -110,6 +117,7 @@ export class DocManager {
     this.reminderOwner = options.reminderOwner ?? (() => null);
     this.versionIntervalMs = options.versionIntervalMs ?? 10 * 60_000;
     this.now = options.now ?? Date.now;
+    this.pushLimitBytes = options.pushLimitBytes ?? MAX_UPDATE_BYTES;
     this.store.pruneVersions(this.now());
     this.addTree(WORKSPACE_DOC_ID);
     for (const docId of this.store.listDocIds()) {
@@ -189,11 +197,23 @@ export class DocManager {
         if (updates.length) state = Y.mergeUpdates(updates);
       }
       if (state && state.byteLength > 2) {
-        this.store.outboxAdd(id, state);
+        const parts = this.outboxParts(open ?? null, state);
+        for (const part of parts === true ? [state] : parts) this.store.outboxAdd(id, part);
         queued++;
       }
     }
     return queued;
+  }
+
+  /**
+   * What the outbox gets for an update to a loaded doc: the update, or (too large to push
+   * in one piece) parts of it, or parts of the doc's whole state when the update can't be
+   * read on its own.
+   */
+  private outboxParts(doc: Y.Doc | null, update: Uint8Array): true | Uint8Array[] {
+    const limit = this.pushLimitBytes;
+    if (update.byteLength <= limit) return true;
+    return splitUpdate(update, limit) ?? (doc ? splitDocState(doc, limit) : true);
   }
 
   onUpdate(listener: UpdateListener): () => void {
@@ -299,6 +319,7 @@ export class DocManager {
     if (entry) {
       this.maybeSnapshot(docId, entry.doc);
       Y.applyUpdate(entry.doc, update, origin);
+      if (this.idleTimers.has(docId)) this.unloadWhenIdle(docId);
       return;
     }
     // Not loaded here: a window has it open (and now edits it), or nobody has (e.g. a late
@@ -306,7 +327,25 @@ export class DocManager {
     const doc = this.load(docId);
     this.maybeSnapshot(docId, doc);
     Y.applyUpdate(doc, update, origin);
-    this.unloadIfUnused(docId);
+    this.unloadWhenIdle(docId);
+  }
+
+  /** Docs loaded for updates nobody has them open for, unloaded once those stop. */
+  private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /**
+   * Unload a doc nothing holds after a moment without updates: a stream of them (a first
+   * sync, a large doc arriving in parts) then loads it once, not once per update.
+   */
+  private unloadWhenIdle(docId: string): void {
+    clearTimeout(this.idleTimers.get(docId));
+    this.idleTimers.set(
+      docId,
+      setTimeout(() => {
+        this.idleTimers.delete(docId);
+        this.unloadIfUnused(docId);
+      }, IDLE_UNLOAD_MS),
+    );
   }
 
   // --- Access changes (sync) -----------------------------------------------------
@@ -452,6 +491,8 @@ export class DocManager {
     this.storedTimer = null;
     for (const timer of this.loadTimers) clearTimeout(timer);
     this.loadTimers.clear();
+    for (const timer of this.idleTimers.values()) clearTimeout(timer);
+    this.idleTimers.clear();
     for (const { doc } of this.docs.values()) doc.destroy();
     this.docs.clear();
     this.listeners.clear();
@@ -467,7 +508,11 @@ export class DocManager {
       }
     }
     doc.on('update', (update: Uint8Array, origin: unknown) => {
-      this.store.appendUpdate(docId, update, this.outbox && origin !== SYNC_ORIGIN);
+      this.store.appendUpdate(
+        docId,
+        update,
+        this.outbox && origin !== SYNC_ORIGIN && this.outboxParts(doc, update),
+      );
       for (const listener of this.listeners) listener(docId, update, origin);
       if (origin === MAIN_ORIGIN) return;
       // Only a change made here bumps "last edited": the device that made a synced

@@ -52,10 +52,13 @@ pull request and fails on a result over its limit, or 20% slower than the base b
 run.
 
 ```sh
-pnpm --filter @workspace/perf bench          # the pure code: decode, views, search
+# The pure code: decode, views, search
+pnpm bench
+
+# The app: open, type, filter, scroll, quick find, a first sync
 pnpm --filter @workspace/desktop build
 cd apps/desktop
-PERF=1 xvfb-run -a npx playwright test e2e/perf.spec.ts   # the app: open, type, filter, scroll, sync
+PERF=1 xvfb-run -a npx playwright test e2e/perf.spec.ts
 ```
 
 Set `PERF_RESULTS=<file>` to record the results as JSON, and compare two runs with

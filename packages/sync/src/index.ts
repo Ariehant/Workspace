@@ -4,3 +4,4 @@ export * from './client';
 export * from './memory';
 export * from './partial';
 export * from './presence';
+export * from './split';

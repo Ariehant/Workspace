@@ -159,18 +159,19 @@ pnpm install
 pnpm dev               # the desktop app with hot reload
 ```
 
-| Command             | What it does                                                   |
-| ------------------- | -------------------------------------------------------------- |
-| `pnpm dev`          | Run the desktop app in development mode                        |
-| `pnpm dev:web`      | The web app with hot reload (`VITE_SERVER=<server url>`)       |
-| `pnpm build`        | Build every package                                            |
-| `pnpm lint`         | ESLint, and a check of every link in the Markdown docs         |
-| `pnpm typecheck`    | Type-check every package                                       |
-| `pnpm test`         | Unit and integration tests (Vitest, with a throwaway Postgres) |
-| `pnpm test:e2e`     | End-to-end tests driving the real Electron app (Playwright)    |
-| `pnpm test:e2e:web` | The web app's end-to-end tests (Chromium, real server)         |
-| `pnpm format`       | Prettier                                                       |
-| `pnpm package`      | Build the `.deb` and AppImage into `apps/desktop/dist/`        |
+| Command             | What it does                                                                   |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `pnpm dev`          | Run the desktop app in development mode                                        |
+| `pnpm dev:web`      | The web app with hot reload (`VITE_SERVER=<server url>`)                       |
+| `pnpm build`        | Build every package                                                            |
+| `pnpm lint`         | ESLint, and a check of every link in the Markdown docs                         |
+| `pnpm typecheck`    | Type-check every package                                                       |
+| `pnpm test`         | Unit and integration tests (Vitest, with a throwaway Postgres)                 |
+| `pnpm test:e2e`     | End-to-end tests driving the real Electron app (Playwright)                    |
+| `pnpm test:e2e:web` | The web app's end-to-end tests (Chromium, real server)                         |
+| `pnpm format`       | Prettier                                                                       |
+| `pnpm package`      | Build the `.deb` and AppImage into `apps/desktop/dist/`                        |
+| `pnpm bench`        | The performance budgets' pure-code suite ([more](CONTRIBUTING.md#performance)) |
 
 End-to-end tests need a display: on a headless machine, run `pnpm --filter @workspace/desktop
 build`, then `xvfb-run -a pnpm test:e2e`. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the
@@ -225,16 +226,16 @@ The design decisions and their reasons are in [docs/PLAN.md](docs/PLAN.md#1-arch
 
 ## Roadmap
 
-| Phase                        | Status         | Plan and notes                            |
-| ---------------------------- | -------------- | ----------------------------------------- |
-| 0. Foundation                | ✅ Done        | [PLAN.md](docs/PLAN.md#8-phase-0-outcome) |
-| 1. Editor and navigation     | ✅ Done        | [PHASE1.md](docs/PHASE1.md)               |
-| 2. Databases                 | ✅ Done        | [PHASE2.md](docs/PHASE2.md)               |
-| 3. Power features            | ✅ Done        | [PHASE3.md](docs/PHASE3.md)               |
-| 4. Sync server               | ✅ Done        | [PHASE4.md](docs/PHASE4.md)               |
-| 5. Collaboration             | ✅ Done        | [PHASE5.md](docs/PHASE5.md)               |
-| 6. Automations and API       | ✅ Done        | [PHASE6.md](docs/PHASE6.md)               |
-| 7. Polish and release (v1.0) | 🚧 In progress | [PHASE7.md](docs/PHASE7.md)               |
+| Phase                        | Status     | Plan and notes                            |
+| ---------------------------- | ---------- | ----------------------------------------- |
+| 0. Foundation                | ✅ Done    | [PLAN.md](docs/PLAN.md#8-phase-0-outcome) |
+| 1. Editor and navigation     | ✅ Done    | [PHASE1.md](docs/PHASE1.md)               |
+| 2. Databases                 | ✅ Done    | [PHASE2.md](docs/PHASE2.md)               |
+| 3. Power features            | ✅ Done    | [PHASE3.md](docs/PHASE3.md)               |
+| 4. Sync server               | ✅ Done    | [PHASE4.md](docs/PHASE4.md)               |
+| 5. Collaboration             | ✅ Done    | [PHASE5.md](docs/PHASE5.md)               |
+| 6. Automations and API       | ✅ Done    | [PHASE6.md](docs/PHASE6.md)               |
+| 7. Polish and release (v1.0) | 🚧 M1 done | [PHASE7.md](docs/PHASE7.md)               |
 
 Out of scope: Notion AI, Notion Mail, Notion Calendar as a separate app, and the marketplace.
 
