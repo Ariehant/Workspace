@@ -22,7 +22,10 @@ const given = args.filter((a) => !a.startsWith('--'));
 
 const files = given.length
   ? given.map((f) => resolve(f))
-  : execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '*.md'], { cwd: root, encoding: 'utf8' })
+  : execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '*.md'], {
+      cwd: root,
+      encoding: 'utf8',
+    })
       .split('\n')
       .filter(Boolean)
       .map((f) => join(root, f));
