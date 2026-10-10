@@ -973,7 +973,8 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 **Runs:**
 
 - **Unit tests:** 910 passed (4 skipped: the stack smoke cases, without a stack).
-- **Desktop E2E and web E2E:** running.
+- **Desktop E2E:** 145 of 146, twice. Both times the failure was the page icon test's teardown. The test passed, then closing its app took over 60 s in the worker that had run 101 tests: the flake seen in M1, Phase 5 and M5, now on every full run. The spec passed three times out of three on its own. It isn't from Phase 6 (the specs before it are unchanged), but it needs its own look: closing an app late in a long worker hangs.
+- **Web E2E:** 3 of 3.
 
 ## Packages
 
