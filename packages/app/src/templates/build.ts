@@ -35,6 +35,8 @@ export interface ViewSpec {
   type: ViewType;
   /** Board: group by this property. Calendar/timeline: date property. */
   by?: string;
+  /** Timeline: the date property bars end at. */
+  until?: string;
 }
 
 export interface DatabaseSpec {
@@ -131,10 +133,14 @@ export class TemplateBuilder {
 
   addView(databaseId: PageId, view: ViewSpec): void {
     const doc = this.doc(databaseId);
-    const by = view.by && readDatabase(doc).properties.find((p) => p.name === view.by)?.id;
+    const named = (name?: string) =>
+      name && readDatabase(doc).properties.find((p) => p.name === name)?.id;
+    const by = named(view.by);
+    const until = named(view.until);
     const config: Partial<ViewConfig> = {};
     if (by && view.type === 'board') config.groupBy = { propertyId: by };
     if (by && (view.type === 'calendar' || view.type === 'timeline')) config.dateProperty = by;
+    if (until && view.type === 'timeline') config.endDateProperty = until;
     addView(doc, { viewSet: databaseId, name: view.name, type: view.type, config });
   }
 

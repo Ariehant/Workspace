@@ -71,6 +71,13 @@ describe('built-in templates', () => {
     const back = projects.properties.find((p) => p.name === 'Tasks')!;
     expect(relationIds(gripper.values[back.id])).toHaveLength(3);
     expect(projects.views.map((v) => v.type)).toEqual(['table', 'timeline']);
+    // Bars run from Start to End.
+    const timeline = projects.views.find((v) => v.type === 'timeline')!;
+    const named = (id: string | null) => projects.properties.find((p) => p.id === id)?.name;
+    expect([named(timeline.dateProperty), named(timeline.endDateProperty)]).toEqual([
+      'Start',
+      'End',
+    ]);
     // The root page shows both databases inline.
     expect(readLinks(doc(root)).length).toBe(0);
     const blocks = getPageContent(doc(root))

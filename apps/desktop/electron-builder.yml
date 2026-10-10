@@ -29,8 +29,8 @@ linux:
   category: Office
   synopsis: Offline-first workspace for notes, docs and databases
   description: >-
-    Pages, nested documents and rich text, stored locally in SQLite and usable fully
-    offline. A self-hosted sync server for multiple devices is planned.
+    Pages, databases and rich text, stored locally in SQLite and usable fully offline,
+    with an optional self-hosted server for sync, collaboration and a Notion-compatible API.
   maintainer: Workspace Maintainers <maintainers@example.invalid>
   vendor: Workspace Maintainers
   # Electron reports desktopName (package.json) as the Wayland app_id / X11 WM_CLASS,

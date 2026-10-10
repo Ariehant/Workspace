@@ -114,7 +114,7 @@ Tooling: TypeScript strict, ESLint, Prettier, Vitest for unit tests, Playwright 
 | **4. Sync server** (4–5 wk) ✅ done, plan: [PHASE4.md](PHASE4.md) | Docker Compose stack, auth (email/password + OIDC), Hocuspocus sync, attachment upload to MinIO, device sync, web app build | Two devices for one user stay in sync, including after offline edits |
 | **5. Collaboration** (5–6 wk) ✅ done, plan: [PHASE5.md](PHASE5.md) | Workspaces, members, guests, permissions, presence and cursors, comments, inbox and notifications, publish to web | Several users co-edit with the correct permission checks |
 | **6. Automation & API** (3–4 wk) ✅ done, plan: [PHASE6.md](PHASE6.md) | Database automations, forms, reminders (done in Phase 5), public REST API, webhooks, integration tokens; the "can edit content" database role (moved from Phase 5); a Postgres job queue instead of Redis | API conformance tests pass |
-| **7. Polish & release** (ongoing) | Performance (pages with 10k blocks, databases with 50k rows using virtualized views), accessibility, i18n, auto-update, signed packages | Release v1.0 |
+| **7. Polish & release** (ongoing) in progress, plan: [PHASE7.md](PHASE7.md) | Performance (pages with 10k blocks, databases with 50k rows using virtualized views), accessibility, i18n, auto-update, signed packages | Release v1.0 |
 
 ## 5. Ubuntu packaging and running
 - **Desktop builds with electron-builder:** `.deb` (apt-installable, with a desktop entry and MIME and URL handling for `app://` deep links), AppImage, Snap (strict confinement with the home and network plugs), and Flatpak (Flathub manifest).

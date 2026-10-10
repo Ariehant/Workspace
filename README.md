@@ -1,251 +1,246 @@
+<div align="center">
+
+<img src="apps/desktop/build/icon.png" width="88" alt="Workspace icon">
+
 # Workspace
 
-An offline-first replacement for Notion's core features (pages, rich text, databases, and later sync
-and collaboration) that runs natively on Ubuntu 24.04 and later. Notion AI features are out of scope.
+**Notes, docs and databases that live on your computer, sync through your own server, and speak
+Notion's API. Notion's core, without the AI.**
 
-The roadmap and architecture are in [docs/PLAN.md](docs/PLAN.md). **Status:** Phase 0 (foundation) and
-Phase 1 (editor and navigation, see [docs/PHASE1.md](docs/PHASE1.md)) and Phase 2 (databases,
-see [docs/PHASE2.md](docs/PHASE2.md)) are complete. Phase 3 (power features, see [docs/PHASE3.md](docs/PHASE3.md)) is done
-except its last check, importing a real Notion export. Phase 4 (sync server, see
-[docs/PHASE4.md](docs/PHASE4.md)) is complete: a self-hosted server (Docker Compose behind Caddy), accounts and SSO,
-offline-first sync between desktops, server-side search and attachments, and the web app. Two desktops
-converge after offline edits and restarts. Phase 5 (collaboration, see [docs/PHASE5.md](docs/PHASE5.md)) is complete: members,
-invites, roles and groups, profiles and @-mentions of people are done (M1), and the server now
-decides who sees and edits what: scopes (teamspaces, private pages, shared pages) with roles,
-enforced per doc on the sync socket, search and page location (M2). The app shows it all
-(M3): sidebar sections for teamspaces, pages shared with you and your private pages, a share
-dialog, teamspace settings, read-only pages for viewers, and moving pages between sections.
-People on the same page see each other (M4): avatars in the page header, named cursors in the
-editor, a dot in the sidebar on pages others are viewing, and avatars on database rows others
-have open. Comments work too (M5): comment on selected text or on the whole page, reply,
-@-mention, react and resolve, in a comments panel. People who may only comment suggest edits
-instead, and someone who may edit accepts or rejects them. The inbox (M6) collects mentions,
-comments and replies on pages you follow, reminders and pages shared with you, live, with
-desktop notifications. Pages can be published to the web (M7), readable without signing in,
-and the server keeps backlinks and page history, so the web app has them too. The exit check
-passes: three accounts on two desktops and the web app, crafted clients that try to get around
-the checks, and the Docker stack with a second account. Phase 6 (automations, forms and a
-Notion-compatible API, see [docs/PHASE6.md](docs/PHASE6.md)) is done. M1 is done: a database
-can be shared as "Can edit content" (rows, not properties or views, checked by the server), the
-server can edit docs on someone's behalf through the same checks, and it has a job queue. M2 adds
-forms: a database's form view, filled in from the app (even by people who may only view it) or,
-shared by link, by anyone in a browser, with each response a new row. M3 adds automations: when a page is added, a property is
-edited or on a schedule, the server edits the page, adds pages, notifies people or sends a
-signed webhook, acting with the access of the person who made it. M4 runs them on a desktop
-whose workspace isn't synced too (schedules included, catching up after the app was closed),
-and buttons can send a webhook or a notification. M5 adds integrations and the API: owners make
-an integration with a token, connect pages to it, and it uses Notion's API (`/v1`, the
-official SDK works) on those pages: users, pages, databases and data sources, queries and
-search. M6 adds page content (blocks: read, appended, changed and deleted by id, while people
-edit the same page live), comments, and signed links to stored files. M7 adds integration
-webhooks (Notion's events, verified and signed, only for pages the integration can read) and
-email digests of unread notifications (after a mention, or daily), with one-click unsubscribe. The exit
-check passes: the official SDK against both API versions, published Notion tools run unchanged,
-and a scenario where an outside script, an automation, a public form, webhooks and a member
-who may only edit rows all meet. Phase 6 is done.
+[![CI](https://github.com/Ariehant/Workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/Ariehant/Workspace/actions/workflows/ci.yml)
+![Ubuntu 24.04+](https://img.shields.io/badge/Ubuntu-24.04%2B-E95420?logo=ubuntu&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Notion API](https://img.shields.io/badge/Notion%20API-2022--06--28%20%7C%202025--09--03-000000?logo=notion&logoColor=white)
 
-## What works today
+[Features](#features) · [Screenshots](#screenshots) · [Get started](#get-started) ·
+[Self-host](docs/self-hosting.md) · [API](docs/api.md) · [Docs](docs/README.md) ·
+[Roadmap](#roadmap)
 
-- Desktop app (Electron) with a page tree in the sidebar: create pages, drag to reorder or nest
-  them, favorites, and a resizable sidebar. Trash: restore or delete permanently; pages are deleted
-  automatically after 30 days.
-- Quick find (`Ctrl+K` / `Ctrl+P`) over titles and content, with recent pages; `Ctrl+Enter` opens
-  the result in a new window. Back and forward with `Alt+←`/`Alt+→` or the mouse's side buttons.
-- Tabs: `Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`; Ctrl+click or middle-click anything that opens a page to
-  open it in a new tab. Drag tabs to reorder them or out of the window. Tabs, with their
-  history, come back after a restart.
-- `workspace://page/…` links to pages and blocks open in the app, including from other apps.
-- Rich-text page editor (TipTap/ProseMirror):
-  - `/` opens a filterable block menu: text, headings, to-do, bulleted/numbered and toggle lists,
-    toggle headings, quote, divider, callout, table, code (syntax highlighting for ~190
-    languages, line numbers, captions, Tab/Shift+Tab on selected lines), Mermaid diagrams,
-    block and inline equations (KaTeX, with workspace macros and live errors), table of
-    contents, breadcrumb, columns, link to page and new sub-page.
-  - Markdown shortcuts: `#`, `-`, `1.`, `[]`, `>` (toggle), `"` (quote), ` ``` `, `---`, `$$`,
-    `$$x$$` (inline equation).
-  - Hover a block for `+` (add below) and `⋮⋮` (drag to move; click for turn into, duplicate,
-    copy link, delete). Drop a block on another block's left or right edge to make columns.
-  - Media: images (upload, paste or drop; resize; captions), video, audio, PDFs (viewed in the
-    page), any file (opens in its default app), web bookmarks with previews, and embeds from
-    YouTube, Vimeo, Loom, Figma, CodePen and Google Maps. Pasting a link offers Bookmark or Embed.
-  - Selecting text shows a toolbar for bold, italic, underline, strikethrough, code, links,
-    colors, equations and turn into. Ctrl+click opens a link. Blocks can be colored from the `⋮⋮`
-    menu.
-  - `@` mentions pages (live titles) and dates ("next fri", "in 2 weeks"); `@remind tomorrow`
-    sends a desktop notification at 9:00. `:` suggests emoji.
-  - Paste Markdown to get blocks; copy gives Markdown as plain text. Ctrl+F finds and replaces.
-- Databases, inline or full page (`/database inline`, `/database full page`, or "Get started
-  with: Database" on an empty page):
-  - Property types: text, number, select, multi-select, status, date (ranges, times), checkbox,
-    URL, email, phone, files, person, created/edited time and by, and unique ID.
-  - Table view: edit cells in place, keyboard navigation, copy and paste, undo; sort; rename,
-    retype, hide, resize, reorder, duplicate and delete columns; drag rows to reorder. Large
-    tables only render the rows in view.
-  - Several views per database, each with its own filters (simple chips or nested AND/OR),
-    sorts, grouping and sub-grouping, column calculations and visible columns; search inside a
-    view. Number, date and time formats; reminders on dates.
-  - Formulas (Notion's Formula 2.0 language): an editor with highlighting, autocomplete,
-    function docs, live preview and error positions; results sort, filter and group by type.
-  - Relations (one-way or two-way, across databases or within one) with a page picker,
-    rollups with Notion's calculations, sub-items nested in the table, and dependencies.
-  - Board (drag cards between columns, swimlanes, hidden and colored columns), list and gallery
-    views, with card previews (cover, first image, files) and card sizes.
-  - Calendar (month/week, drag to reschedule and resize), timeline (zoom levels, draggable
-    bars, dependency arrows) and chart views (bar, line, pie, donut).
-  - Buttons (insert blocks, add or edit database pages) and a button property; `@today` and
-    `@me` in buttons and templates.
-  - Database templates (default per database or view), linked views of a database in any
-    page, simple tables turned into databases and back, locked views and properties.
-  - Rows are pages: open them in a side peek, a center peek or full page, with their properties
-    above the content. Rows show up in quick find (including their property text), can be
-    linked to, and go to the Trash when deleted.
-- Synced blocks: the same content in several places, edited anywhere.
-- Backlinks under every page title, and page history with preview and restore.
-- Export a page (`···` → Export…) or the whole workspace (click "Workspace" at the top of the
-  sidebar) as Markdown & CSV in Notion's layout, HTML, or PDF; back up the workspace to a
-  `.zip` and restore it.
-- Import (sidebar → Import) a Notion export zip (Markdown & CSV or HTML) or Markdown, HTML, CSV
-  and text files: pages, databases with inferred types and relations, links and attachments.
-- Templates gallery (sidebar → Templates): built-in templates for personal use, projects,
-  engineering and a robotics lab, with previews. "Save as template" in a page's `···` menu adds
-  your own.
-- Every block has a stable id, ready for block links, comments and sync later.
-- Everything is saved locally as you type and survives restarts, including the last open page and
-  which sidebar items are expanded.
-- Several windows on the same workspace stay in sync live (File → New Window, `Ctrl+Shift+N`).
-- Light, dark and system themes.
-- Page icons (emoji or image) and covers (gradients, colors or images, repositionable).
-- Page menu: font (default, serif, mono), small text, full width, lock, duplicate (with
-  sub-pages), move to, copy link, word count.
-- Sync between devices through a server you host (sidebar → "Sync is off", or File → Sync…):
-  sign in with a password or single sign-on, upload this workspace or use one from the server,
-  and keep working offline; changes and attachments sync when the connection is back.
-- Teams on a server workspace: invite people by email (a link to send, or an email when the
-  server has SMTP) as admins, members or guests; roles, groups, and your name and picture
-  (Members in the sidebar, Your profile in the workspace menu). @-mention people in pages, and
-  pick them in person properties.
-- `.deb` and AppImage packages for Ubuntu.
+<br>
 
-## Requirements
+<img src="docs/images/editor.png" alt="A page in Workspace: headings, a checklist, a Mermaid diagram and a table" width="900">
 
-- Ubuntu 24.04 or later (x86-64). Other modern Linux desktops should work too.
-- For development: Node.js 22.13 or later (24 LTS recommended) and pnpm 10
-  (`corepack enable` sets up the pinned version).
+</div>
 
-## Development
+## Why Workspace
+
+- **Offline first.** The desktop app is complete on its own. Everything is saved locally as you
+  type, in one SQLite file, and nothing needs an account.
+- **Your server, when you want one.** Add the self-hosted server (Docker Compose behind Caddy) to
+  sync devices, work with others in real time, publish pages and use the web app. Edits made
+  offline merge cleanly when you reconnect, because every page is a CRDT (Yjs).
+- **Notion-compatible.** Import a Notion export, and point existing Notion integrations at your
+  server: the official `@notionhq/client` SDK works against it unchanged.
+- **No AI, no lock-in.** Export everything as Markdown, CSV, HTML or PDF, or back up the whole
+  workspace to a `.zip`.
+
+## Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Editor**
+
+- Slash menu, Markdown shortcuts, drag handles and columns
+- Headings, lists, to-dos, toggles, callouts, quotes, tables
+- Code with highlighting for ~190 languages, Mermaid diagrams, KaTeX equations
+- Images, video, audio, PDFs, files, bookmarks and embeds
+- @-mentions of pages, people and dates, reminders, emoji
+- Synced blocks, buttons, table of contents, find and replace
+
+</td>
+<td width="50%" valign="top">
+
+**Databases**
+
+- Table, board, list, gallery, calendar, timeline, chart and form views
+- 20+ property types, with Notion's Formula 2.0 language
+- Relations, rollups, sub-items and dependencies
+- Filters (nested AND/OR), sorts, groups, calculations per view
+- Templates, linked views, locked views, row pages as peeks
+- Automations: on a new page, a changed property or a schedule
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**Workspace**
+
+- Page tree with drag and drop, favorites, trash, quick find (`Ctrl+K`)
+- Tabs, several windows, back and forward, `workspace://` links
+- Backlinks, page history with restore, a templates gallery
+- Import Notion exports, Markdown, HTML and CSV
+- Export Markdown & CSV, HTML, PDF; full backups
+- Light, dark and system themes
+
+</td>
+<td valign="top">
+
+**Together, on your server**
+
+- Accounts with passwords or single sign-on (OpenID Connect)
+- Members, guests, groups, teamspaces and per-page sharing
+- Live cursors and presence, comments, suggested edits
+- An inbox for mentions, comments and reminders, with email digests
+- Publish pages to the web, and a web app with the same UI
+- A Notion-compatible REST API with integration tokens and webhooks
+
+</td>
+</tr>
+</table>
+
+The full inventory, block by block, is in [docs/features.md](docs/features.md).
+
+## Screenshots
+
+|                                                                                                                                                               |                                                                                                                                                         |
+| :-----------------------------------------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------------------------------------: |
+|                    <img src="docs/images/board.png" alt="A board view grouped by status" width="440"><br>**Board view**, grouped by status                    |        <img src="docs/images/timeline.png" alt="A timeline of projects above a table of tasks" width="440"><br>**Timeline** and a related table         |
+|                  <img src="docs/images/calendar.png" alt="A calendar view of a habit tracker" width="440"><br>**Calendar** of database pages                  |         <img src="docs/images/slash-menu.png" alt="The slash menu open under a code block" width="440"><br>**Slash menu** for every block type          |
+|              <img src="docs/images/comments.png" alt="A comment thread on highlighted text" width="440"><br>**Comments** on text, with mentions               | <img src="docs/images/automations.png" alt="An automation that sets a date, notifies and calls a webhook" width="440"><br>**Automations** with webhooks |
+| <img src="docs/images/api.png" alt="Blocks and a comment added through the API, shown in the app" width="440"><br>Content and comments **from the API**, live |                          <img src="docs/images/dark.png" alt="The same page in the dark theme" width="440"><br>**Dark theme**                           |
+
+## Get started
+
+### The desktop app
+
+Workspace runs on Ubuntu 24.04 and later (x86-64). Build the packages from source (there are no
+published releases yet):
 
 ```sh
+corepack enable        # pnpm, at the version the repo pins
 pnpm install
-pnpm dev            # launch the desktop app with hot reload
+pnpm package           # .deb and AppImage in apps/desktop/dist/
+sudo apt install ./apps/desktop/dist/workspace-app_*_amd64.deb
 ```
 
-| Command             | What it does                                                |
-| ------------------- | ----------------------------------------------------------- |
-| `pnpm dev`          | Run the desktop app in development mode                     |
-| `pnpm build`        | Build all packages                                          |
-| `pnpm typecheck`    | Type-check every package                                    |
-| `pnpm test`         | Unit tests (Vitest)                                         |
-| `pnpm test:e2e`     | End-to-end tests driving the real Electron app (Playwright) |
-| `pnpm test:e2e:web` | The web app's end-to-end tests (Chromium, real server)      |
-| `pnpm dev:web`      | The web app with hot reload (`VITE_SERVER=<server url>`)    |
-| `pnpm lint`         | ESLint                                                      |
-| `pnpm format`       | Prettier                                                    |
-| `pnpm package`      | Build `.deb` and AppImage into `apps/desktop/dist/`         |
+Prefer the `.deb`: it installs an AppArmor profile so Chromium's sandbox works under Ubuntu
+24.04's restrictions. Where your data lives, backups and the AppImage are covered in the
+[desktop guide](docs/desktop.md).
 
-E2E tests need a display. On a headless machine, run `pnpm --filter @workspace/desktop build`
-first, then `xvfb-run -a pnpm test:e2e`.
-
-## Installing on Ubuntu
-
-**.deb (recommended):**
-
-```sh
-sudo apt install ./workspace-app_0.1.0_amd64.deb
-workspace-app
-```
-
-The package installs an AppArmor profile so Chromium's sandbox works under Ubuntu 24.04's
-user-namespace restrictions.
-
-**AppImage:** Ubuntu 24.04 needs FUSE 2 (`sudo apt install libfuse2t64`). Ubuntu's AppArmor
-policy also blocks the Chromium sandbox for AppImages; until signed AppImage profiles are in
-place, prefer the `.deb`.
-
-### Where data is stored
-
-| What                                 | Location                                                               |
-| ------------------------------------ | ---------------------------------------------------------------------- |
-| Workspace database (pages, content)  | `~/.local/share/workspace-app/workspace.db` (honours `$XDG_DATA_HOME`) |
-| Attachments (images, PDFs, files)    | `~/.local/share/workspace-app/files/`                                  |
-| Chromium profile (caches, GPU state) | `~/.config/Workspace/`                                                 |
-
-With sync on, the database also holds the changes waiting for the server, and the sign-in
-(encrypted with the system keyring when there is one).
-
-Back up the workspace by copying `workspace.db` and the `files/` folder while the app is closed. Set `WORKSPACE_DATA_DIR`
-to use a different directory, for example to keep separate workspaces.
-
-## Self-hosting the sync server
-
-The server runs with Docker Compose on Ubuntu 24.04: Caddy (automatic HTTPS), the server and
-Postgres 16, with attachments on a volume (or in S3 with `docker-compose.s3.yml`).
+### The sync server
 
 ```sh
 cd infra
-cp .env.example .env   # set DOMAIN and the passwords
+cp .env.example .env   # set DOMAIN and POSTGRES_PASSWORD
 docker compose up -d
 ```
 
-The first account created becomes the server admin. After that, `SIGNUP` decides who can join:
-`open`, `invite` (the default) or `disabled`. Admins manage accounts from the command line:
+Caddy gets a certificate for your domain, and `https://<DOMAIN>` serves the web app. On a
+desktop, open **Sync** in the sidebar and enter the same address. The first account becomes the
+server admin. Single sign-on, email, S3 storage, backups and the admin CLI are in the
+[self-hosting guide](docs/self-hosting.md).
 
-```sh
-docker compose exec server workspace-admin create-invite [email]
-docker compose exec server workspace-admin create-user ada@example.com "Ada" [--admin]
-docker compose exec server workspace-admin reindex   # rebuild the search index
-docker compose exec server workspace-admin help      # all commands
+### Use the API
+
+Make an integration in **Members → Integrations**, connect pages to it (**Share → Connections**),
+and use Notion's SDK with your server as the base URL:
+
+```js
+import { Client } from '@notionhq/client';
+
+const notion = new Client({
+  auth: process.env.WORKSPACE_TOKEN,
+  baseUrl: 'https://notes.example.com',
+});
+const { results } = await notion.search({ query: 'Roadmap' });
 ```
 
-Single sign-on works with any OpenID Connect provider (GitLab, Google, Keycloak, Authentik…).
-Set `OIDC_*` in `.env` (see `.env.example`).
+Endpoints, versions, webhooks and the differences from Notion are in the [API guide](docs/api.md).
 
-People join a workspace through an invite from its owners or admins (Members → Invite), which
-also lets them sign up on an invite-only server. Set `SMTP_URL` and `SMTP_FROM` for the server
-to email invites; otherwise the invite links are shown to copy and send.
+## Development
 
-`infra/workspace.service` runs it under systemd and `infra/backup.sh` backs it up.
+You need Node.js 22.13 or later (24 LTS recommended) and pnpm 10 (`corepack enable`).
 
-- **In a browser:** open `https://<DOMAIN>`. The web app is the same UI. It keeps only the pages
-  you open, and works while connected (export, import, backups and page history are desktop
-  features).
-- **On a desktop:** open Sync in the sidebar and enter `https://<DOMAIN>`.
+```sh
+pnpm install
+pnpm dev               # the desktop app with hot reload
+```
+
+| Command             | What it does                                                   |
+| ------------------- | -------------------------------------------------------------- |
+| `pnpm dev`          | Run the desktop app in development mode                        |
+| `pnpm dev:web`      | The web app with hot reload (`VITE_SERVER=<server url>`)       |
+| `pnpm build`        | Build every package                                            |
+| `pnpm lint`         | ESLint, and a check of every link in the Markdown docs         |
+| `pnpm typecheck`    | Type-check every package                                       |
+| `pnpm test`         | Unit and integration tests (Vitest, with a throwaway Postgres) |
+| `pnpm test:e2e`     | End-to-end tests driving the real Electron app (Playwright)    |
+| `pnpm test:e2e:web` | The web app's end-to-end tests (Chromium, real server)         |
+| `pnpm format`       | Prettier                                                       |
+| `pnpm package`      | Build the `.deb` and AppImage into `apps/desktop/dist/`        |
+
+End-to-end tests need a display: on a headless machine, run `pnpm --filter @workspace/desktop
+build`, then `xvfb-run -a pnpm test:e2e`. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the
+repo is organised and what a change needs before it's merged.
 
 ## Architecture
 
-```
-apps/
-  desktop/          Electron main process, preload bridge, renderer entry, packaging
-packages/
-  core/             Data model on Yjs: pages, page tree, blocks, DocClient sync
-  storage-local/    SQLite persistence (node:sqlite), DocManager, search index
-  editor/           TipTap editor bound to a page's Yjs document
-  ui/               Design tokens (Tailwind), themes, buttons, menus
-  app/              Shared React screens: sidebar, page view, app shell
-  storage-remote/   Postgres store for the sync server (migrations, update log, accounts)
-  sync/             Sync protocol: messages, the server hub and the clients (no I/O)
-apps/server/        Sync server (Fastify: auth, workspaces, WebSocket sync, search), bundled with esbuild
-apps/web/           The web app: the shared UI on the server (Vite)
-infra/              Docker Compose stack, Caddyfile, systemd unit, backup script
+```mermaid
+flowchart LR
+  subgraph desktop["Desktop app (Electron)"]
+    ui["React UI · TipTap editor"] <--> main["Main process<br/>Yjs docs · SQLite · files"]
+  end
+  subgraph server["Self-hosted server (Docker Compose)"]
+    caddy["Caddy (HTTPS)"] --> api["Fastify<br/>sync · REST · /v1 API · jobs"]
+    api --> pg[("Postgres")]
+    api --> files[("Files or S3")]
+  end
+  main <-- "WebSocket sync" --> caddy
+  browser["Web app"] <--> caddy
+  integrations["Integrations<br/>(Notion SDK)"] --> caddy
 ```
 
-- **All data is Yjs CRDT documents.** One _workspace doc_ holds every page's metadata (title, icon,
-  parent, order, trash state). Each page has its own _page doc_ with the editor content. Concurrent
-  edits always merge, which makes the planned sync server and real-time collaboration an addition
-  rather than a rewrite.
-- **The main process owns the data.** `DocManager` keeps the live documents, appends every update
-  to SQLite, relays it to the other windows and keeps the search index current. Renderer windows
-  are sandboxed and reach it only through the typed preload API (`window.workspace`).
-- **No native modules.** SQLite comes from Electron's built-in `node:sqlite` (with FTS5), and
-  every JavaScript dependency is bundled, so packages ship without `node_modules`.
-- **Shared UI.** `packages/app` talks to its host only through the `Platform` interface, so the
-  planned web build can reuse it over the sync server.
+- **Every page and database is a Yjs document.** Concurrent and offline edits always merge, so
+  sync and real-time collaboration are additions, not rewrites.
+- **The desktop's main process owns the data.** It keeps live documents, appends each update to
+  SQLite (`node:sqlite`, with FTS5 search) and relays it to windows, which are sandboxed and use
+  a typed preload API.
+- **The server checks every write.** Sync messages are authorized per document and per role, and
+  the API, forms and automations edit documents through the same checks.
+- **One UI, two hosts.** `packages/app` reaches its host only through a `Platform` interface, so
+  the desktop and the web app share every screen.
+
+| Path                      | What's there                                                        |
+| ------------------------- | ------------------------------------------------------------------- |
+| `apps/desktop`            | Electron main process, preload bridge, packaging, E2E tests         |
+| `apps/server`             | The server: auth, sync, search, files, the `/v1` API, jobs          |
+| `apps/web`                | The web app: the shared UI served by the server                     |
+| `packages/core`           | The data model on Yjs: pages, the page tree, blocks, comments       |
+| `packages/editor`         | TipTap extensions for every block type                              |
+| `packages/database`       | Properties, formulas, filters, sorts, views, automations            |
+| `packages/app`            | Shared React screens: sidebar, pages, databases, settings           |
+| `packages/ui`             | Design tokens, themes and components                                |
+| `packages/storage-local`  | SQLite persistence and search for the desktop                       |
+| `packages/storage-remote` | Postgres store for the server: migrations, the update log, accounts |
+| `packages/sync`           | The sync protocol: messages, the server hub and clients             |
+| `packages/api-model`      | Notion's API objects, both ways                                     |
+| `packages/importers`      | Notion exports, Markdown, HTML, CSV                                 |
+| `packages/exporters`      | Markdown, CSV, HTML, PDF and backups                                |
+| `infra`                   | Docker Compose stack, Caddyfile, systemd unit, backup script        |
+
+The design decisions and their reasons are in [docs/PLAN.md](docs/PLAN.md#1-architecture).
+
+## Roadmap
+
+| Phase                        | Status         | Plan and notes                            |
+| ---------------------------- | -------------- | ----------------------------------------- |
+| 0. Foundation                | ✅ Done        | [PLAN.md](docs/PLAN.md#8-phase-0-outcome) |
+| 1. Editor and navigation     | ✅ Done        | [PHASE1.md](docs/PHASE1.md)               |
+| 2. Databases                 | ✅ Done        | [PHASE2.md](docs/PHASE2.md)               |
+| 3. Power features            | ✅ Done¹       | [PHASE3.md](docs/PHASE3.md)               |
+| 4. Sync server               | ✅ Done        | [PHASE4.md](docs/PHASE4.md)               |
+| 5. Collaboration             | ✅ Done        | [PHASE5.md](docs/PHASE5.md)               |
+| 6. Automations and API       | ✅ Done        | [PHASE6.md](docs/PHASE6.md)               |
+| 7. Polish and release (v1.0) | 🚧 In progress | [PHASE7.md](docs/PHASE7.md)               |
+
+¹ One check is open: importing a real Notion export, which needs a sample export.
+
+Out of scope: Notion AI, Notion Mail, Notion Calendar as a separate app, and the marketplace.
+
+## License
+
+No license has been chosen yet, so the code is not yet available for reuse. A license is part of
+the v1.0 release ([Phase 7](docs/PHASE7.md)).

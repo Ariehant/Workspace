@@ -13,11 +13,12 @@
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @workspace/desktop test:e2e",
     "package": "pnpm --filter @workspace/desktop package",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-links.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e:web": "pnpm --filter @workspace/web test:e2e",
-    "dev:web": "pnpm --filter @workspace/web dev"
+    "dev:web": "pnpm --filter @workspace/web dev",
+    "check:links": "node scripts/check-links.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

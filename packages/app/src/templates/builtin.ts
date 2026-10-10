@@ -146,7 +146,7 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
             { Name: 'Gripper v2', Status: 'Active', Start: day(-14), End: day(21) },
             { Name: 'Lab website', Status: 'Planning', Start: day(7), End: day(30) },
           ],
-          views: [{ name: 'Timeline', type: 'timeline', by: 'Start' }],
+          views: [{ name: 'Timeline', type: 'timeline', by: 'Start', until: 'End' }],
         },
         root,
       );
