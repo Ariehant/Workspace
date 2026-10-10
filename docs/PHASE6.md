@@ -913,7 +913,8 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 **Runs:**
 
 - **Unit tests:** 903 passed (3 skipped).
-- **Desktop E2E and web E2E:** running.
+- **Desktop E2E:** 142 of 142, twice.
+- **Web E2E:** 3 of 3.
 
 ### Exit check (≈ 2 days)
 
