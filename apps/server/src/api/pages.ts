@@ -5,6 +5,7 @@
  */
 import {
   ApiError,
+  blocksIn,
   findProperty,
   invalid,
   listObject,
@@ -43,6 +44,7 @@ import {
 } from '@workspace/database';
 import type { FastifyInstance } from 'fastify';
 import type * as Y from 'yjs';
+import { appendBlocks } from './content';
 import { viewOf } from './plugin';
 import { rememberRow, type ApiView, type DatabaseLocated, type Located } from './view';
 
@@ -128,12 +130,11 @@ function readPageTitle(raw: unknown): string | undefined {
   return title;
 }
 
-function noChildren(body: Body) {
-  const children = body.children ?? body.content;
-  if (Array.isArray(children) && children.length > 0) {
-    throw invalid('body.children: page content through the API comes in a later version.');
-  }
-}
+/** The new page's content (checked before anything is made). */
+const childrenOf = (api: ApiView, body: Body) =>
+  body.children === undefined
+    ? []
+    : blocksIn(body.children, 'body.children', { isUser: (u) => api.access.isMember(u) });
 
 async function createRow(api: ApiView, database: DatabaseLocated, body: Body) {
   const properties = readDatabase(database.db).properties;
@@ -243,7 +244,7 @@ export function pageRoutes(app: FastifyInstance) {
     const api = viewOf(request);
     api.need('insertContent');
     const body = asBody(request.body);
-    noChildren(body);
+    const children = childrenOf(api, body);
     const parent = parseParent(body.parent);
     if (parent.kind === 'workspace') throw invalid('body.parent should be a page or a database.');
     const target = await api.locate(parent.id);
@@ -255,7 +256,9 @@ export function pageRoutes(app: FastifyInstance) {
     } else {
       id = await createSubpage(api, target, body);
     }
-    return api.pageJson(await api.locate(id));
+    const made = await api.locate(id);
+    if (children.length) await appendBlocks(api, made, null, null, children);
+    return api.pageJson(made);
   });
 
   app.get<{ Params: { id: string } }>('/pages/:id', async (request) => {

@@ -1,6 +1,6 @@
 # Phase 6: Automations and API
 
-**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) M4 (automations on a local desktop, and button webhook and notification steps) and M5 (integrations and the API core) are done.
+**Status:** in progress. M1 (the content role, server edits with an author, and the job queue), M2 (forms), M3 (automations on the server) M4 (automations on a local desktop, and button webhook and notification steps), M5 (integrations and the API core) and M6 (blocks, comments and files in the API) are done.
 
 ## Context
 
@@ -657,7 +657,7 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - **Search** reads the trees and databases shared with the integration (titles containing the query), not the search index, which lags a moment behind writes.
 - **A data source's id is its database's**, since there's one each.
 - **Not done (later):**
-  - **M6:** page content (`children`), and signed file URLs (stored files' URLs point at the signed-in file route).
+  - **M6:** page content (`children`), and signed file URLs (stored files' URLs point at the signed-in file route). Done in M6.
   - Filters on rollups with `any`/`every`/`none`.
   - Images as icons and covers: emoji icons and removing are supported.
   - New status options.
@@ -747,19 +747,78 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 - **Run 2:** 139 of 140. The M4 button test typed before the new page's editor had the focus. It now waits for the focus, as the other specs do, and passed three runs out of three.
 - **Web E2E:** 3 of 3.
 
-### M6: blocks, comments and files in the API (≈ 4 days)
+### M6: blocks, comments and files in the API ✅
 
-- **Block ids:** a `blockId` attribute on block nodes (in `@workspace/editor` and `@workspace/core`), set on creation and once for existing blocks.
-- **`packages/api-model`:** blocks both ways for every type listed above; `unsupported` for the rest; nesting (children, two levels per append).
-- **Endpoints:**
-  - blocks: retrieve, update, delete, list children, append children (with `after`)
-  - comments: list, create on a page or in a discussion
-  - page creation with `children`
-- **Files:** signed file URLs for `file` objects; external files kept as URLs.
-- **Tests:**
-  - **Round trip:** a page made in the app is read through the API, written to a new page, and read back with no loss in any block type.
-  - **Concurrency:** appends while someone edits the same page live both survive (Yjs merges, and the server edit is a normal update).
-  - block ids stay stable through edits.
+**Changed from the plan:**
+
+- **Block ids are the editor's `id` attribute** (TipTap's `UniqueID`, already on every block node), not a new `blockId`. Blocks without one (content from before ids) get one the first time the API reads the page, as a server edit, so the ids then stay the same for everyone.
+- **Deleting a block removes it** from the page (page history keeps it). `DELETE` and `PATCH` with `in_trash: true` do the same; the response says `in_trash: true`, but the block can't be restored through the API. Pages and rows are trashed, as before.
+- **Table rows are read-only.** Their ids are made from the table's id and the row's place (our rows have no ids of their own), so changing or deleting one is refused.
+- **Paragraphs can't hold blocks** here, so children sent under a paragraph come after it. Quotes, callouts, list items, to-dos, toggles and columns keep theirs.
+- **Blocks have no author:** `created_by` and `last_edited_by` have a null id, and the times are the page's.
+- **Uploads aren't supported** (`file_upload`, or a `file` by URL): files go in as external URLs. Stored files come out with signed URLs.
+- **Comments:**
+  - A discussion on a block reports the block as its parent. One on selected text reports the page (its anchor is a text range, not a block).
+  - Listing returns open discussions only (not resolved ones, or suggested edits).
+  - New discussions go on a page (`parent.page_id`), or as a reply (`discussion_id`).
+- **The server bundle** now includes the editor's schema (with `import.meta.glob` for code languages stubbed out at build time). It is about 21 MB.
+
+**`packages/api-model`:**
+
+- **`blocks.ts`:**
+  - **Out:** editor JSON → Notion blocks. Lists are taken apart into items, toggles with a level are toggleable headings, a quote's or callout's first paragraph is its text, and tables, columns, page links, databases, synced blocks, files, bookmarks and embeds map to theirs. Buttons and anything else read as `unsupported`.
+  - **In:** Notion blocks → editor JSON. Consecutive list items are grouped into lists. At most 100 blocks, two levels deep and 1,000 elements per request. `child_page` and `child_database` are refused (they're made with `POST /v1/pages` and `/v1/databases`).
+  - **Rich text both ways:** marks, colors, links, line breaks, and page, person and date mentions and equations. Links must be web addresses, and people must be in the workspace.
+  - **Changes** for `PATCH /v1/blocks/:id`: text, and settings (checked, language, color, icon…).
+- **`comments.ts`:** a comment's body (plain text with `<@id>` mentions) as rich text, and back.
+
+**Editor:** `contentJson` (a doc's content as editor JSON), `contentElements` (blocks as Yjs elements with fresh ids, checked against the schema) and `inlineElements` (a block's new text).
+
+**Server** (`apps/server/src/api/`):
+
+- **`content.ts`:**
+  - A page's blocks are its content, then its sub-pages and databases (`child_page`, `child_database`), as Notion lists them.
+  - A block is found by id in the pages the bot reads (remembered once found).
+  - **Writes** go into the page's doc as the bot, at the place asked: after a block, or into a block that holds others. After a list item, new items of the same kind join its list.
+  - Text is replaced in place, so the block keeps its id and children. A list left empty by a delete goes too.
+- **`blocks.ts`:** `GET /v1/blocks/:id` (a page as `child_page`), `GET` and `PATCH /v1/blocks/:id/children` (append, with `after`), `PATCH /v1/blocks/:id` and `DELETE /v1/blocks/:id`.
+- **`pages.ts`:** `POST /v1/pages` takes `children`, checked before the page is made.
+- **`comments.ts`:** `GET /v1/comments?block_id=` (a page's or a block's) and `POST /v1/comments`, written to the page's comments doc as the bot, through the same checks as anyone's comments.
+- **Signed file URLs:** `GET /api/files/signed/:workspace/:file?exp=&sig=`, an HMAC-SHA256 of the workspace, the file and the expiry, with a secret per workspace. They work for an hour without signing in (to the minute, so the same file gets the same URL for a while); expired or altered ones get 403.
+
+**App:** an avatar that is an emoji (an integration's icon) shows as the emoji, not as a broken picture.
+
+**Tests:**
+
+- **`blocks.test.ts` (api-model):**
+  - rich text both ways, and what's refused
+  - comments' mentions
+  - every block type out, lists taken apart, table row ids
+  - back in as the same content
+  - limits and refused types; changes
+- **`api.test.ts` (server):**
+  - **Round trip:** a page made with the editor (headings, formatting and links, nested lists, a numbered list, a quote, code, a divider, a to-do, a callout, a toggle and a table) is read through the API, sent back as a new page's `children`, and reads back the same. Ada's desktop has the copy.
+  - **Blocks:**
+    - retrieve, with the page or the block as the parent; a page as `child_page`; sub-pages listed after content
+    - added after a block, into a list, into a toggle; refused into a heading or after a block that isn't there
+    - text and settings changed with the id kept
+    - deleted (an emptied list too), on the desktop as well
+    - a view-only integration reads but doesn't write
+  - **Stable ids and concurrency:** a block from before ids gets one once, and the desktop has it. Ada types into a paragraph while the API appends a block and renames a heading: everything is kept, on the server and the desktop, and every block keeps its id.
+  - **Comments:**
+    - a page's discussions and a block's, without resolved ones
+    - started by the bot with a mention, and a reply in Ada's discussion, both on her desktop
+    - pages not shared are 404; without the capabilities, refused
+  - **Files:** a stored file's signed URL works without signing in, and fails when altered or expired.
+  - **The official SDK:** `blocks.children.append` and `list`, and `comments.create` and `list`.
+  - Each test's server and Postgres pool now close when it ends: with five more worlds, the file ran Postgres out of connections when run with the rest of the suite.
+
+**E2E** (`integrations.spec.ts`): Ada writes a line on "Arm design" and connects it to Lab bot. The API reads her line as a block, adds a heading, to-dos, a callout and code after it, and comments on the page. Both appear on her desktop, live.
+
+**Runs:**
+
+- **Unit tests:** 896 passed (3 skipped).
+- **Desktop E2E and web E2E:** running.
 
 ### M7: integration webhooks and email digests (≈ 3 days)
 

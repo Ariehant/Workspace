@@ -4,3 +4,5 @@ export * from './rich-text';
 export * from './properties';
 export * from './filters';
 export * from './objects';
+export * from './blocks';
+export * from './comments';

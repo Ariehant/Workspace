@@ -1,6 +1,9 @@
 import { cn } from './cn';
 
-/** A person's picture, or their initial on a tint picked from their id. */
+/**
+ * A person's picture, or their initial on a tint picked from their id. An emoji (an
+ * integration's icon) shows on the tint instead of the initial.
+ */
 export function Avatar({
   name,
   src,
@@ -16,7 +19,8 @@ export function Avatar({
   className?: string;
 }) {
   const style = { width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.5)) };
-  if (src) {
+  const emoji = src && isEmoji(src) ? src : null;
+  if (src && !emoji) {
     return (
       <img
         src={src}
@@ -40,10 +44,13 @@ export function Avatar({
         className,
       )}
     >
-      {name.trim().charAt(0).toUpperCase() || '?'}
+      {emoji ?? (name.trim().charAt(0).toUpperCase() || '?')}
     </span>
   );
 }
+
+/** A few characters with no URL in them (not a picture's address). */
+const isEmoji = (src: string) => src.length <= 16 && !/[/:.]/.test(src);
 
 const TINTS = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'];
 

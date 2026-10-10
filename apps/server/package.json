@@ -18,6 +18,7 @@
     "@workspace/api-model": "workspace:*",
     "@workspace/core": "workspace:*",
     "@workspace/database": "workspace:*",
+    "@workspace/editor": "workspace:*",
     "@workspace/exporters": "workspace:*",
     "@workspace/storage-remote": "workspace:*",
     "@workspace/sync": "workspace:*",

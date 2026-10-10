@@ -143,6 +143,9 @@ importers:
       '@workspace/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@workspace/editor':
+        specifier: workspace:*
+        version: link:../../packages/editor
       '@workspace/exporters':
         specifier: workspace:*
         version: link:../../packages/exporters

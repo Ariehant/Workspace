@@ -14,6 +14,8 @@ import type { Integration } from '@workspace/storage-remote';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ServerContext } from '../context';
 import { ApiView } from './view';
+import { blockRoutes } from './blocks';
+import { commentRoutes } from './comments';
 import { databaseRoutes } from './databases';
 import { pageRoutes } from './pages';
 import { searchRoutes } from './search';
@@ -116,6 +118,7 @@ export function apiRoutes(app: FastifyInstance, ctx: ServerContext, options: Api
           return send(reply, new ApiError('unauthorized', 'API token is invalid.'));
         }
         request.api = new ApiView(ctx, integration, version, access);
+        await request.api.prepare();
       });
 
       v1.setErrorHandler((error, _request, reply) => {
@@ -172,6 +175,8 @@ export function apiRoutes(app: FastifyInstance, ctx: ServerContext, options: Api
       pageRoutes(v1);
       databaseRoutes(v1);
       searchRoutes(v1);
+      blockRoutes(v1);
+      commentRoutes(v1);
     },
     { prefix: '/v1' },
   );

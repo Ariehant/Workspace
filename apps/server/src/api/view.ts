@@ -44,6 +44,7 @@ import { atLeast } from '../access/roles';
 import type { WorkspaceAccess } from '../access/service';
 import type { ServerContext } from '../context';
 import { EditRefused } from '../docs-edit';
+import { FILE_SECRET, signedFileUrl } from '../files-routes';
 
 export type Located =
   | { kind: 'page'; id: string; scope: Scope; tree: Y.Doc; meta: PageMeta }
@@ -68,6 +69,8 @@ export class ApiView {
   private readonly docs = new Map<string, Promise<Y.Doc | null>>();
   private readonly computed = new Map<string, DatabaseSnapshot>();
   private ctxCache: DisplayContext | null = null;
+  /** The workspace's secret for signed file links (loaded by `prepare`). */
+  private fileSecret = '';
 
   constructor(
     readonly ctx: ServerContext,
@@ -78,6 +81,15 @@ export class ApiView {
     this.botId = integration.id;
     this.workspaceId = integration.workspaceId;
     this.roles = access.roles(integration.id);
+  }
+
+  /** Load what objects need before the request runs (the file links' secret). */
+  async prepare(): Promise<void> {
+    this.fileSecret = await this.ctx.store.automationSecrets.get(
+      this.workspaceId,
+      FILE_SECRET.databaseId,
+      FILE_SECRET.automationId,
+    );
   }
 
   // --- Capabilities and access ------------------------------------------------------
@@ -101,6 +113,11 @@ export class ApiView {
   }
 
   // --- Docs -------------------------------------------------------------------------
+
+  /** Read a doc afresh next time (it changed). */
+  forget(docId: string): void {
+    this.docs.delete(docId);
+  }
 
   doc(docId: string): Promise<Y.Doc | null> {
     let loading = this.docs.get(docId);
@@ -302,10 +319,14 @@ export class ApiView {
   get links(): FileLinks {
     const base = this.ctx.config.publicUrl;
     return {
-      fileUrl: (id) => ({
-        url: `${base}/api/workspaces/${this.workspaceId}/files/${id}`,
-        expiry_time: new Date(Date.now() + 3600_000).toISOString(),
-      }),
+      // Links that work for an hour without signing in (to the minute, so they repeat).
+      fileUrl: (id) => {
+        const expires = Math.ceil((Date.now() + 3600_000) / 60_000) * 60_000;
+        return {
+          url: signedFileUrl(base, this.fileSecret, this.workspaceId, id, expires),
+          expiry_time: new Date(expires).toISOString(),
+        };
+      },
       pageUrl: (id) => `${base}/w/${this.workspaceId}#page=${id}`,
     };
   }

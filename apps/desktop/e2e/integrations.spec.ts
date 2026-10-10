@@ -2,14 +2,15 @@
  * Phase 6 M5: integrations. Ada (a desktop, on a server) makes "Lab bot" in
  * Members → Integrations and copies its token. The API sees nothing until she connects
  * her database "Parts" to it (Share → Connections); then it reads the rows, and a row it
- * adds appears on her desktop, live.
+ * adds appears on her desktop, live. (M6) On a page she connects, it reads her text as
+ * blocks, adds its own after it, and comments; she sees both on her desktop.
  */
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { addRow, newDatabase, titles } from './db';
-import { expect, launchApp, test, type Launched } from './helpers';
+import { editor, expect, launchApp, test, type Launched } from './helpers';
 import { startSyncServer, type SyncServer } from './server';
 
 test.describe.configure({ mode: 'serial' });
@@ -141,4 +142,76 @@ test('connected to "Parts", the API reads its rows and adds one, live on the des
   expect(made.status).toBe(200);
   await expect(titles(A).filter({ hasText: 'Stepper motor' })).toHaveCount(1, { timeout: 15_000 });
   await shot(A, 'integrations-3-row');
+});
+
+test('on a connected page, the API reads the blocks, adds its own, and comments', async () => {
+  const A = ada.window;
+  await A.getByRole('button', { name: 'New page', exact: true }).click();
+  await A.getByLabel('Page title').fill('Arm design');
+  await A.getByLabel('Page title').press('Enter');
+  await expect(editor(A).first()).toBeFocused();
+  await A.keyboard.type('Reach is 60 cm.');
+  await A.getByRole('button', { name: 'Page options' }).click();
+  await A.getByTestId('page-menu-connections').click();
+  const share = A.getByTestId('share-dialog');
+  await share.getByLabel('Integration', { exact: true }).selectOption({ label: '🤖 Lab bot' });
+  await share.getByTestId('connect-integration').click();
+  await expect(share.getByTestId('connections')).toContainText('Lab bot');
+  await A.keyboard.press('Escape');
+  await synced(A);
+
+  let page: { id: string } | undefined;
+  await expect
+    .poll(
+      async () => {
+        const found = await api('POST', '/search', {
+          query: 'Arm design',
+          filter: { property: 'object', value: 'page' },
+        });
+        page = found.body.results?.[0];
+        return page?.id;
+      },
+      { timeout: 15_000 },
+    )
+    .toBeTruthy();
+  // Her text, as blocks.
+  let blocks: { id: string; type: string; paragraph?: { rich_text: { plain_text: string }[] } }[] =
+    [];
+  await expect
+    .poll(
+      async () => {
+        blocks = (await api('GET', `/blocks/${page!.id}/children`)).body.results ?? [];
+        return blocks.map((b) => b.paragraph?.rich_text.map((r) => r.plain_text).join(''));
+      },
+      { timeout: 15_000 },
+    )
+    .toContain('Reach is 60 cm.');
+
+  const text = (content: string) => ({ rich_text: [{ text: { content } }] });
+  const added = await api('PATCH', `/blocks/${page!.id}/children`, {
+    after: blocks.find((b) => b.type === 'paragraph')!.id,
+    children: [
+      { type: 'heading_2', heading_2: text('Checks') },
+      { type: 'to_do', to_do: { ...text('Torque at full reach'), checked: true } },
+      { type: 'to_do', to_do: text('Cable routing') },
+      { type: 'callout', callout: { ...text('Payload stays under 2 kg.'), icon: { emoji: '⚠️' } } },
+      { type: 'code', code: { ...text('reach_cm = 60'), language: 'python' } },
+    ],
+  });
+  expect(added.status).toBe(200);
+  const content = editor(A).first();
+  await expect(content.getByRole('heading', { name: 'Checks' })).toBeVisible({ timeout: 15_000 });
+  await expect(content).toContainText('Torque at full reach');
+  await expect(content).toContainText('Payload stays under 2 kg.');
+  await expect(content).toContainText('reach_cm = 60');
+
+  const comment = await api('POST', '/comments', {
+    parent: { page_id: page!.id },
+    rich_text: [{ text: { content: 'Torque checked at 60 cm: 4.2 N·m, within limits.' } }],
+  });
+  expect(comment.status).toBe(200);
+  await expect(
+    A.getByTestId('page-comments').getByTestId('comment-body').filter({ hasText: 'within limits' }),
+  ).toHaveCount(1, { timeout: 15_000 });
+  await shot(A, 'integrations-4-blocks-and-comment');
 });

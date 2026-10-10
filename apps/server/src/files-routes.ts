@@ -3,7 +3,7 @@
  * File ids are content hashes (`<sha256>.<ext>`), so an upload is checked against its id
  * and uploading the same file twice is a no-op.
  */
-import { createHash, randomUUID, type Hash } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual, type Hash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -28,6 +28,30 @@ const ACTIVE = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|a
 
 class TooLarge extends Error {}
 
+/**
+ * Signed links to files (Phase 6 M6): the API gives integrations links that work for an
+ * hour without signing in, as Notion's do. Signed with a secret per workspace.
+ */
+export const FILE_SECRET = { databaseId: '*', automationId: 'files' } as const;
+
+export const fileSignature = (
+  secret: string,
+  workspaceId: string,
+  fileId: string,
+  expires: number,
+) => createHmac('sha256', secret).update(`${workspaceId}/${fileId}/${expires}`).digest('base64url');
+
+export function signedFileUrl(
+  base: string,
+  secret: string,
+  workspaceId: string,
+  fileId: string,
+  expires: number,
+): string {
+  const sig = fileSignature(secret, workspaceId, fileId, expires);
+  return `${base}/api/files/signed/${workspaceId}/${fileId}?exp=${expires}&sig=${sig}`;
+}
+
 /** Bytes kept from the start of an upload, to tell what it is. */
 const HEAD_BYTES = 512;
 
@@ -44,49 +68,75 @@ export function fileRoutes(app: FastifyInstance, ctx: ServerContext) {
     return store.roleOf(request.params.id, request.auth!.user.id);
   }
 
+  /** Stream a stored file (with ranges and caching), as the app or a signed link asks. */
+  async function send(request: FastifyRequest, reply: FastifyReply, id: string, fileId: string) {
+    const meta = await store.getFile(id, fileId);
+    if (!meta) return fail(reply, 404, 'not_found', 'No such file.');
+    const etag = `"${fileId}"`;
+    const filename = encodeURIComponent(meta.name);
+    reply
+      .header('etag', etag)
+      .header('accept-ranges', 'bytes')
+      .header('cache-control', 'private, max-age=31536000, immutable')
+      .header('x-content-type-options', 'nosniff')
+      // Served from our own origin: whatever it is, it can't run as our page.
+      .header('content-security-policy', "sandbox; default-src 'none'")
+      .header('x-file-name', filename)
+      .header(
+        'content-disposition',
+        `${ACTIVE.test(meta.mime) ? 'attachment' : 'inline'}; filename*=UTF-8''${filename}`,
+      );
+    // Content-addressed: the same id is always the same bytes.
+    if (request.headers['if-none-match']?.split(/\s*,\s*/).includes(etag)) {
+      return reply.code(304).send();
+    }
+    const range = parseRange(request.headers.range, meta.size);
+    if (range === 'unsatisfiable') {
+      return reply.code(416).header('content-range', `bytes */${meta.size}`).send();
+    }
+    const stored = await files.get(fileKey(id, fileId), range ?? undefined);
+    if (!stored) return fail(reply, 404, 'not_found', 'No such file.');
+    reply.header('content-type', meta.mime);
+    if (range) {
+      return reply
+        .code(206)
+        .header('content-range', `bytes ${range.start}-${range.end}/${stored.size}`)
+        .header('content-length', range.end - range.start + 1)
+        .send(stored.body);
+    }
+    return reply.header('content-length', stored.size).send(stored.body);
+  }
+
   app.get<{ Params: { id: string; fileId: string } }>(
     '/api/workspaces/:id/files/:fileId',
     { preHandler: signedIn, schema: { params } },
     async (request, reply) => {
       if (!(await access(request))) return fail(reply, 404, 'not_found', 'No such file.');
-      const { id, fileId } = request.params;
-      const meta = await store.getFile(id, fileId);
-      if (!meta) return fail(reply, 404, 'not_found', 'No such file.');
-      const etag = `"${fileId}"`;
-      const filename = encodeURIComponent(meta.name);
-      reply
-        .header('etag', etag)
-        .header('accept-ranges', 'bytes')
-        .header('cache-control', 'private, max-age=31536000, immutable')
-        .header('x-content-type-options', 'nosniff')
-        // Served from our own origin: whatever it is, it can't run as our page.
-        .header('content-security-policy', "sandbox; default-src 'none'")
-        .header('x-file-name', filename)
-        .header(
-          'content-disposition',
-          `${ACTIVE.test(meta.mime) ? 'attachment' : 'inline'}; filename*=UTF-8''${filename}`,
-        );
-      // Content-addressed: the same id is always the same bytes.
-      if (request.headers['if-none-match']?.split(/\s*,\s*/).includes(etag)) {
-        return reply.code(304).send();
-      }
-      const range = parseRange(request.headers.range, meta.size);
-      if (range === 'unsatisfiable') {
-        return reply.code(416).header('content-range', `bytes */${meta.size}`).send();
-      }
-      const stored = await files.get(fileKey(id, fileId), range ?? undefined);
-      if (!stored) return fail(reply, 404, 'not_found', 'No such file.');
-      reply.header('content-type', meta.mime);
-      if (range) {
-        return reply
-          .code(206)
-          .header('content-range', `bytes ${range.start}-${range.end}/${stored.size}`)
-          .header('content-length', range.end - range.start + 1)
-          .send(stored.body);
-      }
-      return reply.header('content-length', stored.size).send(stored.body);
+      return send(request, reply, request.params.id, request.params.fileId);
     },
   );
+
+  app.get<{
+    Params: { id: string; fileId: string };
+    Querystring: { exp?: string; sig?: string };
+  }>('/api/files/signed/:id/:fileId', { schema: { params } }, async (request, reply) => {
+    const { id, fileId } = request.params;
+    const expires = Number(request.query.exp);
+    const sig = Buffer.from(String(request.query.sig ?? ''));
+    if (!Number.isInteger(expires) || expires < Date.now()) {
+      return fail(reply, 403, 'expired', 'This link has expired.');
+    }
+    const secret = await store.automationSecrets.get(
+      id,
+      FILE_SECRET.databaseId,
+      FILE_SECRET.automationId,
+    );
+    const expected = Buffer.from(fileSignature(secret, id, fileId, expires));
+    if (sig.length !== expected.length || !timingSafeEqual(sig, expected)) {
+      return fail(reply, 403, 'forbidden', 'This link is not valid.');
+    }
+    return send(request, reply, id, fileId);
+  });
 
   app.put<{ Params: { id: string; fileId: string }; Body: Readable }>(
     '/api/workspaces/:id/files/:fileId',

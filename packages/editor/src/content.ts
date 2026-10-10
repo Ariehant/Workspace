@@ -1,7 +1,7 @@
 import { getSchema, resolveExtensions, type JSONContent } from '@tiptap/core';
 import { MarkdownManager } from '@tiptap/markdown';
 import type { Node as PMNode, Schema } from '@tiptap/pm/model';
-import { prosemirrorToYXmlFragment } from '@tiptap/y-tiptap';
+import { prosemirrorToYXmlFragment, yXmlFragmentToProsemirrorJSON } from '@tiptap/y-tiptap';
 import { PAGE_CONTENT_FIELD, newId } from '@workspace/core';
 import * as Y from 'yjs';
 import { BLOCK_NODE_TYPES, pageExtensions } from './extensions';
@@ -100,4 +100,63 @@ export function appendContent(doc: Y.Doc, parts: readonly ContentPart[]): string
   });
   scratch.destroy();
   return dropped;
+}
+
+/** A page doc's content as editor JSON blocks (what the API reads). */
+export function contentJson(doc: Y.Doc): JSONContent[] {
+  const json = yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(PAGE_CONTENT_FIELD)) as JSONContent;
+  return json.content ?? [];
+}
+
+/** Nodes as Yjs elements, ready to insert into a page's content (or into a block). */
+function toElements(nodes: readonly PMNode[]): (Y.XmlElement | Y.XmlText)[] {
+  const { schema } = pageSchema();
+  const scratch = new Y.Doc();
+  try {
+    prosemirrorToYXmlFragment(schema.topNodeType.create(null, nodes), scratch.getXmlFragment('x'));
+    return scratch
+      .getXmlFragment('x')
+      .toArray()
+      .map((node) => (node as Y.XmlElement | Y.XmlText).clone());
+  } finally {
+    scratch.destroy();
+  }
+}
+
+/**
+ * Editor JSON blocks as page-content elements to insert anywhere (the page, a list, a
+ * toggle…): checked against the schema, each with a fresh id. Also the types of blocks
+ * that couldn't be made.
+ */
+export function contentElements(blocks: readonly JSONContent[]): {
+  elements: (Y.XmlElement | Y.XmlText)[];
+  dropped: string[];
+} {
+  const { schema } = pageSchema();
+  const { nodes, dropped } = toNodes(blocks, schema);
+  return { elements: toElements(nodes), dropped };
+}
+
+/** Inline content for a block of `type`, as the elements of its text (to replace them). */
+export function inlineElements(
+  type: string,
+  inline: readonly JSONContent[],
+): (Y.XmlElement | Y.XmlText)[] {
+  const { schema } = pageSchema();
+  const nodeType = schema.nodes[type];
+  if (!nodeType) throw new Error(`No block type ${type}`);
+  const node = schema.nodeFromJSON({ type, content: inline.length ? inline : undefined });
+  node.check();
+  const scratch = new Y.Doc();
+  try {
+    const fragment = scratch.getXmlFragment('x');
+    prosemirrorToYXmlFragment(
+      schema.topNodeType.create(null, [schema.nodes.paragraph!.create(null, node.content)]),
+      fragment,
+    );
+    const paragraph = fragment.get(0) as Y.XmlElement;
+    return paragraph.toArray().map((n) => (n as Y.XmlElement | Y.XmlText).clone());
+  } finally {
+    scratch.destroy();
+  }
 }
