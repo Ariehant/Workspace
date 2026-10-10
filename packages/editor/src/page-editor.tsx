@@ -1,5 +1,5 @@
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 import { BlockHandle } from './block-handle';
@@ -88,6 +88,16 @@ export function PageEditor({
     },
     [doc],
   );
+
+  // Leaving the page: the menus below unregister their plugins as they unmount (after this
+  // runs), and each unregistration rebuilds the editor state, re-rendering every block of a
+  // long page. The editor is about to be destroyed, so that work is skipped.
+  useLayoutEffect(() => {
+    if (!editor) return;
+    return () => {
+      if (!editor.isDestroyed) editor.unregisterPlugin = () => undefined;
+    };
+  }, [editor]);
 
   // Others' cursors: a plugin on the live editor (presence arrives after it's made).
   useEffect(() => {

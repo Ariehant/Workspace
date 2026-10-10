@@ -77,6 +77,9 @@ importers:
       '@workspace/importers':
         specifier: workspace:*
         version: link:../../packages/importers
+      '@workspace/perf':
+        specifier: workspace:*
+        version: link:../../packages/perf
       '@workspace/storage-local':
         specifier: workspace:*
         version: link:../../packages/storage-local
@@ -499,6 +502,24 @@ importers:
       vite:
         specifier: 7.3.6
         version: 7.3.6(@types/node@26.6.4)(jiti@2.7.0)(lightningcss@1.33.0)
+
+  packages/perf:
+    dependencies:
+      '@workspace/core':
+        specifier: workspace:*
+        version: link:../core
+      '@workspace/database':
+        specifier: workspace:*
+        version: link:../database
+      '@workspace/storage-local':
+        specifier: workspace:*
+        version: link:../storage-local
+      fractional-indexing:
+        specifier: ^3.4.0
+        version: 3.4.0
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.33
 
   packages/storage-local:
     dependencies:

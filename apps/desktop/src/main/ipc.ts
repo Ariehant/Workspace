@@ -66,7 +66,7 @@ export function registerIpc(
   ipcMain.handle(IPC.docOpen, (event, docId: unknown) => {
     if (!isDocId(docId)) throw new Error('Invalid document id');
     track(event.sender, docId);
-    return manager.open(docId);
+    return manager.openUpdates(docId);
   });
 
   ipcMain.on(IPC.docPush, (event, docId: unknown, update: unknown) => {

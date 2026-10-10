@@ -45,7 +45,7 @@ export function QuickFind({
   const [selected, setSelected] = useState(0);
   const [found, setFound] = useState<{ query: string; hits: SearchHit[] } | null>(null);
   const q = query.trim();
-  const { pages } = useApp();
+  const { pages, databases } = useApp();
   const registryVersion = useRegistryVersion();
 
   useEffect(() => {
@@ -64,8 +64,17 @@ export function QuickFind({
   }, [platform, q]);
 
   const results = useMemo(() => {
-    // Pages and database rows alike (rows load their database on first lookup).
+    const hits = found?.query === q ? found.hits : [];
+    const hitsById = new Map(hits.map((h) => [h.id, h]));
+    // Pages and database rows alike. A row of a database that isn't loaded shows what the
+    // search index has: looking it up would load the whole database just to list it.
     const toResult = (id: PageId, snippet: string | null = null): Result | null => {
+      const hit = hitsById.get(id);
+      if (hit?.databaseId && !databases.get(hit.databaseId)) {
+        if (!pages.get(hit.databaseId)) return null;
+        const path = pages.breadcrumb(hit.databaseId).map((p) => p.title || 'Untitled');
+        return { id, title: hit.title || 'Untitled', icon: hit.icon, path, snippet };
+      }
       const page = pages.get(id);
       if (!page || page.inTrash) return null;
       const path = pages
@@ -89,7 +98,6 @@ export function QuickFind({
     }
 
     const lower = q.toLowerCase();
-    const hits = found?.query === q ? found.hits : [];
     const snippets = new Map(hits.map((h) => [h.id, h.snippet]));
     const byTitle = listPages(workspace)
       .filter((p) => (p.title || 'untitled').toLowerCase().includes(lower))
@@ -107,7 +115,7 @@ export function QuickFind({
       .slice(0, MAX_RESULTS);
     // `registryVersion`: rows found by search appear once their database loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace, pages, recent, q, found, registryVersion]);
+  }, [workspace, pages, databases, recent, q, found, registryVersion]);
 
   const index = Math.min(selected, Math.max(results.length - 1, 0));
   const choose = (i: number, inWindow: boolean) => {

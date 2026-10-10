@@ -48,6 +48,28 @@ describe('DocClient', () => {
     expect(host.doc('p1').getText('t').toString()).toBe('stored + local');
   });
 
+  it("doesn't encode the stored state again on open", async () => {
+    const host = new FakeHost();
+    host.doc('p1').getText('t').insert(0, 'stored');
+    const handle = new DocClient(host.transport()).acquire('p1');
+    // Yjs encodes each transaction for update listeners: none while the state goes in.
+    expect(handle.doc._observers.has('update')).toBe(false);
+    await handle.ready;
+    expect(handle.doc._observers.get('update')?.size).toBe(1);
+  });
+
+  it('pushes edits made before the stored state arrived', async () => {
+    const host = new FakeHost();
+    host.doc('p1').getText('t').insert(0, 'stored');
+    const client = new DocClient(host.transport());
+    const handle = client.acquire('p1');
+    handle.doc.getMap('m').set('early', true);
+    await handle.ready;
+    expect(host.doc('p1').getMap('m').get('early')).toBe(true);
+    handle.doc.getText('t').insert(6, '!');
+    expect(host.doc('p1').getText('t').toString()).toBe('stored!');
+  });
+
   it('relays edits between two windows without echoing', async () => {
     const host = new FakeHost();
     const w1 = new DocClient(host.transport()).acquire('p1');

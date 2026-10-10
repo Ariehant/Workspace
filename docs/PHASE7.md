@@ -1,7 +1,7 @@
 # Phase 7: Polish and release (v1.0)
 
-**Status:** planned. The repository's presentation (the README, user guides and a link check in
-CI) is done ahead of the milestones.
+**Status:** in progress: M1 (performance). The repository's presentation (the README, user
+guides and a link check in CI) was done ahead of the milestones.
 
 ## Context
 
@@ -173,12 +173,112 @@ steps: six milestones and the release check. If time runs short, cut these, in t
 
 ## Milestones
 
-### M1: performance (≈ 1.5 weeks)
+### M1: performance (in progress)
 
-- Fixture generator; benchmarks for the pure code and the UI cases; budgets in CI.
-- Fixes until every budget holds.
-- **Tests:** the benchmarks themselves, plus E2E on the generated 10,000-block page and
-  50,000-row database (open, type, filter, scroll).
+**Changed from the plan:**
+
+- **Fixtures** are a package, `packages/perf`, rather than a script: the same generators feed
+  the unit benchmarks and the app's E2E run. They build, deterministically:
+  - a page of 10,000 blocks (headings, paragraphs, bullets and to-dos)
+  - a Tasks database of 50,000 rows with a select, a number, a date, a checkbox, labels, notes,
+    a formula, a relation to a Projects database and a rollup through it, and four views
+  - and write them as a desktop workspace (`workspace.db`, indexed).
+- **Benchmarks are tests** with limits (Vitest for the pure code, Playwright for the app),
+  rather than Vitest bench files, so a slow result fails like any test.
+- **Each budget has a target and a limit.** The target is the budget below; the limit is what
+  CI holds each run to. They're equal where the target is met. Where it isn't yet, the limit
+  sits above today's result: a regression still fails, and the report shows the gap.
+- **Two budgets aren't met yet** (see below): opening the 50,000-row database, and typing in
+  the 10,000-block page. Both are bound by how the data and the editor are built, not by a
+  slow function; the fixes are larger than this milestone.
+- **Found by the first-sync case, and being fixed:** a doc whose state is over 8 MB can't
+  sync. One update may be at most 8 MB, so the 50,000-row database (29 MB) stays in the
+  outbox ("Syncing 1 change"). Large updates will go in chunks.
+
+**Found and fixed** (on the 50,000-row database and the 10,000-block page):
+
+| Problem                                                                                                                                     | Before          | After                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------- |
+| The app's start, with this workspace                                                                                                        | 17 s            | 1.2 s                         |
+| Search index work after one edit to the database (quadratic: full-text rows were updated by page id, which the full-text table can't index) | over 15 min     | 0.15 s                        |
+| Opening a doc in the main process (it was decoded, then encoded again for the window)                                                       | 3.7 s           | 0.05 s                        |
+| The window encoding the whole database again when it loaded (an update listener was already attached)                                       | 2.1 s           | 0                             |
+| Local automations copying the database 3 s after every change, though it had none                                                           | 3.5 s           | 0                             |
+| Formula and rollup values (each number formatted with a new `Intl.NumberFormat`)                                                            | 3.1 s           | 0.42 s                        |
+| A sort or filter recomputing every formula and rollup (the properties were read again on any view change)                                   | 6.8 s           | 0.4 s                         |
+| Leaving a long page (each menu's plugin removal re-rendered all 10,000 blocks)                                                              | 1.5 s           | 0                             |
+| Code highlighting (it walked the whole page twice on every transaction, cursor moves included)                                              | every keystroke | only code blocks that changed |
+| Quick find showing a row (its whole database was loaded first)                                                                              | 2–5 s           | from the search index         |
+| The first edit's page-history snapshot (the doc was encoded again)                                                                          | 0.75 s          | a copy of what's stored       |
+
+**Storage** (migration 7 of the desktop's SQLite file):
+
+- **`pages.fts_rowid`** links each index entry to its full-text row, and **`pages.props`**
+  keeps a row's property text. Index entries are compared with what's stored and only the
+  changed ones are written, by rowid.
+- **Incremental database indexing:** the main process reads a database through
+  `DatabaseHandle` (only changed rows are read again), keeps each row's index entry while the
+  row is unchanged, and after an edit writes the rows that changed: their entries, relation
+  links (`replaceLinksOf`) and date reminders (`updatePropertyReminders`).
+- **Windows open docs from what's stored:** `DocManager.openUpdates` returns the stored
+  updates without decoding them (`DocClient` applies a list in one transaction). The main
+  process then loads the doc while the window decodes it, rather than on the first edit:
+  while the main process works, windows get no input.
+
+**App:**
+
+- `DatabaseHandle` reads the schema, the views and the meta apart, so a view change keeps the
+  properties (and the computed values made from them).
+- Rollups format their values only for calculations that show text.
+- Code highlighting and line numbers update only the code blocks a transaction changed.
+- Quick find shows rows of databases that aren't loaded from the search index's title and
+  icon.
+
+**Tried and dropped:**
+
+- `content-visibility: auto` on a long page's blocks: Chromium then checks every block's
+  visibility each frame, which cost more than the layout it saved.
+- Typing on long pages by transaction instead of letting the browser insert text: about 10%
+  faster, not worth giving up the browser's own text input.
+- A larger V8 young generation for the window: no difference.
+
+**Not met yet, and why:**
+
+- **Opening the 50,000-row database** takes 4.3 to 5.6 s. Decoding its Yjs doc (29 MB,
+  1.2 million items) takes about 2 s on its own in the window, then the computed values and the
+  first render. Options: load rows progressively (show the first screen, then the rest), or
+  keep rows in their own docs. The main process also decodes it once (in parallel, about 3 s);
+  moving indexing to a worker thread would remove that.
+- **Typing in the 10,000-block page** takes 115 to 185 ms per keystroke (p95). It grows with the
+  page: about 20 ms at 250 blocks, 25 ms at 1,000 and 41 ms at 3,000. Per keystroke, Chromium
+  lays out the whole editable element (about 8 ms here), and ProseMirror's view update and
+  y-prosemirror each walk the page's top-level blocks. Options: render only the blocks in view,
+  or one editable element per block, as Notion does.
+- **Page history** stores a full copy of a doc per editing session; for this database that's
+  29 MB. Storing changes between versions would fix it.
+
+**Tests:**
+
+- **`packages/perf`:** the fixtures (deterministic, computed values right, a written workspace
+  that opens and searches), and the budget checks (limits, regressions, the report).
+- **`budgets.bench.test.ts`** (`pnpm --filter @workspace/perf bench`): decode, snapshot,
+  computed values, filter, sort, group and an edit on 50,000 rows; the long page's decode;
+  search over 50,000 rows.
+- **`apps/desktop/e2e/perf.spec.ts`** (`PERF=1`): open the long page, type, scroll; open the
+  database, sort, filter, group, scroll the table, board, list and gallery; quick find; and a
+  second device's first sync of the whole workspace from a server.
+- **Unit tests** for each fix: an index migrated from version 6, writes limited to the rows
+  that changed, docs opened without loading, the update listener attached after the stored
+  state, views keeping the properties, incremental code highlighting.
+- **CI:** a `perf` job runs both suites and compares the results with the limits and with the
+  base branch's last run (more than 20% slower fails), in the job summary.
+
+**Results so far** (this machine, 4 cores): the pure-code suite all within its limits
+(decode 2.8 s and an edit 67 ms over target); in the app, the long page opens in 0.12 s and
+scrolls at 50 ms frames at worst. The full table comes with the sync fix.
+
+**Runs so far:** unit tests all pass; desktop E2E 146 of 146 (one helper updated for the new
+open API, then re-run); web E2E 3 of 3.
 
 ### M2: accessibility (≈ 1 week)
 

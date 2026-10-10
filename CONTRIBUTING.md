@@ -43,6 +43,26 @@ xvfb-run -a pnpm test:e2e
 pnpm test:e2e:web
 ```
 
+## Performance
+
+`packages/perf` generates a large workspace (a page of 10,000 blocks and a database of
+50,000 rows with formulas, relations and rollups) and measures it against the budgets in
+[`packages/perf/src/budgets.ts`](packages/perf/src/budgets.ts). CI runs both suites on every
+pull request and fails on a result over its limit, or 20% slower than the base branch's last
+run.
+
+```sh
+pnpm --filter @workspace/perf bench          # the pure code: decode, views, search
+pnpm --filter @workspace/desktop build
+cd apps/desktop
+PERF=1 xvfb-run -a npx playwright test e2e/perf.spec.ts   # the app: open, type, filter, scroll, sync
+```
+
+Set `PERF_RESULTS=<file>` to record the results as JSON, and compare two runs with
+`node --experimental-strip-types packages/perf/src/report.ts results.json [baseline.json]`.
+`PERF_ROWS` and `PERF_BLOCKS` change the sizes. To profile the app, build it with
+`WORKSPACE_NO_MINIFY=1` so function names stay readable.
+
 ## What a change needs
 
 - **Tests** for the behaviour it adds or fixes: unit tests next to the code, and an end-to-end

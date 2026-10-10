@@ -17,16 +17,18 @@ import {
   readLinks,
 } from '@workspace/core';
 import {
+  DatabaseHandle,
   hasRow,
   isDatabaseDoc,
-  readDatabase,
   readDateReminders,
   relationIds,
   rowPropertiesText,
   touchRow,
+  type Property,
+  type Row,
 } from '@workspace/database';
 import * as Y from 'yjs';
-import type { PageIndexRow, RowIndexRow, SqliteStore } from './sqlite-store';
+import type { LinkRow, PageIndexRow, RowIndexRow, SqliteStore } from './sqlite-store';
 
 export type UpdateListener = (docId: string, update: Uint8Array, origin: unknown) => void;
 
@@ -222,15 +224,70 @@ export class DocManager {
       return Y.encodeStateAsUpdate(entry.doc);
     }
     const doc = this.load(docId);
-    this.docs.get(docId)!.refs = 1;
+    this.docs.get(docId)!.refs++;
     return Y.encodeStateAsUpdate(doc);
   }
 
+  /**
+   * A document's full state for a window, as its stored updates (applied together, they
+   * make the doc). Pair with `release`. The doc isn't loaded here until something needs it
+   * (an edit, a synced change, indexing): decoding a large database and encoding it again
+   * would take seconds the window then spends decoding it anyway.
+   */
+  openUpdates(docId: string): Uint8Array[] {
+    if (isTreeDocId(docId)) this.addTree(docId);
+    const entry = this.docs.get(docId);
+    if (entry) {
+      entry.refs++;
+      return this.store.getUpdates(docId);
+    }
+    const updates = this.store.getUpdates(docId);
+    if (updates.length > this.compactThreshold) {
+      // A long log: loading compacts it.
+      this.load(docId);
+      this.docs.get(docId)!.refs++;
+      return this.store.getUpdates(docId);
+    }
+    this.unloadedRefs.set(docId, (this.unloadedRefs.get(docId) ?? 0) + 1);
+    this.loadSoon(docId);
+    return updates;
+  }
+
+  private readonly loadTimers = new Set<ReturnType<typeof setTimeout>>();
+
+  /**
+   * Load a doc a window opened, after the window has its state: the window then decodes
+   * it while this process does too, rather than this process doing so on its first edit
+   * (while it does, windows get no input: they're routed through this process).
+   */
+  private loadSoon(docId: string): void {
+    const timer = setTimeout(() => {
+      this.loadTimers.delete(timer);
+      if (this.unloadedRefs.has(docId) && !this.docs.has(docId)) this.load(docId);
+    }, 0);
+    this.loadTimers.add(timer);
+  }
+
+  /** Windows' references to docs they opened that aren't loaded here (yet). */
+  private readonly unloadedRefs = new Map<string, number>();
+
   release(docId: string): void {
+    const unloaded = this.unloadedRefs.get(docId);
+    if (unloaded !== undefined) {
+      if (unloaded > 1) this.unloadedRefs.set(docId, unloaded - 1);
+      else this.unloadedRefs.delete(docId);
+      return;
+    }
     const entry = this.docs.get(docId);
     if (!entry || entry.refs === Infinity) return;
     entry.refs--;
-    if (entry.refs > 0) return;
+    this.unloadIfUnused(docId);
+  }
+
+  /** Unload a doc nothing holds (after it was loaded for a moment, or released). */
+  private unloadIfUnused(docId: string): void {
+    const entry = this.docs.get(docId);
+    if (!entry || entry.refs > 0) return;
     this.flush(docId);
     entry.doc.destroy();
     this.docs.delete(docId);
@@ -244,12 +301,12 @@ export class DocManager {
       Y.applyUpdate(entry.doc, update, origin);
       return;
     }
-    // An update for a doc nobody has open (e.g. a late update from a closing window).
+    // Not loaded here: a window has it open (and now edits it), or nobody has (e.g. a late
+    // update from a closing window, or a synced change).
     const doc = this.load(docId);
     this.maybeSnapshot(docId, doc);
     Y.applyUpdate(doc, update, origin);
-    this.docs.get(docId)!.refs = 0;
-    this.release(docId);
+    this.unloadIfUnused(docId);
   }
 
   // --- Access changes (sync) -----------------------------------------------------
@@ -281,7 +338,8 @@ export class DocManager {
       const refs = entry.refs;
       entry.doc.destroy();
       this.docs.delete(docId);
-      this.load(docId);
+      // The index holds the old state: all of it is indexed again.
+      this.indexedRows.delete(this.load(docId));
       this.docs.get(docId)!.refs = refs;
     }
     this.scheduleIndex(docId);
@@ -322,10 +380,7 @@ export class DocManager {
       this.lastVersion.set(docId, now);
       return this.store.addVersion(docId, Y.encodeStateAsUpdate(doc), reason, now);
     } finally {
-      if (!open) {
-        this.docs.get(docId)!.refs = 0;
-        this.release(docId);
-      }
+      if (!open) this.unloadIfUnused(docId);
     }
   }
 
@@ -349,7 +404,11 @@ export class DocManager {
     if (this.now() - last < this.versionIntervalMs) return;
     if (Y.encodeStateVector(doc).length <= 1) return;
     this.lastVersion.set(docId, this.now());
-    this.store.addVersion(docId, Y.encodeStateAsUpdate(doc), 'edit', this.now());
+    // The doc as stored is the doc now (this runs before a change is applied): one stored
+    // update is its state already, without encoding it again.
+    const stored = this.store.getUpdates(docId);
+    const state = stored.length === 1 ? stored[0]! : Y.encodeStateAsUpdate(doc);
+    this.store.addVersion(docId, state, 'edit', this.now());
   }
 
   /**
@@ -362,12 +421,11 @@ export class DocManager {
     const indexOne = (docId: string, onlyDatabases: boolean) => {
       const open = this.docs.has(docId);
       const doc = open ? this.docs.get(docId)!.doc : this.load(docId);
+      // Everything, whatever the index held.
+      this.indexedRows.delete(doc);
       if (!onlyDatabases || isDatabaseDoc(doc)) this.index(docId);
       else later.push(docId);
-      if (!open) {
-        this.docs.get(docId)!.refs = 1;
-        this.release(docId);
-      }
+      if (!open) this.unloadIfUnused(docId);
     };
     for (const docId of this.store.listDocIds()) {
       if (!isTreeDocId(docId)) indexOne(docId, true);
@@ -392,6 +450,8 @@ export class DocManager {
     this.flush();
     if (this.storedTimer) clearTimeout(this.storedTimer);
     this.storedTimer = null;
+    for (const timer of this.loadTimers) clearTimeout(timer);
+    this.loadTimers.clear();
     for (const { doc } of this.docs.values()) doc.destroy();
     this.docs.clear();
     this.listeners.clear();
@@ -415,7 +475,10 @@ export class DocManager {
       if (origin !== SYNC_ORIGIN) this.editedHere.add(docId);
       this.scheduleIndex(docId);
     });
-    this.docs.set(docId, { doc, refs: 0 });
+    // Windows that opened it before it was loaded hold it from now on.
+    this.docs.set(docId, { doc, refs: this.unloadedRefs.get(docId) ?? 0 });
+    this.unloadedRefs.delete(docId);
+    if (isDatabaseDoc(doc)) this.indexedAsLoaded(docId, doc);
     for (const listener of this.loadListeners) listener(docId, doc);
     return doc;
   }
@@ -483,8 +546,7 @@ export class DocManager {
         if (this.docs.has(id) || this.store.getUpdates(id).length === 0) continue;
         this.load(id);
         this.index(id);
-        this.docs.get(id)!.refs = 1;
-        this.release(id);
+        this.unloadIfUnused(id);
       }
     }, this.indexDelayMs);
   }
@@ -550,29 +612,96 @@ export class DocManager {
     this.onRemindersChanged();
   }
 
+  /** Incremental readers of the loaded databases (only changed rows are read again). */
+  private readonly databaseHandles = new WeakMap<Y.Doc, DatabaseHandle>();
+  /** Each row's index entry, kept while its row (and the properties, and people) don't change. */
+  private rowEntries = new WeakMap<Row, RowIndexRow>();
+  private rowEntriesFor: { properties: readonly Property[] | null; users: string } = {
+    properties: null,
+    users: '',
+  };
+  /**
+   * What the index holds of each loaded database: its rows as they were indexed (or as
+   * loaded: the index was kept up to date with what's stored), so a change re-indexes only
+   * the rows it touched.
+   */
+  private readonly indexedRows = new WeakMap<
+    Y.Doc,
+    { rows: Map<string, Row>; properties: readonly Property[]; users: string }
+  >();
+
+  private databaseHandle(databaseId: string, doc: Y.Doc): DatabaseHandle {
+    let handle = this.databaseHandles.get(doc);
+    if (!handle) this.databaseHandles.set(doc, (handle = new DatabaseHandle(databaseId, doc)));
+    return handle;
+  }
+
+  private usersKey(users: ReadonlyMap<string, string>): string {
+    return [...users].join('\n');
+  }
+
+  /** A database just loaded from storage: what the index holds of it is what's stored. */
+  private indexedAsLoaded(databaseId: string, doc: Y.Doc): void {
+    const db = this.databaseHandle(databaseId, doc).snapshot();
+    const users = userNames(this.workspace, this.storedDoc(MEMBERS_DOC_ID));
+    this.indexedRows.set(doc, {
+      rows: new Map(db.rows.map((row) => [row.id, row])),
+      properties: db.properties,
+      users: this.usersKey(users),
+    });
+  }
+
   /** Index a database's rows: titles and property text, for search and links. */
   private indexDatabase(databaseId: string, doc: Y.Doc): void {
+    const db = this.databaseHandle(databaseId, doc).snapshot();
     const users = userNames(this.workspace, this.storedDoc(MEMBERS_DOC_ID));
-    const db = readDatabase(doc);
-    const rows: RowIndexRow[] = db.rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      icon: row.icon,
-      sortKey: row.sortKey,
-      // Templates stay indexed (so their content is kept) but don't show in search.
-      inTrash: row.trashedAt !== null || row.isTemplate,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      props: rowPropertiesText(row, db.properties, { users }),
-    }));
-    const { added, removed } = this.store.syncRowIndex(databaseId, rows);
+    const usersKey = this.usersKey(users);
+    if (this.rowEntriesFor.properties !== db.properties || this.rowEntriesFor.users !== usersKey) {
+      this.rowEntries = new WeakMap();
+      this.rowEntriesFor = { properties: db.properties, users: usersKey };
+    }
+    const entryOf = (row: Row): RowIndexRow => {
+      let entry = this.rowEntries.get(row);
+      if (!entry) {
+        entry = {
+          id: row.id,
+          title: row.title,
+          icon: row.icon,
+          sortKey: row.sortKey,
+          // Templates stay indexed (so their content is kept) but don't show in search.
+          inTrash: row.trashedAt !== null || row.isTemplate,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          props: rowPropertiesText(row, db.properties, { users }),
+        };
+        this.rowEntries.set(row, entry);
+      }
+      return entry;
+    };
+
+    // Every row when the properties or people changed (their text may have), or the first
+    // time; else the rows that changed since the last time.
+    const last = this.indexedRows.get(doc);
+    const all = !last || last.properties !== db.properties || last.users !== usersKey;
+    const changedRows = all ? db.rows : db.rows.filter((row) => last.rows.get(row.id) !== row);
+    let result: { added: string[]; removed: string[] };
+    let gone: string[] = [];
+    if (all) {
+      result = this.store.syncRowIndex(databaseId, db.rows.map(entryOf));
+    } else {
+      const ids = new Set(db.rows.map((row) => row.id));
+      gone = [...last.rows.keys()].filter((id) => !ids.has(id));
+      result = this.store.updateRowIndex(databaseId, changedRows.map(entryOf), gone);
+    }
+    const { added, removed } = result;
+
     // Relations count as links from a row to the pages it relates to.
     const relations = db.properties.filter((p) => p.type === 'relation');
-    for (const row of db.rows) {
+    const links = new Map<string, LinkRow[]>();
+    for (const row of changedRows) {
       if (row.isTemplate) continue;
-      this.store.replaceLinks(
+      links.set(
         row.id,
-        ['relation'],
         relations.flatMap((p) =>
           relationIds(row.values[p.id]).map((target) => ({
             target,
@@ -583,8 +712,24 @@ export class DocManager {
         ),
       );
     }
-    this.store.replacePropertyReminders(databaseId, readDateReminders(db));
-    this.onRemindersChanged();
+    if (links.size > 0) this.store.replaceLinksOf('relation', links);
+
+    if (all) {
+      this.store.replacePropertyReminders(databaseId, readDateReminders(db));
+      this.onRemindersChanged();
+    } else if (changedRows.length > 0 || gone.length > 0) {
+      this.store.updatePropertyReminders(
+        [...changedRows.map((row) => row.id), ...gone],
+        readDateReminders({ ...db, rows: changedRows }),
+      );
+      this.onRemindersChanged();
+    }
+    this.indexedRows.set(doc, {
+      rows: new Map(db.rows.map((row) => [row.id, row])),
+      properties: db.properties,
+      users: usersKey,
+    });
+
     // Content typed (or synced) before the row reached the index.
     for (const id of added) {
       const content = this.docs.get(id)?.doc;

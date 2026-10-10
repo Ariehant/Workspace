@@ -128,6 +128,20 @@ export const MIGRATIONS: string[] = [
     file_id TEXT PRIMARY KEY
   );
   `,
+  // 7: each index entry knows its full-text row (Phase 7 M1). `page_id` can't be indexed
+  // in the full-text table, so changing an entry by page id scanned all of it. `props`
+  // keeps a row's property text, so unchanged rows aren't written again.
+  `
+  ALTER TABLE pages ADD COLUMN fts_rowid INTEGER;
+  ALTER TABLE pages ADD COLUMN props TEXT NOT NULL DEFAULT '';
+  CREATE TEMP TABLE fts_ids AS
+    SELECT page_id, MAX(rowid) AS fts_rowid FROM page_fts GROUP BY page_id;
+  CREATE INDEX temp.fts_ids_page ON fts_ids (page_id);
+  UPDATE pages SET fts_rowid = (SELECT fts_rowid FROM fts_ids WHERE fts_ids.page_id = pages.id);
+  UPDATE pages SET props = COALESCE((SELECT props FROM page_fts WHERE rowid = pages.fts_rowid), '')
+    WHERE database_id IS NOT NULL;
+  DROP TABLE temp.fts_ids;
+  `,
 ];
 
 /** Settings that belong to this device's sync (never exported to a backup). */
@@ -184,6 +198,20 @@ export interface RowIndexRow {
   updatedAt: number;
   /** Text of the row's properties, searchable. */
   props: string;
+}
+
+/** An entry of the `pages` table, as stored. */
+interface StoredEntry {
+  id: string;
+  fts_rowid: number | null;
+  parent_id: string | null;
+  title: string;
+  icon: string | null;
+  sort_key: string;
+  in_trash: number;
+  created_at: number;
+  updated_at: number;
+  props?: string;
 }
 
 export interface FileRecord {
@@ -384,94 +412,235 @@ export class SqliteStore {
   /** Make the index of workspace pages match `rows` exactly (database rows aside). */
   syncPageIndex(rows: PageIndexRow[]): void {
     this.transaction(() => {
-      const existing = new Set(
+      const existing = new Map(
         (
-          this.db.prepare('SELECT id FROM pages WHERE database_id IS NULL').all() as {
-            id: string;
-          }[]
-        ).map((r) => r.id),
+          this.db
+            .prepare(
+              `SELECT id, fts_rowid, parent_id, title, icon, sort_key, in_trash, created_at,
+                      updated_at
+               FROM pages WHERE database_id IS NULL`,
+            )
+            .all() as unknown as StoredEntry[]
+        ).map((r) => [r.id, r]),
       );
-      const upsert = this.db.prepare(`
-        INSERT INTO pages (id, parent_id, title, icon, sort_key, in_trash, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (id) DO UPDATE SET
-          parent_id = excluded.parent_id, title = excluded.title, icon = excluded.icon,
-          sort_key = excluded.sort_key, in_trash = excluded.in_trash,
-          created_at = excluded.created_at, updated_at = excluded.updated_at
+      const update = this.db.prepare(`
+        UPDATE pages SET parent_id = ?, title = ?, icon = ?, sort_key = ?, in_trash = ?,
+          created_at = ?, updated_at = ?
+        WHERE id = ?
       `);
-      const ftsTitle = this.db.prepare('UPDATE page_fts SET title = ? WHERE page_id = ?');
-      const ftsInsert = this.db.prepare(
-        "INSERT INTO page_fts (page_id, title, body) VALUES (?, ?, '')",
-      );
       for (const row of rows) {
-        upsert.run(
-          row.id,
-          row.parentId,
-          row.title,
-          row.icon,
-          row.sortKey,
-          row.inTrash ? 1 : 0,
-          row.createdAt,
-          row.updatedAt,
-        );
-        if (existing.has(row.id)) ftsTitle.run(row.title, row.id);
-        else ftsInsert.run(row.id, row.title);
+        const old = existing.get(row.id);
         existing.delete(row.id);
+        if (!old) {
+          const ftsRowid = this.ftsEntry(row.id, row.title, null);
+          this.insertEntry(row.id, row.parentId, null, row, '', ftsRowid);
+          continue;
+        }
+        const inTrash = row.inTrash ? 1 : 0;
+        if (
+          old.parent_id !== row.parentId ||
+          old.title !== row.title ||
+          old.icon !== row.icon ||
+          old.sort_key !== row.sortKey ||
+          old.in_trash !== inTrash ||
+          old.created_at !== row.createdAt ||
+          old.updated_at !== row.updatedAt
+        ) {
+          update.run(
+            row.parentId,
+            row.title,
+            row.icon,
+            row.sortKey,
+            inTrash,
+            row.createdAt,
+            row.updatedAt,
+            row.id,
+          );
+        }
+        if (old.title !== row.title || old.fts_rowid === null) {
+          this.ftsEntry(row.id, row.title, null, old.fts_rowid);
+        }
       }
-      for (const id of existing) this.removePageIndex(id);
+      for (const id of existing.keys()) this.removePageIndex(id);
     });
   }
 
   /**
    * Make the index of one database's rows match `rows`. Returns the ids that were
-   * added and removed (so the caller can index or drop their content docs).
+   * added and removed (so the caller can index or drop their content docs). Only rows
+   * that changed are written.
    */
   syncRowIndex(databaseId: string, rows: RowIndexRow[]): { added: string[]; removed: string[] } {
     const added: string[] = [];
     const removed: string[] = [];
     this.transaction(() => {
-      const existing = new Set(this.rowIdsOf(databaseId));
-      const upsert = this.db.prepare(`
-        INSERT INTO pages
-          (id, parent_id, database_id, title, icon, sort_key, in_trash, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (id) DO UPDATE SET
-          parent_id = excluded.parent_id, database_id = excluded.database_id,
-          title = excluded.title, icon = excluded.icon, sort_key = excluded.sort_key,
-          in_trash = excluded.in_trash, created_at = excluded.created_at,
-          updated_at = excluded.updated_at
-      `);
-      const ftsUpdate = this.db.prepare(
-        'UPDATE page_fts SET title = ?, props = ? WHERE page_id = ?',
-      );
-      const ftsInsert = this.db.prepare(
-        "INSERT INTO page_fts (page_id, title, body, props) VALUES (?, ?, '', ?)",
+      const existing = new Map(
+        (
+          this.db
+            .prepare(
+              `SELECT id, fts_rowid, parent_id, title, icon, sort_key, in_trash, created_at,
+                      updated_at, props
+               FROM pages WHERE database_id = ?`,
+            )
+            .all(databaseId) as unknown as StoredEntry[]
+        ).map((r) => [r.id, r]),
       );
       for (const row of rows) {
-        upsert.run(
-          row.id,
-          databaseId,
-          databaseId,
-          row.title,
-          row.icon,
-          row.sortKey,
-          row.inTrash ? 1 : 0,
-          row.createdAt,
-          row.updatedAt,
-        );
-        if (existing.has(row.id)) ftsUpdate.run(row.title, row.props, row.id);
-        else {
-          ftsInsert.run(row.id, row.title, row.props);
-          added.push(row.id);
-        }
+        if (this.writeRowEntry(databaseId, row, existing.get(row.id))) added.push(row.id);
         existing.delete(row.id);
       }
-      for (const id of existing) {
+      for (const id of existing.keys()) {
         this.removePageIndex(id);
         removed.push(id);
       }
     });
     return { added, removed };
+  }
+
+  /**
+   * Index the rows of a database that changed since the last sync (`changed`), and drop
+   * the ones that are gone; like `syncRowIndex`, without reading the other rows.
+   */
+  updateRowIndex(
+    databaseId: string,
+    changed: readonly RowIndexRow[],
+    gone: readonly string[],
+  ): { added: string[]; removed: string[] } {
+    const added: string[] = [];
+    const removed: string[] = [];
+    this.transaction(() => {
+      const get = this.db.prepare(
+        `SELECT id, database_id, fts_rowid, parent_id, title, icon, sort_key, in_trash,
+                created_at, updated_at, props
+         FROM pages WHERE id = ?`,
+      );
+      for (const row of changed) {
+        const old = get.get(row.id) as (StoredEntry & { database_id: string | null }) | undefined;
+        const mine = old?.database_id === databaseId ? old : undefined;
+        if (this.writeRowEntry(databaseId, row, mine)) added.push(row.id);
+      }
+      for (const id of gone) {
+        const old = get.get(id) as { database_id: string | null } | undefined;
+        if (old?.database_id !== databaseId) continue;
+        this.removePageIndex(id);
+        removed.push(id);
+      }
+    });
+    return { added, removed };
+  }
+
+  /** Write one row's index entry, given what's stored for it; true when it's new. */
+  private writeRowEntry(
+    databaseId: string,
+    row: RowIndexRow,
+    old: StoredEntry | undefined,
+  ): boolean {
+    if (!old) {
+      const ftsRowid = this.ftsEntry(row.id, row.title, row.props);
+      this.insertEntry(row.id, databaseId, databaseId, row, row.props, ftsRowid);
+      return true;
+    }
+    const inTrash = row.inTrash ? 1 : 0;
+    if (
+      old.title !== row.title ||
+      old.icon !== row.icon ||
+      old.sort_key !== row.sortKey ||
+      old.in_trash !== inTrash ||
+      old.created_at !== row.createdAt ||
+      old.updated_at !== row.updatedAt ||
+      old.props !== row.props
+    ) {
+      this.db
+        .prepare(
+          `UPDATE pages SET title = ?, icon = ?, sort_key = ?, in_trash = ?, created_at = ?,
+             updated_at = ?, props = ?
+           WHERE id = ?`,
+        )
+        .run(
+          row.title,
+          row.icon,
+          row.sortKey,
+          inTrash,
+          row.createdAt,
+          row.updatedAt,
+          row.props,
+          row.id,
+        );
+    }
+    if (old.title !== row.title || old.props !== row.props || old.fts_rowid === null) {
+      this.ftsEntry(row.id, row.title, row.props, old.fts_rowid);
+    }
+    return false;
+  }
+
+  /**
+   * Write a page's full-text title (and property text, for rows) at `rowid`, or in a new
+   * full-text row; returns its rowid. A page that had an entry elsewhere (it moved between
+   * the workspace and a database) keeps its full-text row.
+   */
+  private ftsEntry(
+    id: string,
+    title: string,
+    props: string | null,
+    rowid: number | null = this.ftsRowidOf(id),
+  ): number {
+    if (rowid !== null) {
+      if (props === null) {
+        this.db.prepare('UPDATE page_fts SET title = ? WHERE rowid = ?').run(title, rowid);
+      } else {
+        this.db
+          .prepare('UPDATE page_fts SET title = ?, props = ? WHERE rowid = ?')
+          .run(title, props, rowid);
+      }
+      return rowid;
+    }
+    const { lastInsertRowid } = this.db
+      .prepare("INSERT INTO page_fts (page_id, title, body, props) VALUES (?, ?, '', ?)")
+      .run(id, title, props ?? '');
+    this.db.prepare('UPDATE pages SET fts_rowid = ? WHERE id = ?').run(lastInsertRowid, id);
+    return Number(lastInsertRowid);
+  }
+
+  private ftsRowidOf(id: string): number | null {
+    const row = this.db.prepare('SELECT fts_rowid FROM pages WHERE id = ?').get(id) as
+      { fts_rowid: number | null } | undefined;
+    return row?.fts_rowid ?? null;
+  }
+
+  private insertEntry(
+    id: string,
+    parentId: string | null,
+    databaseId: string | null,
+    row: Omit<PageIndexRow, 'id' | 'parentId'>,
+    props: string,
+    ftsRowid: number,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO pages
+           (id, parent_id, database_id, title, icon, sort_key, in_trash, created_at, updated_at,
+            props, fts_rowid)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET
+           parent_id = excluded.parent_id, database_id = excluded.database_id,
+           title = excluded.title, icon = excluded.icon, sort_key = excluded.sort_key,
+           in_trash = excluded.in_trash, created_at = excluded.created_at,
+           updated_at = excluded.updated_at, props = excluded.props,
+           fts_rowid = excluded.fts_rowid`,
+      )
+      .run(
+        id,
+        parentId,
+        databaseId,
+        row.title,
+        row.icon,
+        row.sortKey,
+        row.inTrash ? 1 : 0,
+        row.createdAt,
+        row.updatedAt,
+        props,
+        ftsRowid,
+      );
   }
 
   /** Ids of a database's rows in the index. */
@@ -494,8 +663,9 @@ export class SqliteStore {
   }
 
   removePageIndex(id: string): void {
+    const rowid = this.ftsRowidOf(id);
     this.db.prepare('DELETE FROM pages WHERE id = ?').run(id);
-    this.db.prepare('DELETE FROM page_fts WHERE page_id = ?').run(id);
+    if (rowid !== null) this.db.prepare('DELETE FROM page_fts WHERE rowid = ?').run(rowid);
     this.db.prepare('DELETE FROM links WHERE source_id = ?').run(id);
   }
 
@@ -514,6 +684,58 @@ export class SqliteStore {
       for (const link of links) {
         if (link.target === sourceId) continue;
         insert.run(sourceId, link.target, link.kind, link.blockId, link.snippet);
+      }
+    });
+  }
+
+  /**
+   * Replace the links of one kind that each of `sources` makes, in one transaction.
+   * Sources whose links didn't change aren't written.
+   */
+  replaceLinksOf(kind: string, sources: ReadonlyMap<string, readonly LinkRow[]>): void {
+    const key = (target: string, blockId: string | null, snippet: string) =>
+      JSON.stringify([target, blockId, snippet]);
+    this.transaction(() => {
+      type Stored = {
+        source_id: string;
+        target_id: string;
+        block_id: string | null;
+        snippet: string;
+      };
+      const existing = new Map<string, string[]>();
+      // A few sources: by source (indexed); many: one pass over the kind's links.
+      const stored =
+        sources.size <= 500
+          ? [...sources.keys()].flatMap(
+              (id) =>
+                this.db
+                  .prepare(
+                    'SELECT source_id, target_id, block_id, snippet FROM links WHERE source_id = ? AND kind = ?',
+                  )
+                  .all(id, kind) as Stored[],
+            )
+          : (this.db
+              .prepare('SELECT source_id, target_id, block_id, snippet FROM links WHERE kind = ?')
+              .all(kind) as Stored[]);
+      for (const link of stored) {
+        if (!sources.has(link.source_id)) continue;
+        let keys = existing.get(link.source_id);
+        if (!keys) existing.set(link.source_id, (keys = []));
+        keys.push(key(link.target_id, link.block_id, link.snippet));
+      }
+      const remove = this.db.prepare('DELETE FROM links WHERE source_id = ? AND kind = ?');
+      const insert = this.db.prepare(
+        'INSERT INTO links (source_id, target_id, kind, block_id, snippet) VALUES (?, ?, ?, ?, ?)',
+      );
+      for (const [sourceId, links] of sources) {
+        const wanted = links.filter((link) => link.target !== sourceId);
+        const next = wanted.map((l) => key(l.target, l.blockId, l.snippet)).sort();
+        const before = (existing.get(sourceId) ?? []).sort();
+        if (next.length === before.length && next.every((k, i) => k === before[i])) continue;
+        remove.run(sourceId, kind);
+        for (const link of wanted) {
+          insert.run(sourceId, link.target, kind, link.blockId, link.snippet);
+        }
       }
     });
   }
@@ -636,7 +858,9 @@ export class SqliteStore {
   }
 
   setPageBody(id: string, body: string): void {
-    this.db.prepare('UPDATE page_fts SET body = ? WHERE page_id = ?').run(body, id);
+    const rowid = this.ftsRowidOf(id);
+    if (rowid !== null)
+      this.db.prepare('UPDATE page_fts SET body = ? WHERE rowid = ?').run(body, rowid);
   }
 
   search(query: string, limit = 20): SearchResult[] {
@@ -785,6 +1009,43 @@ export class SqliteStore {
   }
 
   /** Unfired reminders due by `now`, on pages that are not in the trash. */
+  /**
+   * Replace the date-property reminders of some rows (`rowIds`) of a database with
+   * `reminders`, keeping whether each one already fired; other rows' are kept.
+   */
+  updatePropertyReminders(
+    rowIds: readonly string[],
+    reminders: { rowId: string; propertyId: string; fireAt: number; text: string }[],
+  ): void {
+    if (rowIds.length === 0) return;
+    this.transaction(() => {
+      const ofRow = `page_id = ? AND block_id LIKE '${PROPERTY_REMINDER}%'`;
+      const firedOf = this.db.prepare(
+        `SELECT page_id, block_id, fire_at FROM reminders WHERE ${ofRow} AND fired = 1`,
+      );
+      const remove = this.db.prepare(`DELETE FROM reminders WHERE ${ofRow}`);
+      const fired = new Set<string>();
+      for (const rowId of rowIds) {
+        for (const r of firedOf.all(rowId) as {
+          page_id: string;
+          block_id: string;
+          fire_at: number;
+        }[]) {
+          fired.add(`${r.page_id}/${r.block_id}@${r.fire_at}`);
+        }
+        remove.run(rowId);
+      }
+      const insert = this.db.prepare(
+        'INSERT OR IGNORE INTO reminders (page_id, block_id, fire_at, text, fired) VALUES (?, ?, ?, ?, ?)',
+      );
+      for (const r of reminders) {
+        const blockId = `${PROPERTY_REMINDER}${r.propertyId}`;
+        const key = `${r.rowId}/${blockId}@${r.fireAt}`;
+        insert.run(r.rowId, blockId, r.fireAt, r.text, fired.has(key) ? 1 : 0);
+      }
+    });
+  }
+
   dueReminders(now: number): Reminder[] {
     const rows = this.db
       .prepare(

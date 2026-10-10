@@ -7,3 +7,7 @@ test-results/
 playwright-report/
 *.log
 .DS_Store
+
+# Performance runs (packages/perf)
+perf-results.json
+perf-baseline.json

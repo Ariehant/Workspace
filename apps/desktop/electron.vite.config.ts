@@ -59,6 +59,6 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react(), tailwindcss(), csp()],
-    build: { minify: true },
+    build: { minify: !process.env.WORKSPACE_NO_MINIFY },
   },
 });

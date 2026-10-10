@@ -8,6 +8,7 @@ import {
   moveRow,
   setCell,
   setRowTitle,
+  updateView,
 } from './index';
 
 describe('DatabaseHandle', () => {
@@ -36,6 +37,21 @@ describe('DatabaseHandle', () => {
     expect(handle.row(b)?.values[n]).toBe(4);
     expect(handle.snapshot().properties.map((p) => p.name)).toContain('N');
     handle.destroy();
+  });
+
+  it('keeps the properties when only a view changes (computed values stay cached)', () => {
+    const doc = new Y.Doc();
+    initDatabase(doc, { databaseId: 'db' });
+    const estimate = addProperty(doc, { name: 'Estimate', type: 'number' });
+    const handle = new DatabaseHandle('db', doc);
+    const first = handle.snapshot();
+    updateView(doc, first.views[0]!.id, { sorts: [{ propertyId: estimate, direction: 'asc' }] });
+    const second = handle.snapshot();
+    expect(second.views[0]!.sorts).toHaveLength(1);
+    expect(second.properties).toBe(first.properties);
+    expect(second.meta).toBe(first.meta);
+    addProperty(doc, { name: 'Notes', type: 'text' });
+    expect(handle.snapshot().properties).not.toBe(first.properties);
   });
 
   it('undoes local edits', () => {

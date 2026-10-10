@@ -197,6 +197,8 @@ export class LocalAutomations {
     }
     const doc = this.manager.loaded(docId);
     if (!doc || !isDatabaseDoc(doc)) return;
+    // Nothing to follow: no automations, none before, and no schedules to line up.
+    if (!baseline && readAutomations(doc).length === 0 && !this.hasSchedules(docId)) return;
     // Its first automation (or the database itself) just arrived: count from here.
     if (!baseline && hasPageAutomations(doc)) this.baselines.set(docId, copy(doc));
     // Looked at even while syncing (nothing runs then): the copy keeps up.
@@ -216,7 +218,8 @@ export class LocalAutomations {
     clearTimeout(this.timers.get(databaseId));
     this.timers.delete(databaseId);
     if (this.closed) return;
-    const after = this.current(databaseId);
+    const current = this.readable(databaseId);
+    const after = current?.doc ?? null;
     try {
       const baseline = this.baselines.get(databaseId);
       if (!after || !isDatabaseDoc(after)) {
@@ -251,8 +254,16 @@ export class LocalAutomations {
     } catch (error) {
       this.options.onError?.(error);
     } finally {
-      after?.destroy();
+      if (current?.copied) after?.destroy();
     }
+  }
+
+  /** The database as it is now, to read right away: the loaded doc, or a copy. */
+  private readable(databaseId: string): { doc: Y.Doc; copied: boolean } | null {
+    const live = this.manager.loaded(databaseId);
+    if (live) return { doc: live, copied: false };
+    const doc = this.current(databaseId);
+    return doc && { doc, copied: true };
   }
 
   /** The database as it is now (a copy to read). */
@@ -263,6 +274,10 @@ export class LocalAutomations {
     const doc = new Y.Doc();
     Y.applyUpdate(doc, state);
     return doc;
+  }
+
+  private hasSchedules(databaseId: string): boolean {
+    return Object.keys(this.schedules()).some((key) => key.startsWith(`${databaseId}/`));
   }
 
   // --- Schedules --------------------------------------------------------------------

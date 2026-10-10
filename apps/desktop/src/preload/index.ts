@@ -29,7 +29,7 @@ function on<Args extends unknown[]>(
 /** The only bridge between the sandboxed UI and the main process. */
 const api = {
   docs: {
-    open: (docId: string): Promise<Uint8Array> => ipcRenderer.invoke(IPC.docOpen, docId),
+    open: (docId: string): Promise<Uint8Array[]> => ipcRenderer.invoke(IPC.docOpen, docId),
     push: (docId: string, update: Uint8Array): void => ipcRenderer.send(IPC.docPush, docId, update),
     close: (docId: string): void => ipcRenderer.send(IPC.docClose, docId),
     onUpdate: (listener: (docId: string, update: Uint8Array) => void): Unsubscribe =>

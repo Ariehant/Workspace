@@ -40,28 +40,37 @@ export const TIME_FORMATS: { id: TimeFormat; label: string }[] = [
   { id: '24h', label: '24 hour' },
 ];
 
+/** Number formatters by format and precision: making one is far slower than using it. */
+const numberFormats = new Map<string, Intl.NumberFormat>();
+
+function numberFormat(format: string, precision: number | undefined): Intl.NumberFormat {
+  const key = `${format}:${precision ?? ''}`;
+  let formatter = numberFormats.get(key);
+  if (!formatter) {
+    const digits =
+      precision !== undefined
+        ? { minimumFractionDigits: precision, maximumFractionDigits: precision }
+        : {};
+    formatter = new Intl.NumberFormat(
+      'en-US',
+      format === 'commas' || format === 'percent'
+        ? { maximumFractionDigits: 10, ...digits }
+        : { style: 'currency', currency: CURRENCIES[format as NumberFormat] ?? 'USD', ...digits },
+    );
+    numberFormats.set(key, formatter);
+  }
+  return formatter;
+}
+
 /** A number as its property shows it: `1,234.5`, `12%`, `$3.00`, ... */
 export function formatNumber(n: number, config: PropertyConfig = {}): string {
   const format = config.numberFormat ?? 'number';
-  const digits =
-    config.precision !== undefined
-      ? { minimumFractionDigits: config.precision, maximumFractionDigits: config.precision }
-      : {};
   if (format === 'number') {
     return config.precision !== undefined ? n.toFixed(config.precision) : String(n);
   }
-  if (format === 'commas') {
-    return n.toLocaleString('en-US', { maximumFractionDigits: 10, ...digits });
-  }
-  if (format === 'percent') {
-    // Notion's percent shows the number as typed: 12 -> 12%.
-    return `${n.toLocaleString('en-US', { maximumFractionDigits: 10, ...digits })}%`;
-  }
-  return n.toLocaleString('en-US', {
-    style: 'currency',
-    currency: CURRENCIES[format] ?? 'USD',
-    ...digits,
-  });
+  const text = numberFormat(format, config.precision).format(n);
+  // Notion's percent shows the number as typed: 12 -> 12%.
+  return format === 'percent' ? `${text}%` : text;
 }
 
 const DAY_MS = 86_400_000;

@@ -137,13 +137,16 @@ export function computeRollup(
   const values = rows.map((r) => cellValue(r, target));
   const isEmpty = (v: unknown) => target.type !== 'checkbox' && kind.isEmpty(v);
   const filled = values.filter((v) => !isEmpty(v));
-  const texts = rows.map((r) => cellText(r, target, ctx)).filter((t) => t !== '');
+  // Display text only for the calculations that show it (formatting is the slow part).
+  const shownTexts = () => rows.map((r) => cellText(r, target, ctx)).filter((t) => t !== '');
 
   switch (calc) {
-    case 'showOriginal':
+    case 'showOriginal': {
+      const texts = shownTexts();
       return texts.length ? texts.join(', ') : null;
+    }
     case 'showUnique': {
-      const unique = [...new Set(texts)];
+      const unique = [...new Set(shownTexts())];
       return unique.length ? unique.join(', ') : null;
     }
     case 'countAll':

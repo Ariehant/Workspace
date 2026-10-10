@@ -38,6 +38,7 @@
     "@workspace/editor": "workspace:*",
     "@workspace/exporters": "workspace:*",
     "@workspace/importers": "workspace:*",
+    "@workspace/perf": "workspace:*",
     "@workspace/storage-local": "workspace:*",
     "@workspace/storage-remote": "workspace:*",
     "@workspace/sync": "workspace:*",

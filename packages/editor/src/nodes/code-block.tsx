@@ -13,6 +13,7 @@ import { cn } from '@workspace/ui';
 import { Captions, Check, Copy, ListOrdered, WrapText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { indentLines, lineStarts } from './code-lines';
+import { codeHighlightPlugin, touchedNodes } from './code-highlight';
 import { COMMON_LANGUAGES, MORE_LANGUAGES, ensureLanguage, lowlight } from './languages';
 import { renderMermaid, svgDataUrl, svgWidth, type MermaidResult } from './mermaid';
 
@@ -224,28 +225,30 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: ReactNodeView
 const lineNumbersKey = new PluginKey('codeLineNumbers');
 
 /** Line numbers as widgets at the start of each line, so they follow wrapping and aren't copied. */
+function lineNumbersOf(node: PMNode, pos: number): Decoration[] {
+  if (!node.attrs.lineNumbers) return [];
+  const starts = lineStarts(node.textContent);
+  const width = String(starts.length).length;
+  return starts.map((offset, i) =>
+    Decoration.widget(
+      pos + 1 + offset,
+      () => {
+        const span = document.createElement('span');
+        span.className = 'ws-line-number';
+        span.textContent = String(i + 1).padStart(width, ' ');
+        span.setAttribute('aria-hidden', 'true');
+        return span;
+      },
+      { side: -1, key: `ln-${i + 1}-${width}`, ignoreSelection: true },
+    ),
+  );
+}
+
 function lineNumberDecorations(state: EditorState, typeName: string): DecorationSet {
   const decorations: Decoration[] = [];
   state.doc.descendants((node: PMNode, pos: number) => {
-    if (node.type.name !== typeName) return true;
-    if (!node.attrs.lineNumbers) return false;
-    const starts = lineStarts(node.textContent);
-    const width = String(starts.length).length;
-    starts.forEach((offset, i) => {
-      decorations.push(
-        Decoration.widget(
-          pos + 1 + offset,
-          () => {
-            const span = document.createElement('span');
-            span.className = 'ws-line-number';
-            span.textContent = String(i + 1).padStart(width, ' ');
-            span.setAttribute('aria-hidden', 'true');
-            return span;
-          },
-          { side: -1, key: `ln-${i + 1}-${width}`, ignoreSelection: true },
-        ),
-      );
-    });
+    if (node.type.name !== typeName) return !node.isTextblock;
+    decorations.push(...lineNumbersOf(node, pos));
     return false;
   });
   return DecorationSet.create(state.doc, decorations);
@@ -306,13 +309,26 @@ export const CodeBlock = CodeBlockLowlight.extend({
   addProseMirrorPlugins() {
     const name = this.name;
     return [
-      ...(this.parent?.() ?? []),
+      // The stock highlighting walks the whole page on every transaction: ours doesn't.
+      ...(this.parent?.() ?? []).filter(
+        (plugin) => !(plugin as unknown as { key: string }).key.startsWith('lowlight$'),
+      ),
+      codeHighlightPlugin(name, this.options.defaultLanguage ?? 'plaintext'),
       new Plugin({
         key: lineNumbersKey,
         state: {
           init: (_, state) => lineNumberDecorations(state, name),
-          apply: (tr, old, _oldState, state) =>
-            tr.docChanged ? lineNumberDecorations(state, name) : old,
+          // Only the code blocks a change touched get their numbers again.
+          apply: (tr, old: DecorationSet) => {
+            if (!tr.docChanged) return old;
+            let set = old.map(tr.mapping, tr.doc);
+            for (const { node, pos } of touchedNodes(tr, name)) {
+              set = set
+                .remove(set.find(pos, pos + node.nodeSize))
+                .add(tr.doc, lineNumbersOf(node, pos));
+            }
+            return set;
+          },
         },
         props: { decorations: (state) => lineNumbersKey.getState(state) as DecorationSet },
       }),

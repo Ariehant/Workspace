@@ -140,6 +140,49 @@ describe('database indexing', () => {
     expect(store.locatePage('p1')).toEqual({ databaseId: null });
     store.close();
   });
+
+  it('migrates a version 6 file: entries find their full-text rows', () => {
+    const raw = new DatabaseSync(dbPath);
+    for (const sql of MIGRATIONS.slice(0, 6)) raw.exec(sql);
+    raw.exec('PRAGMA user_version = 6');
+    raw.exec(`INSERT INTO pages (id, parent_id, database_id, title, icon, sort_key, in_trash,
+      created_at, updated_at) VALUES ('r1', 'db', 'db', 'Gearbox', NULL, 'a0', 0, 1, 1)`);
+    raw.exec(`INSERT INTO page_fts (page_id, title, body, props)
+      VALUES ('r1', 'Gearbox', 'notes', 'steel')`);
+    raw.close();
+
+    const store = new SqliteStore(dbPath);
+    expect(store.search('steel')).toMatchObject([{ id: 'r1', databaseId: 'db' }]);
+    const row = { id: 'r1', title: 'Gearbox v2', icon: null, sortKey: 'a0', inTrash: false };
+    store.syncRowIndex('db', [{ ...row, createdAt: 1, updatedAt: 2, props: 'aluminium' }]);
+    store.setPageBody('r1', 'revised notes');
+    // The same full-text row, changed: one result, with the new text.
+    expect(store.search('Gearbox')).toMatchObject([{ id: 'r1', title: 'Gearbox v2' }]);
+    expect(store.search('steel')).toEqual([]);
+    expect(store.search('aluminium revised')).toHaveLength(1);
+    store.syncRowIndex('db', []);
+    expect(store.search('Gearbox')).toEqual([]);
+    store.close();
+  });
+
+  it('writes only the rows that changed', () => {
+    const { store, manager, db } = setup();
+    const status = addProperty(db, { name: 'Status', type: 'text' });
+    const ids = Array.from({ length: 50 }, (_, i) =>
+      addRow(db, { actor: null, title: `Row ${i}` }),
+    );
+    manager.flush();
+    const changes = () =>
+      (store.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n;
+    const before = changes();
+    setCell(db, ids[7]!, status, 'shipped', null);
+    manager.flush();
+    // The row's entry and its full-text row, not all 50 rows (two writes each).
+    expect(changes() - before).toBeLessThan(20);
+    expect(store.search('shipped').map((r) => r.id)).toEqual([ids[7]]);
+    manager.close();
+    store.close();
+  });
 });
 
 describe('date property reminders', () => {

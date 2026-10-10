@@ -108,13 +108,14 @@ async function expand(window: Page, title: string) {
  */
 async function snapshot(page: Page) {
   const read = async (docId: string) => {
-    const bytes = await page.evaluate(async (id) => {
-      const state = await window.workspace.docs.open(id);
+    // The doc's stored updates (together, its state).
+    const updates = await page.evaluate(async (id) => {
+      const stored = await window.workspace.docs.open(id);
       window.workspace.docs.close(id);
-      return Array.from(state);
+      return stored.map((update) => Array.from(update));
     }, docId);
     const doc = new Y.Doc();
-    Y.applyUpdate(doc, Uint8Array.from(bytes));
+    for (const update of updates) Y.applyUpdate(doc, Uint8Array.from(update));
     return doc;
   };
   const workspace = await read(WORKSPACE_DOC_ID);

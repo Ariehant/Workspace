@@ -64,6 +64,54 @@ jobs:
             apps/web/test-results
           retention-days: 7
 
+  perf:
+    name: Performance budgets
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Allow user namespaces for the Chromium sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: pnpm --filter @workspace/desktop build
+      # The base branch's last results, for the regression check (none on a first run).
+      - uses: actions/cache/restore@v4
+        with:
+          path: perf-baseline.json
+          key: perf-${{ github.base_ref || github.ref_name }}-${{ github.sha }}
+          restore-keys: perf-${{ github.base_ref || github.ref_name }}-
+      - name: Pure-code benchmarks (50,000 rows)
+        run: pnpm --filter @workspace/perf bench
+        env:
+          PERF_RESULTS: ${{ github.workspace }}/perf-results.json
+      - name: UI budgets (10,000-block page, 50,000-row database)
+        working-directory: apps/desktop
+        run: xvfb-run -a npx playwright test e2e/perf.spec.ts
+        env:
+          PERF: 1
+          PERF_RESULTS: ${{ github.workspace }}/perf-results.json
+      - name: Compare with the budgets and the base branch
+        if: always()
+        run: node --experimental-strip-types packages/perf/src/report.ts perf-results.json perf-baseline.json
+      - name: Keep these results as the baseline
+        if: github.event_name == 'push'
+        run: cp perf-results.json perf-baseline.json
+      - uses: actions/cache/save@v4
+        if: github.event_name == 'push'
+        with:
+          path: perf-baseline.json
+          key: perf-${{ github.ref_name }}-${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: perf-results.json
+          retention-days: 30
+
   package:
     name: Package and install on Ubuntu 24.04
     needs: check

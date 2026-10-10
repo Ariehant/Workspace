@@ -106,6 +106,38 @@ describe('DocManager', () => {
     store.close();
   });
 
+  it("opens docs for windows from what's stored, loading them only when they change", () => {
+    const store = new SqliteStore(dbPath);
+    const manager = new DocManager(store);
+    const ws = connectWindow(manager, WORKSPACE_DOC_ID, 'w1');
+    const pageId = createPage(ws, { title: 'Notes' });
+    const page = connectWindow(manager, pageId, 'w1');
+    writeParagraph(page, 'stored');
+    manager.release(pageId);
+    expect(manager.loaded(pageId)).toBeNull();
+
+    // A window opens it: the stored updates, without loading it here.
+    const opened = new Y.Doc();
+    opened.transact(() => {
+      for (const update of manager.openUpdates(pageId)) Y.applyUpdate(opened, update);
+    });
+    expect(getPageContent(opened).toString()).toContain('stored');
+    expect(manager.loaded(pageId)).toBeNull();
+
+    // It edits it: loaded now, and held until the window lets go.
+    const sv = Y.encodeStateVector(opened);
+    writeParagraph(opened, 'edited');
+    manager.applyUpdate(pageId, Y.encodeStateAsUpdate(opened, sv), 'w2');
+    expect(manager.loaded(pageId)).not.toBeNull();
+    manager.flush();
+    expect(manager.loaded(pageId)).not.toBeNull();
+    manager.release(pageId);
+    expect(manager.loaded(pageId)).toBeNull();
+    expect(store.search('edited').map((r) => r.id)).toEqual([pageId]);
+    manager.close();
+    store.close();
+  });
+
   it('relays edits between windows', () => {
     const store = new SqliteStore(dbPath);
     const manager = new DocManager(store);

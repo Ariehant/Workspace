@@ -6,8 +6,11 @@ import type { PresenceChannel, PresenceHandlers, PresenceTransport } from './pre
  * the Electron main process today, the sync server for the web app later.
  */
 export interface DocTransport {
-  /** Load a document and return its full state as a single update. */
-  open(docId: string): Promise<Uint8Array>;
+  /**
+   * Load a document and return its full state: one update, or several that make it
+   * together (a host can pass on what it stored without merging it first).
+   */
+  open(docId: string): Promise<Uint8Array | Uint8Array[]>;
   /** Send a local update. */
   push(docId: string, update: Uint8Array): void;
   /** Receive updates made elsewhere (other windows, other devices). */
@@ -60,12 +63,35 @@ export class DocClient {
     let entry = this.entries.get(docId);
     if (!entry) {
       const doc = new Y.Doc({ guid: docId });
-      doc.on('update', (update: Uint8Array, origin: unknown) => {
-        if (origin !== this.remote) this.transport.push(docId, update);
-      });
-      const ready = this.transport.open(docId).then((state) => {
-        Y.applyUpdate(doc, state, this.remote);
-      });
+      // The push listener goes on after the stored state is in: while a doc has update
+      // listeners, Yjs encodes every transaction for them, and encoding a large doc's whole
+      // state again on open costs as much as decoding it. Edits made before that (rare:
+      // callers wait for `ready`) are pushed as the full state once it's in.
+      let editedEarly = false;
+      const early = (transaction: Y.Transaction) => {
+        if (transaction.origin !== this.remote) editedEarly = true;
+      };
+      doc.on('afterTransaction', early);
+      const push = () => {
+        doc.off('afterTransaction', early);
+        doc.on('update', (update: Uint8Array, origin: unknown) => {
+          if (origin !== this.remote) this.transport.push(docId, update);
+        });
+        if (editedEarly) this.transport.push(docId, Y.encodeStateAsUpdate(doc));
+      };
+      const ready = this.transport.open(docId).then(
+        (state) => {
+          const updates = Array.isArray(state) ? state : [state];
+          doc.transact(() => {
+            for (const update of updates) Y.applyUpdate(doc, update, this.remote);
+          }, this.remote);
+          push();
+        },
+        (error: unknown) => {
+          push();
+          throw error;
+        },
+      );
       entry = { doc, ready, refs: 0 };
       this.entries.set(docId, entry);
     }

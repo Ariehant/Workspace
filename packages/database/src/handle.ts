@@ -27,6 +27,8 @@ export class DatabaseHandle {
   private ordered: Row[] = [];
   private orderDirty = true;
   private rowsDirty = true;
+  private schemaDirty = true;
+  private viewsDirty = true;
   private metaDirty = true;
   private current: DatabaseSnapshot | null = null;
   private version = 0;
@@ -37,8 +39,8 @@ export class DatabaseHandle {
   ) {
     const rows = rowsMap(doc);
     rows.observeDeep(this.onRows);
-    schemaMap(doc).observeDeep(this.onMeta);
-    viewsMap(doc).observeDeep(this.onMeta);
+    schemaMap(doc).observeDeep(this.onSchema);
+    viewsMap(doc).observeDeep(this.onViews);
     metaMap(doc).observe(this.onMeta);
     // Only local edits (origin null) are undoable, not other windows' updates.
     this.undo = new Y.UndoManager([rows, schemaMap(doc), viewsMap(doc), metaMap(doc)], {
@@ -63,6 +65,18 @@ export class DatabaseHandle {
       }
     }
     this.rowsDirty = true;
+    this.changed();
+  };
+
+  // Schema, views and meta are re-read apart: a view change (a sort, a filter) keeps the
+  // properties as they were, so values computed from them are kept too.
+  private readonly onSchema = () => {
+    this.schemaDirty = true;
+    this.changed();
+  };
+
+  private readonly onViews = () => {
+    this.viewsDirty = true;
     this.changed();
   };
 
@@ -117,15 +131,15 @@ export class DatabaseHandle {
     } else {
       rows = this.ordered;
     }
-    const meta =
-      this.metaDirty || !this.lastMeta
-        ? {
-            properties: readProperties(this.doc),
-            views: readViews(this.doc),
-            meta: readMeta(this.doc),
-          }
-        : this.lastMeta;
+    const last = this.lastMeta;
+    const meta = {
+      properties: this.schemaDirty || !last ? readProperties(this.doc) : last.properties,
+      views: this.viewsDirty || !last ? readViews(this.doc) : last.views,
+      meta: this.metaDirty || !last ? readMeta(this.doc) : last.meta,
+    };
     this.lastMeta = meta;
+    this.schemaDirty = false;
+    this.viewsDirty = false;
     this.metaDirty = false;
     this.current = { ...meta, rows };
     return this.current;
