@@ -818,7 +818,9 @@ When SMTP is configured, people get an email for inbox items they haven't seen (
 **Runs:**
 
 - **Unit tests:** 896 passed (3 skipped).
-- **Desktop E2E and web E2E:** running.
+- **Desktop E2E, run 1:** 141 of 141.
+- **Run 2:** 140 of 141. `access.spec.ts` waited 15 s for a page shared with everyone to reach Bob's desktop (the timing flake seen before, outside the API). It passed three reruns out of three.
+- **Web E2E:** 3 of 3.
 
 ### M7: integration webhooks and email digests (≈ 3 days)
 
