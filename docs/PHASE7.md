@@ -328,6 +328,10 @@ moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
     same. The web app leaves zoom to the browser.
   - **Tests:** `zoom.spec.ts` (keys and wheel sent as the system sends them, the menu, a second
     window, a restart, 50% and 125% screenshots); unit tests for the levels.
+- **Fixed on the way: mention notifications cut mid-word.** The server read a workspace's changes
+  1 s after the first one, so a mention typed mid-sentence notified with half the sentence
+  ("Torque check by plea"). It now waits until changes pause for 1 s (5 s at most), so the
+  notification shows what was written. Found by the inbox E2E; unit tests for the scheduling.
 - axe-core in the E2E suite; keyboard paths for every action; focus management; roles and names;
   contrast; reduced motion.
 - **Tests:** axe on every main screen and dialog in both themes; keyboard-only E2E for creating a

@@ -46,8 +46,13 @@ const FOLLOWER = 'notify';
 const BATCH = 500;
 
 export interface NotifierOptions {
-  /** Wait this long after a change (edits come in bursts). */
+  /**
+   * Wait until changes stop for this long (edits come in bursts: a mention's notification
+   * should show the finished sentence, not the half typed when it was made).
+   */
   delayMs?: number;
+  /** But no longer than this after the first change (someone typing on and on). */
+  maxDelayMs?: number;
   /** Look for due reminders this often. */
   reminderPollMs?: number;
   /** Send a notification to the person's open connections. */
@@ -92,6 +97,8 @@ function byAuthor(updates: LoggedUpdate[]): { userId: string | null; updates: Lo
 
 export class Notifier {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** When each scheduled workspace's first unread change came (for `maxDelayMs`). */
+  private readonly firstChange = new Map<string, number>();
   private readonly running = new Map<string, Promise<void>>();
   private readonly again = new Set<string>();
   private reminderTimer: ReturnType<typeof setInterval> | null = null;
@@ -120,13 +127,20 @@ export class Notifier {
     void this.fireReminders();
   }
 
-  /** A workspace's log grew. */
+  /** A workspace's log grew: read it once its changes pause. */
   schedule(workspaceId: string, delayMs = this.delayMs): void {
-    if (this.closed || this.timers.has(workspaceId)) return;
+    if (this.closed) return;
+    const now = Date.now();
+    const first = this.firstChange.get(workspaceId) ?? now;
+    this.firstChange.set(workspaceId, first);
+    clearTimeout(this.timers.get(workspaceId));
+    const maxDelayMs = this.options.maxDelayMs ?? 5000;
+    const wait = Math.max(0, Math.min(delayMs, first + maxDelayMs - now));
     const timer = setTimeout(() => {
       this.timers.delete(workspaceId);
+      this.firstChange.delete(workspaceId);
       void this.run(workspaceId);
-    }, delayMs);
+    }, wait);
     timer.unref?.();
     this.timers.set(workspaceId, timer);
   }
@@ -158,6 +172,7 @@ export class Notifier {
     this.closed = true;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
+    this.firstChange.clear();
     if (this.reminderTimer) clearInterval(this.reminderTimer);
     await Promise.all([...this.running.values(), this.reminding]);
   }
