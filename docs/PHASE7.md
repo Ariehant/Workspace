@@ -332,6 +332,9 @@ moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
   1 s after the first one, so a mention typed mid-sentence notified with half the sentence
   ("Torque check by plea"). It now waits until changes pause for 1 s (5 s at most), so the
   notification shows what was written. Found by the inbox E2E; unit tests for the scheduling.
+- **Runs** (zoom and the notification fix): unit tests all pass; desktop E2E 147 passed (3 skipped)
+  twice, web E2E 3 passed. The zoom commit's own first desktop run failed only the inbox test,
+  which the notification fix addresses (that test then passed three runs in a row).
 - axe-core in the E2E suite; keyboard paths for every action; focus management; roles and names;
   contrast; reduced motion.
 - **Tests:** axe on every main screen and dialog in both themes; keyboard-only E2E for creating a
