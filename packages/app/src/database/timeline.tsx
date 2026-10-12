@@ -16,7 +16,13 @@ import {
 } from '@workspace/database';
 import { PageIcon } from '@workspace/editor';
 import { Button, cn } from '@workspace/ui';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { useApp } from '../context';
 import { writeCell } from './actions';
 import { CellDisplay } from './cells';
@@ -90,6 +96,18 @@ export function TimelineView(props: LayoutViewProps) {
     scrolledFor.current = key;
     const el = scrollRef.current;
     if (el) el.scrollLeft = Math.max(0, timelineX(now, origin, zoom) - el.clientWidth / 3);
+  });
+
+  // The axis starts before the earliest bar, so moving that bar moves the axis: keep
+  // what's on screen in place when it does (or the bar seems not to have moved).
+  const shownAxis = useRef<{ origin: number; zoom: TimelineZoom } | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const previous = shownAxis.current;
+    shownAxis.current = { origin, zoom };
+    if (el && previous?.zoom === zoom && previous.origin !== origin) {
+      el.scrollLeft += timelineX(previous.origin, origin, zoom);
+    }
   });
 
   const lines = buildLines<Row>(result, (rows, path) =>

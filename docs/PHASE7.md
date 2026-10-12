@@ -306,7 +306,12 @@ The pure-code suite on the same database: decode 2.5–3.1 s (target 1 s), a sna
 computed values about 0.5 s each, filter, sort and group 50–150 ms, an edit 63–85 ms (target
 50 ms), the long page's decode about 0.2 s, and search about 45 ms.
 
-**Runs:** unit tests all pass; the desktop and web E2E runs for this commit are recorded in the next one.
+**Runs:** unit tests all pass. Desktop E2E: 146 passed (3 skipped: the two perf tests and the README screenshots,
+which run only when asked) on the first run; the second run, a day later, failed the
+timeline drag test. That was a real bug, not timing: the axis starts two weeks before the earliest
+bar (or today), so dragging the earliest bar later moved the whole axis with it, and the bar
+stayed where it was on screen. The timeline now keeps what's on screen in place when its axis
+moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
 
 ### M2: accessibility (≈ 1 week)
 
