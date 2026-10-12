@@ -6,8 +6,9 @@ import {
   type MenuItemConstructorOptions,
 } from 'electron';
 import { IPC } from '../shared/ipc';
+import type { Zoom } from './zoom';
 
-export function buildMenu(createWindow: () => BrowserWindow, isDev: boolean): Menu {
+export function buildMenu(createWindow: () => BrowserWindow, zoom: Zoom, isDev: boolean): Menu {
   const send = (command: string) => (_item: unknown, window: BaseWindow | undefined) => {
     if (window instanceof BrowserWindow) window.webContents.send(IPC.command, command);
   };
@@ -52,9 +53,26 @@ export function buildMenu(createWindow: () => BrowserWindow, isDev: boolean): Me
       submenu: [
         { label: 'Toggle Sidebar', click: send('toggle-sidebar') },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        // Each window handles the zoom keys itself (Ctrl+= too, which Electron's own
+        // Zoom In misses on Linux), so the menu only shows them.
+        {
+          label: 'Actual Size',
+          accelerator: 'CmdOrCtrl+0',
+          registerAccelerator: false,
+          click: () => zoom.reset(),
+        },
+        {
+          label: 'Zoom In',
+          accelerator: 'CmdOrCtrl+=',
+          registerAccelerator: false,
+          click: () => zoom.zoomIn(),
+        },
+        {
+          label: 'Zoom Out',
+          accelerator: 'CmdOrCtrl+-',
+          registerAccelerator: false,
+          click: () => zoom.zoomOut(),
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' },
         ...(isDev

@@ -313,8 +313,21 @@ bar (or today), so dragging the earliest bar later moved the whole axis with it,
 stayed where it was on screen. The timeline now keeps what's on screen in place when its axis
 moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
 
-### M2: accessibility (≈ 1 week)
+### M2: accessibility (≈ 1 week, 🚧)
 
+- **Done: zoom** (WCAG 1.4.4, resize text). The desktop app had Electron's stock View menu
+  items, hidden with the menu bar, and their Zoom In shortcut is `Ctrl+Plus`, which `Ctrl+=`
+  doesn't trigger on Linux. Now:
+  - `Ctrl+=` (or `+`), `Ctrl+-` and `Ctrl+0`, keypad included, are handled in the main process
+    before the page sees them, and `Ctrl` + wheel steps once per notch (Chromium reports each
+    notch twice).
+  - Levels are Chromium's, 50% to 300% (`packages/core/src/zoom.ts`). One level for every
+    window, kept in the settings and across a switch to a server's workspace. Windows use the
+    `isolated` zoom mode so the hidden print window, on the same origin, stays at 100%.
+  - **Appearance** shows the level with Zoom in, Zoom out and Actual size; the View menu has the
+    same. The web app leaves zoom to the browser.
+  - **Tests:** `zoom.spec.ts` (keys and wheel sent as the system sends them, the menu, a second
+    window, a restart, 50% and 125% screenshots); unit tests for the levels.
 - axe-core in the E2E suite; keyboard paths for every action; focus management; roles and names;
   contrast; reduced motion.
 - **Tests:** axe on every main screen and dialog in both themes; keyboard-only E2E for creating a
@@ -322,8 +335,9 @@ moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
 
 ### M3: languages and formats (≈ 1 week)
 
-- Message catalogs and the extraction check; two translations; the "Language and region"
-  setting; formats in the app, emails, forms and published pages.
+- Message catalogs and the extraction check; the "Language and region" setting; formats in the
+  app, emails, forms and published pages. English only for now (your call): a translation is a
+  catalog file added later.
 - **Tests:** formatting units per locale; E2E switching the language and the date format.
 
 ### M4: updates and packaging (≈ 1.5 weeks)
@@ -357,14 +371,16 @@ moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
 
 These are yours to make; the milestones that need them say so when they start.
 
-- **The license** (before the release check): for example MIT or Apache-2.0 for the most reuse,
-  or AGPL-3.0 to require that changes to a hosted server are shared.
-- **Signing keys** (M4): a GPG key for packages and the apt repository, added to the CI
-  secrets.
-- **Store accounts** (M4): a Snap Store publisher and a Flathub submission are in the project's
-  name.
-- **The first two translations** (M3).
-- **An Unsplash API key** (M6), if the gallery should be on by default for your server.
+- **Decided:**
+  - the license: AGPL-3.0, added at the release check
+  - translations: none for v1.0
+  - the two M1 budgets not met (a 50,000-row database, a 10,000-block page): after v1.0
+- **Still open:**
+  - **Signing keys** (M4): a GPG key for packages and the apt repository, added to the CI
+    secrets.
+  - **Store accounts** (M4): a Snap Store publisher and a Flathub submission in the project's
+    name.
+  - **An Unsplash API key** (M6), if the gallery should be on by default for your server.
 
 ## Verification
 

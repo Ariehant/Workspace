@@ -22,6 +22,10 @@ export const IPC = {
   pageLocate: 'page:locate',
   user: 'app:user',
   themeSet: 'theme:set',
+  zoomGet: 'zoom:get',
+  zoomSet: 'zoom:set',
+  /** main -> renderer: the zoom changed (in any window). */
+  zoomChanged: 'zoom:changed',
   windowOpen: 'window:open',
   fileImport: 'file:import',
   fileOpen: 'file:open',

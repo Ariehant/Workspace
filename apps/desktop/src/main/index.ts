@@ -25,6 +25,7 @@ import { buildMenu } from './menu';
 import { resolveDataDir } from './paths';
 import { broadcastSync, registerSyncIpc } from './sync/ipc';
 import { SyncService, type CarrySettings } from './sync/service';
+import { createZoom } from './zoom';
 
 const isDev = !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL);
 /** `--smoke-test`: start, wait for the UI to render, then exit 0 (or 1 on timeout). */
@@ -79,6 +80,7 @@ const sync = new SyncService({
 });
 // A workspace that isn't synced runs its own automations (the server does while syncing).
 const automations = createAutomations(manager, store, sync);
+const zoom = createZoom(store);
 
 interface WindowBounds {
   x?: number;
@@ -116,8 +118,11 @@ function createWindow(pageId?: string): BrowserWindow {
       sandbox: true,
       nodeIntegration: false,
       spellcheck: true,
+      // Zoom is set per window (all the same level), so the print window keeps 100%.
+      zoomMode: 'isolated',
     },
   });
+  zoom.attach(window);
 
   if (saved?.maximized && !hasOtherWindows) window.maximize();
   window.once('ready-to-show', () => window.show());
@@ -152,6 +157,7 @@ function createPrintWindow(hash: string): BrowserWindow {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      zoomMode: 'isolated',
     },
   });
   loadRenderer(window, hash);
@@ -336,7 +342,7 @@ app.whenReady().then(() => {
     automations.start();
   }
   nativeTheme.themeSource = store.getSetting<ThemeSource>('ui.theme') ?? 'system';
-  Menu.setApplicationMenu(buildMenu(() => createWindow(), isDev));
+  Menu.setApplicationMenu(buildMenu(() => createWindow(), zoom, isDev));
   // Handle workspace:// links system-wide (the .deb also registers the MIME type).
   if (app.isPackaged) app.setAsDefaultProtocolClient(LINK_SCHEME);
   const startLink = process.argv.map(parsePageUrl).find((link) => link !== null);

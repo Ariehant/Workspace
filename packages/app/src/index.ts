@@ -16,4 +16,5 @@ export type {
   SyncPlatform,
   TeamMethod,
   TeamPlatform,
+  ZoomPlatform,
 } from './platform';

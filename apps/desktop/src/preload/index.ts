@@ -92,6 +92,11 @@ const api = {
       ipcRenderer.invoke(IPC.historySnapshot, docId, reason),
   },
   setTheme: (theme: ThemeSource): void => ipcRenderer.send(IPC.themeSet, theme),
+  zoom: {
+    get: (): Promise<number> => ipcRenderer.invoke(IPC.zoomGet),
+    set: (factor: number): void => ipcRenderer.send(IPC.zoomSet, factor),
+    onChange: (listener: (factor: number) => void): Unsubscribe => on(IPC.zoomChanged, listener),
+  },
   onCommand: (listener: (command: string) => void): Unsubscribe => on(IPC.command, listener),
   onNavigate: (listener: (pageId: string, blockId: string | null) => void): Unsubscribe =>
     on(IPC.navigate, listener),

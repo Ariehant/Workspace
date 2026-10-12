@@ -724,6 +724,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onResize={setSidebarWidth}
             fileUrl={platform.fileUrl}
             onThemeChange={changeTheme}
+            zoom={platform.zoom}
             onCollapse={() => setSidebarOpen(false)}
             sync={syncInfo}
             onSync={() => setSyncOpen(true)}

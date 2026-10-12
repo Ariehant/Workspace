@@ -474,6 +474,7 @@ export class SyncService {
           [ACCOUNT]: store.getSetting(ACCOUNT),
           [TOKEN]: store.getSetting(TOKEN),
           'ui.theme': store.getSetting('ui.theme') ?? null,
+          'ui.zoom': store.getSetting('ui.zoom') ?? null,
           'window.bounds': store.getSetting('window.bounds') ?? null,
           // The server's pages arrive by sync: no "Getting started" page.
           'app.onboarded': true,

@@ -45,6 +45,7 @@ const platform: Platform = {
   getSetting: api.settings.get,
   setSetting: api.settings.set,
   setTheme: api.setTheme,
+  zoom: api.zoom,
   onCommand: (listener) => api.onCommand((command) => listener(command as AppCommand)),
   onNavigate: (listener) => api.onNavigate(listener),
   openWindow: (pageId) => api.openWindow(pageId),

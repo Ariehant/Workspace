@@ -35,6 +35,8 @@ export interface Platform {
   setSetting(key: string, value: unknown): void;
   /** Lets the host match native chrome (title bar, menus) to the app theme. */
   setTheme(theme: ThemePreference): void;
+  /** The app's zoom (the desktop; a browser has its own). */
+  zoom?: ZoomPlatform;
   onCommand(listener: (command: AppCommand) => void): () => void;
   /** The host asks to show a page, optionally scrolled to a block (links, notifications). */
   onNavigate(listener: (pageId: string, blockId: string | null) => void): () => void;
@@ -106,6 +108,13 @@ export interface Platform {
    * server (the desktop). With a server (`team`), the server runs them instead.
    */
   automations?: LocalAutomationsPlatform;
+}
+
+/** The app's zoom level, as a factor (1.1 is 110%), shared by every window. */
+export interface ZoomPlatform {
+  get(): Promise<number>;
+  set(factor: number): void;
+  onChange(listener: (factor: number) => void): () => void;
 }
 
 /** An automation's run, as its run log shows it. */

@@ -226,20 +226,22 @@ The design decisions and their reasons are in [docs/PLAN.md](docs/PLAN.md#1-arch
 
 ## Roadmap
 
-| Phase                        | Status     | Plan and notes                            |
-| ---------------------------- | ---------- | ----------------------------------------- |
-| 0. Foundation                | ✅ Done    | [PLAN.md](docs/PLAN.md#8-phase-0-outcome) |
-| 1. Editor and navigation     | ✅ Done    | [PHASE1.md](docs/PHASE1.md)               |
-| 2. Databases                 | ✅ Done    | [PHASE2.md](docs/PHASE2.md)               |
-| 3. Power features            | ✅ Done    | [PHASE3.md](docs/PHASE3.md)               |
-| 4. Sync server               | ✅ Done    | [PHASE4.md](docs/PHASE4.md)               |
-| 5. Collaboration             | ✅ Done    | [PHASE5.md](docs/PHASE5.md)               |
-| 6. Automations and API       | ✅ Done    | [PHASE6.md](docs/PHASE6.md)               |
-| 7. Polish and release (v1.0) | 🚧 M1 done | [PHASE7.md](docs/PHASE7.md)               |
+| Phase                        | Status  | Plan and notes                            |
+| ---------------------------- | ------- | ----------------------------------------- |
+| 0. Foundation                | ✅ Done | [PLAN.md](docs/PLAN.md#8-phase-0-outcome) |
+| 1. Editor and navigation     | ✅ Done | [PHASE1.md](docs/PHASE1.md)               |
+| 2. Databases                 | ✅ Done | [PHASE2.md](docs/PHASE2.md)               |
+| 3. Power features            | ✅ Done | [PHASE3.md](docs/PHASE3.md)               |
+| 4. Sync server               | ✅ Done | [PHASE4.md](docs/PHASE4.md)               |
+| 5. Collaboration             | ✅ Done | [PHASE5.md](docs/PHASE5.md)               |
+| 6. Automations and API       | ✅ Done | [PHASE6.md](docs/PHASE6.md)               |
+| 7. Polish and release (v1.0) | 🚧 M2   | [PHASE7.md](docs/PHASE7.md)               |
 
 Out of scope: Notion AI, Notion Mail, Notion Calendar as a separate app, and the marketplace.
 
 ## License
 
-No license has been chosen yet, so the code is not yet available for reuse. A license is part of
-the v1.0 release ([Phase 7](docs/PHASE7.md)).
+Workspace will be released under the [GNU AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html)
+with v1.0 ([Phase 7](docs/PHASE7.md)): free to use, change and self-host, and changes to a server
+you run for others must be shared. Until the license file lands, the code is not yet available
+for reuse.

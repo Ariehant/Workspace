@@ -85,6 +85,8 @@ Database" on an empty page).
 - **Templates gallery:** built-in templates for personal use, projects, engineering and a
   robotics lab, with previews. "Save as template" adds your own.
 - **Themes:** light, dark and system.
+- **Zoom** from 50% to 300% (`Ctrl+=`, `Ctrl+-`, `Ctrl+0` or `Ctrl` + wheel) in the desktop app,
+  for every window, remembered.
 - Everything is saved as you type and survives restarts, including the last open page and
   which sidebar items are expanded.
 

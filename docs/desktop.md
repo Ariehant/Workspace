@@ -77,6 +77,8 @@ is covered in the [self-hosting guide](self-hosting.md).
 | `Ctrl+Shift+N`               | New window                                  |
 | `Alt+←` / `Alt+→`            | Back / forward                              |
 | `Ctrl+\`                     | Show or hide the sidebar                    |
+| `Ctrl+=` / `Ctrl+-`          | Zoom in / out (also `Ctrl` + mouse wheel)   |
+| `Ctrl+0`                     | Actual size (100%)                          |
 | `Ctrl+F`                     | Find and replace in the page                |
 | `/`                          | Insert a block                              |
 | `@`                          | Mention a page, a person or a date          |
@@ -84,6 +86,10 @@ is covered in the [self-hosting guide](self-hosting.md).
 | `Ctrl+B`, `Ctrl+I`, `Ctrl+U` | Bold, italic, underline                     |
 | `Ctrl+E`                     | Inline code                                 |
 | `Tab` / `Shift+Tab`          | Indent / outdent                            |
+
+The zoom applies to every window and is remembered. **Appearance** in the sidebar shows the
+level, with Zoom in, Zoom out and Actual size; so does the View menu (press `Alt` to show the
+menu bar).
 
 ## Troubleshooting
 

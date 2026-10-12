@@ -16,3 +16,4 @@ export * from './forest';
 export * from './presence';
 export * from './comments';
 export * from './notifications';
+export * from './zoom';

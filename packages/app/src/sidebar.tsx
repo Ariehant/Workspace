@@ -1,5 +1,7 @@
 import {
+  formatZoom,
   resolveDrop,
+  stepZoom,
   type DropZone,
   type PageId,
   type PageTreeNode,
@@ -45,6 +47,9 @@ import {
   StarOff,
   Trash2,
   Users,
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import {
   useEffect,
@@ -54,7 +59,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
-import type { AccountInfo, SyncInfo } from './platform';
+import type { AccountInfo, SyncInfo, ZoomPlatform } from './platform';
 import { SyncIndicator } from './sync-settings';
 import { Trash } from './trash';
 
@@ -96,6 +101,8 @@ export interface SidebarProps {
   onResize(width: number): void;
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
+  /** The app's zoom (hosts that have one), in the Appearance menu. */
+  zoom?: ZoomPlatform;
   onCollapse(): void;
   /** Sync status (hosts that sync), and opening Settings → Sync. */
   sync?: SyncInfo | null;
@@ -337,11 +344,64 @@ export function Sidebar(props: SidebarProps) {
               <MenuRadioItem value="light">Light</MenuRadioItem>
               <MenuRadioItem value="dark">Dark</MenuRadioItem>
             </MenuRadioGroup>
+            {props.zoom && <ZoomItems zoom={props.zoom} />}
           </MenuContent>
         </Menu>
       </div>
       <ResizeHandle width={width} onResize={props.onResize} />
     </nav>
+  );
+}
+
+/** Zoom in the Appearance menu: the level, and in, out and back to 100% (the menu stays open). */
+function ZoomItems({ zoom }: { zoom: ZoomPlatform }) {
+  const [factor, setFactor] = useState(1);
+  useEffect(() => {
+    let live = true;
+    void zoom.get().then((f) => live && setFactor(f));
+    const off = zoom.onChange(setFactor);
+    return () => {
+      live = false;
+      off();
+    };
+  }, [zoom]);
+  const keepOpen = (change: () => void) => (event: Event) => {
+    event.preventDefault();
+    change();
+  };
+  const shortcut = (keys: string) => (
+    <span className="ml-auto pl-4 text-xs text-muted">{keys}</span>
+  );
+  return (
+    <>
+      <MenuSeparator />
+      <div className="flex h-7 items-center px-2 text-xs text-muted">
+        Zoom
+        <span className="ml-auto tabular-nums" data-testid="zoom-level">
+          {formatZoom(factor)}
+        </span>
+      </div>
+      <MenuItem
+        icon={<ZoomIn size={14} />}
+        onSelect={keepOpen(() => zoom.set(stepZoom(factor, 'in')))}
+      >
+        Zoom in{shortcut('Ctrl+=')}
+      </MenuItem>
+      <MenuItem
+        icon={<ZoomOut size={14} />}
+        onSelect={keepOpen(() => zoom.set(stepZoom(factor, 'out')))}
+      >
+        Zoom out{shortcut('Ctrl+-')}
+      </MenuItem>
+      <MenuItem
+        icon={<RotateCcw size={14} />}
+        disabled={factor === 1}
+        onSelect={keepOpen(() => zoom.set(1))}
+        className="data-[disabled]:text-muted"
+      >
+        Actual size{shortcut('Ctrl+0')}
+      </MenuItem>
+    </>
   );
 }
 
