@@ -774,10 +774,13 @@ export function TableView({
       data-testid="table-view"
       onKeyDown={onKeyDown}
       onFocus={(e) => {
-        // Arriving with Tab selects the first cell, so the arrow keys work at once.
+        // Arriving with Tab selects the first cell, so the arrow keys work at once. Not on a
+        // click (focus-visible is for the keyboard): scrolling to the first cell would move
+        // the clicked one from under the pointer.
         const [first] = rowItems;
         const column = columns[0];
-        if (e.target === e.currentTarget && !selected && first && column)
+        const byKeyboard = e.currentTarget.matches(':focus-visible');
+        if (e.target === e.currentTarget && byKeyboard && !selected && first && column)
           setSelected({ key: first.key, rowId: first.row.id, propertyId: column.property.id });
       }}
       onBlur={(e) => {
