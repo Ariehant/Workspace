@@ -65,10 +65,13 @@ export function DialogContent({
         {...props}
         onCloseAutoFocus={(event) => {
           props.onCloseAutoFocus?.(event);
-          const back = opener && findOpener(opener);
-          if (event.defaultPrevented || !back) return;
+          if (event.defaultPrevented) return;
+          // This runs a moment after closing: if something else has the focus by now (another
+          // dialog opened straight away), leave it there.
           event.preventDefault();
-          back.focus();
+          const active = document.activeElement;
+          if (active && active !== document.body) return;
+          (opener && findOpener(opener))?.focus();
         }}
       >
         <RadixDialog.Title className={hideTitle ? 'sr-only' : 'px-4 pt-4 text-base font-semibold'}>
