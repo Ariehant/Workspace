@@ -5,3 +5,4 @@ export * from './theme';
 export * from './dialog';
 export * from './popover';
 export * from './avatar';
+export * from './motion';

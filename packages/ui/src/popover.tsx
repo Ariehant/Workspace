@@ -7,10 +7,11 @@ export const PopoverTrigger = RadixPopover.Trigger;
 export const PopoverAnchor = RadixPopover.Anchor;
 export const PopoverClose = RadixPopover.Close;
 
+/** A popover is a dialog to assistive technology, so it needs a name (`aria-label`). */
 export function PopoverContent({
   className,
   ...props
-}: ComponentProps<typeof RadixPopover.Content>) {
+}: ComponentProps<typeof RadixPopover.Content> & { 'aria-label': string }) {
   return (
     <RadixPopover.Portal>
       <RadixPopover.Content

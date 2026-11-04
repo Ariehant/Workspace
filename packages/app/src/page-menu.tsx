@@ -5,6 +5,7 @@ import {
   MenuItem,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuRadioTile,
   MenuSub,
   MenuSubContent,
   MenuSubTrigger,
@@ -142,23 +143,30 @@ export function PageMenu({
           </IconButton>
         </MenuTrigger>
         <MenuContent align="end" className="w-64" aria-label="Page options" data-testid="page-menu">
-          <div className="grid grid-cols-3 gap-1 p-1" role="group" aria-label="Font">
+          <MenuRadioGroup
+            value={page.font}
+            onValueChange={(font) => onOptions({ font: font as PageFont })}
+            className="grid grid-cols-3 gap-1 p-1"
+            aria-label="Font"
+          >
             {FONTS.map(({ font, label, sample }) => (
-              <button
+              <MenuRadioTile
                 key={font}
-                type="button"
-                aria-pressed={page.font === font}
-                onClick={() => onOptions({ font })}
+                value={font}
+                // Keep the menu open to compare fonts.
+                onSelect={(e) => e.preventDefault()}
                 className={cn(
-                  'flex flex-col items-center gap-0.5 rounded-md py-1.5 hover:bg-hover',
-                  page.font === font && 'text-accent',
+                  'flex cursor-default flex-col items-center gap-0.5 rounded-md py-1.5 outline-none select-none',
+                  'data-[highlighted]:bg-hover data-[state=checked]:text-accent',
                 )}
               >
-                <span className={cn('text-xl', sample)}>Ag</span>
+                <span aria-hidden className={cn('text-xl', sample)}>
+                  Ag
+                </span>
                 <span className="text-xs text-muted">{label}</span>
-              </button>
+              </MenuRadioTile>
             ))}
-          </div>
+          </MenuRadioGroup>
           <MenuSeparator />
           <MenuItem
             onSelect={(e) => {

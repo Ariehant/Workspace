@@ -29,7 +29,7 @@ import {
   type EditorComments,
   type RangeAnchor,
 } from '@workspace/editor';
-import { Avatar, Button, IconButton, cn } from '@workspace/ui';
+import { Avatar, Button, IconButton, cn, scrollBehavior } from '@workspace/ui';
 import { Check, MessageSquare, MoreHorizontal, RotateCcw, SmilePlus, X } from 'lucide-react';
 import {
   useCallback,
@@ -617,7 +617,7 @@ function ThreadView({
         comments.host.setActive(thread.id);
         document
           .querySelector(`.ws-prose [data-thread="${CSS.escape(thread.id)}"]`)
-          ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          ?.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
       }}
       className={cn(
         'flex flex-col gap-2 rounded-lg border bg-surface p-3',

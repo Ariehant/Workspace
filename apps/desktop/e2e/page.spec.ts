@@ -106,7 +106,7 @@ test('page menu: font, small text, full width and word count', async ({ launch }
 
   let menu = await openPageMenu(window);
   await expect(menu.getByTestId('word-count')).toHaveText('Word count: 5');
-  await menu.getByRole('button', { name: /Serif/ }).click();
+  await menu.getByRole('menuitemradio', { name: /Serif/ }).click();
   await expect(prose).toHaveCSS('font-family', /serif/i);
   await window.keyboard.press('Escape');
 

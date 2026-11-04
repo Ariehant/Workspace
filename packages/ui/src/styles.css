@@ -15,16 +15,18 @@
   --ws-bg: #ffffff;
   --ws-sidebar: #f8f8f7;
   --ws-fg: #37352f;
-  --ws-muted: #787774;
-  --ws-faint: #a5a29c;
+  /* Text colours keep 4.5:1 or more against the backgrounds (WCAG AA). */
+  --ws-muted: #63625e;
+  --ws-faint: #706e6a;
   --ws-border: #e9e9e7;
   --ws-hover: rgba(55, 53, 47, 0.06);
   --ws-active: rgba(55, 53, 47, 0.1);
-  --ws-accent: #2383e2;
+  --ws-accent: #1b6fc8;
   --ws-accent-fg: #ffffff;
-  --ws-danger: #eb5757;
+  --ws-danger: #c83a34;
+  --ws-danger-fg: #ffffff;
   --ws-success: #0f7b6c;
-  --ws-warning: #cb7b37;
+  --ws-warning: #a35f1c;
   --ws-selection: rgba(35, 131, 226, 0.22);
   --ws-menu: #ffffff;
   --ws-shadow:
@@ -37,14 +39,16 @@
   --ws-bg: #191919;
   --ws-sidebar: #202020;
   --ws-fg: #d4d4d4;
-  --ws-muted: #9b9b9b;
-  --ws-faint: #5a5a5a;
+  --ws-muted: #a8a8a8;
+  --ws-faint: #929292;
   --ws-border: #2f2f2f;
   --ws-hover: rgba(255, 255, 255, 0.055);
   --ws-active: rgba(255, 255, 255, 0.09);
-  --ws-accent: #2e8ae6;
-  --ws-accent-fg: #ffffff;
+  /* Light enough to read as text on the dark backgrounds, so buttons use dark text on it. */
+  --ws-accent: #5aa5f0;
+  --ws-accent-fg: #191919;
   --ws-danger: #ff7369;
+  --ws-danger-fg: #191919;
   --ws-success: #4dab9a;
   --ws-warning: #ffa344;
   --ws-selection: rgba(46, 138, 230, 0.35);
@@ -66,6 +70,7 @@
   --color-accent: var(--ws-accent);
   --color-accent-fg: var(--ws-accent-fg);
   --color-danger: var(--ws-danger);
+  --color-danger-fg: var(--ws-danger-fg);
   --color-success: var(--ws-success);
   --color-warning: var(--ws-warning);
   --color-menu: var(--ws-menu);
@@ -102,4 +107,25 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--ws-faint) transparent;
+}
+
+/* A visible focus ring for keyboard users wherever a component doesn't draw its own. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ws-accent);
+    outline-offset: 1px;
+  }
+}
+
+/* People who ask the system for less motion get none: no transitions, animations or
+   smooth scrolling. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -391,7 +391,11 @@ export function RuleChip({
           <ChevronDown size={12} />
         </button>
       </PopoverAnchor>
-      <PopoverContent className="w-72 p-2" data-testid="filter-popover">
+      <PopoverContent
+        aria-label={`Filter by ${property.name}`}
+        className="w-72 p-2"
+        data-testid="filter-popover"
+      >
         <div className="mb-2 flex items-center gap-1 text-xs text-muted">
           <span className="flex-1">{property.name}</span>
           <button type="button" onClick={onAdvanced} className="rounded px-1 hover:bg-hover">

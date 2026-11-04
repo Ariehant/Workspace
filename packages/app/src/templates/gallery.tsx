@@ -324,7 +324,12 @@ function DatabasePreview({
   return (
     <div className="my-2" data-testid="template-database">
       {title && <div className="mb-1 text-lg font-semibold">{title}</div>}
-      <div className="overflow-x-auto">
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label={title ? `${title} (preview)` : 'Database preview'}
+        className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>

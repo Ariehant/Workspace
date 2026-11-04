@@ -152,7 +152,7 @@ export function Backlinks({ pageId }: { pageId: string }) {
             {trigger}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-80 p-1">
+        <PopoverContent aria-label="Backlinks" align="start" className="w-80 p-1">
           {list}
         </PopoverContent>
       </Popover>

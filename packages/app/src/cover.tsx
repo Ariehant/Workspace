@@ -205,7 +205,9 @@ export function Cover({ cover, editable, fileUrl, onChange, onUpload }: CoverPro
         <div
           className={cn(
             'absolute right-[max(16px,calc((100%-900px)/2+96px))] bottom-3 flex gap-1 transition-opacity',
-            repositionY === null && !open && 'opacity-0 group-hover:opacity-100',
+            repositionY === null &&
+              !open &&
+              'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
           )}
         >
           {repositionY !== null ? (
@@ -232,7 +234,7 @@ export function Cover({ cover, editable, fileUrl, onChange, onUpload }: CoverPro
                     Change cover
                   </button>
                 </PopoverTrigger>
-                <PopoverContent align="end">
+                <PopoverContent aria-label="Change cover" align="end">
                   <CoverPicker
                     onPick={(next) => {
                       onChange(next);

@@ -1,6 +1,6 @@
 import { PageIcon } from '../page-icon';
 import { NodeViewWrapper, useEditorState, type ReactNodeViewProps } from '@tiptap/react';
-import { cn } from '@workspace/ui';
+import { cn, scrollBehavior } from '@workspace/ui';
 import { ArrowUpRight } from 'lucide-react';
 import { useBreadcrumb, useEditorServices, usePageRef } from '../services';
 import { atomBlock } from './atom';
@@ -120,7 +120,7 @@ function TableOfContentsView({ editor, selected }: ReactNodeViewProps) {
     if (!id) return;
     editor.view.dom
       .querySelector(`[data-id="${CSS.escape(id)}"]`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      ?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   };
 
   return (

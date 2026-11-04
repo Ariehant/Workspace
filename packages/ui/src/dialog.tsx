@@ -1,11 +1,39 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
-import type { ComponentProps, ReactNode } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import { cn } from './cn';
 
 export const Dialog = RadixDialog.Root;
 export const DialogTrigger = RadixDialog.Trigger;
 export const DialogClose = RadixDialog.Close;
 export const DialogTitle = RadixDialog.Title;
+
+/** What had the focus when a dialog opened, to find it again if it was drawn anew. */
+interface Opener {
+  element: HTMLElement;
+  tag: string;
+  label: string | null;
+  text: string | null;
+}
+
+function describeOpener(element: Element | null): Opener | null {
+  if (!(element instanceof HTMLElement) || element === document.body) return null;
+  return {
+    element,
+    tag: element.tagName,
+    label: element.getAttribute('aria-label'),
+    text: element.textContent,
+  };
+}
+
+/** The opener, or the control that replaced it (the same kind, name and text). */
+function findOpener(opener: Opener): HTMLElement | null {
+  if (opener.element.isConnected) return opener.element;
+  return (
+    [...document.querySelectorAll<HTMLElement>(opener.tag)].find(
+      (el) => el.getAttribute('aria-label') === opener.label && el.textContent === opener.text,
+    ) ?? null
+  );
+}
 
 /** Centered modal with a dimmed backdrop. `title` is required for screen readers. */
 export function DialogContent({
@@ -19,6 +47,11 @@ export function DialogContent({
   hideTitle?: boolean;
   children: ReactNode;
 }) {
+  // Most dialogs open from a menu item, a shortcut or a button that isn't a DialogTrigger,
+  // so Radix has nowhere to return the focus on close: back to what had it when it opened.
+  const [opener] = useState(() =>
+    typeof document === 'undefined' ? null : describeOpener(document.activeElement),
+  );
   return (
     <RadixDialog.Portal>
       <RadixDialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
@@ -30,6 +63,13 @@ export function DialogContent({
           className,
         )}
         {...props}
+        onCloseAutoFocus={(event) => {
+          props.onCloseAutoFocus?.(event);
+          const back = opener && findOpener(opener);
+          if (event.defaultPrevented || !back) return;
+          event.preventDefault();
+          back.focus();
+        }}
       >
         <RadixDialog.Title className={hideTitle ? 'sr-only' : 'px-4 pt-4 text-base font-semibold'}>
           {title}

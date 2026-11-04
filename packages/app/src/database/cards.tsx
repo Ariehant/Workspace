@@ -143,7 +143,7 @@ export function SectionHeader({
         </span>
       </span>
       {editable && (
-        <span className="flex items-center opacity-0 group-hover/g:opacity-100">
+        <span className="flex items-center opacity-0 group-hover/g:opacity-100 focus-within:opacity-100">
           <IconButton label="Hide group" size="sm" onClick={onHide}>
             <EyeOff size={13} />
           </IconButton>

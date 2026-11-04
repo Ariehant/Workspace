@@ -110,7 +110,7 @@ export function TabBar({ state, pageOf, onSelect, onClose, onMove, onNew, onDeta
                 }}
                 className={cn(
                   'grid size-5 shrink-0 place-items-center rounded text-muted hover:bg-hover',
-                  !active && 'opacity-0 group-hover:opacity-100',
+                  !active && 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
                 )}
               >
                 <X size={13} />

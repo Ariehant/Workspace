@@ -238,7 +238,12 @@ function ChartSettings({
           <Settings2 size={15} /> Chart settings
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-3" data-testid="chart-settings">
+      <PopoverContent
+        aria-label="Chart settings"
+        align="end"
+        className="w-80 p-3"
+        data-testid="chart-settings"
+      >
         <Field label="Chart type">
           <select
             aria-label="Chart type"

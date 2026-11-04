@@ -71,6 +71,9 @@ export function MenuRadioItem({
   );
 }
 
+/** A radio item styled by its caller (tiles in a grid, for example); keeps the menu's keys. */
+export const MenuRadioTile = DropdownMenu.RadioItem;
+
 export const MenuSub = DropdownMenu.Sub;
 
 export function MenuSubTrigger({

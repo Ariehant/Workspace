@@ -6,7 +6,8 @@ it to a server.
 
 **Contents:** [Install](#install) · [Where your data lives](#where-your-data-lives) ·
 [Backups](#backups) · [Several workspaces](#several-workspaces) · [Sync](#sync) ·
-[Keyboard shortcuts](#keyboard-shortcuts) · [Troubleshooting](#troubleshooting)
+[Keyboard shortcuts](#keyboard-shortcuts) · [Accessibility](#accessibility) ·
+[Troubleshooting](#troubleshooting)
 
 ## Install
 
@@ -87,9 +88,26 @@ is covered in the [self-hosting guide](self-hosting.md).
 | `Ctrl+E`                     | Inline code                                 |
 | `Tab` / `Shift+Tab`          | Indent / outdent                            |
 
+In the sidebar's page tree, `↑` `↓` move between pages, `→` `←` expand and collapse, and
+`Enter` opens the page. In a database table, the arrow keys move between cells, `Enter` or
+typing edits one, and `Tab` moves along the row (and on out of the table past its end).
+
 The zoom applies to every window and is remembered. **Appearance** in the sidebar shows the
 level, with Zoom in, Zoom out and Actual size; so does the View menu (press `Alt` to show the
 menu bar).
+
+## Accessibility
+
+- **Keyboard:** pages, databases, sharing and settings work without a mouse. Moving a page to
+  another parent works from its menu (Move to), and moving a card or a date from the row's
+  properties. Buttons that show on hover show when focused too, and dialogs return the focus
+  to what opened them.
+- **Screen readers:** controls have names and roles, and sync changes and new notifications are
+  announced. Tested with axe in both themes; checked by hand with Orca before each release.
+- **Contrast:** text meets WCAG AA (4.5:1) in the light and dark themes.
+- **Zoom:** see [Keyboard shortcuts](#keyboard-shortcuts).
+- **Less motion:** with the system's reduced motion setting on (GNOME: Settings → Accessibility
+  → Reduce Animation), the app drops its animations and smooth scrolling.
 
 ## Troubleshooting
 

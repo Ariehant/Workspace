@@ -89,6 +89,7 @@ import {
 import {
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -324,6 +325,10 @@ export function TableView({
 
   // --- Selection and editing -------------------------------------------------------------
 
+  const gridId = useId();
+  const cellId = (key: string, propertyId: string) =>
+    `${gridId}-${key}-${propertyId}`.replace(/[^\w-]/g, '_');
+
   const move = (from: CellRef, dRow: number, dCol: number) => {
     const r = rowItems.findIndex((item) => item.key === from.key);
     const c = columns.findIndex((col) => col.property.id === from.propertyId);
@@ -375,6 +380,8 @@ export function TableView({
       ArrowDown: () => move(selected, 1, 0),
       ArrowLeft: () => move(selected, 0, -1),
       ArrowRight: () => move(selected, 0, 1),
+      // Like a spreadsheet, Tab moves along the row; past either end it leaves the grid, so
+      // the keyboard is never trapped in it.
       Tab: () => move(selected, 0, event.shiftKey ? -1 : 1),
       Enter: () => startEdit(selected),
       Escape: () => setSelected(null),
@@ -391,6 +398,11 @@ export function TableView({
         );
       keys.Backspace = clear;
       keys.Delete = clear;
+    }
+    const column = columns.findIndex((c) => c.property.id === selected.propertyId);
+    if (event.key === 'Tab' && column === (event.shiftKey ? 0 : columns.length - 1)) {
+      setSelected(null);
+      return;
     }
     if (keys[event.key] && !mod) {
       keys[event.key]!();
@@ -610,15 +622,19 @@ export function TableView({
         );
       case 'new':
         return editable ? (
-          <button
-            type="button"
-            onClick={() => addNewRow(item)}
-            data-testid="table-new-row"
-            className="flex h-[33px] w-full items-center gap-1.5 border-b border-line px-2 text-muted hover:bg-hover"
-            style={{ width: totalWidth }}
-          >
-            <Plus size={14} /> New
-          </button>
+          <div role="row">
+            <div role="gridcell">
+              <button
+                type="button"
+                onClick={() => addNewRow(item)}
+                data-testid="table-new-row"
+                className="flex h-[33px] w-full items-center gap-1.5 border-b border-line px-2 text-muted hover:bg-hover"
+                style={{ width: totalWidth }}
+              >
+                <Plus size={14} /> New
+              </button>
+            </div>
+          </div>
         ) : null;
       case 'calc':
         return (
@@ -706,6 +722,7 @@ export function TableView({
                 <Cell
                   key={property.id}
                   cellKey={`${item.key}:${property.id}`}
+                  id={cellId(item.key, property.id)}
                   handle={handle}
                   row={row}
                   property={property}
@@ -752,8 +769,17 @@ export function TableView({
       aria-label="Table"
       aria-rowcount={rowItems.length + 1}
       tabIndex={0}
+      // The selected cell is the grid's focus for assistive technology.
+      aria-activedescendant={selected ? cellId(selected.key, selected.propertyId) : undefined}
       data-testid="table-view"
       onKeyDown={onKeyDown}
+      onFocus={(e) => {
+        // Arriving with Tab selects the first cell, so the arrow keys work at once.
+        const [first] = rowItems;
+        const column = columns[0];
+        if (e.target === e.currentTarget && !selected && first && column)
+          setSelected({ key: first.key, rowId: first.row.id, propertyId: column.property.id });
+      }}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null) && !editing)
           setSelected(null);
@@ -814,27 +840,29 @@ export function TableView({
             />
           ))}
           {editable && !snapshot.meta.lockProperties && (
-            <AddPropertyButton
-              onAdd={(type) => {
-                // Relations are set up before they are added.
-                if (type === 'relation') {
-                  setSetup({ kind: 'relation', mode: 'add', afterId: lastColumn });
-                  return;
-                }
-                const id = addProperty(doc, {
-                  name: newPropertyName(doc, propertyKind(type).label),
-                  type,
-                  afterId: lastColumn,
-                });
-                // A new formula opens straight in the formula editor, as in Notion.
-                if (type === 'formula') setFormulaFor(id);
-                else if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
-                else if (type === 'button') {
-                  const added = readProperties(doc).find((p) => p.id === id);
-                  if (added) void editPropertyButton(handle, added);
-                } else setHeaderMenu(id);
-              }}
-            />
+            <div role="columnheader">
+              <AddPropertyButton
+                onAdd={(type) => {
+                  // Relations are set up before they are added.
+                  if (type === 'relation') {
+                    setSetup({ kind: 'relation', mode: 'add', afterId: lastColumn });
+                    return;
+                  }
+                  const id = addProperty(doc, {
+                    name: newPropertyName(doc, propertyKind(type).label),
+                    type,
+                    afterId: lastColumn,
+                  });
+                  // A new formula opens straight in the formula editor, as in Notion.
+                  if (type === 'formula') setFormulaFor(id);
+                  else if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
+                  else if (type === 'button') {
+                    const added = readProperties(doc).find((p) => p.id === id);
+                    if (added) void editPropertyButton(handle, added);
+                  } else setHeaderMenu(id);
+                }}
+              />
+            </div>
           )}
         </div>
 
@@ -933,43 +961,45 @@ function GroupHeader({
       role="row"
       data-testid="group-header"
       data-group-key={info.key}
-      className={cn('group/g flex h-[41px] items-center gap-1.5 text-sm', depth > 0 && 'pl-5')}
+      className={cn('group/g flex h-[41px] items-center text-sm', depth > 0 && 'pl-5')}
     >
-      <IconButton
-        label={group.collapsed ? 'Expand group' : 'Collapse group'}
-        size="sm"
-        onClick={onToggle}
-      >
-        <ChevronRight
-          size={14}
-          className={cn('transition-transform', !group.collapsed && 'rotate-90')}
-        />
-      </IconButton>
-      <span className="flex min-w-0 items-center gap-2" data-testid="group-label">
-        {isOption && info.key !== NO_VALUE ? (
-          <OptionPill
-            option={{ id: info.key, name: info.label, color: info.color ?? 'default' }}
-            status={info.status}
+      <div role="gridcell" className="flex min-w-0 items-center gap-1.5">
+        <IconButton
+          label={group.collapsed ? 'Expand group' : 'Collapse group'}
+          size="sm"
+          onClick={onToggle}
+        >
+          <ChevronRight
+            size={14}
+            className={cn('transition-transform', !group.collapsed && 'rotate-90')}
           />
-        ) : (
-          <span className="truncate font-medium">{info.label}</span>
-        )}
-        <span className="text-faint" data-testid="group-count">
-          {group.rows.length}
-        </span>
-      </span>
-      {editable && (
-        <span className="flex items-center opacity-0 group-hover/g:opacity-100">
-          <IconButton label="Hide group" size="sm" onClick={onHide}>
-            <EyeOff size={13} />
-          </IconButton>
-          {info.value !== undefined && (
-            <IconButton label="New in group" size="sm" onClick={onAdd}>
-              <Plus size={14} />
-            </IconButton>
+        </IconButton>
+        <span className="flex min-w-0 items-center gap-2" data-testid="group-label">
+          {isOption && info.key !== NO_VALUE ? (
+            <OptionPill
+              option={{ id: info.key, name: info.label, color: info.color ?? 'default' }}
+              status={info.status}
+            />
+          ) : (
+            <span className="truncate font-medium">{info.label}</span>
           )}
+          <span className="text-faint" data-testid="group-count">
+            {group.rows.length}
+          </span>
         </span>
-      )}
+        {editable && (
+          <span className="flex items-center opacity-0 group-hover/g:opacity-100 focus-within:opacity-100">
+            <IconButton label="Hide group" size="sm" onClick={onHide}>
+              <EyeOff size={13} />
+            </IconButton>
+            {info.value !== undefined && (
+              <IconButton label="New in group" size="sm" onClick={onAdd}>
+                <Plus size={14} />
+              </IconButton>
+            )}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -995,49 +1025,51 @@ function CalcCell({
   const options = calculationsFor(effectiveType(property));
   const value = info ? calculate(rows, property, info.id, ctx) : '';
   return (
-    <Menu>
-      <MenuTrigger asChild disabled={!editable}>
-        <button
-          type="button"
-          style={{ width }}
-          data-testid="calc-cell"
-          className={cn(
-            'flex h-full shrink-0 items-center justify-end gap-1.5 px-2 text-xs text-faint hover:bg-hover',
-            !info && 'opacity-0 group-hover/calc:opacity-100 data-[state=open]:opacity-100',
-          )}
-        >
-          {info ? (
-            <>
-              <span className="uppercase">{info.short}</span>
-              <span className="text-sm text-fg" data-testid="calc-value">
-                {value || '—'}
-              </span>
-            </>
-          ) : (
-            <>
-              Calculate <ChevronDown size={12} />
-            </>
-          )}
-        </button>
-      </MenuTrigger>
-      <MenuContent align="end" className="max-h-96 overflow-y-auto" data-testid="calc-menu">
-        <MenuItem onSelect={() => onChange(null)}>None</MenuItem>
-        {(['count', 'percent', 'more'] as const).map((group) => {
-          const list = options.filter((o) => o.group === group);
-          return list.length ? (
-            <div key={group}>
-              <MenuSeparator />
-              {list.map((o) => (
-                <MenuItem key={o.id} onSelect={() => onChange(o.id)}>
-                  <span className="flex-1">{o.label}</span>
-                  {o.id === calc && '✓'}
-                </MenuItem>
-              ))}
-            </div>
-          ) : null;
-        })}
-      </MenuContent>
-    </Menu>
+    <div role="gridcell" className="flex h-full shrink-0" style={{ width }}>
+      <Menu>
+        <MenuTrigger asChild disabled={!editable}>
+          <button
+            type="button"
+            data-testid="calc-cell"
+            className={cn(
+              'flex h-full w-full items-center justify-end gap-1.5 px-2 text-xs text-faint hover:bg-hover',
+              !info &&
+                'opacity-0 group-hover/calc:opacity-100 focus-within:opacity-100 data-[state=open]:opacity-100',
+            )}
+          >
+            {info ? (
+              <>
+                <span className="uppercase">{info.short}</span>
+                <span className="text-sm text-fg" data-testid="calc-value">
+                  {value || '—'}
+                </span>
+              </>
+            ) : (
+              <>
+                Calculate <ChevronDown size={12} />
+              </>
+            )}
+          </button>
+        </MenuTrigger>
+        <MenuContent align="end" className="max-h-96 overflow-y-auto" data-testid="calc-menu">
+          <MenuItem onSelect={() => onChange(null)}>None</MenuItem>
+          {(['count', 'percent', 'more'] as const).map((group) => {
+            const list = options.filter((o) => o.group === group);
+            return list.length ? (
+              <div key={group}>
+                <MenuSeparator />
+                {list.map((o) => (
+                  <MenuItem key={o.id} onSelect={() => onChange(o.id)}>
+                    <span className="flex-1">{o.label}</span>
+                    {o.id === calc && '✓'}
+                  </MenuItem>
+                ))}
+              </div>
+            ) : null;
+          })}
+        </MenuContent>
+      </Menu>
+    </div>
   );
 }
 
@@ -1046,6 +1078,8 @@ function CalcCell({
 interface CellProps {
   /** Identifies the cell's line and column (for scrolling it into view). */
   cellKey: string;
+  /** Its element id, for the grid's `aria-activedescendant`. */
+  id: string;
   handle: DatabaseHandle;
   row: Row;
   property: Property;
@@ -1078,6 +1112,7 @@ function Cell(props: CellProps) {
   return (
     <div
       role="gridcell"
+      id={props.id}
       aria-selected={selected}
       data-cell={props.cellKey}
       data-testid="table-cell"
@@ -1187,6 +1222,7 @@ function RowHandle({
   const [open, setOpen] = useState(false);
   return (
     <div
+      role="gridcell"
       className={cn(
         'absolute top-1.5 -left-7 flex group-hover/row:visible',
         open ? 'visible' : 'invisible',
@@ -1383,7 +1419,8 @@ function HeaderCell(props: HeaderCellProps) {
           )}
         </button>
         <MenuContent className="w-60" data-testid="property-menu">
-          <div className="p-1" onKeyDown={(e) => e.stopPropagation()}>
+          {/* A field in a menu goes in a group (a menu holds items, groups and separators). */}
+          <div role="group" className="p-1" onKeyDown={(e) => e.stopPropagation()}>
             <input
               ref={nameRef}
               value={name}

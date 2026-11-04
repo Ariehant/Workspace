@@ -30,6 +30,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   cn,
+  scrollBehavior,
 } from '@workspace/ui';
 import {
   ArrowLeft,
@@ -211,7 +212,7 @@ export function PageHeader({
               onClick={() =>
                 document
                   .querySelector(`.ws-cursor[data-user-id="${CSS.escape(state.user.id)}"]`)
-                  ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+                  ?.scrollIntoView({ block: 'center', behavior: scrollBehavior() })
               }
             >
               <Avatar
@@ -257,10 +258,10 @@ export function PageHeader({
 
 export function TrashBanner({ label, onRestore }: { label: string; onRestore(): void }) {
   return (
-    <div className="flex items-center justify-center gap-3 bg-danger py-1.5 text-sm text-white">
+    <div className="flex items-center justify-center gap-3 bg-danger py-1.5 text-sm text-danger-fg">
       {label}
       <Button
-        className="h-6 border border-white/60 text-white hover:bg-white/15 hover:text-white"
+        className="h-6 border border-danger-fg/60 text-danger-fg hover:bg-danger-fg/15 hover:text-danger-fg"
         onClick={onRestore}
       >
         Restore page
@@ -319,7 +320,7 @@ export function PageHero({
                 />
               </button>
             </PopoverTrigger>
-            <PopoverContent>
+            <PopoverContent aria-label="Change icon">
               <IconPicker
                 hasIcon
                 onPick={setIcon}
@@ -423,30 +424,42 @@ export function TitleInput({
     if (ytext.length === 0 && !readOnly) ref.current?.focus();
   }, [ytext, readOnly]);
 
+  // The page's heading for assistive technology (its name is the title being edited).
   return (
-    <textarea
-      ref={ref}
-      rows={1}
-      value={title}
-      readOnly={readOnly}
-      placeholder="Untitled"
-      aria-label="Page title"
-      spellCheck
-      onChange={(event) => onChange(event.target.value.replace(/\n/g, ' '))}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-          event.preventDefault();
-          onEnter();
-        }
-      }}
-      className="w-full resize-none bg-transparent text-[40px] leading-tight font-bold text-fg outline-none placeholder:text-faint [field-sizing:content]"
-    />
+    <h1 className="m-0">
+      <textarea
+        ref={ref}
+        rows={1}
+        value={title}
+        readOnly={readOnly}
+        placeholder="Untitled"
+        aria-label="Page title"
+        spellCheck
+        onChange={(event) => onChange(event.target.value.replace(/\n/g, ' '))}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            onEnter();
+          }
+        }}
+        className="w-full resize-none bg-transparent text-[40px] leading-tight font-bold text-fg outline-none placeholder:text-faint [field-sizing:content]"
+      />
+    </h1>
   );
 }
 
 // --- Body --------------------------------------------------------------------------------
 
 /** The editor of a page's (or row's) content, with "Enter in the title focuses it". */
+/**
+ * Put the cursor at the start of the body. The DOM focus moves now: the editor's focus
+ * command waits a frame, and keys typed straight after Enter would land in the title.
+ */
+function focusStart(editor: Editor) {
+  editor.view.focus();
+  editor.commands.focus('start');
+}
+
 export function usePageBody(pageId: PageId | null) {
   const { client } = useApp();
   const pageDoc = useDoc(client, pageId);
@@ -459,11 +472,11 @@ export function usePageBody(pageId: PageId | null) {
     setEditor(editor);
     if (editor && focusWhenReady.current) {
       focusWhenReady.current = false;
-      editor.commands.focus('start');
+      focusStart(editor);
     }
   }, []);
   const focusBody = useCallback(() => {
-    if (editorRef.current) editorRef.current.commands.focus('start');
+    if (editorRef.current) focusStart(editorRef.current);
     else focusWhenReady.current = true;
   }, []);
   return { pageDoc, onEditor, focusBody, editor };

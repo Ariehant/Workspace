@@ -283,7 +283,6 @@ function PropertyRow({
       </div>
       <div
         role={canEdit ? 'button' : undefined}
-        aria-label={canEdit ? `Edit ${property.name}` : undefined}
         tabIndex={canEdit ? 0 : undefined}
         onClick={() => canEdit && !editing && onEdit(true)}
         onKeyDown={(e) => {
@@ -294,6 +293,8 @@ function PropertyRow({
           canEdit && 'cursor-pointer hover:bg-hover',
         )}
       >
+        {/* The name says what the button edits, and includes the value shown (WCAG 2.5.3). */}
+        {canEdit && <span className="sr-only">Edit {property.name}: </span>}
         {editing && TEXT_TYPES.includes(property.type) ? (
           <TextCellEditor {...editorProps} className="-mx-2 -my-1.5 rounded border border-accent" />
         ) : empty ? (

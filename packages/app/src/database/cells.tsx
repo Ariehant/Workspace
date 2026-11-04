@@ -443,6 +443,7 @@ export function PopoverCellEditor({ anchor, ...props }: CellEditorProps & { anch
     <Popover open onOpenChange={(open) => !open && props.onDone(null)}>
       <PopoverAnchor asChild>{anchor}</PopoverAnchor>
       <PopoverContent
+        aria-label={`Edit ${props.property.name}`}
         className="w-[300px]"
         data-testid="cell-popover"
         onKeyDown={(e) => e.stopPropagation()}
@@ -630,7 +631,12 @@ function OptionsEditor({ handle, row, property, initialText, onDone }: CellEdito
           className="h-6 min-w-20 flex-1 bg-transparent outline-none"
         />
       </div>
-      <div role="listbox" aria-label="Options" className="max-h-72 overflow-y-auto p-1">
+      <div
+        // A listbox needs options; with none yet it is only the hint.
+        role={items.length ? 'listbox' : undefined}
+        aria-label="Options"
+        className="max-h-72 overflow-y-auto p-1"
+      >
         <p className="px-2 py-1 text-xs text-muted">
           {!canEditOptions
             ? options.length
@@ -1122,7 +1128,7 @@ function RelationEditor({ handle, row, property }: CellEditorProps) {
         <p className="px-2 py-1 text-xs text-muted">
           {property.config.limitOne && linked.length ? 'Replace with' : 'Link another page'}
         </p>
-        <div role="listbox" aria-label="Pages">
+        <div role={candidates.length ? 'listbox' : undefined} aria-label="Pages">
           {candidates.slice(0, 50).map((r) => pageRow(r, null, () => add(r.id)))}
         </div>
         {q && !exact && (

@@ -119,7 +119,7 @@ export function HistoryDialog({
         <div className="flex min-h-0 flex-1 border-t border-line">
           <div
             className="w-60 shrink-0 overflow-y-auto border-r border-line p-1"
-            role="listbox"
+            role={versions?.length ? 'listbox' : undefined}
             aria-label="Versions"
           >
             {versions?.length === 0 && (

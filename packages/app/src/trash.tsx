@@ -98,7 +98,13 @@ export function Trash({ workspace, fileUrl, onOpen, children }: TrashProps) {
         }}
       >
         <PopoverTrigger asChild>{children}</PopoverTrigger>
-        <PopoverContent side="right" align="end" className="w-[400px]" data-testid="trash">
+        <PopoverContent
+          aria-label="Trash"
+          side="right"
+          align="end"
+          className="w-[400px]"
+          data-testid="trash"
+        >
           <div className="border-b border-line p-2">
             <input
               autoFocus
@@ -179,7 +185,7 @@ export function Trash({ workspace, fileUrl, onOpen, children }: TrashProps) {
             </p>
             <div className="flex flex-col gap-2 p-4">
               <Button
-                className="justify-center bg-danger text-white hover:bg-danger/90 hover:text-white"
+                className="justify-center bg-danger text-danger-fg hover:bg-danger/90 hover:text-danger-fg"
                 onClick={() => {
                   confirmPage.remove();
                   setConfirming(null);

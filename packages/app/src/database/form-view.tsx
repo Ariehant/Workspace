@@ -328,7 +328,12 @@ function ShareForm({
           <Share2 size={14} /> Share form
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 space-y-3 p-3" data-testid="form-share-panel">
+      <PopoverContent
+        aria-label="Share form"
+        align="end"
+        className="w-80 space-y-3 p-3"
+        data-testid="form-share-panel"
+      >
         <label className="block text-sm">
           Who can fill it in
           <select

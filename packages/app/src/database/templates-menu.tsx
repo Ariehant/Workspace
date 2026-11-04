@@ -77,7 +77,7 @@ export function NewButton({
         <IconButton
           label={`${label} options`}
           size="sm"
-          className="opacity-0 group-hover/t:opacity-100 data-[state=open]:opacity-100"
+          className="opacity-0 group-hover/t:opacity-100 focus-within:opacity-100 data-[state=open]:opacity-100"
         >
           <MoreHorizontal size={14} />
         </IconButton>
@@ -125,7 +125,12 @@ export function NewButton({
             <ChevronDown size={14} />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 p-1 text-sm" data-testid="templates-menu">
+        <PopoverContent
+          aria-label="Templates"
+          align="end"
+          className="w-72 p-1 text-sm"
+          data-testid="templates-menu"
+        >
           <p className="px-2 py-1 text-xs text-muted">Templates for {databaseTitle}</p>
           {templates.map((t) => (
             <div

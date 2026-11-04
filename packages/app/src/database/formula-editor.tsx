@@ -343,7 +343,7 @@ export function FormulaEditor({
         </div>
         <div className="flex h-72 border-t border-line">
           <div
-            role="listbox"
+            role={suggestions.length ? 'listbox' : undefined}
             aria-label="Suggestions"
             className="w-64 shrink-0 overflow-y-auto border-r border-line p-1"
             data-testid="formula-suggestions"

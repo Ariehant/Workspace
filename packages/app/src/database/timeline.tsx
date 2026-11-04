@@ -333,7 +333,11 @@ export function TimelineView(props: LayoutViewProps) {
         )}
         <div
           ref={scrollRef}
-          className="min-w-0 flex-1 overflow-x-auto"
+          // Focusable so the keyboard can scroll it (the arrow keys).
+          tabIndex={0}
+          role="region"
+          aria-label="Timeline"
+          className="min-w-0 flex-1 overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-accent"
           data-testid="timeline-scroll"
         >
           <div style={{ width }} className="relative">
@@ -435,7 +439,7 @@ export function TimelineView(props: LayoutViewProps) {
                         role="button"
                         aria-label={`Draw dependency from ${line.item.title || 'Untitled'}`}
                         onPointerDown={(e) => startLink(e, line.item.id)}
-                        className="absolute top-1/2 -right-4 size-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-accent bg-surface opacity-0 group-hover/bar:opacity-100"
+                        className="absolute top-1/2 -right-4 size-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-accent bg-surface opacity-0 group-hover/bar:opacity-100 focus-within:opacity-100"
                       />
                     )}
                   </div>

@@ -88,7 +88,7 @@ function ButtonView({ node, editor, getPos, updateAttributes }: ReactNodeViewPro
             type="button"
             aria-label="Edit button"
             onClick={() => void edit()}
-            className="flex size-7 items-center justify-center rounded text-muted opacity-0 group-hover/button:opacity-100 hover:bg-hover"
+            className="flex size-7 items-center justify-center rounded text-muted opacity-0 group-hover/button:opacity-100 focus-within:opacity-100 hover:bg-hover"
           >
             <Pencil size={13} />
           </button>

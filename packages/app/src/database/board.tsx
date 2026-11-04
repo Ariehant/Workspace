@@ -257,7 +257,7 @@ export function BoardView(props: LayoutViewProps) {
                   <Eye
                     size={13}
                     aria-label={`Show ${column.info.label}`}
-                    className="ml-auto text-muted opacity-0 group-hover/h:opacity-100"
+                    className="ml-auto text-muted opacity-0 group-hover/h:opacity-100 focus-within:opacity-100"
                   />
                 </button>
               ))}

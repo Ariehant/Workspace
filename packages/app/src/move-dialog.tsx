@@ -63,7 +63,11 @@ export function MoveDialog({ workspace, pageId, fileUrl, onMove, onClose }: Move
           aria-label="Search for a page to move to"
           className="h-12 w-full rounded-t-xl border-b border-line bg-transparent px-4 text-base outline-none"
         />
-        <div role="listbox" aria-label="Destinations" className="max-h-80 overflow-y-auto p-1">
+        <div
+          role={targets.length ? 'listbox' : undefined}
+          aria-label="Destinations"
+          className="max-h-80 overflow-y-auto p-1"
+        >
           {targets.length === 0 && <p className="px-3 py-2 text-muted">No pages found</p>}
           {targets.map((t, i) => (
             <button

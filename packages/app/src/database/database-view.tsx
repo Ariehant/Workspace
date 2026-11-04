@@ -287,71 +287,69 @@ export function DatabaseView({
         />
       )}
       <div className="flex h-10 items-center gap-1 border-b border-line text-sm">
-        <div
-          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
-          role="tablist"
-          aria-label="Views"
-        >
-          {views.map((v) => (
-            <div
-              key={v.id}
-              draggable={viewsEditable}
-              onDragStart={(e) => {
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', v.name);
-                setDragTab(v.id);
-              }}
-              onDragOver={(e) => dragTab && dragTab !== v.id && e.preventDefault()}
-              onDrop={() => {
-                if (dragTab && dragTab !== v.id) moveView(doc, dragTab, v.id);
-                setDragTab(null);
-              }}
-              onDragEnd={() => setDragTab(null)}
-              className={cn('shrink-0', dragTab === v.id && 'opacity-50')}
-            >
-              {v.id === view.id ? (
-                <ViewMenu
-                  meta={snapshot.meta}
-                  onMeta={(feature, on, deleteProperties) => {
-                    if (feature === 'subItems') {
-                      if (on) enableSubItems(doc, databaseId);
-                      else disableSubItems(doc, { deleteProperties });
-                    } else if (on) enableDependencies(doc, databaseId);
-                    else disableDependencies(doc, { deleteProperties });
-                  }}
-                  view={v}
-                  filesProperties={properties.filter((p) => p.type === 'files')}
-                  dateProperties={dateProperties(properties)}
-                  hasDependencies={snapshot.meta.dependencies !== null}
-                  onLayout={(type) => setViewType(doc, v.id, type)}
-                  editable={viewsEditable}
-                  canDelete={views.length > 1}
-                  onChange={(changes) => updateView(doc, v.id, changes)}
-                  columns={viewColumns(v, properties).map((c) => ({
-                    ...c,
-                    property: byId.get(c.id)!,
-                  }))}
-                  onToggleColumn={(id, visible) => updateViewColumn(doc, v.id, id, { visible })}
-                  onDuplicate={() => setActiveId(duplicateView(doc, v.id))}
-                  onDelete={() => {
-                    deleteView(doc, v.id);
-                    const next = views.find((x) => x.id !== v.id);
-                    if (next) setActiveId(next.id);
-                  }}
-                />
-              ) : (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={false}
-                  onClick={() => setActiveId(v.id)}
-                  className="flex h-7 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
-                >
-                  <ViewIcon type={v.type} /> {v.name}
-                </button>
-              )}
-            </div>
-          ))}
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+          <div className="flex items-center gap-0.5" role="tablist" aria-label="Views">
+            {views.map((v) => (
+              <div
+                key={v.id}
+                draggable={viewsEditable}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', v.name);
+                  setDragTab(v.id);
+                }}
+                onDragOver={(e) => dragTab && dragTab !== v.id && e.preventDefault()}
+                onDrop={() => {
+                  if (dragTab && dragTab !== v.id) moveView(doc, dragTab, v.id);
+                  setDragTab(null);
+                }}
+                onDragEnd={() => setDragTab(null)}
+                className={cn('shrink-0', dragTab === v.id && 'opacity-50')}
+              >
+                {v.id === view.id ? (
+                  <ViewMenu
+                    meta={snapshot.meta}
+                    onMeta={(feature, on, deleteProperties) => {
+                      if (feature === 'subItems') {
+                        if (on) enableSubItems(doc, databaseId);
+                        else disableSubItems(doc, { deleteProperties });
+                      } else if (on) enableDependencies(doc, databaseId);
+                      else disableDependencies(doc, { deleteProperties });
+                    }}
+                    view={v}
+                    filesProperties={properties.filter((p) => p.type === 'files')}
+                    dateProperties={dateProperties(properties)}
+                    hasDependencies={snapshot.meta.dependencies !== null}
+                    onLayout={(type) => setViewType(doc, v.id, type)}
+                    editable={viewsEditable}
+                    canDelete={views.length > 1}
+                    onChange={(changes) => updateView(doc, v.id, changes)}
+                    columns={viewColumns(v, properties).map((c) => ({
+                      ...c,
+                      property: byId.get(c.id)!,
+                    }))}
+                    onToggleColumn={(id, visible) => updateViewColumn(doc, v.id, id, { visible })}
+                    onDuplicate={() => setActiveId(duplicateView(doc, v.id))}
+                    onDelete={() => {
+                      deleteView(doc, v.id);
+                      const next = views.find((x) => x.id !== v.id);
+                      if (next) setActiveId(next.id);
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={false}
+                    onClick={() => setActiveId(v.id)}
+                    className="flex h-7 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+                  >
+                    <ViewIcon type={v.type} /> {v.name}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
           {viewsEditable && (
             <Menu>
               <MenuTrigger asChild>
@@ -409,6 +407,7 @@ export function DatabaseView({
                 </button>
               </PopoverAnchor>
               <PopoverContent
+                aria-label="Filters"
                 align="end"
                 // Focus coming back from a closing chip popover shouldn't close this one.
                 onFocusOutside={(e) => e.preventDefault()}
@@ -439,7 +438,7 @@ export function DatabaseView({
                   <ArrowUpDown size={15} /> <span className="max-md:hidden">Sort</span>
                 </button>
               </PopoverAnchor>
-              <PopoverContent align="end">
+              <PopoverContent aria-label="Sorts" align="end">
                 {view.sorts.length === 0 ? (
                   <PropertyPicker
                     properties={properties}
@@ -468,7 +467,7 @@ export function DatabaseView({
                   <Layers size={15} /> <span className="max-md:hidden">Group</span>
                 </button>
               </PopoverAnchor>
-              <PopoverContent align="end">
+              <PopoverContent aria-label="Group" align="end">
                 <GroupEditor
                   properties={properties}
                   groupBy={view.groupBy}
@@ -848,7 +847,7 @@ function ViewMenu({
         </button>
       </MenuTrigger>
       <MenuContent className="w-64" data-testid="view-menu">
-        <div className="p-1" onKeyDown={(e) => e.stopPropagation()}>
+        <div role="group" className="p-1" onKeyDown={(e) => e.stopPropagation()}>
           <input
             value={name}
             aria-label="View name"
@@ -1154,7 +1153,7 @@ export function InlineDatabase({ databaseId, viewSet }: { databaseId: string; vi
         )}
         <IconButton
           label="Open as full page"
-          className="opacity-0 group-hover:opacity-100"
+          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
           onClick={() => navigate(databaseId)}
         >
           <Maximize2 size={14} />

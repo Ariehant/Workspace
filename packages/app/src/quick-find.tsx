@@ -150,7 +150,11 @@ export function QuickFind({
             className="h-full flex-1 bg-transparent text-base outline-none"
           />
         </div>
-        <div role="listbox" aria-label="Results" className="max-h-[50vh] overflow-y-auto p-1">
+        <div
+          role={results.length ? 'listbox' : undefined}
+          aria-label="Results"
+          className="max-h-[50vh] overflow-y-auto p-1"
+        >
           <p className="px-3 pt-2 pb-1 text-xs font-medium text-muted">
             {q ? 'Best matches' : recent.length ? 'Recent' : 'Recently edited'}
           </p>

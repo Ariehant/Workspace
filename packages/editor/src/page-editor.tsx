@@ -83,7 +83,13 @@ export function PageEditor({
     {
       extensions: pageExtensions(doc, bridge, comments),
       editorProps: {
-        attributes: { class: 'ws-prose', 'data-testid': 'page-editor', spellcheck: 'true' },
+        attributes: {
+          class: 'ws-prose',
+          'data-testid': 'page-editor',
+          spellcheck: 'true',
+          'aria-label': 'Page content',
+          'aria-multiline': 'true',
+        },
       },
     },
     [doc],

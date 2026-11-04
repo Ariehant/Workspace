@@ -62,6 +62,7 @@ import {
 import type { AccountInfo, SyncInfo, ZoomPlatform } from './platform';
 import { SyncIndicator } from './sync-settings';
 import { Trash } from './trash';
+import { onTreeKeyDown, useTreeTabStop } from './tree-keys';
 
 export const SIDEBAR_WIDTH = { min: 200, max: 480, default: 240 } as const;
 
@@ -159,15 +160,19 @@ export function Sidebar(props: SidebarProps) {
           <MenuTrigger asChild>
             <button
               type="button"
-              aria-label="Workspace menu"
               className="-mx-1 flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 hover:bg-hover"
             >
-              <span className="flex size-5 shrink-0 items-center justify-center rounded bg-active text-xs font-semibold">
+              <span
+                aria-hidden
+                className="flex size-5 shrink-0 items-center justify-center rounded bg-active text-xs font-semibold"
+              >
                 W
               </span>
               <span className="truncate text-sm font-medium" data-testid="workspace-name">
                 {account?.workspace ?? 'Workspace'}
               </span>
+              {/* Named by what it shows, then what it does (WCAG 2.5.3). */}
+              <span className="sr-only">, workspace menu</span>
             </button>
           </MenuTrigger>
           <MenuContent align="start" className="w-60">
@@ -217,7 +222,7 @@ export function Sidebar(props: SidebarProps) {
         <IconButton
           label="Close sidebar (Ctrl+\)"
           size="sm"
-          className="opacity-0 group-hover:opacity-100"
+          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
           onClick={onCollapse}
         >
           <ChevronsLeft size={16} />
@@ -241,7 +246,12 @@ export function Sidebar(props: SidebarProps) {
             <div className="flex h-7 items-center px-2 text-xs font-medium text-muted">
               Favorites
             </div>
-            <ul role="tree" aria-label="Favorites">
+            <PageTreeList
+              label="Favorites"
+              expanded={props.expanded}
+              onToggle={props.onToggle}
+              onSelect={onSelect}
+            >
               {favoriteNodes.map((node) => (
                 <TreeItem
                   key={node.page.id}
@@ -251,7 +261,7 @@ export function Sidebar(props: SidebarProps) {
                   {...itemProps}
                 />
               ))}
-            </ul>
+            </PageTreeList>
           </section>
         )}
         {props.teamspaces &&
@@ -261,7 +271,7 @@ export function Sidebar(props: SidebarProps) {
               <IconButton
                 label="Browse teamspaces"
                 size="sm"
-                className="opacity-0 group-hover:opacity-100"
+                className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
                 onClick={props.teamspaces.onBrowse}
               >
                 <Compass size={14} />
@@ -269,7 +279,7 @@ export function Sidebar(props: SidebarProps) {
               <IconButton
                 label="New teamspace"
                 size="sm"
-                className="opacity-0 group-hover:opacity-100"
+                className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
                 onClick={props.teamspaces.onNew}
               >
                 <Plus size={14} />
@@ -442,7 +452,7 @@ function Section(props: SectionProps) {
               <IconButton
                 label={`${section.title} options`}
                 size="sm"
-                className="opacity-0 group-hover:opacity-100"
+                className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
               >
                 <MoreHorizontal size={14} />
               </IconButton>
@@ -467,14 +477,19 @@ function Section(props: SectionProps) {
           <IconButton
             label={section.kind === 'local' ? 'Add a page' : `Add a page to ${section.title}`}
             size="sm"
-            className="opacity-0 group-hover:opacity-100"
+            className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
             onClick={() => onCreate(null, section.addTo!)}
           >
             <Plus size={14} />
           </IconButton>
         )}
       </div>
-      <ul role="tree" aria-label={section.title}>
+      <PageTreeList
+        label={section.title}
+        expanded={props.expanded}
+        onToggle={props.onToggle}
+        onSelect={props.onSelect}
+      >
         {section.nodes.map((node) => (
           <TreeItem
             key={node.page.id}
@@ -486,7 +501,7 @@ function Section(props: SectionProps) {
             setDrag={setDrag}
           />
         ))}
-      </ul>
+      </PageTreeList>
       {section.nodes.length === 0 && (
         <p className="px-2 py-1 text-sm text-faint">
           {section.kind === 'local' ? 'No pages yet' : 'No pages inside'}
@@ -562,6 +577,34 @@ interface TreeItemProps extends SidebarProps {
 
 const AUTO_EXPAND_MS = 600;
 
+/** A tree of pages, usable from the keyboard (see `tree-keys.ts`). */
+function PageTreeList(props: {
+  label: string;
+  expanded: ReadonlySet<PageId>;
+  onToggle(id: PageId): void;
+  onSelect(id: PageId): void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLUListElement>(null);
+  useTreeTabStop(ref);
+  return (
+    <ul
+      ref={ref}
+      role="tree"
+      aria-label={props.label}
+      onKeyDown={(event) =>
+        onTreeKeyDown(event, {
+          isExpanded: (id) => props.expanded.has(id),
+          toggle: props.onToggle,
+          open: props.onSelect,
+        })
+      }
+    >
+      {props.children}
+    </ul>
+  );
+}
+
 /** Which part of a row the pointer is over: top quarter, bottom quarter or middle. */
 function zoneAt(event: DragEvent<HTMLElement>): DropZone {
   const rect = event.currentTarget.getBoundingClientRect();
@@ -635,7 +678,15 @@ function TreeItem(props: TreeItemProps) {
       : {};
 
   return (
-    <li role="treeitem" aria-expanded={isOpen} aria-selected={isCurrent}>
+    <li
+      role="treeitem"
+      aria-expanded={isOpen}
+      aria-selected={isCurrent}
+      data-page-id={page.id}
+      tabIndex={-1}
+      // The focus ring goes on the row, not around the page's children too.
+      className="outline-none [&:focus-visible>div]:ring-2 [&:focus-visible>div]:ring-accent"
+    >
       <div
         data-testid="sidebar-row"
         data-drop={over ?? undefined}
@@ -703,7 +754,7 @@ function TreeItem(props: TreeItemProps) {
               ))}
           </span>
         ) : null}
-        <span className="flex items-center opacity-0 group-hover:opacity-100">
+        <span className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100">
           <Menu>
             <MenuTrigger asChild>
               <IconButton

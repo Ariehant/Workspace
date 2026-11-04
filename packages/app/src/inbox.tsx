@@ -343,70 +343,78 @@ export function InboxButton({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className={className} data-testid="inbox-button">
-          <Inbox size={16} />
-          <span className="flex-1 text-left">Inbox</span>
-          {inbox.unread > 0 && (
-            <span
-              data-testid="inbox-unread"
-              aria-label={`${inbox.unread} unread`}
-              className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs leading-5 font-medium text-accent-fg"
-            >
-              {inbox.unread}
-            </span>
-          )}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        side="right"
-        align="start"
-        className="flex max-h-[70vh] w-[400px] flex-col p-0"
-        aria-label="Inbox"
-        data-testid="inbox"
-      >
-        <div className="flex items-center gap-1 border-b border-line px-3 py-2">
-          <span className="flex-1 text-sm font-semibold">Inbox</span>
-          <IconButton size="sm" label="Mark all as read" onClick={() => setRead(null, true)}>
-            <CheckCheck size={14} />
-          </IconButton>
-          {platform.notifications && <SystemSettings platform={platform.notifications} />}
-        </div>
-        <div className="flex gap-1 px-3 pt-2" role="tablist" aria-label="Show">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              role="tab"
-              aria-selected={filter === f.id}
-              onClick={() => setFilter(f.id)}
-              className={cn(
-                'h-6 rounded px-2 text-xs hover:bg-hover',
-                filter === f.id ? 'bg-active text-fg' : 'text-muted',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <InboxList error={error} empty={items?.length === 0}>
-          {items?.map((n) => (
-            <Item
-              key={n.id}
-              n={n}
-              onOpen={() => {
-                if (n.readAt === null) setRead([n.id], true);
-                setOpen(false);
-                onOpen(n);
-              }}
-              onRead={(read) => setRead([n.id], read)}
-              onArchive={(archived) => setArchived(n.id, archived)}
-            />
-          ))}
-        </InboxList>
-      </PopoverContent>
-    </Popover>
+    <>
+      {/* New notifications are announced as the count changes. */}
+      <span role="status" className="sr-only">
+        {inbox.unread > 0 ? `${inbox.unread} unread in Inbox` : ''}
+      </span>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className={className} data-testid="inbox-button">
+            <Inbox size={16} />
+            <span className="flex-1 text-left">Inbox</span>
+            {inbox.unread > 0 && (
+              <>
+                <span
+                  data-testid="inbox-unread"
+                  className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs leading-5 font-medium text-accent-fg"
+                >
+                  {inbox.unread}
+                </span>
+                <span className="sr-only"> unread</span>
+              </>
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="right"
+          align="start"
+          className="flex max-h-[70vh] w-[400px] flex-col p-0"
+          aria-label="Inbox"
+          data-testid="inbox"
+        >
+          <div className="flex items-center gap-1 border-b border-line px-3 py-2">
+            <span className="flex-1 text-sm font-semibold">Inbox</span>
+            <IconButton size="sm" label="Mark all as read" onClick={() => setRead(null, true)}>
+              <CheckCheck size={14} />
+            </IconButton>
+            {platform.notifications && <SystemSettings platform={platform.notifications} />}
+          </div>
+          <div className="flex gap-1 px-3 pt-2" role="tablist" aria-label="Show">
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={filter === f.id}
+                onClick={() => setFilter(f.id)}
+                className={cn(
+                  'h-6 rounded px-2 text-xs hover:bg-hover',
+                  filter === f.id ? 'bg-active text-fg' : 'text-muted',
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <InboxList error={error} empty={items?.length === 0}>
+            {items?.map((n) => (
+              <Item
+                key={n.id}
+                n={n}
+                onOpen={() => {
+                  if (n.readAt === null) setRead([n.id], true);
+                  setOpen(false);
+                  onOpen(n);
+                }}
+                onRead={(read) => setRead([n.id], read)}
+                onArchive={(archived) => setArchived(n.id, archived)}
+              />
+            ))}
+          </InboxList>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }
 

@@ -78,7 +78,7 @@
   font-family: var(--font-mono);
   font-size: 85%;
   background: var(--ws-hover);
-  color: #eb5757;
+  color: var(--ws-danger);
   border-radius: 4px;
   padding: 0.2em 0.4em;
 }

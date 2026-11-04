@@ -313,7 +313,7 @@ bar (or today), so dragging the earliest bar later moved the whole axis with it,
 stayed where it was on screen. The timeline now keeps what's on screen in place when its axis
 moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
 
-### M2: accessibility (≈ 1 week, 🚧)
+### M2: accessibility ✅
 
 - **Done: zoom** (WCAG 1.4.4, resize text). The desktop app had Electron's stock View menu
   items, hidden with the menu bar, and their Zoom In shortcut is `Ctrl+Plus`, which `Ctrl+=`
@@ -335,10 +335,47 @@ moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
 - **Runs** (zoom and the notification fix): unit tests all pass; desktop E2E 147 passed (3 skipped)
   twice, web E2E 3 passed. The zoom commit's own first desktop run failed only the inbox test,
   which the notification fix addresses (that test then passed three runs in a row).
-- axe-core in the E2E suite; keyboard paths for every action; focus management; roles and names;
-  contrast; reduced motion.
-- **Tests:** axe on every main screen and dialog in both themes; keyboard-only E2E for creating a
-  page, editing a database and sharing a page.
+- **axe-core in the E2E suite** (`a11y.spec.ts`): WCAG 2.1 A and AA plus axe's best practices,
+  no violations allowed, on 25 screens and dialogs in each theme (pages, every menu, quick
+  find, templates, trash, sync, the slash menu, page history, export, a database in all eight
+  layouts with its panels, cells and row page) and, on a server workspace, sign-up, sharing,
+  members, the inbox and comments. The first run found 10 kinds of problems on most screens:
+  - **Contrast:** grey text was 4.2:1 on the sidebar (light) and the faint grey 2.2–2.5:1 in
+    both themes; the blue was 3.6–3.9:1 under white text. New values: muted `#63625e`, faint
+    `#706e6a`, accent `#1b6fc8`, danger `#c83a34`, warning `#a35f1c` (light); muted `#a8a8a8`,
+    faint `#929292`, and an accent of `#5aa5f0` with dark text on it (dark), since no single
+    blue reads both as text on the dark background and under white text. Danger buttons take
+    a `danger-fg` colour for the same reason. Inline code uses the danger red.
+  - **Names:** the editor ("Page content"), every popover (a name is now required by the
+    type), the workspace button and the row page's property buttons (their names contain what
+    they show, WCAG 2.5.3); the page title is the level-one heading.
+  - **Roles:** the database grid's rows now hold only cells (row handle, "+ New", group
+    headers, calculations and "Add a property" are cells or column headers); "Add a view" is
+    outside the view tabs; the font choice in the page menu is a radio group of menu items;
+    lists with no options aren't listboxes; the timeline and the template previews are
+    focusable regions, so the keyboard can scroll them.
+  - **Known exception:** the property and view menus start with a name field, as Notion's do,
+    and ARIA menus may only hold items. Their check allows `aria-required-children`.
+- **Keyboard** (`keyboard.spec.ts`: pages, a database and sharing, from the keyboard alone):
+  - The page tree follows the ARIA tree pattern: one Tab stop (the open page), ↑ ↓ Home End
+    to move, → ← to expand and collapse, Enter or Space to open. Before, Tab only reached each
+    row's small buttons.
+  - Buttons that appear on hover also appear when they have the focus.
+  - Tabbing into a database table selects its first cell; the selected cell is the grid's
+    `aria-activedescendant`. Tab moves along a row as before, and now leaves the grid past
+    either end (it was a keyboard trap).
+  - Dialogs give the focus back to what opened them, or to the control that replaced it (the
+    Share button is drawn anew once a page has its own access).
+  - Enter in a new page's title moves the focus at once: keys typed straight after it went
+    into the title while the editor waited a frame to focus.
+  - Enter in Settings → Sync's workspace name starts syncing.
+- **Screen readers:** sync state changes (not every change counted) and new notifications are
+  announced through polite live regions; the unread count is part of the inbox button's name.
+- **Focus and motion:** a visible focus ring wherever a control doesn't draw its own; with the
+  system's reduced motion setting, no transitions, animations or smooth scrolling (JS scrolling
+  included).
+- **Not automated:** the check with Orca on Ubuntu, by hand, is part of the release check.
+- **Runs:** see the commit that records them.
 
 ### M3: languages and formats (≈ 1 week)
 

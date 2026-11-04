@@ -122,9 +122,9 @@ export function CalendarView(props: LayoutViewProps) {
     <div data-testid="calendar-view" className="flex gap-3 pt-2 pb-4 text-sm">
       <div className="min-w-0 flex-1">
         <div className="flex h-10 items-center gap-1">
-          <h3 className="mr-auto text-base font-semibold" data-testid="calendar-title">
+          <h2 className="mr-auto text-base font-semibold" data-testid="calendar-title">
             {title}
-          </h3>
+          </h2>
           {undated.length > 0 && (
             <Button onClick={() => setNoDate(!noDate)} aria-pressed={noDate}>
               No date ({undated.length})
@@ -217,7 +217,7 @@ export function CalendarView(props: LayoutViewProps) {
                         className={cn(
                           'ml-auto flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs',
                           day === today
-                            ? 'bg-danger font-semibold text-white'
+                            ? 'bg-danger font-semibold text-danger-fg'
                             : outside
                               ? 'text-faint'
                               : 'text-muted',
@@ -297,7 +297,7 @@ export function CalendarView(props: LayoutViewProps) {
                         setDrag(null);
                         setOver(null);
                       }}
-                      className="absolute inset-y-0 right-0 w-2 cursor-ew-resize opacity-0 group-hover/event:opacity-100 hover:bg-accent/40"
+                      className="absolute inset-y-0 right-0 w-2 cursor-ew-resize opacity-0 group-hover/event:opacity-100 focus-within:opacity-100 hover:bg-accent/40"
                     />
                   )}
                 </div>

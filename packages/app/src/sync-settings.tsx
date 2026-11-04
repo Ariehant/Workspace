@@ -70,18 +70,42 @@ function SyncIcon({ info, size = 14 }: { info: SyncInfo; size?: number }) {
 /** The sidebar's sync line: opens Settings → Sync. */
 export function SyncIndicator({ info, onOpen }: { info: SyncInfo; onOpen(): void }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      data-testid="sync-indicator"
-      data-state={info.state}
-      title={info.reason ?? undefined}
-      className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover"
-    >
-      <SyncIcon info={info} size={16} />
-      <span className="min-w-0 flex-1 truncate text-left">{syncLabel(info)}</span>
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={onOpen}
+        data-testid="sync-indicator"
+        data-state={info.state}
+        title={info.reason ?? undefined}
+        className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover"
+      >
+        <SyncIcon info={info} size={16} />
+        <span className="min-w-0 flex-1 truncate text-left">{syncLabel(info)}</span>
+      </button>
+      {/* Screen readers hear when the state changes (not each change counted). */}
+      <span role="status" className="sr-only">
+        {syncAnnouncement(info)}
+      </span>
+    </>
   );
+}
+
+/** What to announce: the state, without the counts that change all the time. */
+function syncAnnouncement(info: SyncInfo): string {
+  switch (info.state) {
+    case 'live':
+      return info.pending > 0 || info.files > 0 ? '' : 'Synced';
+    case 'offline':
+      return 'Offline: changes are kept on this device';
+    case 'unauthorized':
+      return 'Signed out of sync';
+    case 'error':
+      return `Sync error${info.reason ? `: ${info.reason}` : ''}`;
+    case 'stopped':
+      return 'Sync paused';
+    default:
+      return '';
+  }
 }
 
 const input =
@@ -405,8 +429,12 @@ function ChooseWorkspace({
           <input
             className={cn(input, 'mt-1')}
             data-testid="sync-workspace-name"
+            aria-label="Name of the new workspace"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && name.trim() && !busy) void start();
+            }}
           />
         ) : (
           'Creates a workspace on the server with everything on this device.'
