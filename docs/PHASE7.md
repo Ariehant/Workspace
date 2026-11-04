@@ -375,7 +375,11 @@ moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
   system's reduced motion setting, no transitions, animations or smooth scrolling (JS scrolling
   included).
 - **Not automated:** the check with Orca on Ubuntu, by hand, is part of the release check.
-- **Runs:** see the commit that records them.
+- **Runs:** unit tests all pass; desktop E2E 153 passed (3 skipped) twice, web E2E 3 passed.
+  The first full runs caught two regressions from this work, both fixed: a click into a wide
+  table selected its first cell (for the keyboard) and scrolled the clicked one away, and a
+  dialog's focus return pulled the focus out of a dialog opened straight after it. The README
+  screenshots are new (the colours changed).
 
 ### M3: languages and formats (≈ 1 week)
 

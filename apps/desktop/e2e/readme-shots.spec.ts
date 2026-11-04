@@ -100,10 +100,9 @@ test('README screenshots', async ({ launch }) => {
   await window.mouse.click(1300, 860);
   await shot(window, 'editor');
 
-  // The slash menu, at the end of the page.
-  await editor(window).first().locator('p').last().click();
-  await window.keyboard.press('Control+End');
-  await window.keyboard.press('Enter');
+  // The slash menu, in the empty paragraph that ends the page (after the code block: Ctrl+End
+  // would put the cursor in the code).
+  await editor(window).first().locator('> p:last-child').click();
   await window.keyboard.type('/');
   await expect(window.getByTestId('slash-menu')).toBeVisible();
   await shot(window, 'slash-menu');
