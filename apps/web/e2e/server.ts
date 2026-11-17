@@ -20,6 +20,10 @@ const freePort = () =>
 
 export interface TestServer {
   base: string;
+  /** The server goes away (its database and files stay), as if the network did. */
+  pause(): Promise<void>;
+  /** Back, at the same address. */
+  resume(): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -34,41 +38,50 @@ export async function startServer(env: Record<string, string> = {}): Promise<Tes
   const root = mkdtempSync(join(tmpdir(), 'workspace-web-e2e-'));
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
-  const child: ChildProcess = spawn('node', ['dist/main.js'], {
-    cwd: serverDir,
-    env: {
-      ...process.env,
-      DATABASE_URL: databaseUrl,
-      HOST: '127.0.0.1',
-      PORT: String(port),
-      PUBLIC_URL: base,
-      FILES_DIR: join(root, 'files'),
-      WEB_DIR: webDir,
-      SIGNUP: 'open',
-      LOG_LEVEL: 'warn',
-      ...env,
-    },
-    stdio: ['ignore', 'inherit', 'inherit'],
-  });
-  const start = Date.now();
-  for (;;) {
-    const ok = await fetch(`${base}/api/ready`).then(
-      (r) => r.ok,
-      () => false,
-    );
-    if (ok) break;
-    if (Date.now() - start > 20_000) throw new Error('The server did not start');
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  const env_ = {
+    ...process.env,
+    DATABASE_URL: databaseUrl,
+    HOST: '127.0.0.1',
+    PORT: String(port),
+    PUBLIC_URL: base,
+    FILES_DIR: join(root, 'files'),
+    WEB_DIR: webDir,
+    SIGNUP: 'open',
+    LOG_LEVEL: 'warn',
+    ...env,
+  };
+  let child: ChildProcess;
+  const launch = async () => {
+    child = spawn('node', ['dist/main.js'], {
+      cwd: serverDir,
+      env: env_,
+      stdio: ['ignore', 'inherit', 'inherit'],
+    });
+    const start = Date.now();
+    for (;;) {
+      const ok = await fetch(`${base}/api/ready`).then(
+        (r) => r.ok,
+        () => false,
+      );
+      if (ok) break;
+      if (Date.now() - start > 20_000) throw new Error('The server did not start');
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  };
+  const halt = async () => {
+    if (child.exitCode !== null) return;
+    await new Promise((resolve) => {
+      child.once('exit', resolve);
+      child.kill('SIGTERM');
+    });
+  };
+  await launch();
   return {
     base,
+    pause: halt,
+    resume: launch,
     async stop() {
-      if (child.exitCode === null) {
-        await new Promise((resolve) => {
-          child.once('exit', resolve);
-          child.kill('SIGTERM');
-        });
-      }
+      await halt();
       await postgres.stop();
       rmSync(root, { recursive: true, force: true });
     },

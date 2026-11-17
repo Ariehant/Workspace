@@ -63,11 +63,16 @@ export type PageFont = 'default' | 'serif' | 'mono';
 
 /** Banner image above the title. */
 export interface PageCover {
-  /** `color`: a palette name; `gradient`: a gradient id; `file`: a stored image id. */
-  kind: 'color' | 'gradient' | 'file';
+  /**
+   * `color`: a palette name; `gradient`: a gradient id; `file`: a stored image id; `url`: an
+   * image on the web (Unsplash's, which are shown from Unsplash).
+   */
+  kind: 'color' | 'gradient' | 'file' | 'url';
   value: string;
   /** Vertical focus of an image cover, 0 (top) to 100 (bottom). */
   positionY: number;
+  /** Who made a `url` image, shown on the cover (Unsplash asks for it). */
+  credit?: { name: string; url: string };
 }
 
 /** Options set from the page menu (see `setPageOptions`). */

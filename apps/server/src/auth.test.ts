@@ -79,6 +79,7 @@ describe('password accounts', () => {
       signup: 'invite',
       needsSetup: true,
       providers: [{ id: 'fake', name: 'Fake' }],
+      unsplash: false,
     });
     const admin = await s.signup('Ada@Lab.io');
     expect(admin.res.statusCode).toBe(201);

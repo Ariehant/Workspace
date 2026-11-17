@@ -296,7 +296,12 @@ export function* exportPages(source: ExportSource, options: ExportOptions): Gene
     for (const item of order) {
       const ctx = contextFor(item);
       const cover = item.page?.cover ?? item.row?.cover ?? null;
-      const coverUrl = cover?.kind === 'file' ? ctx.fileHref(cover.value, null) : null;
+      const coverUrl =
+        cover?.kind === 'file'
+          ? ctx.fileHref(cover.value, null)
+          : cover?.kind === 'url' && /^https?:\/\//.test(cover.value)
+            ? cover.value
+            : null;
       const icon = item.page?.icon ?? item.row?.icon ?? null;
       const textIcon = icon && !icon.startsWith(FILE_ICON_PREFIX) ? icon : null;
 

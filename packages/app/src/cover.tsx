@@ -1,6 +1,11 @@
 import type { PageCover } from '@workspace/core';
 import { Popover, PopoverContent, PopoverTrigger, cn } from '@workspace/ui';
-import { useRef, useState, type CSSProperties } from 'react';
+import { Loader2, Search } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useApp } from './context';
+import type { UnsplashPhoto, UnsplashPlatform } from './platform';
+
+const UNSPLASH_HOME = 'https://unsplash.com/?utm_source=workspace&utm_medium=referral';
 
 /** Gradient covers, by id (ids are what pages store). */
 export const GRADIENTS: Record<string, string> = {
@@ -32,10 +37,14 @@ export function randomCover(): PageCover {
   return { kind: 'gradient', value: ids[Math.floor(Math.random() * ids.length)]!, positionY: 50 };
 }
 
+/** Covers that are images (they can be repositioned, and fit in cards). */
+export const isImageCover = (cover: PageCover) => cover.kind === 'file' || cover.kind === 'url';
+
 export function coverStyle(cover: PageCover, fileUrl: (id: string) => string): CSSProperties {
-  if (cover.kind === 'file') {
+  if (isImageCover(cover)) {
+    const src = cover.kind === 'file' ? fileUrl(cover.value) : cover.value;
     return {
-      backgroundImage: `url("${fileUrl(cover.value)}")`,
+      backgroundImage: `url("${src.replace(/["\\\n]/g, encodeURIComponent)}")`,
       backgroundSize: 'cover',
       backgroundPosition: `center ${cover.positionY}%`,
     };
@@ -51,7 +60,20 @@ interface CoverPickerProps {
 
 /** Gallery of colors and gradients, plus image upload. */
 function CoverPicker({ onPick, onUpload }: CoverPickerProps) {
-  const [tab, setTab] = useState<'gallery' | 'upload'>('gallery');
+  const { platform } = useApp();
+  const [tab, setTab] = useState<'gallery' | 'upload' | 'unsplash'>('gallery');
+  // Unsplash, where the server has a key for it.
+  const [unsplash, setUnsplash] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void platform.unsplash?.enabled().then(
+      (on) => live && setUnsplash(on),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [platform]);
   const [busy, setBusy] = useState(false);
   const tabClass = (t: typeof tab) =>
     cn(
@@ -82,8 +104,21 @@ function CoverPicker({ onPick, onUpload }: CoverPickerProps) {
         >
           Upload
         </button>
+        {unsplash && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'unsplash'}
+            className={tabClass('unsplash')}
+            onClick={() => setTab('unsplash')}
+          >
+            Unsplash
+          </button>
+        )}
       </div>
-      {tab === 'gallery' ? (
+      {tab === 'unsplash' && platform.unsplash ? (
+        <UnsplashTab unsplash={platform.unsplash} onPick={onPick} />
+      ) : tab === 'gallery' ? (
         <div className="max-h-80 space-y-3 overflow-y-auto p-3">
           <section>
             <h3 className="mb-1.5 text-xs font-medium text-muted">Gradients</h3>
@@ -201,6 +236,27 @@ export function Cover({ cover, editable, fileUrl, onChange, onUpload }: CoverPro
           </span>
         </div>
       )}
+      {cover.kind === 'url' && cover.credit && repositionY === null && (
+        // Unsplash asks for the photographer and Unsplash to be named, with links.
+        <span
+          className="absolute bottom-3 left-[max(16px,calc((100%-900px)/2+96px))] rounded bg-black/45 px-2 py-0.5 text-xs text-white/90 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+          data-testid="cover-credit"
+        >
+          Photo by{' '}
+          <a
+            href={cover.credit.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            {cover.credit.name}
+          </a>{' '}
+          on{' '}
+          <a href={UNSPLASH_HOME} target="_blank" rel="noopener noreferrer" className="underline">
+            Unsplash
+          </a>
+        </span>
+      )}
       {editable && (
         <div
           className={cn(
@@ -247,7 +303,7 @@ export function Cover({ cover, editable, fileUrl, onChange, onUpload }: CoverPro
                   />
                 </PopoverContent>
               </Popover>
-              {cover.kind === 'file' && (
+              {isImageCover(cover) && (
                 <button
                   type="button"
                   className={control}
@@ -263,6 +319,97 @@ export function Cover({ cover, editable, fileUrl, onChange, onUpload }: CoverPro
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Search Unsplash (through the server); a pick is the photo, shown from Unsplash, credited. */
+function UnsplashTab({
+  unsplash,
+  onPick,
+}: {
+  unsplash: UnsplashPlatform;
+  onPick(cover: PageCover): void;
+}) {
+  const [query, setQuery] = useState('');
+  const [photos, setPhotos] = useState<UnsplashPhoto[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const searched = useRef(0);
+
+  useEffect(() => {
+    const q = query.trim();
+    const run = ++searched.current;
+    const timer = setTimeout(
+      () => {
+        setBusy(true);
+        unsplash.search(q || 'landscape').then(
+          (found) => {
+            if (run !== searched.current) return;
+            setPhotos(found);
+            setError(null);
+            setBusy(false);
+          },
+          (e: unknown) => {
+            if (run !== searched.current) return;
+            setError(e instanceof Error ? e.message : String(e));
+            setBusy(false);
+          },
+        );
+      },
+      q ? 300 : 0,
+    );
+    return () => clearTimeout(timer);
+  }, [query, unsplash]);
+
+  return (
+    <div className="p-3" data-testid="unsplash">
+      <label className="flex h-8 items-center gap-2 rounded border border-line px-2">
+        <Search size={14} className="text-faint" />
+        <input
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search for an image…"
+          aria-label="Search Unsplash"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+        />
+        {busy && <Loader2 size={14} className="animate-spin text-faint" />}
+      </label>
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+      <div className="mt-2 grid max-h-72 grid-cols-3 gap-2 overflow-y-auto">
+        {photos?.map((photo) => (
+          <button
+            key={photo.id}
+            type="button"
+            aria-label={photo.description || `Photo by ${photo.author}`}
+            title={`Photo by ${photo.author}`}
+            className="group/photo relative h-16 overflow-hidden rounded-md bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+            onClick={() => {
+              void unsplash.picked(photo).catch(() => {});
+              onPick({
+                kind: 'url',
+                value: photo.full,
+                positionY: 50,
+                credit: { name: photo.author, url: photo.authorUrl },
+              });
+            }}
+          >
+            <img src={photo.thumb} alt="" className="size-full object-cover" loading="lazy" />
+            <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-1 text-left text-[10px] text-white opacity-0 group-hover/photo:opacity-100">
+              {photo.author}
+            </span>
+          </button>
+        ))}
+      </div>
+      {photos?.length === 0 && <p className="mt-2 text-xs text-muted">No images found.</p>}
+      <p className="mt-2 text-[11px] text-faint">
+        Photos from{' '}
+        <a href={UNSPLASH_HOME} target="_blank" rel="noopener noreferrer" className="underline">
+          Unsplash
+        </a>
+        , credited on the cover.
+      </p>
     </div>
   );
 }

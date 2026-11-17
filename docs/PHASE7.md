@@ -506,12 +506,67 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
   after an import weren't found. The test now opens them from their board and table, as a
   person would.
 
-### M6: gaps (≈ 1.5 weeks)
+### M6: gaps ✅
 
-- Image crop, the Unsplash gallery, export and PDF for the web app, offline storage in the web
-  app, formatted text properties, the E2E teardown hang, and quick find searching again once
-  the index catches up (M5).
-- **Tests:** per item; the full desktop E2E passing every test, twice.
+- **Image crop and rotate:** the image block's **Crop** button opens a dialog with the image
+  turned as it will show, a frame to drag (or move with the arrow keys, Shift to resize),
+  shapes to keep (original, square, 4:3, 16:9, 3:4) and quarter turns. The crop (fractions of
+  the image), the turn and the shown aspect are kept on the block; the file doesn't change.
+  The editor, published pages and HTML / PDF exports draw it with the same CSS
+  (`packages/core/src/image-view.ts`), without loading the image first.
+- **Formatted text properties:** a text property's value stays its plain text, so filters,
+  sorting, search, formulas and CSV work as before; its formatting is kept beside it on the
+  row (bold, italic, underline, strikethrough, code, colour, link) and counts only while it
+  still matches the value, so any plain write (an older client, a paste, a CSV import) simply
+  drops it. Cells, cards and row pages show it; editing uses a one-paragraph editor with
+  Ctrl+B, I, U, E, K and a toolbar with colours. Rows, properties and templates copy it; HTML
+  and PDF exports keep it (Markdown and CSV stay plain, as Notion's do); Notion HTML imports
+  bring cells' formatting; the API reads and writes annotations and links.
+- **Export for the web app:** the server makes Markdown & CSV and HTML exports with the
+  desktop's exporter, for a page with its sub-pages or everything the person can read, and
+  streams the zip; Mermaid diagrams are drawn by the browser first.
+- **Offline web app:** the pages it opens are kept in IndexedDB as they change, with the
+  edits the server hasn't acknowledged and what it needs to start (the account, the workspace,
+  its scopes and settings); a service worker keeps the app's own files. Reloaded without the
+  server, it opens where it was, with the edits; when the server is back they're sent. Signing
+  out deletes it all from the browser.
+- **Unsplash covers:** with `UNSPLASH_ACCESS_KEY` set, the cover picker has an Unsplash tab, in
+  the web app and on desktops that sync with that server. Searches go through the server (the
+  key stays there), a pick is reported to Unsplash, and the photo is shown from Unsplash with
+  the photographer credited on the cover, as Unsplash's API guidelines ask. Covers gained a
+  web-address kind for it (the API already gave those as `external`).
+- **Quick find** asks the index again (after 1, 2.5 and 5 s) while a query is on screen, so
+  rows just imported or edited show up without retyping.
+- **The E2E teardown hang:** not seen in any full run since M1 (12 runs), whose fixes took
+  away the heaviest background work (local automations copying the database after every
+  change, formulas recomputed on any view change), the likely cause of a slow close late in a
+  long worker. Should it come back, it can't pass unseen or cost a run: an app that takes over
+  20 s to close, or 40 s to show its sidebar, fails its test with the processes still running
+  (state and wait channel) and the main process's last output, and is ended so the next test
+  starts clean.
+
+**Changed from the plan:**
+
+- **PDFs in the web app** come from the browser's print (the page's print view in a new tab;
+  every browser's print saves PDFs), not a headless Chromium on the server: the same pages,
+  without a browser to install, update and sandbox on every server.
+
+**Found on the way, fixed:**
+
+- Typing straight into a selected text cell lost the letters after the first: the new editor
+  took the focus a frame late. It now takes it as it appears.
+- Enter in the link box clicked its button (the browser's way of submitting a form), which
+  the cell took as a click on itself and closed the editor.
+- Ctrl+K right after Shift+Arrow linked a shorter selection: the browser tells the editor
+  about a selection a moment later. It now reads the selection first.
+- `PHASE7.md` itself: an M5 edit had repeated half the document.
+
+- **Tests:** `image-view.test.ts` (crop geometry), `rich-text.test.ts` (database),
+  `rich-text-input.test.ts`, the exporters', importers' and API model's tests for formatting,
+  the server's export, Unsplash and API tests; desktop E2E for crop (and its dialog in the axe
+  checks), formatted text and quick find after an import; web E2E for export and PDF, offline
+  (the server stopped, the tab reloaded, the server back) and Unsplash covers.
+- **Runs:** unit tests all pass; the E2E runs are recorded in the next commit.
 
 ### Release check (≈ 0.5 weeks)
 

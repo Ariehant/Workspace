@@ -20,6 +20,8 @@ export type {
   TeamMethod,
   TeamPlatform,
   UpdateInfo,
+  UnsplashPhoto,
+  UnsplashPlatform,
   UpdatesPlatform,
   ZoomPlatform,
 } from './platform';

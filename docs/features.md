@@ -37,7 +37,8 @@ planned is in [PHASE7.md](PHASE7.md).
 - **Buttons:** insert blocks, add or edit database pages, send a webhook or a notification;
   `@today` and `@me` in buttons and templates.
 - **Page settings:** emoji or image icons; covers (gradients, colors or images,
-  repositionable); font (default, serif, mono), small text, full width, lock, word count.
+  repositionable, and photos from Unsplash on a server with an Unsplash key, credited on the
+  cover); font (default, serif, mono), small text, full width, lock, word count.
 - **Every block has a stable id**, for block links, comments, sync and the API.
 
 ## Databases

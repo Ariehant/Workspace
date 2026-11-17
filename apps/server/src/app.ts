@@ -1,3 +1,4 @@
+import { unsplashRoutes } from './unsplash-routes';
 import { exportRoutes } from './export-routes';
 import { VERSION } from './version';
 import cookie from '@fastify/cookie';
@@ -281,6 +282,7 @@ export function buildServer({
     integrationRoutes(scope, ctx);
     emailRoutes(scope, ctx);
     exportRoutes(scope, ctx);
+    unsplashRoutes(scope, ctx);
   });
   apiRoutes(app, ctx, apiOptions);
   webApp(app, config.webDir);

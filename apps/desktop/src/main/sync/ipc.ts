@@ -18,6 +18,10 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [/^me$/, ['GET', 'PATCH']],
   [/^me\/email$/, ['GET', 'PUT']],
+  // The server's public settings, and Unsplash covers through it (Phase 7 M6).
+  [/^config$/, ['GET']],
+  [/^unsplash\/photos\?query=[^&#]{1,300}$/, ['GET']],
+  [/^unsplash\/picked$/, ['POST']],
   [/^members$/, ['GET']],
   [new RegExp(`^members/${UUID}$`), ['PATCH', 'DELETE']],
   [/^invites$/, ['GET', 'POST']],

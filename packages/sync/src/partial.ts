@@ -5,7 +5,8 @@
  *
  * After a reconnect every open doc is opened again (its state, merged into what's here,
  * covers anything missed while away) and unacknowledged pushes are sent again.
- * Nothing is persisted: closing the tab while offline loses unsent edits (the app warns).
+ * Nothing is persisted here; `onPending` lets the app keep unsent pushes (the web app keeps
+ * them in IndexedDB, with the docs it has opened).
  */
 import {
   CloseCode,
@@ -38,6 +39,8 @@ export interface PartialClientOptions extends PresenceHooks {
   onError?: (error: unknown) => void;
   /** A notification for the signed-in user arrived (JSON). */
   onNotify?: (payload: string) => void;
+  /** The pushes not acknowledged yet changed (to keep them, e.g. across a reload offline). */
+  onPending?: (items: PushItem[]) => void;
   random?: () => number;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -86,6 +89,7 @@ export class PartialClient {
       | 'onAccess'
       | 'scopeOf'
       | 'onNotify'
+      | 'onPending'
       | keyof PresenceHooks
     >
   > &
@@ -164,13 +168,16 @@ export class PartialClient {
     if (this.ready) this.send({ type: 'close', docId });
   }
 
-  /** A local update: sent now if connected, kept until the server acknowledges it. */
-  push(docId: string, update: Uint8Array): void {
+  /**
+   * A local update: sent now if connected, kept until the server acknowledges it. `scope`
+   * places a new doc (default: `scopeOf`); pushes kept from before give theirs.
+   */
+  push(docId: string, update: Uint8Array, scope?: string | null): void {
     const item: PushItem = {
       localId: this.nextId++,
       docId,
       update,
-      scope: this.o.scopeOf?.(docId) ?? null,
+      scope: scope !== undefined ? scope : (this.o.scopeOf?.(docId) ?? null),
     };
     this.pending.set(item.localId, item);
     if (this.ready) this.send({ type: 'push', items: [item] });
@@ -188,6 +195,7 @@ export class PartialClient {
 
   private notify() {
     for (const listener of this.listeners) listener(this.status, this.pending.size);
+    this.o.onPending?.([...this.pending.values()]);
   }
 
   private connectNow() {

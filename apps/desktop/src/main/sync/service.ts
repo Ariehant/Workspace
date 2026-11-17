@@ -170,16 +170,21 @@ export class SyncService {
     if ('error' in result) this.zoneSent = false;
   }
 
-  /** A team API call (members, invites, groups, `me`) for the renderer, with our token. */
+  /**
+   * A team API call (members, invites, groups, `me`, the server's `config` and Unsplash
+   * covers) for the renderer, with our token.
+   */
   async team(request: TeamRequest): Promise<Result<unknown>> {
     const config = this.config;
     const account = this.account;
     const token = this.token;
     if (!config || !account || !token) return { error: 'Sync this workspace with a server first.' };
     const path =
-      request.path === 'me' || request.path.startsWith('me/')
+      request.path === 'me' || request.path.startsWith('me/') || request.path === 'config'
         ? `/api/auth/${request.path}`
-        : `/api/workspaces/${config.workspaceId}/${request.path}`;
+        : request.path.startsWith('unsplash/')
+          ? `/api/${request.path}`
+          : `/api/workspaces/${config.workspaceId}/${request.path}`;
     try {
       const ok = await new ServerApi(account.server, token).call<unknown>(
         request.method,

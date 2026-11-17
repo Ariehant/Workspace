@@ -39,6 +39,11 @@ export interface Config {
    * see their own in the apps), e.g. `GB`; null for the United States.
    */
   formatsRegion: string | null;
+  /**
+   * Unsplash's API for the cover gallery: an access key (null: no Unsplash tab) and its
+   * address (tests point it elsewhere).
+   */
+  unsplash: { accessKey: string; apiUrl: string } | null;
 }
 
 export interface OidcProvider {
@@ -130,6 +135,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (formatsRegion && !/^[A-Z]{2}$/.test(formatsRegion)) {
     problems.push('FORMATS_REGION must be a two-letter region code, like GB or IN');
   }
+  const unsplashKey = env.UNSPLASH_ACCESS_KEY?.trim() || null;
+  const unsplashUrl = (env.UNSPLASH_API_URL?.trim() || 'https://api.unsplash.com').replace(
+    /\/+$/,
+    '',
+  );
+  if (!/^https?:\/\//.test(unsplashUrl)) problems.push('UNSPLASH_API_URL must be an http(s) URL');
   const smtpFrom = env.SMTP_FROM?.trim() || null;
   if (smtpUrl && !smtpFrom) problems.push('SMTP_FROM is required with SMTP_URL');
   const config: Config = {
@@ -146,6 +157,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     oidcAllowInsecure: env.OIDC_ALLOW_INSECURE === 'true',
     smtp: smtpUrl && smtpFrom ? { url: smtpUrl, from: smtpFrom } : null,
     formatsRegion,
+    unsplash: unsplashKey ? { accessKey: unsplashKey, apiUrl: unsplashUrl } : null,
     webhooks: {
       allowPrivate: env.WEBHOOK_ALLOW_PRIVATE === 'true',
       allowHttp: env.WEBHOOK_ALLOW_HTTP === 'true',

@@ -122,6 +122,7 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
     signup: ctx.config.signup,
     needsSetup: (await accounts.countUsers()) === 0,
     providers: ctx.oidc.list(),
+    unsplash: ctx.config.unsplash !== null,
   }));
 
   app.post<{

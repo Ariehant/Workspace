@@ -4,6 +4,7 @@ import {
   type AutomationRun,
   type Platform,
   type TeamMethod,
+  type UnsplashPhoto,
 } from '@workspace/app';
 import { parseNotification, type PresenceHandlers } from '@workspace/core';
 import '@workspace/editor/editor.css';
@@ -113,6 +114,28 @@ const platform: Platform = {
     buttonSecret: api.automations.buttonSecret,
     buttonWebhook: api.automations.buttonWebhook,
     buttonNotify: api.automations.buttonNotify,
+  },
+  // Unsplash covers, through the server this workspace syncs with (when it has a key).
+  unsplash: {
+    enabled: async () => {
+      const result = await api.sync.team({ method: 'GET', path: 'config' });
+      return 'ok' in result && (result.ok as { unsplash?: boolean }).unsplash === true;
+    },
+    search: async (query) => {
+      const result = await api.sync.team({
+        method: 'GET',
+        path: `unsplash/photos?query=${encodeURIComponent(query)}`,
+      });
+      if ('error' in result) throw new Error(result.error);
+      return (result.ok as { photos: UnsplashPhoto[] }).photos;
+    },
+    picked: async (photo) => {
+      await api.sync.team({
+        method: 'POST',
+        path: 'unsplash/picked',
+        body: { downloadLocation: photo.downloadLocation },
+      });
+    },
   },
   // Works while this workspace syncs (the app only offers it then).
   team: {

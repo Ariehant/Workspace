@@ -10,10 +10,12 @@ import type {
   ExportStatus,
   Platform,
   ScopeInfo,
+  UnsplashPhoto,
 } from '@workspace/app';
 import { parseNotification, type NotificationData, type PresenceHandlers } from '@workspace/core';
 import { PartialClient } from '@workspace/sync';
 import { ApiError, api, type Me } from './api';
+import { OfflineDocs, type OfflineStore } from './offline';
 
 /** Settings shared by all workspaces; the rest are kept per workspace. */
 const GLOBAL_SETTINGS = new Set(['ui.theme', 'ui.sidebarOpen', 'ui.sidebarWidth', 'ui.region']);
@@ -38,20 +40,31 @@ export function createWebPlatform(options: {
   user: Me;
   settings: Record<string, unknown>;
   account: Omit<AccountInfo, 'name' | 'email' | 'workspace'>;
+  /** This browser's offline copy of the workspace, and the scopes it last had. */
+  offline: { store: OfflineStore | null; scopes: ScopeInfo[] | null };
 }): WebHost {
   const { workspace, user } = options;
   const listeners = new Set<(docId: string, update: Uint8Array) => void>();
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   // The person's scopes: the server says on connecting, and when they change.
-  let scopes: ScopeInfo[] | undefined;
+  // Offline, the ones it had last time.
+  let scopes: ScopeInfo[] | undefined = options.offline.scopes ?? undefined;
   const scopeListeners = new Set<(scopes: ScopeInfo[]) => void>();
   let firstScopes: (scopes: ScopeInfo[]) => void = () => {};
   const scopesKnown = new Promise<ScopeInfo[]>((resolve) => (firstScopes = resolve));
+  const offline = new OfflineDocs(
+    options.offline.store,
+    () => client,
+    (docId, update) => {
+      for (const listener of listeners) listener(docId, update);
+    },
+  );
   let resolveScope: ((docId: string) => string | null) | null = null;
   // Presence: one handler per doc shown (the app keeps one awareness each).
   const presenceHandlers = new Map<string, PresenceHandlers>();
   const notificationListeners = new Set<(n: NotificationData) => void>();
   const base = `/api/workspaces/${workspace.id}`;
+  let unsplashOn: Promise<boolean> | undefined;
 
   // --- Exports: rendered by the server, downloaded here; PDFs printed by the browser.
   const exportListeners = new Set<(status: ExportStatus) => void>();
@@ -137,9 +150,8 @@ export function createWebPlatform(options: {
   }).catch(() => {});
   const client = new PartialClient({
     deviceId: crypto.randomUUID(),
-    onUpdate: (docId, update) => {
-      for (const listener of listeners) listener(docId, update);
-    },
+    onUpdate: (docId, update) => offline.received(docId, update),
+    onPending: (items) => offline.pending(items),
     onError: (error) => console.warn('sync:', error),
     // The server refused an edit (the person may not change that page), or took a page
     // away: start again from what the server has.
@@ -150,6 +162,7 @@ export function createWebPlatform(options: {
     onRevoked: () => location.reload(),
     onAccess: (next) => {
       scopes = next as ScopeInfo[];
+      void options.offline.store?.put('scopes', scopes).catch(() => {});
       firstScopes(scopes);
       for (const listener of scopeListeners) listener(scopes);
     },
@@ -176,7 +189,8 @@ export function createWebPlatform(options: {
       };
     },
   });
-  // Started (and stopped) by the component that shows it.
+  // Started (and stopped) by the component that shows it. Edits kept from before go first.
+  void offline.restore();
 
   const settings = new Map(Object.entries(options.settings));
   const keyOf = (key: string) => (GLOBAL_SETTINGS.has(key) ? key : `${workspace.id}:${key}`);
@@ -184,9 +198,9 @@ export function createWebPlatform(options: {
 
   const platform: Platform = {
     transport: {
-      open: (docId) => client.open(docId),
-      push: (docId, update) => client.push(docId, update),
-      close: (docId) => client.close(docId),
+      open: (docId) => offline.open(docId),
+      push: (docId, update) => offline.push(docId, update),
+      close: (docId) => offline.close(docId),
       subscribe: (listener) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
@@ -317,6 +331,24 @@ export function createWebPlatform(options: {
       return () => {
         if (drawDiagrams === render) drawDiagrams = null;
       };
+    },
+    // Unsplash covers, where the server has a key.
+    unsplash: {
+      enabled: () =>
+        (unsplashOn ??= api<{ unsplash?: boolean }>('GET', '/api/auth/config').then(
+          (config) => config.unsplash === true,
+          () => false,
+        )),
+      search: async (query) =>
+        (
+          await api<{ photos: UnsplashPhoto[] }>(
+            'GET',
+            `/api/unsplash/photos?query=${encodeURIComponent(query)}`,
+          )
+        ).photos,
+      picked: async (photo) => {
+        await api('POST', '/api/unsplash/picked', { downloadLocation: photo.downloadLocation });
+      },
     },
     restoreBackup: async () => false,
     // The print view (a tab of its own) has rendered: the browser's print, which saves PDFs.

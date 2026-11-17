@@ -219,3 +219,58 @@ test('a second tab sees edits live, and signing out returns to sign-in', async (
   await expect(other.getByTestId('sign-in')).toBeVisible();
   void browser;
 });
+
+test('offline: keeps editing, reopens without the server, and sends the edits when it’s back', async ({
+  browser,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const signIn = async (p: Page) => {
+    await p.goto(server.base);
+    await p.getByLabel('Email').fill('ada@lab.io');
+    await p.getByLabel('Password').fill('correct horse battery');
+    await p.getByRole('button', { name: 'Sign in' }).click();
+    await p
+      .getByTestId('workspace-picker')
+      .getByRole('button', { name: /Robotics lab/ })
+      .click();
+    await expect(sidebarTitles(p).first()).toBeVisible();
+  };
+  await signIn(page);
+  // The app's files are kept for offline use once its worker is in charge.
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.getByRole('button', { name: 'New page' }).click();
+  await page.getByLabel('Page title').fill('Field notes');
+  await page.getByLabel('Page title').press('Enter');
+  await page.keyboard.type('Before the outage.');
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0);
+  await page.waitForTimeout(1000);
+
+  // The server goes away: editing goes on, and the edits are kept in this browser.
+  await server.pause();
+  await expect(page.getByTestId('offline-banner')).toBeVisible({ timeout: 15_000 });
+  await editor(page).click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Written offline.');
+  await expect(page.getByTestId('offline-banner')).toContainText('kept here');
+  await page.waitForTimeout(1000);
+
+  // Reopened with no server at all: the app, the page and the edit are all here.
+  await page.reload();
+  await expect(sidebarTitles(page).filter({ hasText: 'Field notes' })).toBeVisible();
+  await sidebarTitles(page).filter({ hasText: 'Field notes' }).click();
+  await expect(editor(page)).toContainText('Before the outage.');
+  await expect(editor(page)).toContainText('Written offline.');
+
+  // The server is back: the kept edits go to it, and a fresh browser sees them.
+  await server.resume();
+  await page.getByTestId('offline-banner').getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByTestId('offline-banner')).toHaveCount(0, { timeout: 20_000 });
+  const fresh = await browser.newContext();
+  const other = await fresh.newPage();
+  await signIn(other);
+  await sidebarTitles(other).filter({ hasText: 'Field notes' }).click();
+  await expect(editor(other)).toContainText('Written offline.');
+  await fresh.close();
+});

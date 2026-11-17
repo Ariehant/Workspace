@@ -1,10 +1,11 @@
-import { App } from '@workspace/app';
+import { App, type ScopeInfo } from '@workspace/app';
 import '@workspace/editor/editor.css';
 import type { SyncStatus } from '@workspace/sync';
 import { CloudOff, Loader2 } from 'lucide-react';
 import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ApiError, api, me, type InviteInfo, type Me, type RemoteWorkspace } from './api';
+import { OfflineStore } from './offline';
 import { createWebPlatform } from './platform';
 import { Card, InviteScreen, SignIn, WorkspacePicker } from './shell';
 import './web.css';
@@ -32,9 +33,35 @@ const lastWorkspace = () => {
   }
 };
 
+/** What starting needs, kept for starting offline (who, which workspaces, settings). */
+const BOOT = 'workspace.boot';
+interface Boot {
+  user: Me;
+  workspaces: RemoteWorkspace[];
+  settings: Record<string, unknown>;
+}
+const keepBoot = (boot: Boot | null) => {
+  try {
+    if (boot) localStorage.setItem(BOOT, JSON.stringify(boot));
+    else localStorage.removeItem(BOOT);
+  } catch {
+    // Storage blocked: no offline start.
+  }
+};
+const keptBoot = (): Boot | null => {
+  try {
+    return JSON.parse(localStorage.getItem(BOOT) ?? 'null') as Boot | null;
+  } catch {
+    return null;
+  }
+};
+
 async function signOut() {
   await api('POST', '/api/auth/logout', {}).catch(() => {});
   remember(null);
+  // Nothing of the account stays in this browser.
+  keepBoot(null);
+  await OfflineStore.clear();
   location.assign('/');
 }
 
@@ -48,7 +75,13 @@ type State =
   | { screen: 'sign-in' }
   | { screen: 'invite'; token: string; invite: InviteInfo | null; user: Me | null }
   | { screen: 'pick'; user: Me }
-  | { screen: 'app'; user: Me; workspace: RemoteWorkspace; settings: Record<string, unknown> }
+  | {
+      screen: 'app';
+      user: Me;
+      workspace: RemoteWorkspace;
+      settings: Record<string, unknown>;
+      offline: Offline;
+    }
   | { screen: 'error'; message: string };
 
 /** Where the app should be: signed out, choosing a workspace, or in one. */
@@ -84,10 +117,36 @@ async function resolveState(): Promise<State> {
     remember(workspace.id);
     if (!wanted) history.replaceState(null, '', `/w/${workspace.id}${location.hash}`);
     const { settings } = await api<{ settings: Record<string, unknown> }>('GET', '/api/settings');
-    return { screen: 'app', user, workspace, settings };
+    keepBoot({ user, workspaces, settings });
+    return { screen: 'app', user, workspace, settings, offline: await openOffline(workspace.id) };
   } catch (error) {
+    // No server: the workspace as it was last seen here, if it was.
+    if (error instanceof ApiError && error.status === 0) {
+      const boot = keptBoot();
+      const id = workspaceFromPath() ?? lastWorkspace();
+      const workspace = boot?.workspaces.find((w) => w.id === id);
+      if (boot && workspace) {
+        if (!workspaceFromPath())
+          history.replaceState(null, '', `/w/${workspace.id}${location.hash}`);
+        return {
+          screen: 'app',
+          user: boot.user,
+          workspace,
+          settings: boot.settings,
+          offline: await openOffline(workspace.id),
+        };
+      }
+    }
     return { screen: 'error', message: error instanceof Error ? error.message : String(error) };
   }
+}
+
+type Offline = { store: OfflineStore | null; scopes: ScopeInfo[] | null };
+
+async function openOffline(workspaceId: string): Promise<Offline> {
+  const store = await OfflineStore.open(workspaceId);
+  const scopes = (await store?.get<ScopeInfo[]>('scopes').catch(() => null)) ?? null;
+  return { store, scopes };
 }
 
 function Root() {
@@ -138,7 +197,14 @@ function Root() {
         </Card>
       );
     case 'app':
-      return <Workspace user={state.user} workspace={state.workspace} settings={state.settings} />;
+      return (
+        <Workspace
+          user={state.user}
+          workspace={state.workspace}
+          settings={state.settings}
+          offline={state.offline}
+        />
+      );
   }
 }
 
@@ -146,10 +212,12 @@ function Workspace({
   user,
   workspace,
   settings,
+  offline: kept,
 }: {
   user: Me;
   workspace: RemoteWorkspace;
   settings: Record<string, unknown>;
+  offline: Offline;
 }) {
   const host = useMemo(
     () =>
@@ -161,8 +229,9 @@ function Workspace({
           switchWorkspace: () => location.assign('/?choose'),
           signOut: () => void signOut(),
         },
+        offline: kept,
       }),
-    [workspace, user, settings],
+    [workspace, user, settings, kept],
   );
   const [status, setStatus] = useState<{ sync: SyncStatus; unsent: number }>({
     sync: host.client.state,
@@ -178,13 +247,14 @@ function Workspace({
   }, [host]);
   useEffect(() => {
     document.title = `${workspace.name} · Workspace`;
-    // Edits not yet on the server live only in this tab: warn before it's closed.
+    // Edits not yet on the server are kept in this browser; where it can't keep them (no
+    // IndexedDB), they live only in this tab: warn before it's closed.
     const onUnload = (event: BeforeUnloadEvent) => {
-      if (host.client.unsent > 0) event.preventDefault();
+      if (!kept.store && host.client.unsent > 0) event.preventDefault();
     };
     window.addEventListener('beforeunload', onUnload);
     return () => window.removeEventListener('beforeunload', onUnload);
-  }, [host, workspace.name]);
+  }, [host, workspace.name, kept.store]);
   useEffect(() => {
     if (status.sync.state === 'unauthorized') location.assign('/');
   }, [status.sync.state]);
@@ -204,7 +274,9 @@ function Workspace({
             {status.sync.state === 'error'
               ? status.sync.reason
               : status.unsent > 0
-                ? `Offline · ${status.unsent} unsaved change${status.unsent === 1 ? '' : 's'}. Keep this tab open.`
+                ? kept.store
+                  ? `Offline · ${status.unsent} change${status.unsent === 1 ? '' : 's'} kept here, sent when you’re back.`
+                  : `Offline · ${status.unsent} unsaved change${status.unsent === 1 ? '' : 's'}. Keep this tab open.`
                 : 'Offline · reconnecting…'}
           </span>
           {status.sync.state === 'offline' && (
@@ -220,6 +292,11 @@ function Workspace({
       )}
     </>
   );
+}
+
+// Keeps the app's own files, so it opens offline (production builds; dev serves them live).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
 createRoot(document.getElementById('root')!).render(

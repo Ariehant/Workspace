@@ -79,6 +79,8 @@ export interface Platform {
   onExportStatus(listener: (status: ExportStatus) => void): () => void;
   /** Render Mermaid diagrams to SVG when an export asks (source → SVG). */
   provideDiagrams(render: (sources: string[]) => Promise<Record<string, string>>): () => void;
+  /** Unsplash covers (web app, on a server with a key). */
+  unsplash?: UnsplashPlatform;
   /** Replace the workspace with a backup (asks for the file and confirms first). */
   restoreBackup(): Promise<boolean>;
   /** A print view has finished rendering. */
@@ -327,6 +329,28 @@ export type ImportStatus =
   | { state: 'done'; report: ImportReport }
   | { state: 'cancelled' }
   | { state: 'failed'; error: string };
+
+/** A photo from Unsplash, for covers. */
+export interface UnsplashPhoto {
+  id: string;
+  description: string | null;
+  /** A small image, for choosing. */
+  thumb: string;
+  /** The image to show (from Unsplash, as it asks). */
+  full: string;
+  author: string;
+  authorUrl: string;
+  /** Told when the photo is used (Unsplash asks for that, too). */
+  downloadLocation: string;
+}
+
+/** Unsplash covers, through a server that has a key for it. */
+export interface UnsplashPlatform {
+  enabled(): Promise<boolean>;
+  search(query: string): Promise<UnsplashPhoto[]>;
+  /** The photo became a cover. */
+  picked(photo: UnsplashPhoto): Promise<void>;
+}
 
 export type ExportFormat = 'markdown' | 'html' | 'pdf' | 'backup';
 

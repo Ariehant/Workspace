@@ -23,7 +23,7 @@ import { ChevronRight, EyeOff, Plus } from 'lucide-react';
 import { useMemo, type DragEvent, type ReactNode } from 'react';
 import { useApp } from '../context';
 import { useDoc, useDocVersion } from '../hooks';
-import { coverStyle } from '../cover';
+import { coverStyle, isImageCover } from '../cover';
 import { CellDisplay, OptionPill, TextCellEditor } from './cells';
 
 /** Props shared by the board, list and gallery views. */
@@ -213,7 +213,7 @@ function CardPreview({
         data-testid="card-cover"
         style={{
           ...coverStyle(row.cover, platform.fileUrl),
-          ...(view.fitImage && row.cover.kind === 'file'
+          ...(view.fitImage && isImageCover(row.cover)
             ? { backgroundSize: 'contain', backgroundRepeat: 'no-repeat' }
             : {}),
         }}
