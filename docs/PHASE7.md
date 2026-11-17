@@ -821,8 +821,12 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
   and the index takes 750 ms to catch up with an import, so a search typed in that moment says
   "No results" until the query changes. Pages are found by title regardless; rows wait for the
   index.
-- **Runs:** unit tests all pass (also in four time zones). The full E2E runs are recorded in
-  the next commit.
+- **Runs:** unit tests all pass (also in four time zones); desktop E2E 156 passed (3 skipped)
+  twice, web E2E 3 passed. After the runs, the importer choice was narrowed (an `.enex` or a
+  board inside a Notion export stays an attachment); the import tests passed again on that
+  build. The first try of the new E2E showed the quick-find lag above: rows searched for right
+  after an import weren't found. The test now opens them from their board and table, as a
+  person would.
 
 ### M6: gaps (≈ 1.5 weeks)
 
