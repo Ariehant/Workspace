@@ -17,7 +17,14 @@ import {
 } from '@workspace/database';
 import { Button, Dialog, DialogContent, cn } from '@workspace/ui';
 import { AlertCircle, Sigma } from 'lucide-react';
-import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { PropertyIcon } from './cells';
 
 export interface FormulaEditorProps {
@@ -189,16 +196,24 @@ export function FormulaEditor({
   const index = Math.min(active, Math.max(suggestions.length - 1, 0));
   const selected = suggestions[index];
 
+  // The caret moves as the new source renders (a frame later, keys typed straight after an
+  // accepted suggestion would land first and be pushed behind it).
+  const caretAfter = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const at = caretAfter.current;
+    if (at === null) return;
+    caretAfter.current = null;
+    textarea.current?.focus();
+    textarea.current?.setSelectionRange(at, at);
+  }, [source]);
+
   const replaceRange = (start: number, end: number, text: string, caretOffset = text.length) => {
     const next = source.slice(0, start) + text + source.slice(end);
     setSource(next);
     const pos = start + caretOffset;
     setCaret(pos);
     setActive(0);
-    requestAnimationFrame(() => {
-      textarea.current?.focus();
-      textarea.current?.setSelectionRange(pos, pos);
-    });
+    caretAfter.current = pos;
   };
 
   const accept = (s: Suggestion) => {

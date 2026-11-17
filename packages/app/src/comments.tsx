@@ -35,6 +35,7 @@ import { Check, MessageSquare, MoreHorizontal, RotateCcw, SmilePlus, X } from 'l
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -304,6 +305,7 @@ function Composer({
   }, [initial, names]);
   const [query, setQuery] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const caretAfter = useRef<number | null>(null);
 
   const matches =
     query === null
@@ -324,13 +326,19 @@ function Composer({
     const before = text.slice(0, caret).replace(/@([^\s@]{0,30})$/, `@${person.name} `);
     const next = before + text.slice(caret);
     picked.current.set(person.name, person.id);
+    caretAfter.current = before.length;
     setText(next);
     setQuery(null);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(before.length, before.length);
-    });
   };
+  // After a mention, the caret goes after the name as the new text renders: a frame later,
+  // keys typed straight after would land first and be pushed behind it.
+  useLayoutEffect(() => {
+    const at = caretAfter.current;
+    if (at === null) return;
+    caretAfter.current = null;
+    ref.current?.focus();
+    ref.current?.setSelectionRange(at, at);
+  }, [text]);
 
   const submit = () => {
     let body = text.trim();
