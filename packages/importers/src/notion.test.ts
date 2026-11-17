@@ -1,5 +1,5 @@
 import { listPages, readBlocks, readLinks } from '@workspace/core';
-import { cellText, readDatabase, relationIds } from '@workspace/database';
+import { cellText, readDatabase, relationIds, richOf } from '@workspace/database';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { importFiles, type ImportTarget } from './import';
@@ -206,9 +206,10 @@ describe('Notion HTML export', () => {
           `<th><span class="icon property-icon"><svg class="typesNumber"></svg></span>Hours</th>` +
           `<th><span class="icon property-icon"><svg class="typesCheckbox"></svg></span>Reviewed</th>` +
           `<th><span class="icon property-icon"><svg class="typesFormula"></svg></span>Score</th>` +
+          `<th><span class="icon property-icon"><svg class="typesText"></svg></span>Notes</th>` +
           `</tr></thead><tbody>` +
-          `<tr><td class="cell-title"><a href="Tasks%20${T}/Wire%20motors%20${W}.html">Wire motors</a></td><td><span class="selected-value select-value-color-green">Done</span></td><td>3</td><td><div class="checkbox checkbox-on"></div></td><td>7</td></tr>` +
-          `<tr><td class="cell-title"><a href="Tasks%20${T}/Tune%20${A}.html">Tune</a></td><td><span class="selected-value select-value-color-blue">Blocked</span></td><td>1</td><td><div class="checkbox checkbox-off"></div></td><td>2</td></tr>` +
+          `<tr><td class="cell-title"><a href="Tasks%20${T}/Wire%20motors%20${W}.html">Wire motors</a></td><td><span class="selected-value select-value-color-green">Done</span></td><td>3</td><td><div class="checkbox checkbox-on"></div></td><td>7</td><td>Use <strong>18 AWG</strong>,\n see <a href="https://wire.example/awg">the  chart</a> <mark class="highlight-red">now</mark></td></tr>` +
+          `<tr><td class="cell-title"><a href="Tasks%20${T}/Tune%20${A}.html">Tune</a></td><td><span class="selected-value select-value-color-blue">Blocked</span></td><td>1</td><td><div class="checkbox checkbox-off"></div></td><td>2</td><td>plain</td></tr>` +
           `</tbody></table></article></body></html>`,
       ),
     },
@@ -264,6 +265,7 @@ describe('Notion HTML export', () => {
       ['Hours', 'number'],
       ['Reviewed', 'checkbox'],
       ['Score', 'text'],
+      ['Notes', 'text'],
     ]);
     const state = tasks.properties[1]!;
     expect(state.config.options!.find((o) => o.name === 'Blocked')).toMatchObject({
@@ -272,6 +274,19 @@ describe('Notion HTML export', () => {
     const wire = tasks.rows.find((r) => r.title === 'Wire motors')!;
     expect(cellText(wire, state, { users: new Map() })).toBe('Done');
     expect(wire.values[tasks.properties[3]!.id]).toBe(true);
+    // Formatted text keeps its formatting; its value is the text as shown.
+    const notes = tasks.properties[5]!;
+    expect(wire.values[notes.id]).toBe('Use 18 AWG, see the chart now');
+    expect(richOf(wire, notes.id)).toEqual([
+      { text: 'Use ' },
+      { text: '18 AWG', bold: true },
+      { text: ', see ' },
+      { text: 'the chart', link: 'https://wire.example/awg' },
+      { text: ' ' },
+      { text: 'now', color: 'red' },
+    ]);
+    const tune = tasks.rows.find((r) => r.title === 'Tune')!;
+    expect(tune.rich).toBeUndefined();
     expect(readBlocks(docs.get(wire.id)!)[0]!.text).toBe('Use 18 AWG.');
     expect(listPages(workspace).some((p) => p.title === 'Wire motors')).toBe(false);
   });

@@ -788,74 +788,92 @@
 }
 
 .ws-prose [data-color='gray'],
+.ws-rich [data-color='gray'],
 .ws-swatch-gray {
   color: var(--ws-gray);
 }
 .ws-prose [data-color='gray_background'],
+.ws-rich [data-color='gray_background'],
 .ws-swatch-gray_background {
   background-color: var(--ws-gray-bg);
 }
 .ws-prose [data-color='brown'],
+.ws-rich [data-color='brown'],
 .ws-swatch-brown {
   color: var(--ws-brown);
 }
 .ws-prose [data-color='brown_background'],
+.ws-rich [data-color='brown_background'],
 .ws-swatch-brown_background {
   background-color: var(--ws-brown-bg);
 }
 .ws-prose [data-color='orange'],
+.ws-rich [data-color='orange'],
 .ws-swatch-orange {
   color: var(--ws-orange);
 }
 .ws-prose [data-color='orange_background'],
+.ws-rich [data-color='orange_background'],
 .ws-swatch-orange_background {
   background-color: var(--ws-orange-bg);
 }
 .ws-prose [data-color='yellow'],
+.ws-rich [data-color='yellow'],
 .ws-swatch-yellow {
   color: var(--ws-yellow);
 }
 .ws-prose [data-color='yellow_background'],
+.ws-rich [data-color='yellow_background'],
 .ws-swatch-yellow_background {
   background-color: var(--ws-yellow-bg);
 }
 .ws-prose [data-color='green'],
+.ws-rich [data-color='green'],
 .ws-swatch-green {
   color: var(--ws-green);
 }
 .ws-prose [data-color='green_background'],
+.ws-rich [data-color='green_background'],
 .ws-swatch-green_background {
   background-color: var(--ws-green-bg);
 }
 .ws-prose [data-color='blue'],
+.ws-rich [data-color='blue'],
 .ws-swatch-blue {
   color: var(--ws-blue);
 }
 .ws-prose [data-color='blue_background'],
+.ws-rich [data-color='blue_background'],
 .ws-swatch-blue_background {
   background-color: var(--ws-blue-bg);
 }
 .ws-prose [data-color='purple'],
+.ws-rich [data-color='purple'],
 .ws-swatch-purple {
   color: var(--ws-purple);
 }
 .ws-prose [data-color='purple_background'],
+.ws-rich [data-color='purple_background'],
 .ws-swatch-purple_background {
   background-color: var(--ws-purple-bg);
 }
 .ws-prose [data-color='pink'],
+.ws-rich [data-color='pink'],
 .ws-swatch-pink {
   color: var(--ws-pink);
 }
 .ws-prose [data-color='pink_background'],
+.ws-rich [data-color='pink_background'],
 .ws-swatch-pink_background {
   background-color: var(--ws-pink-bg);
 }
 .ws-prose [data-color='red'],
+.ws-rich [data-color='red'],
 .ws-swatch-red {
   color: var(--ws-red);
 }
 .ws-prose [data-color='red_background'],
+.ws-rich [data-color='red_background'],
 .ws-swatch-red_background {
   background-color: var(--ws-red-bg);
 }
@@ -1149,4 +1167,25 @@
   text-decoration: underline;
   text-decoration-thickness: 2px;
   cursor: pointer;
+}
+
+/* Formatted text in database properties (cells, cards, row pages) and its input. */
+.ws-rich code {
+  font-family: var(--font-mono);
+  font-size: 85%;
+  background: var(--ws-hover);
+  color: var(--ws-danger);
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+.ws-rich a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--ws-faint);
+  text-underline-offset: 2px;
+}
+.ws-rich-input .ProseMirror {
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

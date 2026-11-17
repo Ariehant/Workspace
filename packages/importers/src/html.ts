@@ -1,4 +1,10 @@
-import type { PropertyType } from '@workspace/database';
+import {
+  isPlain,
+  normalizeSpans,
+  plainOf,
+  type PropertyType,
+  type RichSpan,
+} from '@workspace/database';
 import type { JSONContent } from '@workspace/editor';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import { readable, type ConvertContext, type LinkTarget } from './markdown';
@@ -486,6 +492,8 @@ export interface HtmlColumn {
 
 export interface HtmlTableRow {
   cells: string[];
+  /** Cells' formatting (bold, links, colours...), where they have any. */
+  rich: (RichSpan[] | null)[];
   /** Link of the title cell (the row's page). */
   href: string | null;
   /** Select colors by value, from Notion's classes. */
@@ -499,6 +507,41 @@ export interface HtmlPage {
   blocks: JSONContent[];
   /** A database page's table. */
   database: { columns: HtmlColumn[]; rows: HtmlTableRow[] } | null;
+}
+
+/**
+ * A cell's formatted text, laid out as its plain text is (spaces collapsed, ends trimmed);
+ * null when it has no formatting, or holds more than text (mentions, equations).
+ */
+function cellRuns(td: Element, text: string): RichSpan[] | null {
+  const nodes = new Converter({ link: () => null, warn: () => {} }).inline(kids(td));
+  const spans: RichSpan[] = [];
+  let space = true; // at the start, or after a space: further spaces go
+  for (const node of nodes) {
+    if (node.type === 'hardBreak') node.text = ' ';
+    else if (node.type !== 'text') return null;
+    let piece = (node.text ?? '').replace(/\s+/g, ' ');
+    if (space) piece = piece.replace(/^ /, '');
+    if (!piece) continue;
+    space = piece.endsWith(' ');
+    const span: RichSpan = { text: piece };
+    for (const mark of node.type === 'text' ? (node.marks ?? []) : []) {
+      if (mark.type === 'bold') span.bold = true;
+      else if (mark.type === 'italic') span.italic = true;
+      else if (mark.type === 'underline') span.underline = true;
+      else if (mark.type === 'strike') span.strike = true;
+      else if (mark.type === 'code') span.code = true;
+      else if (mark.type === 'color') span.color = String(mark.attrs?.color);
+      else if (mark.type === 'link' && /^(https?:|mailto:)/i.test(String(mark.attrs?.href))) {
+        span.link = String(mark.attrs!.href);
+      }
+    }
+    spans.push(span);
+  }
+  const last = spans.at(-1);
+  if (last) last.text = last.text.replace(/ $/, '');
+  const clean = normalizeSpans(spans);
+  return plainOf(clean) === text && !isPlain(clean) ? clean : null;
 }
 
 function readDatabaseTable(table: Element): HtmlPage['database'] {
@@ -516,21 +559,25 @@ function readDatabaseTable(table: Element): HtmlPage['database'] {
     .filter((n): n is Element => isElement(n) && n.tagName === 'tr' && n !== headRow)
     .map((tr) => {
       const colors = new Map<string, string>();
-      const cells = kids(tr)
-        .filter((n): n is Element => isElement(n) && n.tagName === 'td')
-        .map((td) => {
-          for (const value of findAll(td, (e) => classes(e).has('selected-value'))) {
-            const color = colorOf(value);
-            if (color) colors.set(textOf(value).trim(), color);
-          }
-          const values = findAll(td, (e) => classes(e).has('selected-value'));
-          if (values.length) return values.map((v) => textOf(v).trim()).join(', ');
-          const box = find(td, (e) => classes(e).has('checkbox'));
-          if (box) return classes(box).has('checkbox-on') ? 'Yes' : 'No';
-          return textOf(td).replace(/\s+/g, ' ').trim();
-        });
+      const tds = kids(tr).filter((n): n is Element => isElement(n) && n.tagName === 'td');
+      const cells = tds.map((td) => {
+        for (const value of findAll(td, (e) => classes(e).has('selected-value'))) {
+          const color = colorOf(value);
+          if (color) colors.set(textOf(value).trim(), color);
+        }
+        const values = findAll(td, (e) => classes(e).has('selected-value'));
+        if (values.length) return values.map((v) => textOf(v).trim()).join(', ');
+        const box = find(td, (e) => classes(e).has('checkbox'));
+        if (box) return classes(box).has('checkbox-on') ? 'Yes' : 'No';
+        return textOf(td).replace(/\s+/g, ' ').trim();
+      });
+      const rich = tds.map((td, i) =>
+        i === 0 || !cells[i] || find(td, (e) => classes(e).has('selected-value'))
+          ? null
+          : cellRuns(td, cells[i]!),
+      );
       const titleLink = find(tr, (e) => e.tagName === 'a');
-      return { cells, href: titleLink ? attr(titleLink, 'href') : null, colors };
+      return { cells, rich, href: titleLink ? attr(titleLink, 'href') : null, colors };
     });
   return { columns, rows };
 }

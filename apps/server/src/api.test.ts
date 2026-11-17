@@ -19,7 +19,14 @@ import {
   readThreads,
   setResolved,
 } from '@workspace/core';
-import { addOption, addProperty, addRow, initDatabase, readDatabase } from '@workspace/database';
+import {
+  addOption,
+  addProperty,
+  addRow,
+  initDatabase,
+  readDatabase,
+  richOf,
+} from '@workspace/database';
 import { appendContent, contentJson } from '@workspace/editor';
 import { PgStore } from '@workspace/storage-remote';
 import { createTestDatabase } from '@workspace/storage-remote/testing';
@@ -397,6 +404,37 @@ describe('endpoints', () => {
     );
     const row = readDatabase(w.a.doc(PARTS)).rows.find((r) => r.id === id)!;
     expect(row.createdBy).toBe(bot.id);
+
+    // Formatted text: annotations and links go in, come back, and reach the desktop.
+    expect(
+      (
+        await v1('PATCH', `/databases/${PARTS}`, bot.token, {
+          properties: { Notes: { rich_text: {} } },
+        })
+      ).status,
+    ).toBe(200);
+    const noted = await v1('PATCH', `/pages/${id}`, bot.token, {
+      properties: {
+        Notes: {
+          rich_text: [
+            { text: { content: 'Holds ' } },
+            { text: { content: '0.4 Nm' }, annotations: { bold: true } },
+            { text: { content: ' datasheet', link: { url: 'https://lab.io/ds' } } },
+          ],
+        },
+      },
+    });
+    expect(noted.body.properties.Notes.rich_text).toMatchObject([
+      { plain_text: 'Holds ', annotations: { bold: false } },
+      { plain_text: '0.4 Nm', annotations: { bold: true } },
+      { plain_text: ' datasheet', href: 'https://lab.io/ds' },
+    ]);
+    await until(() => {
+      const db = readDatabase(w.a.doc(PARTS));
+      const notes = db.properties.find((p) => p.name === 'Notes');
+      const r = db.rows.find((x) => x.id === id);
+      return !!notes && !!r && richOf(r, notes.id).some((s) => s.bold && s.text === '0.4 Nm');
+    }, 'formatted text on the desktop');
 
     const changed = await v1('PATCH', `/pages/${id}`, bot.token, {
       properties: { Stock: { number: 9 }, Kind: { select: null } },

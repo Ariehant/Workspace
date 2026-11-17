@@ -4,7 +4,9 @@ import {
   addRow,
   createRelation,
   initDatabase,
+  readDatabase,
   setRelation,
+  setRichCell,
 } from '@workspace/database';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
@@ -179,5 +181,29 @@ describe('export layout', () => {
     expect(
       files.get(`${root}/Tasks ${hex(ids.tasks)}/Wire, motors ${hex(ids.wire)}.html`),
     ).toContain('<dt>Status</dt><dd>Doing &quot;now&quot;</dd>');
+  });
+});
+
+describe('formatted text properties', () => {
+  it('keep their formatting in HTML, and are plain in Markdown and CSV', () => {
+    const { source, ids } = workspace();
+    const tasksDoc = source.doc(ids.tasks)!;
+    const status = readDatabase(tasksDoc).properties.find((p) => p.name === 'Status')!.id;
+    setRichCell(
+      tasksDoc,
+      ids.wire,
+      status,
+      [{ text: 'Doing ' }, { text: 'now', bold: true }],
+      'u1',
+    );
+    const root = `Robot Arm ${hex(ids.robot)}`;
+    const tasks = `${root}/Tasks ${hex(ids.tasks)}`;
+    const row = `${tasks}/Wire, motors ${hex(ids.wire)}`;
+    const html = run(source, { format: 'html' }).files;
+    expect(html.get(`${row}.html`)).toContain('<dt>Status</dt><dd>Doing <strong>now</strong></dd>');
+    expect(html.get(`${tasks}.html`)).toContain('<td>Doing <strong>now</strong></td>');
+    const md = run(source).files;
+    expect(md.get(`${row}.md`)).toContain('Status: Doing now\n');
+    expect(md.get(`${tasks}.csv`)).toContain('"Wire, motors",,Doing now,Motor');
   });
 });

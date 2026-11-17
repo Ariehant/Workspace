@@ -45,9 +45,10 @@ planned is in [PHASE7.md](PHASE7.md).
 Inline or full page (`/database inline`, `/database full page`, or "Get started with:
 Database" on an empty page).
 
-- **Property types:** text, number (with formats), select, multi-select, status, date (ranges,
-  times, reminders), checkbox, URL, email, phone, files, person, formula, relation, rollup,
-  button, created and edited time and by, and unique ID.
+- **Property types:** text (with bold, italic, underline, strikethrough, code, colours and
+  links: Ctrl+B, I, U, E and K while editing, or its toolbar), number (with formats), select,
+  multi-select, status, date (ranges, times, reminders), checkbox, URL, email, phone, files,
+  person, formula, relation, rollup, button, created and edited time and by, and unique ID.
 - **Views:** table, board, list, gallery, calendar, timeline, chart (bar, line, pie, donut) and
   form. Each view has its own filters (simple chips or nested AND/OR), sorts, grouping and
   sub-grouping, column calculations, visible properties, card preview and size, and a search.

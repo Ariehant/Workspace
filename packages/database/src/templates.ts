@@ -1,5 +1,6 @@
 import { PageField } from '@workspace/core';
 import * as Y from 'yjs';
+import { normalizeSpans, plainOf, type RichSpan } from './rich-text';
 import {
   addRow,
   deleteRow,
@@ -90,6 +91,10 @@ export function addRowFromTemplate(
         readProperties(doc),
         options.context ?? { me: options.actor },
       ),
+      // Kept where the value is still the template's (addRow checks).
+      ...(template?.rich
+        ? { rich: structuredClone(template.rich) as Record<string, RichSpan[]> }
+        : {}),
       afterId: options.afterId,
       beforeId: options.beforeId,
     });
@@ -120,7 +125,17 @@ export function applyTemplate(
     if (!(values instanceof Y.Map)) map.set(RowField.values, target);
     const filled = resolvePlaceholders(template.values, readProperties(doc), { me: actor });
     for (const [key, value] of Object.entries(filled)) {
-      if (!target.has(key)) target.set(key, structuredClone(value));
+      if (target.has(key)) continue;
+      target.set(key, structuredClone(value));
+      const spans = template.rich?.[key];
+      if (Array.isArray(spans) && plainOf(normalizeSpans(spans)) === value) {
+        let rich = map.get(RowField.rich);
+        if (!(rich instanceof Y.Map)) {
+          rich = new Y.Map<unknown>();
+          map.set(RowField.rich, rich);
+        }
+        (rich as Y.Map<unknown>).set(key, structuredClone(spans));
+      }
     }
     const fields: Parameters<typeof setRowPageFields>[2] = {};
     if (!row.icon && template.icon) fields.icon = template.icon;

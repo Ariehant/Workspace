@@ -1,6 +1,7 @@
 import { PageField, applyTextDiff, newId, type PageOptions } from '@workspace/core';
 import { generateKeyBetween } from 'fractional-indexing';
 import * as Y from 'yjs';
+import { isPlain, normalizeSpans, plainOf, type RichSpan } from './rich-text';
 import { renameInFormula } from './formula/engine';
 import { defaultForm } from './forms';
 import { cellText, propertyKind, optionsOf } from './properties';
@@ -128,6 +129,7 @@ export function readView(map: YMap): View {
 export function readRow(map: YMap): Row {
   const title = map.get(PageField.title);
   const values = map.get(RowField.values);
+  const rich = map.get(RowField.rich);
   return {
     id: map.get(PageField.id) as string,
     title: title instanceof Y.Text ? title.toString() : '',
@@ -146,6 +148,9 @@ export function readRow(map: YMap): Row {
     locked: map.get(PageField.locked) === true,
     isTemplate: map.get(RowField.template) === true,
     values: values instanceof Y.Map ? (values.toJSON() as Record<string, unknown>) : {},
+    ...(rich instanceof Y.Map && rich.size
+      ? { rich: rich.toJSON() as Record<string, unknown> }
+      : {}),
   };
 }
 
@@ -315,6 +320,7 @@ export function changePropertyType(
       const row = readRow(rowMap);
       const text = cellText(row, from, ctx);
       const values = rowValues(rowMap);
+      clearRich(rowMap, id);
       if (kind.computed || !text) {
         values.delete(id);
         continue;
@@ -339,6 +345,7 @@ export function deleteProperty(doc: Y.Doc, id: string): void {
     for (const rowMap of rowsMap(doc).values()) {
       const values = rowMap.get(RowField.values);
       if (values instanceof Y.Map && values.has(id)) values.delete(id);
+      clearRich(rowMap, id);
     }
     for (const view of readViews(doc)) {
       const map = getViewMap(doc, view.id);
@@ -379,6 +386,10 @@ export function duplicateProperty(doc: Y.Doc, id: string): string {
       if (values instanceof Y.Map && values.has(id)) {
         const value = values.get(id);
         values.set(copy, value instanceof Y.AbstractType ? value.toJSON() : structuredClone(value));
+        const rich = rowMap.get(RowField.rich);
+        if (rich instanceof Y.Map && rich.has(id)) {
+          rowRich(rowMap).set(copy, structuredClone(rich.get(id)));
+        }
       }
     }
   });
@@ -451,6 +462,8 @@ export interface AddRowOptions {
   id?: string;
   title?: string;
   values?: Record<string, unknown>;
+  /** Formatting of text values, by property id (kept only where it matches the value). */
+  rich?: Record<string, RichSpan[]>;
   /** Insert right after / before this row in the manual order (default: last). */
   afterId?: string;
   beforeId?: string;
@@ -484,6 +497,13 @@ export function addRow(doc: Y.Doc, options: AddRowOptions): string {
     // Concurrent offline adds can pick the same number; acceptable until sync (Phase 4).
     map.set(RowField.uid, rows.reduce((max, r) => Math.max(max, r.uid), 0) + 1);
     map.set(RowField.values, values);
+    const rich = Object.entries(options.rich ?? {}).flatMap(([key, spans]) => {
+      const clean = normalizeSpans(spans);
+      return clean.length && !isPlain(clean) && plainOf(clean) === options.values?.[key]
+        ? [[key, clean] as const]
+        : [];
+    });
+    if (rich.length) map.set(RowField.rich, new Y.Map<unknown>(rich));
     rowsMap(doc).set(id, map);
   });
   return id;
@@ -515,8 +535,49 @@ export function setCell(
     const values = rowValues(rowMap);
     if (value === null || value === undefined || value === '') values.delete(propertyId);
     else values.set(propertyId, value);
+    // A plain value: its old formatting no longer applies.
+    clearRich(rowMap, propertyId);
     touch(rowMap, actor, now);
   });
+}
+
+/**
+ * Set a text property to formatted text: the value becomes its plain text, and the
+ * formatting is kept beside it (none for plain text).
+ */
+export function setRichCell(
+  doc: Y.Doc,
+  rowId: string,
+  propertyId: string,
+  spans: readonly RichSpan[],
+  actor: string | null,
+  now = Date.now(),
+): void {
+  const clean = normalizeSpans(spans);
+  const text = plainOf(clean);
+  doc.transact(() => {
+    const rowMap = getRowMap(doc, rowId);
+    const values = rowValues(rowMap);
+    if (text.trim() === '') values.delete(propertyId);
+    else values.set(propertyId, text);
+    if (text.trim() === '' || isPlain(clean)) clearRich(rowMap, propertyId);
+    else rowRich(rowMap).set(propertyId, clean);
+    touch(rowMap, actor, now);
+  });
+}
+
+function rowRich(rowMap: YMap): Y.Map<unknown> {
+  let rich = rowMap.get(RowField.rich);
+  if (!(rich instanceof Y.Map)) {
+    rich = new Y.Map<unknown>();
+    rowMap.set(RowField.rich, rich);
+  }
+  return rich as Y.Map<unknown>;
+}
+
+function clearRich(rowMap: YMap, propertyId: string): void {
+  const rich = rowMap.get(RowField.rich);
+  if (rich instanceof Y.Map && rich.has(propertyId)) rich.delete(propertyId);
 }
 
 export function setRowTitle(
@@ -604,6 +665,7 @@ export function duplicateRow(doc: Y.Doc, rowId: string, actor: string | null): s
       actor,
       title: row.title,
       values: structuredClone(row.values) as Record<string, unknown>,
+      ...(row.rich ? { rich: structuredClone(row.rich) as Record<string, RichSpan[]> } : {}),
       afterId: rowId,
     });
     const { icon, cover, fullWidth, smallText, font, locked } = row;

@@ -16,3 +16,11 @@ export {
 export { renderMermaid, svgWidth } from './nodes/mermaid';
 export type { JSONContent } from '@tiptap/core';
 export * from './comments';
+export {
+  RichText,
+  RichTextInput,
+  docToRuns,
+  runsToDoc,
+  type RichRun,
+  type RichTextExit,
+} from './rich-text-input';

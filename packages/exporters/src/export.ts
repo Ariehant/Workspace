@@ -13,6 +13,8 @@ import {
   ComputedCache,
   DatabaseHandle,
   cellText,
+  richOf,
+  spansToHtml,
   isDatabaseDoc,
   type DatabaseSnapshot,
   type DisplayContext,
@@ -310,7 +312,8 @@ export function* exportPages(source: ExportSource, options: ExportOptions): Gene
                 `<tr>${properties
                   .map((p, i) => {
                     const text = escapeHtml(cellText(row, p, cellCtx));
-                    if (i > 0) return `<td>${text}</td>`;
+                    if (i > 0)
+                      return `<td>${p.type === 'text' ? spansToHtml(richOf(row, p.id)) : text}</td>`;
                     const href = escapeHtml(ctx.pageHref(row.id));
                     return `<td class="title"><a href="${href}">${text || 'Untitled'}</a></td>`;
                   })
@@ -336,7 +339,8 @@ export function* exportPages(source: ExportSource, options: ExportOptions): Gene
         }
       } else {
         const content = contentOf(item.id);
-        let properties: [string, string][] = [];
+        // Name, plain value, and the value as HTML (formatted text keeps its formatting).
+        let properties: [string, string, string][] = [];
         if (item.kind === 'row') {
           const snapshot = databases.snapshot(item.databaseId!);
           const row = snapshot?.rows.find((r) => r.id === item.id);
@@ -344,14 +348,21 @@ export function* exportPages(source: ExportSource, options: ExportOptions): Gene
             const cellCtx = { ...display, pages: snapshot.related };
             properties = exportedProperties(snapshot)
               .slice(1)
-              .map((p): [string, string] => [p.name, cellText(row, p, cellCtx)])
+              .map((p): [string, string, string] => {
+                const text = cellText(row, p, cellCtx);
+                return [
+                  p.name,
+                  text,
+                  p.type === 'text' ? spansToHtml(richOf(row, p.id)) : escapeHtml(text),
+                ];
+              })
               .filter(([, value]) => value !== '');
           }
         }
         if (html) {
           const header = properties.length
             ? `<dl class="properties">${properties
-                .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`)
+                .map(([k, , v]) => `<dt>${escapeHtml(k)}</dt><dd>${v}</dd>`)
                 .join('')}</dl>\n`
             : '';
           const body = blocksHtml(content, ctx);

@@ -34,6 +34,7 @@ import {
   readDatabase,
   restoreRow,
   setCell,
+  setRichCell,
   setPropertyConfig,
   setRelation,
   setRowPageFields,
@@ -41,6 +42,7 @@ import {
   trashRow,
   type Property,
   type SelectOption,
+  type RichSpan,
 } from '@workspace/database';
 import type { FastifyInstance } from 'fastify';
 import type * as Y from 'yjs';
@@ -60,6 +62,8 @@ const asBody = (raw: unknown): Body => {
 interface RowChanges {
   title?: string;
   values: Map<string, unknown>;
+  /** Text properties' formatting (written with their values). */
+  rich: Map<string, RichSpan[]>;
   relations: Map<string, string[]>;
   options: Map<string, SelectOption[]>;
   /** Databases that two-way relations touch. */
@@ -69,6 +73,7 @@ interface RowChanges {
 function readRowChanges(api: ApiView, properties: readonly Property[], raw: unknown): RowChanges {
   const changes: RowChanges = {
     values: new Map(),
+    rich: new Map(),
     relations: new Map(),
     options: new Map(),
     linked: [],
@@ -86,7 +91,10 @@ function readRowChanges(api: ApiView, properties: readonly Property[], raw: unkn
     else if (p.type === 'relation') {
       changes.relations.set(p.id, parsed.value as string[]);
       if (p.config.syncedPropertyId) changes.linked.push(p.config.databaseId ?? '');
-    } else changes.values.set(p.id, parsed.value);
+    } else {
+      changes.values.set(p.id, parsed.value);
+      if (parsed.rich) changes.rich.set(p.id, parsed.rich);
+    }
     if (parsed.newOptions) changes.options.set(p.id, parsed.newOptions);
   }
   return changes;
@@ -106,7 +114,11 @@ function applyRowChanges(
     const p = properties.find((x) => x.id === id)!;
     setPropertyConfig(doc, id, { ...p.config, options: [...(p.config.options ?? []), ...made] });
   }
-  for (const [id, value] of changes.values) setCell(doc, rowId, id, value, bot);
+  for (const [id, value] of changes.values) {
+    const rich = changes.rich.get(id);
+    if (rich) setRichCell(doc, rowId, id, rich, bot);
+    else setCell(doc, rowId, id, value, bot);
+  }
   if (changes.title !== undefined) setRowTitle(doc, rowId, changes.title, bot);
   for (const [id, ids] of changes.relations) setRelation(resolve, databaseId, rowId, id, ids, bot);
 }

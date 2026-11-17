@@ -138,8 +138,9 @@ Webhooks only go to public `https://` addresses unless the server allows otherwi
 - **Paragraphs can't hold blocks:** children sent under a paragraph come after it.
 - **Blocks have no author:** their `created_by` and `last_edited_by` have a null id.
 - **Uploads aren't supported:** files go in as external URLs.
-- **Text properties hold plain text:** formatting inside a text property's value isn't kept.
-  Titles and page content keep theirs.
+- **Titles hold plain text:** formatting inside a page's title isn't kept. Text properties keep
+  bold, italic, strikethrough, underline, code, colours and links, as page content does;
+  mentions and equations in a text property come in as their text.
 - **Comments on selected text** report the page as their parent.
 - **Icons and covers:** emoji icons can be set, and covers removed; images as icons or covers
   can't be set through the API yet.

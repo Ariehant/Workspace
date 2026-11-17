@@ -364,3 +364,57 @@ test('rows in quick find, links to rows, and inline databases', async ({ launch 
   await window.evaluate((url) => globalThis.open(url), link);
   await expect(window.getByTestId('row-page').getByLabel('Page title')).toHaveValue('Spot');
 });
+
+test('text properties: bold, links and colour, kept after a restart and in the row page', async ({
+  launch,
+}) => {
+  const first = await launch();
+  let { window } = first;
+  await newDatabase(window, 'Specs');
+  await addRow(window, 'Arm');
+  await addProperty(window, 'Text', 'Notes');
+
+  // Typed straight into the selected cell, with Ctrl+B around "2 Nm".
+  await (await cell(window, 'Arm', 'Notes')).click();
+  await window.keyboard.type('Torque ');
+  await window.keyboard.press('Control+b');
+  await window.keyboard.type('2 Nm');
+  await window.keyboard.press('Control+b');
+  await window.keyboard.type(', see spec');
+  // "spec" becomes a link (Ctrl+K), and red.
+  for (let i = 0; i < 4; i++) await window.keyboard.press('Shift+ArrowLeft');
+  await window.keyboard.press('Control+k');
+  await window.getByLabel('Link address').fill('https://example.org/spec');
+  await window.getByLabel('Link address').press('Enter');
+  await window.getByLabel('Color').selectOption('red');
+  await window.getByTestId('cell-editor').press('Enter');
+
+  const notes = async () => cell(window, 'Arm', 'Notes');
+  await expect(await notes()).toHaveText('Torque 2 Nm, see spec');
+  await expect((await notes()).locator('strong')).toHaveText('2 Nm');
+  await expect((await notes()).getByRole('link', { name: 'spec' })).toHaveAttribute(
+    'href',
+    'https://example.org/spec',
+  );
+  await expect((await notes()).locator('[data-color="red"]')).toHaveText('spec');
+
+  // Filters and search still read the plain text.
+  await waitForIndexed(window, 'Torque');
+
+  await quit(first.app);
+  ({ window } = await launch());
+  await window.getByTestId('sidebar-page-title').filter({ hasText: 'Specs' }).click();
+  await expect((await notes()).locator('strong')).toHaveText('2 Nm');
+
+  // Editing again keeps the formatting; Escape leaves it as it was.
+  await (await notes()).dblclick();
+  await expect(window.getByTestId('cell-editor').locator('strong')).toHaveText('2 Nm');
+  await window.keyboard.press('Escape');
+  await expect((await notes()).locator('strong')).toHaveText('2 Nm');
+
+  // The row page shows it too.
+  await (await cell(window, 'Arm', 'Name')).hover();
+  await table(window).getByRole('button', { name: 'Open', exact: true }).click();
+  const peek = window.getByTestId('row-peek');
+  await expect(peek.getByTestId('rich-text').locator('strong')).toHaveText('2 Nm');
+});

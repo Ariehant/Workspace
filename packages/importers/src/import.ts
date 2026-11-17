@@ -22,6 +22,7 @@ import {
   type Property,
   type PropertyConfig,
   type PropertyType,
+  type RichSpan,
   type SelectOption,
 } from '@workspace/database';
 import { appendContent, type JSONContent } from '@workspace/editor';
@@ -379,6 +380,8 @@ function importNotion(
     }[];
     rowIds: string[];
     titles: string[];
+    /** Cells' formatting, by row and column (HTML exports). */
+    rich: (RichSpan[] | null)[][];
     colors: Map<string, string>;
     /** Where row cells' relative links resolve from. */
     base: string;
@@ -388,6 +391,7 @@ function importNotion(
     if (item.kind !== 'database') continue;
     let header: HtmlColumn[] = [];
     let cells: string[][] = [];
+    let rich: (RichSpan[] | null)[][] = [];
     let hrefs: (string | null)[] = [];
     const colors = new Map<string, string>();
     let base = item.csv ?? item.file ?? item.dir;
@@ -402,6 +406,7 @@ function importNotion(
       if (page.title && page.title !== item.title) setPageTitle(ws, item.id, page.title);
       header = page.table?.columns ?? [{ name: 'Name', type: 'title' }];
       cells = page.table?.rows.map((r) => r.cells) ?? [];
+      rich = page.table?.rows.map((r) => r.rich) ?? [];
       hrefs = page.table?.rows.map((r) => r.href) ?? [];
       page.table?.rows.forEach((r) => r.colors.forEach((c, v) => colors.set(v, c)));
       base = item.file;
@@ -433,7 +438,16 @@ function importNotion(
     }));
     const doc = target.doc(item.id);
     initDatabase(doc, { databaseId: item.id });
-    plans.push({ item, doc, columns, rowIds, titles: cells.map((r) => r[0] ?? ''), colors, base });
+    plans.push({
+      item,
+      doc,
+      columns,
+      rowIds,
+      titles: cells.map((r) => r[0] ?? ''),
+      rich,
+      colors,
+      base,
+    });
   }
 
   // Relations: columns whose values are rows of another imported database.
@@ -530,6 +544,7 @@ function importNotion(
       const display = { users: new Map<string, string>() };
       plan.rowIds.forEach((rowId, r) => {
         const values: Record<string, unknown> = {};
+        const rich: Record<string, RichSpan[]> = {};
         plan.columns.forEach((column, c) => {
           const property = ids[c];
           const raw = column.values[r]?.trim() ?? '';
@@ -539,8 +554,11 @@ function importNotion(
           else if (property.type === 'checkbox') value = /^(yes|true|1|x|✓)$/i.test(raw);
           else value = propertyKind(property.type).parse(raw, property, display).value;
           if (value !== null && value !== undefined) values[property.id] = value;
+          // Formatted text keeps its formatting (addRow keeps it where it matches the value).
+          const spans = plan.rich[r]?.[c];
+          if (property.type === 'text' && spans) rich[property.id] = spans;
         });
-        addRow(doc, { actor: null, id: rowId, title: plan.titles[r] ?? '', values });
+        addRow(doc, { actor: null, id: rowId, title: plan.titles[r] ?? '', values, rich });
         rows++;
       });
     });

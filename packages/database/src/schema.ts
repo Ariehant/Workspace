@@ -24,6 +24,8 @@ export const RowField = {
   updatedBy: 'updatedBy',
   uid: 'uid',
   values: 'values',
+  /** Formatting of text property values, by property id (see `rich-text.ts`). */
+  rich: 'rich',
   /** Set on template rows: pages new rows are made from, hidden from views. */
   template: 'template',
 } as const;
@@ -426,6 +428,11 @@ export interface Row {
   isTemplate: boolean;
   /** Stored property values by property id (computed properties aren't stored). */
   values: Readonly<Record<string, unknown>>;
+  /**
+   * Formatting of text values by property id, as stored (`richOf` checks it still matches
+   * the value).
+   */
+  rich?: Readonly<Record<string, unknown>>;
 }
 
 export interface DatabaseSnapshot {

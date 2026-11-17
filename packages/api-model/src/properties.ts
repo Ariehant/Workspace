@@ -13,8 +13,11 @@ import {
   defaultStatusOptions,
   effectiveType,
   isDateValue,
+  normalizeSpans,
   optionsOf,
+  plainOf,
   relationIds,
+  richOf,
   type DateValue,
   type FileValue,
   type NumberFormat,
@@ -22,13 +25,14 @@ import {
   type Property,
   type PropertyConfig,
   type PropertyType,
+  type RichSpan,
   type RollupCalculation,
   type Row,
   type SelectOption,
 } from '@workspace/database';
 import { invalid } from './errors';
 import { parseId } from './ids';
-import { readRichText, richText } from './rich-text';
+import { readRichSpans, readRichText, richText, richTextFromSpans } from './rich-text';
 
 // --- Names ---------------------------------------------------------------------------
 
@@ -460,8 +464,10 @@ export function propertyValue(row: Row, p: Property, ctx: ValueContext): Record<
   let value: unknown;
   switch (p.type) {
     case 'title':
-    case 'text':
       value = richText(typeof v === 'string' ? v : '');
+      break;
+    case 'text':
+      value = richTextFromSpans(richOf(row, p.id));
       break;
     case 'number':
       value = typeof v === 'number' ? v : null;
@@ -528,6 +534,8 @@ export function propertiesObject(row: Row, properties: readonly Property[], ctx:
 export interface ParsedValue {
   value: unknown;
   newOptions?: SelectOption[];
+  /** A text property's formatting (store with `setRichCell`). */
+  rich?: RichSpan[];
 }
 
 export interface ParseContext {
@@ -590,8 +598,11 @@ export function parseValue(p: Property, input: unknown, ctx: ParseContext): Pars
   const at = `${where}.${type}`;
   switch (p.type) {
     case 'title':
-    case 'text':
       return { value: readRichText(raw, at) };
+    case 'text': {
+      const spans = normalizeSpans(readRichSpans(raw, at));
+      return { value: plainOf(spans) || null, rich: spans };
+    }
     case 'number':
       if (raw !== null && (typeof raw !== 'number' || !Number.isFinite(raw))) {
         throw invalid(`${at} should be a number or null.`);

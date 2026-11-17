@@ -5,6 +5,7 @@ import {
   initDatabase,
   readDatabase,
   setCell,
+  setRichCell,
   type Property,
   type Row,
 } from '@workspace/database';
@@ -24,6 +25,7 @@ import {
   propertyValue,
   readRichText,
   richText,
+  type RichTextItem,
   type ValueContext,
 } from './index';
 
@@ -391,5 +393,39 @@ describe('lists', () => {
         (i) => i,
       ),
     ).toThrow(/cursor/);
+  });
+});
+
+describe('formatted text properties', () => {
+  it('keep annotations, colours and links both ways', () => {
+    const { doc, ids, prop } = setup();
+    const ctx = { isUser: () => false };
+    const row = addRow(doc, { actor: ADA, title: 'Arm' });
+    const parsed = parseValue(
+      prop(ids.notes),
+      {
+        rich_text: [
+          { text: { content: 'Torque ' } },
+          { text: { content: '2 Nm' }, annotations: { bold: true, color: 'red' } },
+          { text: { content: ' spec', link: { url: 'https://lab.io/spec' } } },
+          { text: { content: '!', link: { url: 'javascript:alert(1)' } } },
+        ],
+      },
+      ctx,
+    );
+    expect(parsed.value).toBe('Torque 2 Nm spec!');
+    setRichCell(doc, row, ids.notes, parsed.rich!, ADA);
+    const out = propertyValue(rowOf(doc, row), prop(ids.notes), links) as {
+      rich_text: RichTextItem[];
+    };
+    expect(
+      out.rich_text.map((i) => [i.plain_text, i.annotations.bold, i.annotations.color, i.href]),
+    ).toEqual([
+      ['Torque ', false, 'default', null],
+      ['2 Nm', true, 'red', null],
+      [' spec', false, 'default', 'https://lab.io/spec'],
+      // A script address isn't kept as a link.
+      ['!', false, 'default', null],
+    ]);
   });
 });

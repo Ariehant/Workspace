@@ -28,6 +28,9 @@ import {
   type PropertyType,
   type Row,
   type SelectOption,
+  normalizeSpans,
+  richOf,
+  setRichCell,
 } from '@workspace/database';
 import { Avatar, IconButton, Popover, PopoverAnchor, PopoverContent, cn } from '@workspace/ui';
 import {
@@ -60,7 +63,7 @@ import {
   ArrowUpRight as RelationIcon,
   type LucideIcon,
 } from 'lucide-react';
-import { PageIcon } from '@workspace/editor';
+import { PageIcon, RichText, RichTextInput, type RichRun } from '@workspace/editor';
 import { useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../context';
 import { useNavigation } from '../navigation';
@@ -333,6 +336,14 @@ export function CellDisplay({
     case 'lastEditedTime':
     case 'uniqueId':
       return <span className={cn('text-muted', lines)}>{cellText(row, property, ctx)}</span>;
+    case 'text': {
+      const runs = richOf(row, property.id);
+      // Formatted text; plain text stays a plain span.
+      if (runs.length > 1 || (runs[0] && Object.keys(runs[0]).length > 1)) {
+        return <RichText runs={runs} className={lines} />;
+      }
+      return <span className={lines}>{cellText(row, property, ctx)}</span>;
+    }
     default:
       return <span className={lines}>{cellText(row, property, ctx)}</span>;
   }
@@ -376,7 +387,42 @@ export interface CellEditorProps {
 }
 
 /** In-place text input for title, text, number, URL, email and phone. */
-export function TextCellEditor({
+export function TextCellEditor(props: CellEditorProps & { className?: string }) {
+  // Text properties take formatting; the other text-like types stay plain.
+  return props.property.type === 'text' ? (
+    <RichCellEditor {...props} />
+  ) : (
+    <PlainCellEditor {...props} />
+  );
+}
+
+function RichCellEditor({
+  handle,
+  row,
+  property,
+  initialText,
+  onDone,
+  className,
+}: CellEditorProps & { className?: string }) {
+  const { user } = useApp();
+  const [runs] = useState(() => richOf(row, property.id));
+  return (
+    <RichTextInput
+      runs={runs}
+      label={property.name}
+      initialText={initialText}
+      className={cn('rounded-sm', className)}
+      onDone={(next: RichRun[], exit) => {
+        if (JSON.stringify(normalizeSpans(next)) !== JSON.stringify(normalizeSpans(runs))) {
+          setRichCell(handle.doc, row.id, property.id, next, user.id);
+        }
+        onDone(exit);
+      }}
+    />
+  );
+}
+
+function PlainCellEditor({
   handle,
   row,
   property,
@@ -388,7 +434,7 @@ export function TextCellEditor({
   const { user } = useApp();
   const [text, setText] = useState(() => initialText ?? cellText(row, property, ctx));
   const done = useRef(false);
-  const multiline = property.type === 'text';
+  const multiline = false;
 
   const commit = (exit: EditExit) => {
     if (done.current) return;
