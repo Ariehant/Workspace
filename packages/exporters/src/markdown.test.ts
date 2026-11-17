@@ -182,3 +182,29 @@ describe('HTML export', () => {
     expect(html).toContain('<input type="checkbox" disabled checked>');
   });
 });
+
+describe('cropped images', () => {
+  it('show their crop and turn in HTML, and the whole file in Markdown', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el('image', {
+        fileId: 'f1',
+        name: 'arm.png',
+        crop: '0.1 0.2 0.5 0.4',
+        rotate: 90,
+        aspect: 0.8,
+      }),
+      el('image', { fileId: 'f2', name: 'base.png' }),
+    );
+    const html = blocksHtml(readContent(doc), ctx);
+    expect(html).toContain(
+      '<div class="cropped" style="position:relative;overflow:hidden;width:100%;aspect-ratio:0.8">',
+    );
+    expect(html).toContain('transform:translate(-50%, -50%) rotate(90deg)');
+    expect(html).toContain(
+      '<img src="Page/arm.png" alt="arm.png" style="position:absolute;max-width:none;width:200%;height:250%;left:-20%;top:-50%">',
+    );
+    expect(html).toContain('<img src="Page/base.png" alt="base.png">');
+    expect(blocksMarkdown(readContent(doc), ctx)).toContain('![arm.png](Page/arm.png)');
+  });
+});

@@ -128,6 +128,61 @@ test('image: upload, caption, resize, and it loads again after a restart', async
   expect(Math.round((await editor(window).locator('.ws-image').boundingBox())!.width)).toBe(width);
 });
 
+test('image: crop to a shape, turn, resize from the keyboard, kept after a restart', async ({
+  launch,
+}) => {
+  const launched = await launch();
+  let { window } = launched;
+  await newPage(window, 'Crops');
+  await slash(window, 'image');
+  await window.getByTestId('media-placeholder').getByLabel('Upload file').setInputFiles({
+    name: 'gripper.png',
+    mimeType: 'image/png',
+    buffer: PNG,
+  });
+  const figure = editor(window).locator('.ws-image');
+  await expect.poll(() => loaded(editor(window).locator('.ws-image img'))).toBe(4);
+
+  await figure.hover();
+  await figure.getByRole('button', { name: 'Crop' }).click();
+  const dialog = window.getByTestId('image-crop-dialog');
+  const frame = dialog.getByTestId('crop-frame');
+  // The 4×3 image cropped square: the middle three quarters of its width.
+  await dialog.getByRole('button', { name: 'Square' }).click();
+  await expect(frame).toHaveAttribute('data-rect', '0.1250 0.0000 0.7500 1.0000');
+  // Turned clockwise, the frame turns with it.
+  await dialog.getByRole('button', { name: 'Rotate right' }).click();
+  await expect(dialog.getByTestId('crop-stage')).toHaveAttribute('data-rotation', '90');
+  await expect(frame).toHaveAttribute('data-rect', '0.0000 0.1250 1.0000 0.7500');
+  // Shift+Up five times: five hundredths shorter.
+  await frame.focus();
+  for (let i = 0; i < 5; i++) await window.keyboard.press('Shift+ArrowUp');
+  await expect(frame).toHaveAttribute('data-rect', '0.0000 0.1250 1.0000 0.7000');
+  await dialog.getByRole('button', { name: 'Apply' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Shown cropped and turned: 3 px high and 2.8 px wide in the file, so a little wider than high.
+  const ratio = (w: Page) => async () => {
+    const box = (await editor(w).getByTestId('cropped-image').boundingBox())!;
+    return box.width / box.height;
+  };
+  await expect.poll(ratio(window)).toBeCloseTo(3 / 2.8, 1);
+  await waitForIndexed(window, 'Crops');
+
+  await quit(launched.app);
+  ({ window } = await launch());
+  await expect(editor(window).getByTestId('cropped-image')).toBeVisible();
+  await expect.poll(ratio(window)).toBeCloseTo(3 / 2.8, 1);
+
+  // Reset brings the whole image back.
+  await editor(window).locator('.ws-image').hover();
+  await editor(window).getByRole('button', { name: 'Crop' }).click();
+  await window.getByTestId('image-crop-dialog').getByRole('button', { name: 'Reset' }).click();
+  await window.getByTestId('image-crop-dialog').getByRole('button', { name: 'Apply' }).click();
+  await expect(editor(window).getByTestId('cropped-image')).toHaveCount(0);
+  await expect.poll(() => loaded(editor(window).locator('.ws-image img'))).toBe(4);
+});
+
 test('pasting and dropping files creates image, PDF and file blocks', async ({ launch }) => {
   const { window } = await launch();
   await newPage(window, 'Attachments');

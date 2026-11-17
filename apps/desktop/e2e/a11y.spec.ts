@@ -12,6 +12,12 @@ import { addProperty, addRow, newDatabase } from './db';
 import { editor, expect, launchApp, test } from './helpers';
 import { startSyncServer } from './server';
 
+/** A 4×3 PNG. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEklEQVR4nGP4z8AARwzEcQwDAH2gC/UmQhvLAAAAAElFTkSuQmCC',
+  'base64',
+);
+
 const THEMES = ['Light', 'Dark'] as const;
 
 /**
@@ -117,6 +123,26 @@ for (const theme of THEMES) {
       await window.getByRole('button', { name: 'Page options' }).click();
       await window.getByTestId('page-menu').getByRole('menuitem', { name: 'Export…' }).click();
       await expect(window.getByTestId('export-dialog')).toBeVisible();
+    });
+
+    // An image and its crop dialog.
+    await editor(window).first().click();
+    await window.keyboard.press('Control+End');
+    await window.keyboard.press('Enter');
+    await window.keyboard.type('/image');
+    await window
+      .getByTestId('slash-menu')
+      .getByRole('option', { name: /^Image/ })
+      .click();
+    await window.getByTestId('media-placeholder').getByLabel('Upload file').setInputFiles({
+      name: 'arm.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    await editor(window).first().locator('.ws-image').hover();
+    await checkOpen(window, s('the image crop'), async () => {
+      await editor(window).first().getByRole('button', { name: 'Crop' }).click();
+      await expect(window.getByTestId('image-crop-dialog').getByTestId('crop-frame')).toBeVisible();
     });
 
     // A database in every layout, and its toolbar's panels.

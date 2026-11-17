@@ -24,8 +24,9 @@ planned is in [PHASE7.md](PHASE7.md).
   Tab/Shift+Tab on selected lines.
 - **Diagrams and math:** Mermaid diagrams (code, preview or split) and KaTeX equations, with
   workspace macros and live errors.
-- **Media:** images (upload, paste or drop; resize; captions), video, audio, PDFs viewed in the
-  page, any file (opens in its default app), web bookmarks with previews, and embeds from
+- **Media:** images (upload, paste or drop; resize; crop and rotate, the file kept as it is;
+  captions), video, audio, PDFs viewed in the page, any file (opens in its default app), web
+  bookmarks with previews, and embeds from
   YouTube, Vimeo, Loom, Figma, CodePen and Google Maps. Pasting a link offers Bookmark or Embed.
 - **Inline formatting:** a toolbar on selected text for bold, italic, underline, strikethrough,
   code, links, colors, equations and turn into. Ctrl+click opens a link.

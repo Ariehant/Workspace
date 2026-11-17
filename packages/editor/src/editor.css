@@ -613,7 +613,14 @@
 .ws-prose .ProseMirror-selectednode:has(.ws-image, .ws-media, .ws-embed, .ws-bookmark) {
   background: none;
 }
-.ws-image.is-selected img,
+.ws-image-cropped {
+  border-radius: 4px;
+}
+.ws-image-cropped img {
+  border-radius: 0;
+}
+.ws-image.is-selected > img,
+.ws-image.is-selected > .ws-image-cropped,
 .ws-media.is-selected,
 .ws-embed.is-selected,
 .ws-bookmark.is-selected {
@@ -638,6 +645,35 @@
 }
 .ws-image:hover .ws-image-resize {
   opacity: 1;
+}
+/* Crop (and later tools), top right, shown on hover or keyboard focus. */
+.ws-image-tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.ws-image:hover .ws-image-tools,
+.ws-image-tools:focus-within {
+  opacity: 1;
+}
+.ws-image-tool {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: rgba(15, 15, 15, 0.7);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ws-image-tool:hover {
+  background: rgba(15, 15, 15, 0.85);
 }
 .ws-image-resize-left {
   left: 8px;

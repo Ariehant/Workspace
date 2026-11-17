@@ -5,6 +5,7 @@ import { NodeViewWrapper, type ReactNodeViewProps } from '@tiptap/react';
 import { cn } from '@workspace/ui';
 import {
   Bookmark,
+  Crop as CropIcon,
   FileText,
   FileVideo,
   Globe,
@@ -17,6 +18,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useEditorServices, type EditorServices, type FileRef } from '../services';
 import { atomBlock, dataAttr } from './atom';
+import { CroppedImage, ImageCropDialog } from './image-crop';
 import { isUrl, toEmbedUrl } from './embeds';
 
 export type MediaKind = 'image' | 'video' | 'audio' | 'pdf' | 'file';
@@ -216,6 +218,7 @@ function ImageView({ node, updateAttributes, editor, selected }: ReactNodeViewPr
   const src = sourceOf(services, node.attrs);
   const figure = useRef<HTMLElement>(null);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const [cropping, setCropping] = useState(false);
   const width = dragWidth ?? (node.attrs.width as number | null);
 
   if (!src) {
@@ -269,12 +272,25 @@ function ImageView({ node, updateAttributes, editor, selected }: ReactNodeViewPr
         className={cn('ws-image group', selected && 'is-selected')}
         style={{ width: width ? `${width}px` : undefined }}
       >
-        <img
-          src={src}
-          alt={(node.attrs.caption as string) || ''}
-          draggable={false}
-          data-drag-handle
-        />
+        <CroppedImage src={src} alt={(node.attrs.caption as string) || ''} attrs={node.attrs} />
+        {editor.isEditable && (
+          <div className="ws-image-tools">
+            <button type="button" className="ws-image-tool" onClick={() => setCropping(true)}>
+              <CropIcon size={13} /> Crop
+            </button>
+          </div>
+        )}
+        {cropping && (
+          <ImageCropDialog
+            src={src}
+            attrs={node.attrs}
+            onClose={() => setCropping(false)}
+            onApply={(view) => {
+              updateAttributes(view);
+              setCropping(false);
+            }}
+          />
+        )}
         {editor.isEditable &&
           (['left', 'right'] as const).map((side) => (
             <span
@@ -305,6 +321,11 @@ const fileAttrs = {
 export const ImageBlock = atomBlock('image', ImageView, {
   ...fileAttrs,
   width: dataAttr('width'),
+  // How it's shown (the file doesn't change): the crop (`x y w h`, fractions of the image),
+  // the clockwise turn in degrees, and the shown width over height.
+  crop: dataAttr('crop'),
+  rotate: dataAttr('rotate'),
+  aspect: dataAttr('aspect'),
 });
 
 // --- Video, audio, PDF, file --------------------------------------------------------

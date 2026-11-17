@@ -1,3 +1,4 @@
+import { FULL_CROP, cssText, imageViewStyles, parseCrop, parseRotation } from '@workspace/core';
 import { flag, inlineText, type ContentNode, type Inline } from './content';
 import { formatDateMention, type RenderContext } from './context';
 
@@ -73,6 +74,16 @@ function listHtml(node: ContentNode, ctx: RenderContext): string {
   return `<${tag}${classAttr(node.type === 'taskList' ? 'todo' : '')}${start}>${items}</${tag}>`;
 }
 
+/** An image, cropped and turned as its block shows it (with CSS; the file is unchanged). */
+function imageHtml(src: string, alt: string, attrs: Record<string, unknown>): string {
+  const crop = parseCrop(attrs.crop);
+  const rotation = parseRotation(attrs.rotate);
+  const aspect = Number(attrs.aspect);
+  if ((!crop && !rotation) || !(aspect > 0)) return `<img src="${src}" alt="${alt}">`;
+  const styles = imageViewStyles(crop ?? FULL_CROP, rotation, aspect);
+  return `<div class="cropped" style="${cssText(styles.frame)}"><div style="${cssText(styles.turned)}"><img src="${src}" alt="${alt}" style="${cssText(styles.image)}"></div></div>`;
+}
+
 function mediaHtml(node: ContentNode, ctx: RenderContext): string {
   const { fileId, src, name, caption, url, title, description } = node.attrs as Record<
     string,
@@ -91,7 +102,7 @@ function mediaHtml(node: ContentNode, ctx: RenderContext): string {
   const label = escapeHtml(caption || name || node.type);
   const media =
     node.type === 'image'
-      ? `<img src="${e}" alt="${label}">`
+      ? imageHtml(e, label, node.attrs)
       : node.type === 'video'
         ? `<video controls src="${e}"></video>`
         : node.type === 'audio'
