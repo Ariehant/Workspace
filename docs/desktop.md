@@ -6,8 +6,8 @@ it to a server.
 
 **Contents:** [Install](#install) · [Where your data lives](#where-your-data-lives) ·
 [Backups](#backups) · [Several workspaces](#several-workspaces) · [Sync](#sync) ·
-[Keyboard shortcuts](#keyboard-shortcuts) · [Accessibility](#accessibility) ·
-[Troubleshooting](#troubleshooting)
+[Keyboard shortcuts](#keyboard-shortcuts) · [Language and region](#language-and-region) ·
+[Accessibility](#accessibility) · [Troubleshooting](#troubleshooting)
 
 ## Install
 
@@ -95,6 +95,13 @@ typing edits one, and `Tab` moves along the row (and on out of the table past it
 The zoom applies to every window and is remembered. **Appearance** in the sidebar shows the
 level, with Zoom in, Zoom out and Actual size; so does the View menu (press `Alt` to show the
 menu bar).
+
+## Language and region
+
+**Workspace menu → Language and region…** sets how dates, times and numbers look: pick your
+region (it starts as your system's), or set the date format, the 12- or 24-hour clock and the
+first day of the week on their own. The app's text is in English for now. A database property
+with its own date or number format keeps it.
 
 ## Accessibility
 

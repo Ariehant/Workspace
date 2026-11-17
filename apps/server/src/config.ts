@@ -34,6 +34,11 @@ export interface Config {
    * addresses. A self-hosted server may allow its own network, and http (development).
    */
   webhooks: { allowPrivate: boolean; allowHttp: boolean };
+  /**
+   * The region whose formats published pages and forms use for dates and numbers (people
+   * see their own in the apps), e.g. `GB`; null for the United States.
+   */
+  formatsRegion: string | null;
 }
 
 export interface OidcProvider {
@@ -121,6 +126,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (smtpUrl && !/^smtps?:\/\//.test(smtpUrl)) {
     problems.push('SMTP_URL must start with smtp:// or smtps://');
   }
+  const formatsRegion = env.FORMATS_REGION?.trim().toUpperCase() || null;
+  if (formatsRegion && !/^[A-Z]{2}$/.test(formatsRegion)) {
+    problems.push('FORMATS_REGION must be a two-letter region code, like GB or IN');
+  }
   const smtpFrom = env.SMTP_FROM?.trim() || null;
   if (smtpUrl && !smtpFrom) problems.push('SMTP_FROM is required with SMTP_URL');
   const config: Config = {
@@ -136,6 +145,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     oidc,
     oidcAllowInsecure: env.OIDC_ALLOW_INSECURE === 'true',
     smtp: smtpUrl && smtpFrom ? { url: smtpUrl, from: smtpFrom } : null,
+    formatsRegion,
     webhooks: {
       allowPrivate: env.WEBHOOK_ALLOW_PRIVATE === 'true',
       allowHttp: env.WEBHOOK_ALLOW_HTTP === 'true',

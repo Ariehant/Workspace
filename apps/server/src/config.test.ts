@@ -85,6 +85,14 @@ describe('config', () => {
     ).toThrow(/OIDC_GITLAB_ISSUER must be a URL[\s\S]*OIDC_GITLAB_CLIENT_ID is required/);
   });
 
+  it('reads the region for published pages and forms', () => {
+    expect(loadConfig({ DATABASE_URL: 'x' }).formatsRegion).toBeNull();
+    expect(loadConfig({ DATABASE_URL: 'x', FORMATS_REGION: 'gb' }).formatsRegion).toBe('GB');
+    expect(() => loadConfig({ DATABASE_URL: 'x', FORMATS_REGION: 'Britain' })).toThrow(
+      /FORMATS_REGION/,
+    );
+  });
+
   it('reads the mail server for invites', () => {
     expect(
       loadConfig({

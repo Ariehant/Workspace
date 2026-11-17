@@ -42,6 +42,7 @@ comments):
 | `DOMAIN`                                      | The address people reach the server at                                      |
 | `POSTGRES_PASSWORD`                           | The database password (use a long random value)                             |
 | `SIGNUP`                                      | Who can create accounts: `open`, `invite` (default) or `disabled`           |
+| `FORMATS_REGION`                              | Dates and numbers on published pages and forms, e.g. `GB` (default `US`)    |
 | `OIDC_*`                                      | Single sign-on providers (see [below](#single-sign-on))                     |
 | `SMTP_URL`, `SMTP_FROM`                       | Email for invites and notification digests (see [below](#email))            |
 | `S3_*`                                        | Attachments in S3 (see [below](#attachments-in-s3))                         |

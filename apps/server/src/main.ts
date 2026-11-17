@@ -1,3 +1,4 @@
+import { resolveRegion, setRegion } from '@workspace/core';
 import { PgStore } from '@workspace/storage-remote';
 import { buildServer } from './app';
 import { ConfigError, loadConfig } from './config';
@@ -8,6 +9,8 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  // Published pages and forms: the server's region, not the system's (often "C" in a container).
+  setRegion(resolveRegion({ region: config.formatsRegion }, 'en-US'));
   const store = new PgStore(config.databaseUrl);
   const files = createFileStorage(config.files);
   // Long update logs are merged hourly (docs with more than 500 stored updates).

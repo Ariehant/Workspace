@@ -87,6 +87,8 @@ Database" on an empty page).
 - **Themes:** light, dark and system.
 - **Zoom** from 50% to 300% (`Ctrl+=`, `Ctrl+-`, `Ctrl+0` or `Ctrl` + wheel) in the desktop app,
   for every window, remembered.
+- **Language and region:** dates, times, numbers and the first day of the week follow your
+  region, or each your own way. The app's text is in English.
 - **Accessibility:** keyboard use throughout (the page tree and tables included), names and
   roles for screen readers, WCAG AA contrast in both themes, and reduced motion. Checked with
   axe on every screen.

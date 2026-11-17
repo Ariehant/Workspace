@@ -1,3 +1,4 @@
+import { formatDateTime, formatDay } from '@workspace/core';
 /**
  * Settings → Integrations (Phase 6 M5, owners and admins): internal integrations that
  * use the API. Each has a token (shown once, when it's made or replaced), what it may
@@ -176,7 +177,7 @@ function WebhookSettings({
       )}
       {current && !current.paused && current.failingSince && (
         <p className="text-muted">
-          Deliveries failing since {new Date(current.failingSince).toLocaleString()}
+          Deliveries failing since {formatDateTime(current.failingSince)}
           {current.lastError ? `: ${current.lastError}` : ''}.
         </p>
       )}
@@ -294,7 +295,7 @@ export function IntegrationsPanel({ team }: { team: TeamApi }) {
               <span className="flex-1 font-medium">{i.name}</span>
               <span className="text-xs text-faint">
                 {i.tokenHint ? `ntn_…${i.tokenHint}` : ''}
-                {i.lastUsedAt ? ` · used ${new Date(i.lastUsedAt).toLocaleDateString()}` : ''}
+                {i.lastUsedAt ? ` · used ${formatDay(new Date(i.lastUsedAt))}` : ''}
               </span>
               <IconButton
                 label={`New token for ${i.name}`}

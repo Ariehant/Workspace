@@ -4,7 +4,7 @@
  * the server runs them in a workspace on a server, and the desktop in one that isn't
  * (Phase 6 M4).
  */
-import { newId } from '@workspace/core';
+import { formatDateTime, newId } from '@workspace/core';
 import {
   AUTOMATIONS_MAP,
   deleteAutomation,
@@ -773,7 +773,7 @@ function RunLog({
       <span className="text-xs font-medium text-muted">Recent runs</span>
       {runs.slice(0, 10).map((r) => (
         <div key={r.id} className="flex gap-2 text-xs">
-          <span className="w-36 shrink-0 text-muted">{new Date(r.at).toLocaleString()}</span>
+          <span className="w-36 shrink-0 text-muted">{formatDateTime(r.at)}</span>
           <span className={cn(r.status === 'failed' && 'text-danger')}>
             {r.status === 'failed'
               ? `Failed: ${r.error ?? ''}`

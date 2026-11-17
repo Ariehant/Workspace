@@ -381,12 +381,33 @@ moves; `dated.spec.ts` passes five runs in a row. Web E2E: 3 passed.
   dialog's focus return pulled the focus out of a dialog opened straight after it. The README
   screenshots are new (the colours changed).
 
-### M3: languages and formats (≈ 1 week)
+### M3: languages and formats ✅ (formats; the string catalogs wait for a translation)
 
-- Message catalogs and the extraction check; the "Language and region" setting; formats in the
-  app, emails, forms and published pages. English only for now (your call): a translation is a
-  catalog file added later.
-- **Tests:** formatting units per locale; E2E switching the language and the date format.
+- **Language and region** (workspace menu → Language and region…): the language (English, the
+  only one so far) and the region, which sets how dates, times and numbers look and the first
+  day of the week. The date format, the clock (12- or 24-hour) and the week start can each be
+  chosen on their own; "Automatic" follows the region, and the region defaults to the
+  system's. A preview shows the result.
+- **How:** formats use the locale `en-<region>`, English as written there (`packages/core/src/
+region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34,567. The
+  week start comes from `Intl.Locale` week info, with a CLDR table where a runtime lacks it.
+  Everything that showed a date or a number in US English now reads the region: database
+  cells (a property's own date, time or number format still wins), formula results, date
+  groups, @-dates, page history, comments, the inbox, the page menu's counts, members,
+  integrations, automations and sync. A calendar view starts its weeks on the region's day
+  unless the view sets its own. The setting is per device on the desktop and per account on
+  the web.
+- **The server** has no person to ask on a published page or a form, so it uses its own
+  region, `FORMATS_REGION` (default `US`). Its emails show no dates.
+- **Not done: message catalogs.** Moving every string into catalogs (FormatJS) with a CI check
+  touches every component and changes nothing while English is the only language (your call).
+  It is the first step when a translation is wanted; the formats above don't depend on it.
+- **Tests:** unit tests for the regions (US, UK, Germany, India; each format on its own; the
+  system default); `region.spec.ts` (US by default, UK, Germany, formats chosen one by one, a
+  calendar's week, kept after a restart, back to automatic); the dialog in the axe checks. Unit
+  tests pin the US formats (`vitest.setup.ts`), so they pass on machines in other locales
+  (they failed in core, database and importers under a German locale).
+- **Runs:** see the next commit.
 
 ### M4: updates and packaging (≈ 1.5 weeks)
 

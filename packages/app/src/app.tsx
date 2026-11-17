@@ -34,6 +34,10 @@ import {
   ScopeMoveError,
   type Forest,
   type MovePageTarget,
+  REGION_SETTING,
+  resolveRegion,
+  setRegion,
+  type RegionSettings,
 } from '@workspace/core';
 import type { OpenPagesIn } from '@workspace/database';
 import { useAppliedTheme, type ThemePreference } from '@workspace/ui';
@@ -75,6 +79,7 @@ import { saveAsTemplate } from './templates/store';
 import { ExportDialog, ExportProgress, useDiagramProvider } from './export-dialog';
 import { PrintView, printFromLocation } from './print-view';
 import { ImportProgress } from './import-dialog';
+import { RegionDialog } from './region-dialog';
 
 const SETTING = {
   theme: 'ui.theme',
@@ -86,6 +91,7 @@ const SETTING = {
   favorites: 'ui.favorites',
   recent: 'ui.recent',
   onboarded: 'app.onboarded',
+  region: REGION_SETTING,
 } as const;
 
 interface Settings {
@@ -98,22 +104,36 @@ interface Settings {
   favorites: PageId[];
   recent: PageId[];
   onboarded: boolean;
+  region: RegionSettings;
 }
 
 async function loadSettings(platform: Platform): Promise<Settings> {
   const get = <T,>(key: string) => platform.getSetting<T>(key);
-  const [theme, lastPage, tabs, expanded, sidebarOpen, sidebarWidth, favorites, recent, onboarded] =
-    await Promise.all([
-      get<ThemePreference>(SETTING.theme),
-      get<PageId>(SETTING.lastPage),
-      get<unknown>(SETTING.tabs),
-      get<PageId[]>(SETTING.expanded),
-      get<boolean>(SETTING.sidebarOpen),
-      get<number>(SETTING.sidebarWidth),
-      get<PageId[]>(SETTING.favorites),
-      get<PageId[]>(SETTING.recent),
-      get<boolean>(SETTING.onboarded),
-    ]);
+  const [
+    theme,
+    lastPage,
+    tabs,
+    expanded,
+    sidebarOpen,
+    sidebarWidth,
+    favorites,
+    recent,
+    onboarded,
+    region,
+  ] = await Promise.all([
+    get<ThemePreference>(SETTING.theme),
+    get<PageId>(SETTING.lastPage),
+    get<unknown>(SETTING.tabs),
+    get<PageId[]>(SETTING.expanded),
+    get<boolean>(SETTING.sidebarOpen),
+    get<number>(SETTING.sidebarWidth),
+    get<PageId[]>(SETTING.favorites),
+    get<PageId[]>(SETTING.recent),
+    get<boolean>(SETTING.onboarded),
+    get<RegionSettings>(SETTING.region),
+  ]);
+  // Formats are global: set before anything renders a date.
+  setRegion(resolveRegion(region ?? {}));
   return {
     theme: theme ?? 'system',
     lastPage: lastPage ?? null,
@@ -124,6 +144,7 @@ async function loadSettings(platform: Platform): Promise<Settings> {
     favorites: favorites ?? [],
     recent: recent ?? [],
     onboarded: onboarded ?? false,
+    region: region ?? {},
   };
 }
 
@@ -544,6 +565,18 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   }, [local, workspace, user]);
   const [peopleOpen, setPeopleOpen] = useState<'members' | 'profile' | null>(null);
 
+  // Language and region: the formats change at once (everything re-renders from here).
+  const [regionSettings, setRegionSettings] = useState(initial.region);
+  const [regionOpen, setRegionOpen] = useState(false);
+  const changeRegion = useCallback(
+    (next: RegionSettings) => {
+      setRegion(resolveRegion(next));
+      setRegionSettings(next);
+      platform.setSetting(SETTING.region, next);
+    },
+    [platform],
+  );
+
   const changeTheme = useCallback(
     (next: ThemePreference) => {
       setTheme(next);
@@ -724,6 +757,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onResize={setSidebarWidth}
             fileUrl={platform.fileUrl}
             onThemeChange={changeTheme}
+            onRegion={() => setRegionOpen(true)}
             zoom={platform.zoom}
             onCollapse={() => setSidebarOpen(false)}
             sync={syncInfo}
@@ -759,6 +793,13 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
                   }
                 : undefined
             }
+          />
+        )}
+        {regionOpen && (
+          <RegionDialog
+            settings={regionSettings}
+            onChange={changeRegion}
+            onClose={() => setRegionOpen(false)}
           />
         )}
         {team && sharing && (

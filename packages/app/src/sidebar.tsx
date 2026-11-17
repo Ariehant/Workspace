@@ -34,6 +34,7 @@ import {
   CornerUpRight,
   Download,
   FileInput,
+  Languages,
   Compass,
   LayoutTemplate,
   MoreHorizontal,
@@ -102,6 +103,8 @@ export interface SidebarProps {
   onResize(width: number): void;
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
+  /** Settings → Language and region. */
+  onRegion?(): void;
   /** The app's zoom (hosts that have one), in the Appearance menu. */
   zoom?: ZoomPlatform;
   onCollapse(): void;
@@ -200,6 +203,11 @@ export function Sidebar(props: SidebarProps) {
                 </MenuItem>
                 <MenuSeparator />
               </>
+            )}
+            {props.onRegion && (
+              <MenuItem icon={<Languages size={14} />} onSelect={props.onRegion}>
+                Language and region…
+              </MenuItem>
             )}
             {props.can.export && (
               <MenuItem icon={<Download size={14} />} onSelect={props.onExportAll}>

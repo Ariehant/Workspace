@@ -4,23 +4,24 @@
  * page title.
  */
 import {
-  REACTIONS,
   addComment,
+  type CommentData,
   commentsDocId,
   createThread,
   decideSuggestion,
   deleteComment,
   deleteThread,
   editComment,
+  formatShortDay,
+  type PageId,
+  REACTIONS,
   readThreads,
   roleAllows,
   setResolved,
-  toggleReaction,
-  updateSuggestion,
-  type CommentData,
-  type PageId,
   type ThreadData,
+  toggleReaction,
   type TreeRole,
+  updateSuggestion,
 } from '@workspace/core';
 import {
   applySuggestion,
@@ -247,7 +248,7 @@ function timeAgo(ms: number, now = Date.now()): string {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return formatShortDay(new Date(ms));
 }
 
 /** A comment's text with its `<@id>` mentions as names. */

@@ -1,4 +1,11 @@
-import { countWords, pageText, type PageFont, type PageMeta } from '@workspace/core';
+import {
+  countWords,
+  formatDay,
+  formatPlainNumber,
+  type PageFont,
+  type PageMeta,
+  pageText,
+} from '@workspace/core';
 import {
   Menu,
   MenuContent,
@@ -91,11 +98,7 @@ function timeAgo(ms: number, now: number): string {
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours} h ago`;
-  return new Date(ms).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return formatDay(new Date(ms), 'full');
 }
 
 /** The page's "…" menu: style, lock, duplicate, move, link, trash, and stats. */
@@ -282,12 +285,15 @@ export function PageMenu({
           </MenuItem>
           {stats && (
             <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-xs text-muted">
-              <div data-testid="word-count">Word count: {stats.words.toLocaleString('en-US')}</div>
+              <div data-testid="word-count">
+                Word count: {formatPlainNumber(stats.words, { grouping: true })}
+              </div>
               <div>Last edited {timeAgo(page.updatedAt, stats.now)}</div>
               {seen && (
                 <div data-testid="page-views">
-                  {seen.views.toLocaleString('en-US')} {seen.views === 1 ? 'view' : 'views'} ·{' '}
-                  {seen.viewers} {seen.viewers === 1 ? 'person' : 'people'} in 4 weeks
+                  {formatPlainNumber(seen.views, { grouping: true })}{' '}
+                  {seen.views === 1 ? 'view' : 'views'} · {seen.viewers}{' '}
+                  {seen.viewers === 1 ? 'person' : 'people'} in 4 weeks
                 </div>
               )}
             </div>

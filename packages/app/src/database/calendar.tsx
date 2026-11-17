@@ -14,6 +14,7 @@ import {
   type Property,
   type Row,
 } from '@workspace/database';
+import { region } from '@workspace/core';
 import { PageIcon } from '@workspace/editor';
 import { Button, IconButton, cn } from '@workspace/ui';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
@@ -78,7 +79,7 @@ export function CalendarView(props: LayoutViewProps) {
     );
   }
   const settable = editable && property.type === 'date';
-  const weeks = calendarWeeks(anchor, view.calendarMode, view.weekStart);
+  const weeks = calendarWeeks(anchor, view.calendarMode, view.weekStart ?? region().weekStart);
   const today = dayIndex(new Date());
   const dated = result.rows.flatMap((row) => {
     const days = rowDays(row, property);

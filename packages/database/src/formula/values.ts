@@ -1,16 +1,12 @@
+import { dateTimeFormat, formatTimeOfDay } from '@workspace/core';
 import { isDate, isPage, isPerson, type FDate, type FValue } from './types';
 
 const DAY_MS = 86_400_000;
-const fullDate = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-  year: 'numeric',
-});
-const timeOfDay = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
-
+/** A date as formulas show it, in the person's region: "November 17, 2026 3:05 PM". */
 function formatOneDate(ms: number, time: boolean): string {
   const d = new Date(ms);
-  return time ? `${fullDate.format(d)} ${timeOfDay.format(d)}` : fullDate.format(d);
+  const day = dateTimeFormat({ month: 'long', day: 'numeric', year: 'numeric' }).format(d);
+  return time ? `${day} ${formatTimeOfDay(d)}` : day;
 }
 
 /** A number as formulas show it: no float noise (0.1 + 0.2 shows 0.3). */

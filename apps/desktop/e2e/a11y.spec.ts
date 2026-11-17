@@ -87,6 +87,12 @@ for (const theme of THEMES) {
     await checkOpen(window, s('the trash'), () => sidebarButton('Trash').click());
     await checkOpen(window, s('sync settings'), () => window.getByTestId('sync-indicator').click());
 
+    await checkOpen(window, s('language and region'), async () => {
+      await window.getByRole('button', { name: /workspace menu/i }).click();
+      await window.getByRole('menuitem', { name: 'Language and region…' }).click();
+      await expect(window.getByTestId('region-dialog')).toBeVisible();
+    });
+
     // A page of its own: the slash menu, page history and export.
     await window.getByRole('button', { name: 'New page' }).click();
     await window.getByLabel('Page title').fill('Checked');

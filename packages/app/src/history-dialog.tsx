@@ -1,4 +1,4 @@
-import { blockTexts, replacePageContent } from '@workspace/core';
+import { blockTexts, formatShortDay, formatTimeOfDay, replacePageContent } from '@workspace/core';
 import { PageEditor } from '@workspace/editor';
 import { Button, Dialog, DialogContent, cn } from '@workspace/ui';
 import { useEffect, useMemo, useState } from 'react';
@@ -17,12 +17,8 @@ const REASONS: Record<string, string> = {
   'not-saved': 'Not saved: your access changed',
 };
 
-const when = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
+/** When a version was saved: "Nov 17, 3:05 PM" / "17 Nov, 15:05". */
+const when = (ms: number) => `${formatShortDay(new Date(ms))}, ${formatTimeOfDay(new Date(ms))}`;
 
 /** A doc built from a saved version's state. */
 async function loadVersion(
@@ -140,7 +136,7 @@ export function HistoryDialog({
                   selected?.id === v.id && 'bg-active',
                 )}
               >
-                <span className="font-medium">{when.format(v.createdAt)}</span>
+                <span className="font-medium">{when(v.createdAt)}</span>
                 <span className="text-xs text-muted">
                   {v.authors
                     ? v.authors.length > 0

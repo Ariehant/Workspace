@@ -5,6 +5,8 @@
  * `YYYY-MM-DD`; reminders add a time.
  */
 
+import { formatDay, formatWeekday } from './region';
+
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const MONTHS = [
   'january',
@@ -95,7 +97,10 @@ export function parseDate(input: string, now = new Date()): Date | null {
   return null;
 }
 
-/** "Today", "Tomorrow", "Yesterday", "Friday" (within the next week), else "Oct 5, 2026". */
+/**
+ * "Today", "Tomorrow", "Yesterday", "Friday" (within the next week), else the day in the
+ * person's date format ("Oct 5, 2026").
+ */
 export function formatDate(iso: string, now = new Date()): string {
   const d = fromIsoDate(iso);
   if (!d) return iso;
@@ -103,8 +108,8 @@ export function formatDate(iso: string, now = new Date()): string {
   if (days === 0) return 'Today';
   if (days === 1) return 'Tomorrow';
   if (days === -1) return 'Yesterday';
-  if (days > 1 && days < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (days > 1 && days < 7) return formatWeekday(d);
+  return formatDay(d);
 }
 
 /** Default reminder time on the chosen day: 9:00 local. */

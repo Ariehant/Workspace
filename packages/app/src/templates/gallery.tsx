@@ -1,3 +1,4 @@
+import { formatDay } from '@workspace/core';
 import type { PageId } from '@workspace/core';
 import {
   cellText,
@@ -81,7 +82,7 @@ export function TemplatesGallery({
           id: t.id,
           name: t.name,
           icon: t.icon,
-          description: `Saved ${new Date(t.createdAt).toLocaleDateString()}`,
+          description: `Saved ${formatDay(new Date(t.createdAt))}`,
           load: () => Promise.resolve(t.bundle),
           saved: true,
         }))

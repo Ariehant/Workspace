@@ -375,8 +375,8 @@ export interface ViewConfig {
   dateProperty: string | null;
   endDateProperty: string | null;
   calendarMode: 'month' | 'week';
-  /** 0 = Sunday, 1 = Monday. */
-  weekStart: 0 | 1;
+  /** 0 = Sunday, 1 = Monday; null = the person's (Language and region). */
+  weekStart: 0 | 1 | null;
   timelineZoom: TimelineZoom;
   /** Timeline: the table of rows on the left. */
   timelineTable: boolean;
@@ -500,7 +500,7 @@ export const DEFAULT_VIEW_CONFIG: ViewConfig = {
   dateProperty: null,
   endDateProperty: null,
   calendarMode: 'month',
-  weekStart: 0,
+  weekStart: null,
   timelineZoom: 'week',
   timelineTable: true,
   showDependencies: true,

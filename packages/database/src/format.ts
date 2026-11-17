@@ -1,3 +1,11 @@
+import {
+  formatDay as formatRegionDay,
+  formatPlainNumber,
+  formatTimeOfDay,
+  formatWeekday,
+  numberFormat as regionNumberFormat,
+  region,
+} from '@workspace/core';
 import type { DateFormat, NumberFormat, PropertyConfig, TimeFormat } from './schema';
 
 const CURRENCIES: Partial<Record<NumberFormat, string>> = {
@@ -40,33 +48,31 @@ export const TIME_FORMATS: { id: TimeFormat; label: string }[] = [
   { id: '24h', label: '24 hour' },
 ];
 
-/** Number formatters by format and precision: making one is far slower than using it. */
-const numberFormats = new Map<string, Intl.NumberFormat>();
-
+/** The region's number formatter for a format and precision (cached by the region module). */
 function numberFormat(format: string, precision: number | undefined): Intl.NumberFormat {
-  const key = `${format}:${precision ?? ''}`;
-  let formatter = numberFormats.get(key);
-  if (!formatter) {
-    const digits =
-      precision !== undefined
-        ? { minimumFractionDigits: precision, maximumFractionDigits: precision }
-        : {};
-    formatter = new Intl.NumberFormat(
-      'en-US',
-      format === 'commas' || format === 'percent'
-        ? { maximumFractionDigits: 10, ...digits }
-        : { style: 'currency', currency: CURRENCIES[format as NumberFormat] ?? 'USD', ...digits },
-    );
-    numberFormats.set(key, formatter);
-  }
-  return formatter;
+  const digits =
+    precision !== undefined
+      ? { minimumFractionDigits: precision, maximumFractionDigits: precision }
+      : {};
+  return regionNumberFormat(
+    format === 'commas' || format === 'percent'
+      ? { maximumFractionDigits: 10, ...digits }
+      : { style: 'currency', currency: CURRENCIES[format as NumberFormat] ?? 'USD', ...digits },
+  );
 }
 
 /** A number as its property shows it: `1,234.5`, `12%`, `$3.00`, ... */
 export function formatNumber(n: number, config: PropertyConfig = {}): string {
   const format = config.numberFormat ?? 'number';
   if (format === 'number') {
-    return config.precision !== undefined ? n.toFixed(config.precision) : String(n);
+    // Without separators between thousands, but with the region's decimal sign.
+    return config.precision !== undefined
+      ? regionNumberFormat({
+          minimumFractionDigits: config.precision,
+          maximumFractionDigits: config.precision,
+          useGrouping: false,
+        }).format(n)
+      : formatPlainNumber(n);
   }
   const text = numberFormat(format, config.precision).format(n);
   // Notion's percent shows the number as typed: 12 -> 12%.
@@ -74,7 +80,6 @@ export function formatNumber(n: number, config: PropertyConfig = {}): string {
 }
 
 const DAY_MS = 86_400_000;
-const pad = (n: number) => String(n).padStart(2, '0');
 
 /** Local Date for a stored `YYYY-MM-DD[THH:mm]`. */
 export function dateFromString(s: string): Date {
@@ -91,54 +96,33 @@ export function dayOffset(date: Date, now: Date): number {
   return Math.round((startOfDay(date).getTime() - startOfDay(now).getTime()) / DAY_MS);
 }
 
-const fullDay = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
-
 function formatDay(date: Date, format: DateFormat, now: Date): string {
-  const [y, m, d] = [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())];
-  switch (format) {
-    case 'mdy':
-      return `${m}/${d}/${y}`;
-    case 'dmy':
-      return `${d}/${m}/${y}`;
-    case 'ymd':
-      return `${y}/${m}/${d}`;
-    case 'relative': {
-      const days = dayOffset(date, now);
-      if (days === 0) return 'Today';
-      if (days === 1) return 'Tomorrow';
-      if (days === -1) return 'Yesterday';
-      if (days > 1 && days < 7) return weekday.format(date);
-      if (days < -1 && days > -7) return `Last ${weekday.format(date)}`;
-      return fullDay.format(date);
-    }
-    default:
-      return fullDay.format(date);
-  }
+  if (format !== 'relative') return formatRegionDay(date, format);
+  const days = dayOffset(date, now);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  if (days === -1) return 'Yesterday';
+  if (days > 1 && days < 7) return formatWeekday(date);
+  if (days < -1 && days > -7) return `Last ${formatWeekday(date)}`;
+  return formatRegionDay(date, 'full');
 }
 
-function formatTime(date: Date, format: TimeFormat): string {
-  if (format === '24h') return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  const h = date.getHours() % 12 || 12;
-  return `${h}:${pad(date.getMinutes())} ${date.getHours() < 12 ? 'AM' : 'PM'}`;
-}
+/** A property's date and time formats: its own, or the person's (Language and region). */
+const dateFormatOf = (config: PropertyConfig): DateFormat => config.dateFormat ?? region().date;
+const timeFormatOf = (config: PropertyConfig): TimeFormat => config.timeFormat ?? region().time;
 
 /** A stored date (`YYYY-MM-DD[THH:mm]`) in the property's date and time format. */
 export function formatDateString(s: string, config: PropertyConfig = {}, now = new Date()): string {
   const date = dateFromString(s);
-  const day = formatDay(date, config.dateFormat ?? 'full', now);
-  return s.includes('T') ? `${day} ${formatTime(date, config.timeFormat ?? '12h')}` : day;
+  const day = formatDay(date, dateFormatOf(config), now);
+  return s.includes('T') ? `${day} ${formatTimeOfDay(date, timeFormatOf(config))}` : day;
 }
 
 /** A timestamp (created / edited time), always with the time. */
 export function formatTimestamp(ms: number, config: PropertyConfig = {}, now = new Date()): string {
   const date = new Date(ms);
-  return `${formatDay(date, config.dateFormat ?? 'full', now)} ${formatTime(
+  return `${formatDay(date, dateFormatOf(config), now)} ${formatTimeOfDay(
     date,
-    config.timeFormat ?? '12h',
+    timeFormatOf(config),
   )}`;
 }

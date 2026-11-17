@@ -1,3 +1,4 @@
+import { formatDay } from '@workspace/core';
 import type { WorkspaceRole } from '@workspace/core';
 import { Avatar, Button, Dialog, DialogContent, IconButton, cn } from '@workspace/ui';
 import { Check, Copy, Loader2, Mail, Trash2, UserMinus, Users, X } from 'lucide-react';
@@ -419,7 +420,7 @@ function Invites({ invites, onRevoke }: { invites: PendingInvite[]; onRevoke(id:
           <span className="min-w-0 flex-1 truncate">{invite.email}</span>
           <span className="text-sm text-muted">{ROLE_LABELS[invite.role]}</span>
           <span className="w-36 text-right text-xs text-faint">
-            Expires {new Date(invite.expiresAt).toLocaleDateString()}
+            Expires {formatDay(new Date(invite.expiresAt))}
           </span>
           <Button className="h-7" onClick={() => onRevoke(invite.id)}>
             Revoke

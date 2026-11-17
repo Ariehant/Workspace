@@ -4,11 +4,12 @@
  * in the sidebar, and which kinds show as system notifications.
  */
 import {
-  NOTIFICATION_KINDS,
+  formatShortDay,
   getPage,
-  parseNotification,
+  NOTIFICATION_KINDS,
   type NotificationData,
   type NotificationKind,
+  parseNotification,
 } from '@workspace/core';
 import {
   Avatar,
@@ -136,7 +137,7 @@ function timeAgo(ms: number, now = Date.now()): string {
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h`;
-  return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return formatShortDay(new Date(ms));
 }
 
 /** What a notification says, in a sentence. */

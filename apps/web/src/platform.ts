@@ -8,7 +8,7 @@ import { PartialClient } from '@workspace/sync';
 import { ApiError, api, type Me } from './api';
 
 /** Settings shared by all workspaces; the rest are kept per workspace. */
-const GLOBAL_SETTINGS = new Set(['ui.theme', 'ui.sidebarOpen', 'ui.sidebarWidth']);
+const GLOBAL_SETTINGS = new Set(['ui.theme', 'ui.sidebarOpen', 'ui.sidebarWidth', 'ui.region']);
 
 const extensionFor = (name: string) => {
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';

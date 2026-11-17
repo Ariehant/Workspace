@@ -1,3 +1,4 @@
+import { formatDateTime } from '@workspace/core';
 import { Button, Dialog, DialogContent, cn } from '@workspace/ui';
 import {
   AlertTriangle,
@@ -522,7 +523,7 @@ function Status({ sync, info }: { sync: SyncPlatform; info: SyncInfo }) {
     ['Workspace', info.workspace?.name],
     ['Changes to send', info.pending],
     ['Files to upload', info.files],
-    ['Last synced', info.lastSyncedAt ? new Date(info.lastSyncedAt).toLocaleString() : 'Not yet'],
+    ['Last synced', info.lastSyncedAt ? formatDateTime(info.lastSyncedAt) : 'Not yet'],
   ];
   return (
     <div className="flex flex-col gap-3">

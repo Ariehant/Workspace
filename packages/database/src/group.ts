@@ -1,3 +1,4 @@
+import { formatMonth } from '@workspace/core';
 import { dateFromString, formatDateString } from './format';
 import {
   STATUS_GROUPS,
@@ -83,8 +84,6 @@ const RELATIVE: { key: string; label: string; test(days: number): boolean }[] = 
   { key: 'later', label: 'Later', test: () => true },
 ];
 
-const monthName = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
-
 /** The bucket a date falls in, and its label. Keys sort chronologically. */
 function dateKey(date: Date, bucket: DateBucket, now: Date): { key: string; label: string } {
   switch (bucket) {
@@ -106,7 +105,7 @@ function dateKey(date: Date, bucket: DateBucket, now: Date): { key: string; labe
     case 'month':
       return {
         key: `${date.getFullYear()}-${pad(date.getMonth() + 1)}`,
-        label: monthName.format(date),
+        label: formatMonth(date),
       };
     case 'year':
       return { key: String(date.getFullYear()), label: String(date.getFullYear()) };

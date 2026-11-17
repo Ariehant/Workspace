@@ -1,4 +1,11 @@
-import { getPage, getPageTitleText, isInTrash, roleAllows, setPageTitle } from '@workspace/core';
+import {
+  getPage,
+  getPageTitleText,
+  isInTrash,
+  region,
+  roleAllows,
+  setPageTitle,
+} from '@workspace/core';
 import {
   setMeta,
   ensureViewSet,
@@ -829,6 +836,7 @@ function ViewMenu({
   onDelete(): void;
 }) {
   const [name, setName] = useState(view.name);
+  const mondayFirst = (view.weekStart ?? region().weekStart) === 1;
   return (
     <Menu
       onOpenChange={(open) => {
@@ -982,12 +990,12 @@ function ViewMenu({
             icon={<CalendarDays size={14} />}
             onSelect={(e) => {
               e.preventDefault();
-              onChange({ weekStart: view.weekStart === 1 ? 0 : 1 });
+              onChange({ weekStart: mondayFirst ? 0 : 1 });
             }}
           >
             <span className="flex-1">Start week on Monday</span>
-            <span className={cn('text-xs', view.weekStart === 1 ? 'text-accent' : 'text-faint')}>
-              {view.weekStart === 1 ? 'On' : 'Off'}
+            <span className={cn('text-xs', mondayFirst ? 'text-accent' : 'text-faint')}>
+              {mondayFirst ? 'On' : 'Off'}
             </span>
           </MenuItem>
         )}
