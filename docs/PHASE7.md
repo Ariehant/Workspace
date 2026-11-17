@@ -407,7 +407,17 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
   calendar's week, kept after a restart, back to automatic); the dialog in the axe checks. Unit
   tests pin the US formats (`vitest.setup.ts`), so they pass on machines in other locales
   (they failed in core, database and importers under a German locale).
-- **Runs:** see the next commit.
+- **Runs:** unit tests all pass (also under a German locale); web E2E 3 passed. Desktop E2E:
+  154 passed (3 skipped) on the first run of each round. The second runs found:
+  - **A real bug, fixed:** publishing a page right after naming it suggested `/p/page`. The
+    address came from the server's search index, which can be a moment behind; the app now
+    makes it from the title it shows (`slugFromTitle`, shared with the server). The publish
+    test failed two runs in four before, and passes five in five now.
+  - **Not reproduced:** two tests ran into the one-minute timeout while starting (the page
+    cover, and once the page icon test, each as a run's first test of the app), and
+    synced blocks once read the system clipboard while it changed. They passed in 16 runs
+    together and in five cold starts each. The timeouts look like the E2E hang M6 is to look
+    into, and go there.
 
 ### M4: updates and packaging (≈ 1.5 weeks)
 
