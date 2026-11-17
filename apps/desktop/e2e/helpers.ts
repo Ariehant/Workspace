@@ -196,8 +196,10 @@ export async function launchApp(
   return { app, window };
 }
 
+/** Close an app in a test (a restart): as at teardown, a close that hangs is reported. */
 export async function quit(app: ElectronApplication) {
-  await app.close();
+  const slow = await closeApp(app);
+  if (slow) throw new Error(`The app didn't close\n${slow}`);
 }
 
 export const sidebarTitles = (window: Page) => window.getByTestId('sidebar-page-title');
