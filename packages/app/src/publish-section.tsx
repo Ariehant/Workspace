@@ -3,7 +3,7 @@
  * public address anyone can read, with an address of its own, whether search engines
  * may index it, and a title and description for search results and link previews.
  */
-import type { PageId } from '@workspace/core';
+import { slugFromTitle, type PageId } from '@workspace/core';
 import { Button } from '@workspace/ui';
 import { Check, Globe, Link } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -16,10 +16,13 @@ const input =
 export function PublishSection({
   team,
   pageId,
+  title,
   canPublish,
 }: {
   team: TeamApi;
   pageId: PageId;
+  /** The page's title here: the server's copy of it can be a moment behind. */
+  title: string;
   /** Full access: may publish, change and unpublish (others see whether it's published). */
   canPublish: boolean;
 }) {
@@ -85,7 +88,7 @@ export function PublishSection({
             disabled={busy}
             onClick={() =>
               void save({
-                slug: suggested,
+                slug: title.trim() ? slugFromTitle(title) : suggested,
                 includeSubpages: true,
                 allowIndexing: false,
                 title: '',

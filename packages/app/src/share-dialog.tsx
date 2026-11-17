@@ -336,7 +336,14 @@ export function ShareDialog({
             </>
           )}
           {error && scopes && <p className="text-sm text-red-600">{error}</p>}
-          {here && <PublishSection team={team} pageId={pageId} canPublish={canShare} />}
+          {here && (
+            <PublishSection
+              team={team}
+              pageId={pageId}
+              title={page?.title ?? ''}
+              canPublish={canShare}
+            />
+          )}
           <div className="flex justify-end border-t border-line pt-3">
             <Button
               onClick={() => {

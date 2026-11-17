@@ -18,3 +18,4 @@ export * from './comments';
 export * from './notifications';
 export * from './zoom';
 export * from './region';
+export * from './slug';

@@ -44,14 +44,8 @@ const CSP = [
 
 export const SLUG = /^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$/;
 
-/** `Gearbox design!` → `gearbox-design` (a slug to start from). */
-export const slugFrom = (title: string) =>
-  title
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'page';
+/** `Gearbox design!` → `gearbox-design` (a slug to start from; the app makes the same). */
+export { slugFromTitle as slugFrom } from '@workspace/core';
 
 export class Site {
   private readonly cache = new Map<string, Rendered>();
