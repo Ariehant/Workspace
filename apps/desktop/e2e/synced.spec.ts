@@ -61,16 +61,22 @@ test('synced blocks: edit in one place, see it everywhere; unsync; kept after re
   await app.evaluate(({ clipboard }) => clipboard.clear());
   await blockMenu(window, synced(window));
   await window.getByRole('menuitem', { name: 'Copy and sync' }).click();
-  // Read what "Copy and sync" put on the clipboard, as a paste would.
+  // Read what "Copy and sync" put on the clipboard, as a paste would. Read once: on X11 the
+  // clipboard's change count can move again after a write, and an item read before that then
+  // refuses getType ("Clipboard data has changed"), so that counts as not read yet.
   const readHtml = () =>
     window.evaluate(async () => {
-      for (const item of await navigator.clipboard.read()) {
-        if (item.types.includes('text/html')) return (await item.getType('text/html')).text();
+      try {
+        for (const item of await navigator.clipboard.read()) {
+          if (item.types.includes('text/html')) return (await item.getType('text/html')).text();
+        }
+      } catch (error) {
+        if ((error as Error).name !== 'InvalidStateError') throw error;
       }
       return '';
     });
-  await expect.poll(readHtml).toContain('synced-block');
-  const html = await readHtml();
+  let html = '';
+  await expect.poll(async () => (html = await readHtml())).toContain('synced-block');
 
   await newPage(window, 'Base spec');
   await pasteHtml(window, html);

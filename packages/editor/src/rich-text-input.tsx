@@ -141,13 +141,11 @@ export function RichTextInput({
     done.current = true;
     onDone(docToRuns(editor.getJSON()), exit);
   };
-  // The key handlers below run outside React: they reach the editor through this.
+  // The key handlers below run outside React: they reach the editor through this, set as it
+  // mounts (TipTap's onCreate comes from a timer, which the browser runs after queued keys).
   const editorRef = useRef<Editor | null>(null);
   const editor = useEditor({
     immediatelyRender: true,
-    onCreate: ({ editor: created }) => {
-      editorRef.current = created;
-    },
     extensions: [
       StarterKit.configure({
         document: false,
@@ -224,6 +222,7 @@ export function RichTextInput({
   // Focus as soon as it's on screen, before the next key arrives (typing on a selected cell
   // starts editing, and the rest of the word follows straight away).
   useLayoutEffect(() => {
+    editorRef.current = editor;
     editor.view.focus();
     editor.commands.setTextSelection(editor.state.doc.content.size - 1);
   }, [editor]);
