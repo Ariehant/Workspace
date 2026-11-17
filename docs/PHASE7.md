@@ -613,7 +613,14 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
   the teardown's close. The test restarts the app mid-way with `quit()`, a plain
   `app.close()` with no limit, so that's where it stalls: closing the app, as in Phase 6.
   `quit()` now closes through the same guard, so the next time names the processes still
-  running and what they're waiting on.
+  running and what they're waiting on. Two full runs since: no hang (one all passed, 158; the
+  other had one failure, the mention notification test, below).
+- **The mention notification test** failed once (Bob's inbox never showed Ada's mention in
+  20 s) in eleven full runs, and passed 40 times in a row after, on its own and alongside a
+  full run. Not understood yet: it now checks the mention is on Ada's page first, so the next
+  time says whether it never went in or the server never delivered it.
+- **Left for a person:** a pass with Orca on a real desktop, and the AppImage's AppArmor
+  profile on a real Ubuntu 24.04 (neither runs in a container).
 
 #### Parity (PLAN §3, line by line)
 
