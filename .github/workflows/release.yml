@@ -71,7 +71,7 @@ jobs:
       matrix:
         include:
           - { package: deb, system: 'ubuntu:24.04' }
-          - { package: deb, system: 'ubuntu:25.04' }
+          - { package: deb, system: 'ubuntu:26.04' }
           - { package: AppImage, system: 'ubuntu:24.04' }
           - { package: snap, system: runner }
           - { package: flatpak, system: runner }
@@ -164,7 +164,11 @@ jobs:
         run: |
           prerelease=""
           case "$TAG" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$TAG" packages/* --title "Workspace ${TAG#v}" --generate-notes \
+          # Hand-written notes for the version (a release candidate uses its release's),
+          # else GitHub's generated ones.
+          notes="docs/releases/${TAG%%-*}.md"
+          if [ -f "$notes" ]; then notes_arg=(--notes-file "$notes"); else notes_arg=(--generate-notes); fi
+          gh release create "$TAG" packages/* --title "Workspace ${TAG#v}" "${notes_arg[@]}" \
             --verify-tag $prerelease
       - name: The apt repository (GitHub Pages, gh-pages branch)
         if: ${{ !contains(env.TAG, '-') }}

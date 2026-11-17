@@ -432,8 +432,9 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
   The `.deb`, Snap and Flatpak update through apt and their stores, and About says so.
 - **The release workflow** (`.github/workflows/release.yml`), on a `v*` tag: builds the `.deb`,
   AppImage, Snap and Flatpak; checks that the AppImage updates itself to the next version;
-  installs each package in a clean system and starts it (the `.deb` in Ubuntu 24.04 and 25.04
-  containers, the AppImage in a container, the Snap and the Flatpak on the runner); then
+  installs each package in a clean system and starts it (the `.deb` in Ubuntu 24.04 and 26.04
+  containers, 26.04 since the release check as 25.04 reached its end of life; the AppImage in a
+  container; the Snap and the Flatpak on the runner); then
   publishes the GitHub release (checksums, signatures), the apt repository on GitHub Pages and
   the Snap Store upload. A tag with a `-` (`v1.0.0-rc.1`) is a pre-release on GitHub only.
 - **Signing** with the project's GPG key from the `GPG_PRIVATE_KEY` secret: `SHA256SUMS.asc`,
@@ -573,7 +574,8 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
 - **Parity:** go through the feature inventory in PLAN §3 next to Notion, and record the result
   for each line in this document.
 - **The release candidate:** tag `v1.0.0-rc.1`, install each package on a clean Ubuntu 24.04
-  and 25.04, upgrade a server from the Phase 6 schema, and run the scenario tests against it.
+  and 26.04 (25.04 reached its end of life in January 2026), upgrade a server from the Phase 6
+  schema, and run the scenario tests against it.
 - **The release:** `v1.0.0`, with release notes, the license, and the README's install section
   pointing at the published packages.
 
