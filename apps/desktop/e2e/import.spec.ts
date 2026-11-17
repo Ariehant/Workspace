@@ -195,6 +195,9 @@ test('import a Trello board, an Evernote notebook and a Confluence space', async
     '2 archived Trello cards were left out',
   );
   await report.getByRole('button', { name: 'Done' }).click();
+  // Found straight away: quick find asks again once the index has the new rows.
+  await find(window, 'Mount the base');
+  await expect(editor(window).first()).toContainText('Bolt the base to the bench.');
   await find(window, 'Arm build');
   const doing = window.getByTestId('board-column').filter({ hasText: 'Doing' });
   const key = await doing.getAttribute('data-group-key');

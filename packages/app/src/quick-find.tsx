@@ -28,6 +28,11 @@ interface Result {
 
 const MAX_RESULTS = 20;
 const SEARCH_DELAY_MS = 80;
+/** When the same query is asked again (the index catches up with edits within a second). */
+const RESEARCH_AFTER_MS = [1000, 2500, 5000];
+const sameHits = (a: SearchHit[], b: SearchHit[]) =>
+  a.length === b.length &&
+  a.every((h, i) => h.id === b[i]!.id && h.title === b[i]!.title && h.snippet === b[i]!.snippet);
 
 /**
  * Quick find (Ctrl+K / Ctrl+P): pages whose title matches, then pages whose content
@@ -51,15 +56,23 @@ export function QuickFind({
   useEffect(() => {
     if (!q) return;
     let active = true;
-    const timer = setTimeout(() => {
+    const run = () =>
       platform.search(q).then(
-        (hits) => active && setFound({ query: q, hits }),
+        (hits) =>
+          active &&
+          setFound((last) =>
+            last?.query === q && sameHits(last.hits, hits) ? last : { query: q, hits },
+          ),
         (error: unknown) => console.error('Search failed', error),
       );
-    }, SEARCH_DELAY_MS);
+    // The index follows edits (and imports) by a moment, so the same query is asked again a
+    // few times while it's on screen: what was just written shows up without retyping.
+    const timers = [0, ...RESEARCH_AFTER_MS].map((after) =>
+      setTimeout(run, SEARCH_DELAY_MS + after),
+    );
     return () => {
       active = false;
-      clearTimeout(timer);
+      timers.forEach(clearTimeout);
     };
   }, [platform, q]);
 
