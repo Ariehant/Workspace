@@ -456,7 +456,11 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
 - **Tests:** `about.spec.ts` (the version, no update controls on a build that isn't an
   AppImage); About in the axe checks; `scripts/test-appimage-update.sh`; `pnpm lint` checks the
   apps' versions agree.
-- **Runs:** see the next commit.
+- **Runs:** unit tests all pass; desktop E2E 155 passed (3 skipped) twice, web E2E 3 passed. The
+  first round's second run caught a real bug, fixed: after picking a mention in a comment, or
+  a suggestion in the formula editor, the caret moved a frame later, so a key typed in that
+  frame was pushed behind the rest ("@Bob please?" became "@Bob lease?p"). The caret now
+  moves with the text.
 
 ### M5: more importers (≈ 1 week)
 
