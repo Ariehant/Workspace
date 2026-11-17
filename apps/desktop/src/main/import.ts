@@ -11,7 +11,8 @@ import createImportWorker from './import-worker?nodeWorker';
 export const IMPORT_ORIGIN = 'import';
 
 /**
- * Imports: pick files (a Notion export zip, Markdown, HTML, CSV or text), build the pages
+ * Imports: pick files (a Notion or Confluence export zip, Evernote .enex, Trello board JSON,
+ * Markdown, HTML, CSV or text), build the pages
  * in a worker, then apply them here. One at a time, cancellable until it's applied.
  */
 export function registerImport(deps: {
@@ -31,8 +32,8 @@ export function registerImport(deps: {
       properties: ['openFile' as const, 'multiSelections' as const],
       filters: [
         {
-          name: 'Notion export, Markdown, HTML, CSV or text',
-          extensions: ['zip', 'md', 'markdown', 'html', 'htm', 'csv', 'txt'],
+          name: 'Notion, Confluence, Evernote or Trello export, Markdown, HTML, CSV or text',
+          extensions: ['zip', 'enex', 'json', 'md', 'markdown', 'html', 'htm', 'csv', 'txt'],
         },
       ],
     };

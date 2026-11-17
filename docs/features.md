@@ -100,6 +100,12 @@ Database" on an empty page).
 - **Import** (sidebar → Import): a Notion export zip (Markdown & CSV, or HTML), and Markdown,
   HTML, CSV and text files. Pages, databases with inferred types and relations, links and
   attachments come across.
+- **Import from Evernote, Trello and Confluence:** an Evernote notebook (`.enex`) as a database
+  of notes with tags, dates, checklists and attachments; a Trello board (its JSON export) as a
+  database with a board view by list, cards with labels, due dates, checklists and comments;
+  and a Confluence space (its HTML export zip) as the page tree, with panels, code, tasks,
+  attachments and links between pages. See the
+  [desktop guide](desktop.md#import-from-other-apps) for how to export from each.
 - **Export** a page (`···` → Export…) or the whole workspace as Markdown & CSV in Notion's
   layout, HTML, or PDF.
 - **Backups:** the whole workspace to a `.zip`, and restore from one.

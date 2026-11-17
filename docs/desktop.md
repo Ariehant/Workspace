@@ -75,6 +75,25 @@ With sync on, the database also holds the changes waiting to be sent, and the si
   to a `.zip`, or to restore one. The same menu exports it as Markdown & CSV, HTML or PDF.
 - **By hand:** copy `workspace.db` and the `files/` folder while the app is closed.
 
+## Import from other apps
+
+**Import** in the sidebar takes the files each app exports. Everything lands under a new page
+named after the file (**Import**, for several files), and a report lists what came across and what didn't.
+
+| From       | Export there                                                       | Import            |
+| ---------- | ------------------------------------------------------------------ | ----------------- |
+| Notion     | Settings → Export all workspace content, Markdown & CSV or HTML    | the `.zip`        |
+| Evernote   | Select notes or a notebook → Export → ENEX (one file per notebook) | the `.enex` files |
+| Trello     | Board menu → Print, export and share → Export as JSON              | the `.json`       |
+| Confluence | Space settings → Export space → HTML                               | the `.zip`        |
+| Anything   | Markdown, HTML, CSV or text files                                  | the files         |
+
+Each Evernote notebook becomes a database of its notes (tags, created and updated dates and
+the source address as columns). A Trello board becomes a database shown as a board grouped by
+list; its attachments come across as links (the files stay on Trello) and archived cards are
+left out. A Confluence space becomes its page tree. Encrypted text in Evernote notes can't come
+across.
+
 ## Several workspaces
 
 Set `WORKSPACE_DATA_DIR` to keep a workspace somewhere else, for example one per project:

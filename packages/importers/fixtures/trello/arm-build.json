@@ -1,0 +1,104 @@
+{
+  "id": "6720a1b2c3d4e5f601234567",
+  "name": "Arm build",
+  "desc": "",
+  "closed": false,
+  "lists": [
+    { "id": "list-done", "name": "Done", "closed": false, "pos": 3000 },
+    { "id": "list-todo", "name": "To do", "closed": false, "pos": 1000 },
+    { "id": "list-doing", "name": "Doing", "closed": false, "pos": 2000 },
+    { "id": "list-old", "name": "Ideas (archived)", "closed": true, "pos": 4000 }
+  ],
+  "labels": [
+    { "id": "label-hw", "name": "Hardware", "color": "orange" },
+    { "id": "label-sw", "name": "Software", "color": "sky_dark" },
+    { "id": "label-urgent", "name": "", "color": "red" }
+  ],
+  "members": [
+    { "id": "member-a", "fullName": "Asha Rao", "username": "asha" },
+    { "id": "member-b", "fullName": "", "username": "lee" }
+  ],
+  "cards": [
+    {
+      "id": "6720a1b2aaaaaaaaaaaaaaa1",
+      "name": "Mount the base",
+      "desc": "Bolt the base to the **bench**.\n\n- M6 bolts\n- Torque to 10 Nm",
+      "idList": "list-doing",
+      "closed": false,
+      "pos": 16384,
+      "due": "2026-11-20T15:30:00.000Z",
+      "dueComplete": false,
+      "idLabels": ["label-hw", "label-urgent"],
+      "idMembers": ["member-a", "member-b"],
+      "attachments": [
+        { "name": "Base drawing", "url": "https://example.org/base.pdf" },
+        { "name": "local", "url": "file:///tmp/x" }
+      ]
+    },
+    {
+      "id": "6720a1b2aaaaaaaaaaaaaaa2",
+      "name": "Write the joint driver",
+      "desc": "",
+      "idList": "list-todo",
+      "closed": false,
+      "pos": 16384,
+      "due": null,
+      "idLabels": ["label-sw"],
+      "idMembers": [],
+      "attachments": []
+    },
+    {
+      "id": "6720a1b2aaaaaaaaaaaaaaa3",
+      "name": "Order servos",
+      "desc": "",
+      "idList": "list-done",
+      "closed": false,
+      "pos": 16384,
+      "due": "2026-10-01T09:00:00.000Z",
+      "dueComplete": true,
+      "idLabels": [],
+      "idMembers": ["member-a"]
+    },
+    {
+      "id": "6720a1b2aaaaaaaaaaaaaaa4",
+      "name": "Old idea",
+      "desc": "",
+      "idList": "list-todo",
+      "closed": true,
+      "pos": 32768
+    },
+    {
+      "id": "6720a1b2aaaaaaaaaaaaaaa5",
+      "name": "Laser pointer",
+      "desc": "",
+      "idList": "list-old",
+      "closed": false,
+      "pos": 16384
+    }
+  ],
+  "checklists": [
+    {
+      "id": "cl-1",
+      "idCard": "6720a1b2aaaaaaaaaaaaaaa1",
+      "name": "Steps",
+      "pos": 1,
+      "checkItems": [
+        { "name": "Drill holes", "state": "complete", "pos": 1 },
+        { "name": "Level the plate", "state": "incomplete", "pos": 2 }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "commentCard",
+      "date": "2026-11-02T10:00:00.000Z",
+      "data": { "text": "Bolts arrived.", "card": { "id": "6720a1b2aaaaaaaaaaaaaaa1" } },
+      "memberCreator": { "fullName": "Asha Rao", "username": "asha" }
+    },
+    {
+      "type": "updateCard",
+      "date": "2026-11-02T11:00:00.000Z",
+      "data": { "card": { "id": "6720a1b2aaaaaaaaaaaaaaa1" } }
+    }
+  ]
+}

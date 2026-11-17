@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { zipSync } from 'fflate';
 import { cell, table } from './db';
@@ -154,4 +155,92 @@ test('export a page to Markdown and import it back', async ({ launch }) => {
   await expect(editor(window).locator('ul[data-type="taskList"] li p')).toHaveText(
     'Zero the encoders',
   );
+});
+
+const fixtures = fileURLToPath(new URL('../../../packages/importers/fixtures', import.meta.url));
+
+/** A fixture folder zipped, as the export downloads. */
+function zipFolder(dir: string, path: string) {
+  const files: Record<string, Uint8Array> = {};
+  const walk = (at: string) => {
+    for (const entry of readdirSync(at)) {
+      const full = join(at, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else files[relative(dir, full).replace(/\\/g, '/')] = new Uint8Array(readFileSync(full));
+    }
+  };
+  walk(dir);
+  writeFileSync(path, zipSync(files));
+}
+
+async function importFile(app: ElectronApplication, window: Page, path: string, counts: string) {
+  await stubOpen(app, path);
+  await window.getByRole('button', { name: 'Import', exact: true }).click();
+  const report = window.getByTestId('import-report');
+  await expect(report.getByTestId('import-counts')).toHaveText(counts, { timeout: 20_000 });
+  return report;
+}
+
+test('import a Trello board, an Evernote notebook and a Confluence space', async ({ launch }) => {
+  const { app, window } = await launch();
+
+  // Trello: a board grouped by list, cards with their checklists.
+  let report = await importFile(
+    app,
+    window,
+    join(fixtures, 'trello', 'arm-build.json'),
+    '0 pages, 1 database with 3 rows, and 0 files.',
+  );
+  await expect(report.getByTestId('import-warnings')).toHaveText(
+    '2 archived Trello cards were left out',
+  );
+  await report.getByRole('button', { name: 'Done' }).click();
+  await find(window, 'Arm build');
+  const doing = window.getByTestId('board-column').filter({ hasText: 'Doing' });
+  const key = await doing.getAttribute('data-group-key');
+  await expect(window.locator(`[data-testid="board-cell"][data-group-key="${key}"]`)).toContainText(
+    'Mount the base',
+  );
+  // A card opens with its description, checklist and comments.
+  await window.getByTestId('card').filter({ hasText: 'Mount the base' }).click();
+  const peek = window.getByTestId('row-peek');
+  await expect(peek.getByLabel('Page title')).toHaveValue('Mount the base');
+  await expect(peek.getByTestId('page-editor')).toContainText('Bolt the base to the bench.');
+  await expect(peek.getByTestId('page-editor')).toContainText('Drill holes');
+  await expect(peek.getByTestId('page-editor')).toContainText(
+    'Asha Rao, 2026-11-02: Bolts arrived.',
+  );
+  await peek.getByRole('button', { name: 'Close' }).click();
+
+  // Evernote: a database of notes, with the note's image and to-dos.
+  report = await importFile(
+    app,
+    window,
+    join(fixtures, 'evernote', 'Robotics.enex'),
+    '0 pages, 1 database with 2 rows, and 2 files.',
+  );
+  await report.getByRole('button', { name: 'Done' }).click();
+  await find(window, 'Robotics');
+  const gripper = window.getByTestId('table-row').filter({ hasText: 'Gripper ideas & tests' });
+  await expect(gripper).toContainText('hardware');
+  await gripper.getByTestId('row-title').hover();
+  await gripper.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(peek.getByLabel('Page title')).toHaveValue('Gripper ideas & tests');
+  await expect(peek.getByTestId('page-editor')).toContainText('Silicone fingers, two chambers');
+  const image = peek.getByTestId('page-editor').locator('img').first();
+  await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
+  await expect(peek.getByTestId('page-editor').getByRole('checkbox').first()).toBeChecked();
+  await peek.getByRole('button', { name: 'Close' }).click();
+
+  // Confluence: the page tree, a callout, and links between pages.
+  const zip = join(out, 'Confluence-space-export.zip');
+  zipFolder(join(fixtures, 'confluence'), zip);
+  report = await importFile(app, window, zip, '4 pages, 0 databases with 0 rows, and 2 files.');
+  await expect(report).toContainText('Everything came over.');
+  await report.getByRole('button', { name: 'Done' }).click();
+  await find(window, 'Arm design');
+  await expect(editor(window).first().getByText('Keep hands clear of the elbow.')).toBeVisible();
+  await expect(window.getByLabel('Breadcrumb')).toContainText('Home');
+  await editor(window).first().getByTestId('mention').filter({ hasText: 'Controllers' }).click();
+  await expect(window.getByLabel('Page title')).toHaveValue('Controllers');
 });

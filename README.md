@@ -71,7 +71,7 @@ Notion's API. Notion's core, without the AI.**
 - Page tree with drag and drop, favorites, trash, quick find (`Ctrl+K`)
 - Tabs, several windows, back and forward, `workspace://` links
 - Backlinks, page history with restore, a templates gallery
-- Import Notion exports, Markdown, HTML and CSV
+- Import from Notion, Evernote, Trello and Confluence, and Markdown, HTML and CSV
 - Export Markdown & CSV, HTML, PDF; full backups
 - Light, dark and system themes
 
@@ -204,23 +204,23 @@ flowchart LR
 - **One UI, two hosts.** `packages/app` reaches its host only through a `Platform` interface, so
   the desktop and the web app share every screen.
 
-| Path                      | What's there                                                        |
-| ------------------------- | ------------------------------------------------------------------- |
-| `apps/desktop`            | Electron main process, preload bridge, packaging, E2E tests         |
-| `apps/server`             | The server: auth, sync, search, files, the `/v1` API, jobs          |
-| `apps/web`                | The web app: the shared UI served by the server                     |
-| `packages/core`           | The data model on Yjs: pages, the page tree, blocks, comments       |
-| `packages/editor`         | TipTap extensions for every block type                              |
-| `packages/database`       | Properties, formulas, filters, sorts, views, automations            |
-| `packages/app`            | Shared React screens: sidebar, pages, databases, settings           |
-| `packages/ui`             | Design tokens, themes and components                                |
-| `packages/storage-local`  | SQLite persistence and search for the desktop                       |
-| `packages/storage-remote` | Postgres store for the server: migrations, the update log, accounts |
-| `packages/sync`           | The sync protocol: messages, the server hub and clients             |
-| `packages/api-model`      | Notion's API objects, both ways                                     |
-| `packages/importers`      | Notion exports, Markdown, HTML, CSV                                 |
-| `packages/exporters`      | Markdown, CSV, HTML, PDF and backups                                |
-| `infra`                   | Docker Compose stack, Caddyfile, systemd unit, backup script        |
+| Path                      | What's there                                                         |
+| ------------------------- | -------------------------------------------------------------------- |
+| `apps/desktop`            | Electron main process, preload bridge, packaging, E2E tests          |
+| `apps/server`             | The server: auth, sync, search, files, the `/v1` API, jobs           |
+| `apps/web`                | The web app: the shared UI served by the server                      |
+| `packages/core`           | The data model on Yjs: pages, the page tree, blocks, comments        |
+| `packages/editor`         | TipTap extensions for every block type                               |
+| `packages/database`       | Properties, formulas, filters, sorts, views, automations             |
+| `packages/app`            | Shared React screens: sidebar, pages, databases, settings            |
+| `packages/ui`             | Design tokens, themes and components                                 |
+| `packages/storage-local`  | SQLite persistence and search for the desktop                        |
+| `packages/storage-remote` | Postgres store for the server: migrations, the update log, accounts  |
+| `packages/sync`           | The sync protocol: messages, the server hub and clients              |
+| `packages/api-model`      | Notion's API objects, both ways                                      |
+| `packages/importers`      | Notion, Evernote, Trello and Confluence exports; Markdown, HTML, CSV |
+| `packages/exporters`      | Markdown, CSV, HTML, PDF and backups                                 |
+| `infra`                   | Docker Compose stack, Caddyfile, systemd unit, backup script         |
 
 The design decisions and their reasons are in [docs/PLAN.md](docs/PLAN.md#1-architecture).
 
@@ -235,7 +235,7 @@ The design decisions and their reasons are in [docs/PLAN.md](docs/PLAN.md#1-arch
 | 4. Sync server               | ✅ Done | [PHASE4.md](docs/PHASE4.md)               |
 | 5. Collaboration             | ✅ Done | [PHASE5.md](docs/PHASE5.md)               |
 | 6. Automations and API       | ✅ Done | [PHASE6.md](docs/PHASE6.md)               |
-| 7. Polish and release (v1.0) | 🚧 M5   | [PHASE7.md](docs/PHASE7.md)               |
+| 7. Polish and release (v1.0) | 🚧 M6   | [PHASE7.md](docs/PHASE7.md)               |
 
 Out of scope: Notion AI, Notion Mail, Notion Calendar as a separate app, and the marketplace.
 

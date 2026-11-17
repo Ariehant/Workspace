@@ -26,7 +26,9 @@ import {
 } from '@workspace/database';
 import { appendContent, type JSONContent } from '@workspace/editor';
 import type * as Y from 'yjs';
+import { importConfluence, isConfluenceExport } from './confluence';
 import { parseCsv } from './csv';
+import { importEvernote } from './evernote';
 import { notionHtmlPage, type HtmlColumn } from './html';
 import { inferType, parseNumber, splitList } from './infer';
 import { notionMarkdownPage, type ConvertContext, type LinkTarget } from './markdown';
@@ -40,6 +42,7 @@ import {
   resolvePath,
   type ArchiveFile,
 } from './paths';
+import { importTrello, isTrelloBoard } from './trello';
 
 /** Where an import writes: the workspace and new docs for the pages it creates. */
 export interface ImportTarget {
@@ -102,11 +105,45 @@ function relationTokens(text: string): { title: string; path: string | null }[] 
 }
 
 /**
- * Import files (a Notion export, or plain Markdown / HTML / CSV / text files) under a new
- * page. Pages keep their tree, databases come from their CSV (or HTML table) with row
- * pages, links between them point at the new pages, and attachments are stored.
+ * Import files under a new page, by what they are: Evernote notebooks (`.enex`), Trello
+ * boards (their JSON export), a Confluence space (its HTML export), or else a Notion export
+ * or plain Markdown / HTML / CSV / text files.
  */
 export function importFiles(
+  input: readonly ArchiveFile[],
+  target: ImportTarget,
+  options: ImportOptions,
+): ImportReport {
+  const files = input.filter((f) => !JUNK.test(f.path) && !f.path.endsWith('/'));
+  // Only when that's all there is: a Notion export may hold such a file as an attachment.
+  const enex = files.filter((f) => /\.enex$/i.test(f.path));
+  if (enex.length && enex.length === files.length) {
+    return importEvernote(
+      enex.map((f) => ({ path: f.path, text: decoder.decode(f.data) })),
+      target,
+      options,
+    );
+  }
+  const boards = files.flatMap((f) => {
+    if (!/\.json$/i.test(f.path)) return [];
+    try {
+      const json: unknown = JSON.parse(decoder.decode(f.data));
+      return isTrelloBoard(json) ? [json] : [];
+    } catch {
+      return [];
+    }
+  });
+  if (boards.length && boards.length === files.length) return importTrello(boards, target, options);
+  if (isConfluenceExport(files)) return importConfluence(files, target, options);
+  return importNotion(files, target, options);
+}
+
+/**
+ * A Notion export, or plain Markdown / HTML / CSV / text files. Pages keep their tree,
+ * databases come from their CSV (or HTML table) with row pages, links between them point at
+ * the new pages, and attachments are stored.
+ */
+function importNotion(
   input: readonly ArchiveFile[],
   target: ImportTarget,
   options: ImportOptions,

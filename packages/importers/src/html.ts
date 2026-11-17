@@ -578,3 +578,10 @@ export function notionHtmlPage(html: string, ctx: HtmlContext): HtmlPage {
     database: table ? readDatabaseTable(table) : null,
   };
 }
+
+/** Blocks from any HTML (a fragment, or a document's body): Evernote notes, Confluence pages. */
+export function htmlBlocks(html: string, ctx: HtmlContext): JSONContent[] {
+  const document = parse(html);
+  const body = find(document, (e) => e.tagName === 'body');
+  return body ? new Converter(ctx).mixed(kids(body)) : [];
+}

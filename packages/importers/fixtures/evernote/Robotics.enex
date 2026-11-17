@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-export SYSTEM "http://xml.evernote.com/pub/evernote-export4.dtd">
+<en-export export-date="20261102T091500Z" application="Evernote" version="10.105.4">
+  <note>
+    <title>Gripper ideas &amp; tests</title>
+    <created>20261001T083000Z</created>
+    <updated>20261005T101500Z</updated>
+    <tag>hardware</tag>
+    <tag>gripper</tag>
+    <note-attributes>
+      <source-url>https://example.org/grippers</source-url>
+    </note-attributes>
+    <content>
+      <![CDATA[<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note><h2>Soft gripper</h2><div>Silicone fingers, <b>two</b> chambers, <i>40 kPa</i> max.</div><div><en-todo checked="true"/>Print the mould</div><div><en-todo checked="false"/>Cast the fingers</div><div><en-media hash="2cd8bde463f5d82aae0f0cec061d6b8f" type="image/png"/></div><ul><li><div>Shore 00-30</div></li><li><div>Shore A-10</div></li></ul><en-crypt cipher="AES" length="128">c2VjcmV0</en-crypt></en-note>]]>
+    </content>
+    <resource>
+      <data encoding="base64">
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAA
+AABJRU5ErkJggg==
+      </data>
+      <mime>image/png</mime>
+      <resource-attributes>
+        <file-name>finger.png</file-name>
+      </resource-attributes>
+    </resource>
+    <resource>
+      <data encoding="base64">JVBERi0xLjQKMSAwIG9iajw8Pj5lbmRvYmoKdHJhaWxlcjw8Pj4KJSVFT0YK</data>
+      <mime>application/pdf</mime>
+      <resource-attributes>
+        <file-name>datasheet.pdf</file-name>
+      </resource-attributes>
+    </resource>
+  </note>
+  <note>
+    <title>Bring-up checklist</title>
+    <created>20261003T120000Z</created>
+    <updated>20261003T121000Z</updated>
+    <tag>hardware</tag>
+    <content>
+      <![CDATA[<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note><div>Before power-on:</div><ul style="--en-todo:true;"><li style="--en-checked:true;"><div>Check the e-stop</div></li><li style="--en-checked:false;"><div>Home the joints</div></li></ul></en-note>]]>
+    </content>
+  </note>
+</en-export>

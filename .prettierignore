@@ -3,3 +3,5 @@ out/
 dist/
 docs/PLAN.md
 apps/desktop/build/
+# Sample exports, kept as the apps write them
+packages/importers/fixtures
