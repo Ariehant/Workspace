@@ -1,6 +1,7 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { unzipSync } from 'fflate';
 import { startServer, type TestServer } from './server';
 
 test.describe.configure({ mode: 'serial' });
@@ -119,6 +120,56 @@ test('sign up, create a workspace, write a page and a database, reload', async (
   await page.keyboard.press('Escape');
 });
 
+test('export a page as Markdown with its image, and print it to PDF', async ({ page }) => {
+  page.on('pageerror', (error) => console.error(`[page] ${error.stack ?? error}`));
+  await page.goto(server.base);
+  await page.getByLabel('Email').fill('ada@lab.io');
+  await page.getByLabel('Password').fill('correct horse battery');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page
+    .getByTestId('workspace-picker')
+    .getByRole('button', { name: /Robotics lab/ })
+    .click();
+  await sidebarTitles(page).filter({ hasText: 'Gripper' }).click();
+  await expect(editor(page)).toContainText('Two-finger parallel gripper');
+
+  // Markdown: made by the server, downloaded by the browser.
+  const openExport = async () => {
+    await page.getByRole('button', { name: 'Page options' }).click();
+    await page.getByTestId('page-menu').getByRole('menuitem', { name: 'Export…' }).click();
+    return page.getByTestId('export-dialog');
+  };
+  let dialog = await openExport();
+  const downloading = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe('Gripper (Markdown).zip');
+  const files = unzipSync(new Uint8Array(readFileSync((await download.path())!)));
+  const paths = Object.keys(files);
+  const markdown = paths.find((p) => p.endsWith('.md'))!;
+  expect(new TextDecoder().decode(files[markdown])).toContain('Two-finger parallel gripper, 2 Nm.');
+  // The image the page shows, under its name.
+  expect(paths.some((p) => p.endsWith('/gripper.png'))).toBe(true);
+  await expect(page.getByTestId('export-status')).toHaveAttribute('data-state', 'done');
+
+  // PDF: the page in a tab of its own, printed by the browser (its dialog saves PDFs).
+  await page.context().addInitScript(() => {
+    window.print = () => {
+      (window as unknown as { printed: boolean }).printed = true;
+    };
+  });
+  dialog = await openExport();
+  await dialog.getByRole('radio', { name: /^PDF/ }).check();
+  const opening = page.waitForEvent('popup');
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  const tab = await opening;
+  await expect(editor(tab)).toContainText('Two-finger parallel gripper');
+  await expect
+    .poll(() => tab.evaluate(() => (window as unknown as { printed?: boolean }).printed))
+    .toBe(true);
+  await tab.close();
+});
+
 test('a second tab sees edits live, and signing out returns to sign-in', async ({
   browser,
   page,
@@ -158,7 +209,9 @@ test('a second tab sees edits live, and signing out returns to sign-in', async (
   await shot(other, 'web-6-dark');
 
   await page.getByRole('button', { name: 'Workspace menu' }).click();
-  await expect(page.getByRole('menuitem', { name: /Export all/ })).toHaveCount(0);
+  // Exports work here; backups are the desktop's.
+  await expect(page.getByRole('menuitem', { name: /Export all/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Back up/ })).toHaveCount(0);
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page.getByTestId('sign-in')).toBeVisible();
   // Signed out everywhere in this browser (the cookie is gone).

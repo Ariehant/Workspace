@@ -1,3 +1,4 @@
+import { exportRoutes } from './export-routes';
 import { VERSION } from './version';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
@@ -279,6 +280,7 @@ export function buildServer({
     buttonRoutes(scope, ctx);
     integrationRoutes(scope, ctx);
     emailRoutes(scope, ctx);
+    exportRoutes(scope, ctx);
   });
   apiRoutes(app, ctx, apiOptions);
   webApp(app, config.webDir);

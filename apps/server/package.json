@@ -23,6 +23,7 @@
     "@workspace/storage-remote": "workspace:*",
     "@workspace/sync": "workspace:*",
     "fastify": "^5.12.5",
+    "fflate": "^0.8.3",
     "nodemailer": "^10.0.16",
     "openid-client": "^6.8.8",
     "ws": "^8.22.0",

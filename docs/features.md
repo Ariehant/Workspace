@@ -120,8 +120,8 @@ These need the [self-hosted server](self-hosting.md).
   use one from the server, and keep working offline. Changes and attachments sync when the
   connection is back, and edits made on both sides merge.
 - **The web app:** the same UI in a browser, at your server's address. It keeps only the pages
-  you open, and works while connected (export, import, backups and page history are desktop
-  features).
+  you open, and works while connected. It exports Markdown & CSV and HTML (made by the server)
+  and PDF (through the browser's print); import and backups are desktop features.
 - **Server search** over everything you can read, and server-side page history and backlinks,
   so the web app has them too.
 

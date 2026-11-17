@@ -163,8 +163,8 @@ sudo systemctl enable --now workspace
 ## Clients
 
 - **In a browser:** open `https://<DOMAIN>`. The web app is the same UI. It keeps only the pages
-  you open and works while connected; export, import, backups and page history are desktop
-  features.
+  you open and works while connected. Exports are made by the server (PDFs by the browser's
+  print); import and backups are desktop features.
 - **On a desktop:** open **Sync** in the sidebar and enter `https://<DOMAIN>` (see the
   [desktop guide](desktop.md#sync)).
 - **Integrations:** see the [API guide](api.md).

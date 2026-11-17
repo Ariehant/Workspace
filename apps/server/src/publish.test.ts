@@ -13,6 +13,7 @@ import type { AddressInfo } from 'node:net';
 import { createPage, getPageContent } from '@workspace/core';
 import { PgStore } from '@workspace/storage-remote';
 import { createTestDatabase } from '@workspace/storage-remote/testing';
+import { unzipSync } from 'fflate';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import * as Y from 'yjs';
 import { buildServer } from './app';
@@ -285,5 +286,70 @@ describe('publishing', () => {
     );
     expect((await w.json('GET', versions, w.ada.token)).body.versions).toHaveLength(2);
     expect((await w.json('POST', versions, w.gus.token, { reason: 'restore' })).status).toBe(404);
+  });
+});
+
+describe('exports for the web app', () => {
+  it('zips a page with its sub-pages, or everything someone can read; not for outsiders', async () => {
+    const w = await world();
+    const exportUrl = `/api/workspaces/${w.ws}/export`;
+    const names: string[] = [];
+    const zip = async (token: string, payload: object) => {
+      const res = await w.app.inject({
+        method: 'POST',
+        url: exportUrl,
+        payload,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('application/zip');
+      names.push(
+        decodeURIComponent(String(res.headers['content-disposition']).split("''")[1] ?? ''),
+      );
+      const files = unzipSync(new Uint8Array(res.rawPayload));
+      return new Map(Object.entries(files).map(([path, bytes]) => [path, bytes]));
+    };
+    const text = (bytes: Uint8Array | undefined) => new TextDecoder().decode(bytes);
+
+    // A page with its sub-page, its synced block's text and its image (under its name).
+    const page = await zip(w.bob.token, {
+      format: 'markdown',
+      pageId: 'gear',
+      includeSubpages: true,
+    });
+    expect([...page.keys()].sort()).toEqual([
+      'Gearbox gear.md',
+      'Gearbox gear/Sub notes sub.md',
+      `Gearbox gear/${IMAGE}`,
+    ]);
+    expect(text(page.get('Gearbox gear.md'))).toContain('Leaked synced');
+    expect(text(page.get(`Gearbox gear/${IMAGE}`))).toBe('png bytes');
+    expect(text(page.get('Gearbox gear/Sub notes sub.md'))).toContain('Sub content');
+
+    // Everything Ada can read, as HTML.
+    const all = await zip(w.ada.token, { format: 'html' });
+    expect([...all.keys()]).toContain('Secret plans secret.html');
+    expect(text(all.get('Secret plans secret.html'))).toContain('Do not share');
+
+    // A guest who can't read the teamspace gets nothing, and can't tell it's there.
+    const refused = await w.call('POST', exportUrl, w.gus.token, {
+      format: 'markdown',
+      pageId: 'gear',
+    });
+    expect(refused.statusCode).toBe(404);
+    const nothing = await zip(w.gus.token, { format: 'markdown' });
+    expect(nothing.size).toBe(0);
+    const signedOut = await w.call('POST', exportUrl, null, { format: 'markdown' });
+    expect([401, 403]).toContain(signedOut.statusCode);
+
+    expect(names).toEqual([
+      'Gearbox (Markdown).zip',
+      'Workspace (HTML).zip',
+      'Workspace (Markdown).zip',
+    ]);
+
+    // HTML: the diagrams to draw come first (the browser renders them).
+    const diagrams = await w.json('POST', `${exportUrl}/diagrams`, w.ada.token, { format: 'html' });
+    expect(diagrams).toEqual({ status: 200, body: { sources: [] } });
   });
 });

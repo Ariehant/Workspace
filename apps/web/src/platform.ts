@@ -2,7 +2,15 @@
  * The shared UI's host in the browser: docs over the sync socket (a partial client: only
  * the docs on screen), search, files and settings over the API.
  */
-import type { AccountInfo, Backlink, DocVersionInfo, Platform, ScopeInfo } from '@workspace/app';
+import type {
+  AccountInfo,
+  Backlink,
+  DocVersionInfo,
+  ExportRequest,
+  ExportStatus,
+  Platform,
+  ScopeInfo,
+} from '@workspace/app';
 import { parseNotification, type NotificationData, type PresenceHandlers } from '@workspace/core';
 import { PartialClient } from '@workspace/sync';
 import { ApiError, api, type Me } from './api';
@@ -44,6 +52,85 @@ export function createWebPlatform(options: {
   const presenceHandlers = new Map<string, PresenceHandlers>();
   const notificationListeners = new Set<(n: NotificationData) => void>();
   const base = `/api/workspaces/${workspace.id}`;
+
+  // --- Exports: rendered by the server, downloaded here; PDFs printed by the browser.
+  const exportListeners = new Set<(status: ExportStatus) => void>();
+  const sendExport = (status: ExportStatus) => {
+    for (const listener of exportListeners) listener(status);
+  };
+  let exporting: AbortController | null = null;
+  let drawDiagrams: ((sources: string[]) => Promise<Record<string, string>>) | null = null;
+
+  async function startExport(request: ExportRequest): Promise<boolean> {
+    if (request.format === 'backup') return false;
+    if (request.format === 'pdf') {
+      if (!request.pageId) return false;
+      // Opened straight away, while the click still counts (browsers block later pop-ups).
+      const params = new URLSearchParams({ print: request.pageId });
+      if (request.includeSubpages) params.set('subpages', '1');
+      if (request.pdf) {
+        params.set('size', request.pdf.pageSize);
+        params.set('scale', String(request.pdf.scale));
+      }
+      const tab = window.open(`${location.pathname}${location.search}#${params}`, '_blank');
+      if (!tab) throw new Error('Allow pop-ups for this site to save PDFs.');
+      return true;
+    }
+    if (exporting) throw new Error('An export is already running.');
+    const controller = new AbortController();
+    exporting = controller;
+    const body = {
+      format: request.format,
+      ...(request.pageId ? { pageId: request.pageId } : {}),
+      ...(request.includeSubpages ? { includeSubpages: true } : {}),
+    };
+    void (async () => {
+      try {
+        sendExport({ state: 'running', done: 0, total: 0 });
+        let mermaid: Record<string, string> = {};
+        if (request.format === 'html' && drawDiagrams) {
+          const { sources } = await api<{ sources: string[] }>(
+            'POST',
+            `${base}/export/diagrams`,
+            body,
+          );
+          if (sources.length) mermaid = await drawDiagrams(sources);
+        }
+        const response = await fetch(`${base}/export`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          signal: controller.signal,
+          headers: { 'content-type': 'application/json', 'x-workspace-client': 'web' },
+          body: JSON.stringify({ ...body, mermaid }),
+        });
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as { message?: string } | null;
+          throw new Error(data?.message ?? `The server answered ${response.status}.`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get('content-disposition') ?? '';
+        const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(disposition)?.[1] ?? '');
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name || 'Export.zip';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        sendExport({ state: 'done', path: link.download });
+      } catch (error) {
+        sendExport(
+          controller.signal.aborted
+            ? { state: 'cancelled' }
+            : { state: 'failed', error: error instanceof Error ? error.message : String(error) },
+        );
+      } finally {
+        if (exporting === controller) exporting = null;
+      }
+    })();
+    return true;
+  }
   // Reminders fire at 9:00 where this person is.
   void api('PATCH', '/api/auth/me', {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -219,16 +306,36 @@ export function createWebPlatform(options: {
           reason,
         }).catch(() => ({ id: null }))
       ).id,
-    startExport: async () => false,
-    cancelExport: () => {},
-    onExportStatus: () => () => {},
-    provideDiagrams: () => () => {},
+    startExport: (request) => startExport(request),
+    cancelExport: () => exporting?.abort(),
+    onExportStatus: (listener) => {
+      exportListeners.add(listener);
+      return () => exportListeners.delete(listener);
+    },
+    provideDiagrams: (render) => {
+      drawDiagrams = render;
+      return () => {
+        if (drawDiagrams === render) drawDiagrams = null;
+      };
+    },
     restoreBackup: async () => false,
-    printReady: () => {},
+    // The print view (a tab of its own) has rendered: the browser's print, which saves PDFs.
+    printReady: () => {
+      // The size and scale picked in the export dialog.
+      const params = new URLSearchParams(location.hash.slice(1));
+      const scale = Number(params.get('scale')) || 1;
+      const style = document.createElement('style');
+      style.textContent = `@page { size: ${params.get('size') === 'Letter' ? 'letter' : 'A4'}; }${
+        scale !== 1 ? ` html { zoom: ${Math.min(2, Math.max(0.1, scale))}; }` : ''
+      }`;
+      document.head.append(style);
+      window.addEventListener('afterprint', () => window.close(), { once: true });
+      window.print();
+    },
     startImport: async () => false,
     cancelImport: () => {},
     onImportStatus: () => () => {},
-    features: { export: false, import: false, backup: false },
+    features: { export: true, import: false, backup: false },
     scopes: {
       get: () => (scopes ? Promise.resolve(scopes) : scopesKnown),
       onChange: (listener) => {

@@ -7,6 +7,8 @@ export type {
   AutomationRun,
   Backlink,
   DocVersionInfo,
+  ExportRequest,
+  ExportStatus,
   Feature,
   LocalAutomationsPlatform,
   Platform,
