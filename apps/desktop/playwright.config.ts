@@ -7,5 +7,6 @@ export default defineConfig({
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
-  use: { trace: 'retain-on-failure' },
+  // A step that can't happen fails with what it waited for (not a bare test timeout).
+  use: { trace: 'retain-on-failure', actionTimeout: 30_000 },
 });

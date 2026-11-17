@@ -126,7 +126,11 @@ export async function launchApp(
   const args = [appDir];
   // Chromium refuses to start its sandbox as root (e.g. in containers).
   if (process.getuid?.() === 0) args.push('--no-sandbox');
-  const app = await electron.launch({
+  // Electron's own start, time-limited too: if it never returns, what started is noted and
+  // ended (nothing is left for the worker's teardown to wait on).
+  const before = electronPids();
+  let launchTimer: ReturnType<typeof setTimeout> | undefined;
+  const launching = electron.launch({
     executablePath: electronPath,
     args,
     env: {
@@ -137,6 +141,24 @@ export async function launchApp(
       ...env,
     },
   });
+  const app = await Promise.race([
+    launching,
+    new Promise<never>((_, reject) => {
+      launchTimer = setTimeout(() => {
+        const started = [...electronPids()].filter((pid) => !before.has(pid));
+        const trees = started.map((pid) => processTree(pid));
+        const report = trees.join('\n') || '(no new process)';
+        for (const line of trees.flatMap((t) => t.split('\n').slice(1))) {
+          try {
+            process.kill(Number(line.trim().split(/\s+/)[0]), 'SIGKILL');
+          } catch {
+            // gone already
+          }
+        }
+        reject(new Error(`Electron didn't start in ${START_TIMEOUT_MS / 1000} s:\n${report}`));
+      }, START_TIMEOUT_MS);
+    }),
+  ]).finally(() => clearTimeout(launchTimer));
   // The main process's last output, for a start that doesn't finish. E2E_MAIN_LOG=1 shows all
   // of it (warnings, errors).
   const output: string[] = [];
@@ -197,4 +219,18 @@ export async function settle(page: Page) {
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
   );
+}
+
+/** The Electron processes running now. */
+function electronPids(): Set<number> {
+  try {
+    return new Set(
+      execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8' })
+        .split('\n')
+        .filter((line) => /electron\/dist\/electron(\s|$)/.test(line) && !/--type=/.test(line))
+        .map((line) => Number(line.trim().split(/\s+/)[0])),
+    );
+  } catch {
+    return new Set();
+  }
 }
