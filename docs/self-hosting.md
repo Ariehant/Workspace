@@ -47,6 +47,7 @@ comments):
 | `SMTP_URL`, `SMTP_FROM`                       | Email for invites and notification digests (see [below](#email))            |
 | `S3_*`                                        | Attachments in S3 (see [below](#attachments-in-s3))                         |
 | `WEBHOOK_ALLOW_PRIVATE`, `WEBHOOK_ALLOW_HTTP` | Let webhooks reach private addresses or plain HTTP (see [below](#webhooks)) |
+| `SOURCE_URL`                                  | Where your server's source is, if you changed it (About links there; AGPL)  |
 | `UNSPLASH_ACCESS_KEY`                         | An Unsplash tab in the cover picker (searches go through the server)        |
 | `MAX_FILE_MB`                                 | The largest attachment (default 512)                                        |
 | `LOG_LEVEL`                                   | `info` (default), or `trace`, `debug`, `warn`, `error`, `fatal`, `silent`   |

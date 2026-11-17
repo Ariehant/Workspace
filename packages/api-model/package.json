@@ -16,5 +16,6 @@
   },
   "devDependencies": {
     "yjs": "^13.6.27"
-  }
+  },
+  "license": "AGPL-3.0-or-later"
 }

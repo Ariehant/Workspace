@@ -118,6 +118,8 @@ export interface AboutPlatform {
   appVersion(): Promise<string>;
   /** The server's version, while on one; null otherwise. */
   serverVersion?(): Promise<string | null>;
+  /** Where the source code is (the server's, in the web app); default: the project's. */
+  sourceUrl?(): Promise<string | null>;
   updates?: UpdatesPlatform;
 }
 

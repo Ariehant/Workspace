@@ -235,6 +235,10 @@ export function createWebPlatform(options: {
       serverVersion: async () =>
         (await api<{ version?: string }>('GET', '/api/auth/config').catch(() => null))?.version ??
         null,
+      // The server's source (a modified server offers its own, as the AGPL asks).
+      sourceUrl: async () =>
+        (await api<{ source?: string }>('GET', '/api/auth/config').catch(() => null))?.source ??
+        null,
     },
     onCommand: () => () => {},
     // Links to pages (#page=…) in this tab.

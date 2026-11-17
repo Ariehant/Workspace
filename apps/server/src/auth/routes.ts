@@ -123,6 +123,7 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
     needsSetup: (await accounts.countUsers()) === 0,
     providers: ctx.oidc.list(),
     unsplash: ctx.config.unsplash !== null,
+    source: ctx.config.sourceUrl,
   }));
 
   app.post<{

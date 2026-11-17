@@ -14,5 +14,6 @@
     "@workspace/core": "workspace:*",
     "fractional-indexing": "^3.4.0",
     "yjs": "^13.6.27"
-  }
+  },
+  "license": "AGPL-3.0-or-later"
 }

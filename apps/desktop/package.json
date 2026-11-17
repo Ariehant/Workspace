@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Offline-first workspace for notes, docs and databases",
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-or-later",
   "author": {
     "name": "Workspace Maintainers",
     "email": "maintainers@example.invalid"

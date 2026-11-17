@@ -80,6 +80,7 @@ describe('password accounts', () => {
       needsSetup: true,
       providers: [{ id: 'fake', name: 'Fake' }],
       unsplash: false,
+      source: 'https://github.com/ariehant/workspace',
     });
     const admin = await s.signup('Ada@Lab.io');
     expect(admin.res.statusCode).toBe(201);

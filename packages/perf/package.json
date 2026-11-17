@@ -17,5 +17,6 @@
     "@workspace/storage-local": "workspace:*",
     "yjs": "^13.6.27",
     "fractional-indexing": "^3.4.0"
-  }
+  },
+  "license": "AGPL-3.0-or-later"
 }

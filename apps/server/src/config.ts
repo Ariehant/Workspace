@@ -1,4 +1,7 @@
 /** Server settings, read from the environment (see infra/.env.example). */
+/** The project's own source code. */
+export const UPSTREAM_SOURCE = 'https://github.com/ariehant/workspace';
+
 export interface Config {
   host: string;
   port: number;
@@ -44,6 +47,11 @@ export interface Config {
    * address (tests point it elsewhere).
    */
   unsplash: { accessKey: string; apiUrl: string } | null;
+  /**
+   * Where this server's source code is (the AGPL asks a modified server to offer its source
+   * to the people using it); the apps link to it from About.
+   */
+  sourceUrl: string;
 }
 
 export interface OidcProvider {
@@ -141,6 +149,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     '',
   );
   if (!/^https?:\/\//.test(unsplashUrl)) problems.push('UNSPLASH_API_URL must be an http(s) URL');
+  const sourceUrl = env.SOURCE_URL?.trim() || UPSTREAM_SOURCE;
+  if (!/^https?:\/\//.test(sourceUrl)) problems.push('SOURCE_URL must be an http(s) URL');
   const smtpFrom = env.SMTP_FROM?.trim() || null;
   if (smtpUrl && !smtpFrom) problems.push('SMTP_FROM is required with SMTP_URL');
   const config: Config = {
@@ -158,6 +168,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     smtp: smtpUrl && smtpFrom ? { url: smtpUrl, from: smtpFrom } : null,
     formatsRegion,
     unsplash: unsplashKey ? { accessKey: unsplashKey, apiUrl: unsplashUrl } : null,
+    sourceUrl,
     webhooks: {
       allowPrivate: env.WEBHOOK_ALLOW_PRIVATE === 'true',
       allowHttp: env.WEBHOOK_ALLOW_HTTP === 'true',

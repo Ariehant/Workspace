@@ -16,5 +16,6 @@
     "lib0": "^0.2.119",
     "y-protocols": "1.0.7",
     "yjs": "^13.6.27"
-  }
+  },
+  "license": "AGPL-3.0-or-later"
 }

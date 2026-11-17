@@ -5,7 +5,7 @@ const { version } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
 ) as { version: string };
 
-test('About Workspace shows the version; this build updates with the system', async ({
+test('About Workspace shows the version, license and source; this build updates with the system', async ({
   launch,
 }) => {
   const { app, window } = await launch();
@@ -14,6 +14,12 @@ test('About Workspace shows the version; this build updates with the system', as
   const dialog = window.getByTestId('about-dialog');
   await expect(dialog.getByTestId('app-version')).toHaveText(version);
   expect(await app.evaluate(({ app }) => app.getVersion())).toBe(version);
+  // The license, and where the source is.
+  await expect(dialog.getByTestId('license')).toContainText('GNU Affero General Public License');
+  await expect(dialog.getByTestId('source-link')).toHaveAttribute(
+    'href',
+    'https://github.com/ariehant/workspace',
+  );
   // Not an AppImage (the tests run the unpacked app): no update controls, and why.
   await expect(dialog).toContainText('updates with your system');
   await expect(dialog.getByRole('button', { name: 'Check for updates' })).toHaveCount(0);

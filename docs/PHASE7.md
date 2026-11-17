@@ -577,6 +577,45 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
 - **The release:** `v1.0.0`, with release notes, the license, and the README's install section
   pointing at the published packages.
 
+#### Parity (PLAN §3, line by line)
+
+✅ there; ◐ there with a difference; ✗ not there.
+
+| Inventory line                                                                                    |     | Notes                                                                                                                     |
+| ------------------------------------------------------------------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------- |
+| Text blocks: headings (and toggle headings), lists, to-dos, toggle, quote, callout, divider       | ✅  |                                                                                                                           |
+| Code (highlighting, language picker), equations, Mermaid                                          | ◐   | Highlighting is highlight.js (lowlight), not Shiki, for bundle size (Phase 1)                                             |
+| Simple table, columns, table of contents, breadcrumb, link to page, synced blocks                 | ✅  |                                                                                                                           |
+| Buttons and template buttons                                                                      | ✅  |                                                                                                                           |
+| Media: images (resize, caption, crop), video, audio, PDF, files, bookmarks, embeds                | ◐   | Embeds from YouTube, Vimeo, Loom, Figma, CodePen and Google Maps; no GitHub gists or other sites yet (a bookmark instead) |
+| Inline formatting, mentions (page, person, date, reminder), emoji, inline equations               | ✅  |                                                                                                                           |
+| Slash menu, Markdown shortcuts, turn into, drag handle, multi-block selection, paste, undo, find  | ✅  | Find and replace in a page                                                                                                |
+| Page settings: icons, covers (upload, gallery, Unsplash), full width, small text, fonts, lock     | ✅  | Unsplash with a server key (M6)                                                                                           |
+| Views: table, board, list, gallery, calendar, timeline, chart, form                               | ✅  |                                                                                                                           |
+| Properties, formulas (Formula 2.0), relations, rollups, created / edited, unique ID, button       | ✅  | Text properties keep formatting (M6)                                                                                      |
+| Filters (nested), sorts, groups, sub-groups, calculations, hidden properties, card preview / size | ✅  |                                                                                                                           |
+| Inline / full-page databases, linked views, templates, sub-items, dependencies, row locking       | ✅  |                                                                                                                           |
+| Row pages: side peek, center peek, full page                                                      | ✅  |                                                                                                                           |
+| Automations: property and schedule triggers; set property, add page, notify, webhook              | ✅  |                                                                                                                           |
+| Sidebar: tree, drag and drop, favorites, private pages, teamspaces, recently viewed, trash        | ◐   | Recently viewed pages are quick find's list before you type, not a sidebar section                                        |
+| Quick find with filters and full text                                                             | ◐   | Full text over titles, content and rows; no filters (by teamspace, author or date) yet                                    |
+| Backlinks, history, templates gallery, duplicate, move to, windows and tabs, keyboard shortcuts   | ✅  | The common shortcuts (the [desktop guide](desktop.md#keyboard-shortcuts) lists them)                                      |
+| Themes; language and date formats                                                                 | ◐   | Formats follow the region (M3); the UI is English only until a translation comes (your call)                              |
+| Accounts, workspaces, members, groups, guests                                                     | ✅  |                                                                                                                           |
+| Sharing per page and teamspace with four levels, inherited                                        | ✅  |                                                                                                                           |
+| Real-time co-editing, cursors, presence                                                           | ✅  |                                                                                                                           |
+| Comments (inline and page, resolve), suggested edits                                              | ✅  |                                                                                                                           |
+| Inbox: mentions, comments, reminders; desktop notifications                                       | ✅  |                                                                                                                           |
+| Publish to web with SEO options, custom domain, analytics                                         | ◐   | No custom domains (left out in Phase 5); published at `/p/<slug>` on the server                                           |
+| Import: Notion, Markdown, CSV, HTML, text, Evernote, Confluence, Trello                           | ✅  | M5                                                                                                                        |
+| Export: Markdown & CSV, HTML, PDF, backup                                                         | ✅  | The web app exports too (M6); backups are the desktop's                                                                   |
+| REST API in Notion's shape, tokens, webhooks                                                      | ✅  | Differences in the [API guide](api.md#differences-from-notion)                                                            |
+| Web clipper (later, optional)                                                                     | ✗   | Optional in the plan; not started                                                                                         |
+
+The gaps that would take days, not weeks: embeds from any site (a sandboxed frame, as Notion's
+"Embed" block does), and quick find filters. Custom domains need the server's Caddy to issue
+certificates on demand, and a check that it only does so for domains a workspace has added.
+
 ## Decisions needed
 
 These are yours to make; the milestones that need them say so when they start.

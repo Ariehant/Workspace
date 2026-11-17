@@ -35,14 +35,22 @@ function updateText(info: UpdateInfo): string {
   }
 }
 
+/** The project's source code (a server can name its own: see `sourceUrl`). */
+export const SOURCE_URL = 'https://github.com/ariehant/workspace';
+
 /** Workspace menu → About Workspace: the versions, and updates where the app updates itself. */
 export function AboutDialog({ about, onClose }: { about: AboutPlatform; onClose(): void }) {
   const [version, setVersion] = useState<string | null>(null);
   const [server, setServer] = useState<string | null>(null);
+  const [source, setSource] = useState(SOURCE_URL);
   const updates = useUpdates(about.updates);
   useEffect(() => {
     void about.appVersion().then(setVersion);
     void about.serverVersion?.().then(setServer, () => setServer(null));
+    void about.sourceUrl?.().then(
+      (url) => url && setSource(url),
+      () => {},
+    );
   }, [about]);
 
   return (
@@ -59,6 +67,27 @@ export function AboutDialog({ about, onClose }: { about: AboutPlatform; onClose(
               </>
             )}
           </dl>
+          <p className="text-muted" data-testid="license">
+            Free software under the{' '}
+            <a
+              href="https://www.gnu.org/licenses/agpl-3.0.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              GNU Affero General Public License 3.0
+            </a>{' '}
+            or later.{' '}
+            <a
+              href={source}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+              data-testid="source-link"
+            >
+              Source code
+            </a>
+          </p>
           {updates && !updates.supported && (
             <p className="text-muted">
               This copy updates with your system: apt for the .deb, the Snap Store or Flathub.

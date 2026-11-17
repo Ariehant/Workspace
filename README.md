@@ -241,7 +241,7 @@ Out of scope: Notion AI, Notion Mail, Notion Calendar as a separate app, and the
 
 ## License
 
-Workspace will be released under the [GNU AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html)
-with v1.0 ([Phase 7](docs/PHASE7.md)): free to use, change and self-host, and changes to a server
-you run for others must be shared. Until the license file lands, the code is not yet available
-for reuse.
+Workspace is free software under the [GNU Affero General Public License 3.0](LICENSE) or later:
+free to use, change and self-host. If you change it and run it for others (a server people use
+over the network), offer them your changed source: set `SOURCE_URL` on the server to where it
+is, and the apps' **About** links there.

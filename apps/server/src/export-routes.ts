@@ -16,7 +16,6 @@ import { Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { PassThrough } from 'node:stream';
 import * as Y from 'yjs';
-import { atLeast } from './access/roles';
 import { fail, requireUser } from './auth/context';
 import type { ServerContext } from './context';
 import { FILE_ID, fileKey } from './files';
@@ -51,10 +50,6 @@ export function exportRoutes(app: FastifyInstance, ctx: ServerContext) {
     const roles = access.roles(userId);
     const readable = (doc: string) =>
       access.canRead(roles, doc) && access.placementOf(doc) !== undefined;
-    if (body.pageId) {
-      const role = roles.get(access.placementOf(body.pageId) ?? '');
-      if (!atLeast(role, 'view')) return null;
-    }
 
     const load = async (id: string): Promise<Y.Doc | null> => {
       const state = await ctx.store.docState(workspaceId, id);
@@ -70,6 +65,9 @@ export function exportRoutes(app: FastifyInstance, ctx: ServerContext) {
       if (doc) trees.push(localTree(doc, treeDoc));
     }
     const workspace = new Forest(trees);
+    // The page must be in a tree they can read (its own doc may not be placed yet: a page
+    // gets a scope on its first edit, so an empty page has none).
+    if (body.pageId && !listPages(workspace).some((p) => p.id === body.pageId)) return null;
     const workspaceDoc = await load(WORKSPACE_DOC_ID);
     const members = await load(MEMBERS_DOC_ID);
     const users = userNames(workspaceDoc, members);
