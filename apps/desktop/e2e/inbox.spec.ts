@@ -240,6 +240,8 @@ test('mentions off as desktop notifications: the next one only reaches the inbox
   await A.keyboard.type('Gear cutting: @Bo');
   await expect(A.getByTestId('mention-menu').getByRole('option').first()).toHaveText(/Bob/);
   await A.keyboard.press('Enter');
+  // On Ada's page first (if this fails, the mention never went in; past it, delivery did).
+  await expect(editor(A).getByTestId('mention').filter({ hasText: 'Bob' }).last()).toBeVisible();
   await synced(A);
   await expect(unread(B)).toHaveText('1', { timeout: 20_000 });
   expect(await systemNotifications(bob)).toHaveLength(1);
