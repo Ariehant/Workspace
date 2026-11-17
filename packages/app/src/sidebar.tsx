@@ -29,11 +29,13 @@ import {
   LogOut,
   ChevronRight,
   ChevronsLeft,
+  CircleArrowUp,
   CircleUser,
   Copy,
   CornerUpRight,
   Download,
   FileInput,
+  Info,
   Languages,
   Compass,
   LayoutTemplate,
@@ -105,6 +107,10 @@ export interface SidebarProps {
   onThemeChange(theme: ThemePreference): void;
   /** Settings → Language and region. */
   onRegion?(): void;
+  /** About Workspace (versions, updates). */
+  onAbout?(): void;
+  /** A downloaded update, to restart into. */
+  updateReady?: { version: string; onRestart(): void };
   /** The app's zoom (hosts that have one), in the Appearance menu. */
   zoom?: ZoomPlatform;
   onCollapse(): void;
@@ -214,6 +220,11 @@ export function Sidebar(props: SidebarProps) {
                 Export all workspace content…
               </MenuItem>
             )}
+            {props.onAbout && (
+              <MenuItem icon={<Info size={14} />} onSelect={props.onAbout}>
+                About Workspace
+              </MenuItem>
+            )}
             {props.can.backup && (
               <>
                 <MenuSeparator />
@@ -305,6 +316,19 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       <div className="border-t border-line p-1">
+        {props.updateReady && (
+          <button
+            type="button"
+            onClick={props.updateReady.onRestart}
+            data-testid="update-ready"
+            className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm font-medium text-accent hover:bg-hover"
+          >
+            <CircleArrowUp size={16} />
+            <span className="min-w-0 flex-1 truncate text-left">
+              Restart to update to {props.updateReady.version}
+            </span>
+          </button>
+        )}
         {props.sync && props.onSync && <SyncIndicator info={props.sync} onOpen={props.onSync} />}
         {props.team && (
           <button

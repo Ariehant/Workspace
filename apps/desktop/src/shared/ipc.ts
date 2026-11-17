@@ -26,6 +26,13 @@ export const IPC = {
   zoomSet: 'zoom:set',
   /** main -> renderer: the zoom changed (in any window). */
   zoomChanged: 'zoom:changed',
+  appVersion: 'app:version',
+  updateGet: 'update:get',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
+  updateSetAuto: 'update:set-auto',
+  /** main -> renderer: an update's progress. */
+  updateChanged: 'update:changed',
   windowOpen: 'window:open',
   fileImport: 'file:import',
   fileOpen: 'file:open',
@@ -126,6 +133,7 @@ export interface SyncScope {
 
 export interface SyncServerInfo {
   server: string;
+  version?: string;
   signup: 'open' | 'invite' | 'disabled';
   needsSetup: boolean;
   providers: { id: string; name: string }[];
@@ -168,6 +176,20 @@ export type ExportStatus =
   | { state: 'failed'; error: string };
 
 export type ThemeSource = 'system' | 'light' | 'dark';
+
+/** Where updating this install stands (only the AppImage updates itself). */
+export interface UpdateState {
+  supported: boolean;
+  /** The version running. */
+  current: string;
+  /** Look for updates by itself. */
+  auto: boolean;
+  status: 'idle' | 'checking' | 'none' | 'downloading' | 'ready' | 'error';
+  /** The version found (downloading or ready). */
+  version: string | null;
+  progress: number | null;
+  error: string | null;
+}
 
 /** An attachment stored in the workspace (see FileStore). */
 export interface FileRef {

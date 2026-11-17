@@ -46,6 +46,16 @@ const platform: Platform = {
   setSetting: api.settings.set,
   setTheme: api.setTheme,
   zoom: api.zoom,
+  about: {
+    appVersion: api.version,
+    serverVersion: async () => {
+      const { server } = await api.sync.status();
+      if (!server) return null;
+      const info = await api.sync.serverInfo(server);
+      return 'ok' in info ? (info.ok.version ?? null) : null;
+    },
+    updates: api.updates,
+  },
   onCommand: (listener) => api.onCommand((command) => listener(command as AppCommand)),
   onNavigate: (listener) => api.onNavigate(listener),
   openWindow: (pageId) => api.openWindow(pageId),

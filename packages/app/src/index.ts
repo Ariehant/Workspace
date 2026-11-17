@@ -1,6 +1,7 @@
 export { App } from './app';
 export { can } from './platform';
 export type {
+  AboutPlatform,
   AccountInfo,
   AppCommand,
   AutomationRun,
@@ -16,5 +17,7 @@ export type {
   SyncPlatform,
   TeamMethod,
   TeamPlatform,
+  UpdateInfo,
+  UpdatesPlatform,
   ZoomPlatform,
 } from './platform';

@@ -12,28 +12,51 @@ it to a server.
 ## Install
 
 Workspace runs on Ubuntu 24.04 and later (x86-64); other modern Linux desktops should work too.
-There are no published releases yet, so build the packages from source (Node.js 22.13 or later,
-pnpm 10):
+Each release on [GitHub](https://github.com/ariehant/workspace/releases) has a `.deb`, an
+AppImage, a Snap and a Flatpak, with `SHA256SUMS` (signed, `.asc`, once the project's key is
+set up). Until the first release, build them from source, below.
+
+**From the apt repository (recommended):** updates come with `apt upgrade`.
+
+```sh
+curl -fsSL https://ariehant.github.io/workspace/apt/workspace-archive-keyring.gpg \
+  | sudo tee /usr/share/keyrings/workspace-archive-keyring.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/workspace-archive-keyring.gpg] https://ariehant.github.io/workspace/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/workspace.list
+sudo apt update && sudo apt install workspace-app
+```
+
+The `.deb` adds Workspace to the applications menu, registers `workspace://` links, and installs
+an AppArmor profile so Chromium's sandbox works under Ubuntu 24.04's user-namespace rules. A
+downloaded `.deb` installs the same way: `sudo apt install ./workspace-app_*_amd64.deb`.
+
+**The AppImage** updates itself: it downloads a new release in the background and offers
+**Restart to update** in the sidebar (turn that off, or check now, in Workspace menu → About
+Workspace). Ubuntu 24.04 needs FUSE 2 (`sudo apt install libfuse2t64`), and its AppArmor rules
+block the Chromium sandbox for programs without a profile. To give the AppImage one, save this
+as `/etc/apparmor.d/workspace-appimage` and run `sudo apparmor_parser -r` on it:
+
+```text
+abi <abi/4.0>,
+include <tunables/global>
+
+profile workspace-appimage /tmp/.mount_Worksp*/workspace-app flags=(unconfined) {
+  userns,
+  include if exists <local/workspace-appimage>
+}
+```
+
+**The Snap** (`sudo snap install workspace-app`, once it is in the Snap Store) and **the
+Flatpak** (from Flathub, once listed) update through their stores.
+
+**From source** (Node.js 22.13 or later, pnpm 10):
 
 ```sh
 corepack enable
 pnpm install
 pnpm package        # apps/desktop/dist/: a .deb and an AppImage
-```
-
-**The `.deb` (recommended):**
-
-```sh
 sudo apt install ./apps/desktop/dist/workspace-app_*_amd64.deb
-workspace-app
 ```
-
-It adds Workspace to the applications menu, registers `workspace://` links, and installs an
-AppArmor profile so Chromium's sandbox works under Ubuntu 24.04's user-namespace restrictions.
-
-**The AppImage:** Ubuntu 24.04 needs FUSE 2 (`sudo apt install libfuse2t64`). Ubuntu's AppArmor
-policy also blocks the Chromium sandbox for AppImages, so prefer the `.deb` until signed
-AppImage profiles are in place ([Phase 7](PHASE7.md)).
 
 ## Where your data lives
 

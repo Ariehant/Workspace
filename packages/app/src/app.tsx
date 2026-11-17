@@ -80,6 +80,7 @@ import { ExportDialog, ExportProgress, useDiagramProvider } from './export-dialo
 import { PrintView, printFromLocation } from './print-view';
 import { ImportProgress } from './import-dialog';
 import { RegionDialog } from './region-dialog';
+import { AboutDialog, useUpdates } from './about-dialog';
 
 const SETTING = {
   theme: 'ui.theme',
@@ -568,6 +569,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   // Language and region: the formats change at once (everything re-renders from here).
   const [regionSettings, setRegionSettings] = useState(initial.region);
   const [regionOpen, setRegionOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const updates = useUpdates(platform.about?.updates);
   const changeRegion = useCallback(
     (next: RegionSettings) => {
       setRegion(resolveRegion(next));
@@ -758,6 +761,12 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             fileUrl={platform.fileUrl}
             onThemeChange={changeTheme}
             onRegion={() => setRegionOpen(true)}
+            onAbout={platform.about ? () => setAboutOpen(true) : undefined}
+            updateReady={
+              updates?.status === 'ready' && updates.version
+                ? { version: updates.version, onRestart: () => platform.about?.updates?.install() }
+                : undefined
+            }
             zoom={platform.zoom}
             onCollapse={() => setSidebarOpen(false)}
             sync={syncInfo}
@@ -794,6 +803,9 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
                 : undefined
             }
           />
+        )}
+        {aboutOpen && platform.about && (
+          <AboutDialog about={platform.about} onClose={() => setAboutOpen(false)} />
         )}
         {regionOpen && (
           <RegionDialog

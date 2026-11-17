@@ -14,7 +14,7 @@
     "bench": "pnpm --filter @workspace/perf bench",
     "test:e2e": "pnpm --filter @workspace/desktop test:e2e",
     "package": "pnpm --filter @workspace/desktop package",
-    "lint": "eslint . && node scripts/check-links.mjs",
+    "lint": "eslint . && node scripts/check-links.mjs && node scripts/version.mjs check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e:web": "pnpm --filter @workspace/web test:e2e",

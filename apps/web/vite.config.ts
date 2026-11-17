@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 import { EMBED_PROVIDERS } from '../../packages/editor/src/nodes/embeds';
 
@@ -35,8 +36,13 @@ const csp = (): Plugin => ({
   ],
 });
 
+const { version } = JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
+
 export default defineConfig({
   plugins: [react(), tailwindcss(), csp()],
+  define: { __WORKSPACE_VERSION__: JSON.stringify(version) },
   build: { outDir: 'dist', emptyOutDir: true },
   server: {
     // `pnpm dev` against a local server: VITE_SERVER=http://127.0.0.1:3000 pnpm dev

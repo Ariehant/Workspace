@@ -419,12 +419,44 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
     together and in five cold starts each. The timeouts look like the E2E hang M6 is to look
     into, and go there.
 
-### M4: updates and packaging (≈ 1.5 weeks)
+### M4: updates and packaging ✅ (Snap and Flatpak checked in CI only)
 
-- The release workflow, versions, signing, the apt repository, auto-update for the AppImage,
-  Snap and Flatpak.
-- **Tests:** in CI, each package installed in a clean container and smoke-tested; an AppImage
-  updating from a test release to a newer one.
+- **Versions:** one version for the desktop, server and web app, set from the release tag
+  (`scripts/version.mjs set`; `pnpm lint` checks they agree). The server's comes from its
+  package.json at build time (it was hard-coded), and `/api/auth/config` reports it.
+  **Workspace menu → About Workspace** shows the app's version and, when on a server, the
+  server's.
+- **Auto-update for the AppImage** (`electron-updater`, from GitHub releases): it checks 15 s
+  after starting and every 6 hours, downloads in the background, and the sidebar offers
+  **Restart to update**. About has "Download updates automatically" and "Check for updates".
+  The `.deb`, Snap and Flatpak update through apt and their stores, and About says so.
+- **The release workflow** (`.github/workflows/release.yml`), on a `v*` tag: builds the `.deb`,
+  AppImage, Snap and Flatpak; checks that the AppImage updates itself to the next version;
+  installs each package in a clean system and starts it (the `.deb` in Ubuntu 24.04 and 25.04
+  containers, the AppImage in a container, the Snap and the Flatpak on the runner); then
+  publishes the GitHub release (checksums, signatures), the apt repository on GitHub Pages and
+  the Snap Store upload. A tag with a `-` (`v1.0.0-rc.1`) is a pre-release on GitHub only.
+- **Signing** with the project's GPG key from the `GPG_PRIVATE_KEY` secret: `SHA256SUMS.asc`,
+  `.asc` signatures for the `.deb` and the AppImage, and the apt repository's `InRelease` and
+  `Release.gpg`. Without the secret the workflow skips signing and says so. (electron-builder's
+  embedded AppImage signature is left out: AppImageUpdate tooling is the only thing that reads
+  it, and the `.asc` covers the same.)
+- **The apt repository** (`scripts/apt-repo.sh`): `pool/` keeps every release, `dists/stable`
+  is made again from it each time.
+- **The AppImage sandbox:** the desktop guide gives the AppArmor profile Ubuntu 24.04 needs
+  (`userns` for the AppImage's mount path), to check by hand at the release check.
+- **Checked here:** the `.deb` installs in a clean Ubuntu 24.04 container and starts; a signed
+  apt repository built from it installs in another clean container with `apt`; the AppImage
+  0.1.0 finds 0.1.1 on a local feed, downloads it and replaces itself (and the new file reports
+  0.1.1). CI's package job now runs that update test on every change.
+- **Not checked here:** the Snap and the Flatpak need snapd and flatpak-builder, which this
+  environment can't run; their build and install steps run in the release workflow on GitHub's
+  runners, the first time on a tag. The Snap Store upload and the Flathub listing need the
+  accounts (decisions, below).
+- **Tests:** `about.spec.ts` (the version, no update controls on a build that isn't an
+  AppImage); About in the axe checks; `scripts/test-appimage-update.sh`; `pnpm lint` checks the
+  apps' versions agree.
+- **Runs:** see the next commit.
 
 ### M5: more importers (≈ 1 week)
 

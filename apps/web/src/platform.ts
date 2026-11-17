@@ -129,6 +129,12 @@ export function createWebPlatform(options: {
       }).catch((error: unknown) => console.warn('setting not saved:', error));
     },
     setTheme: () => {},
+    about: {
+      appVersion: async () => __WORKSPACE_VERSION__,
+      serverVersion: async () =>
+        (await api<{ version?: string }>('GET', '/api/auth/config').catch(() => null))?.version ??
+        null,
+    },
     onCommand: () => () => {},
     // Links to pages (#page=…) in this tab.
     onNavigate: (listener) => {

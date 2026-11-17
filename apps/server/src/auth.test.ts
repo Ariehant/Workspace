@@ -1,3 +1,4 @@
+import { VERSION } from './version';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -74,6 +75,7 @@ describe('password accounts', () => {
   it('makes the first account the admin, then follows the sign-up policy', async () => {
     const s = await setup({ SIGNUP: 'invite' });
     expect((await s.get('/api/auth/config')).json()).toEqual({
+      version: VERSION,
       signup: 'invite',
       needsSetup: true,
       providers: [{ id: 'fake', name: 'Fake' }],

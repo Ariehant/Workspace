@@ -60,3 +60,46 @@ deb:
 
 appImage:
   artifactName: ${productName}-${version}-${arch}.AppImage
+
+# The Snap Store build (`--linux snap`, in the release workflow). Strict confinement: the
+# home folder, the network, the desktop, sound, the keyring (sync's session token) and
+# removable drives (exports, imports).
+snap:
+  artifactName: workspace-app_${version}_${arch}.snap
+  confinement: strict
+  grade: stable
+  summary: Notes, docs and databases that work offline
+  plugs:
+    - default
+    - home
+    - network
+    - removable-media
+    - password-manager-service
+    - audio-playback
+
+# The Flathub build (`--linux flatpak`, in the release workflow), on the Electron base app.
+flatpak:
+  artifactName: ${productName}-${version}-${arch}.flatpak
+  runtime: org.freedesktop.Platform
+  runtimeVersion: '24.08'
+  sdk: org.freedesktop.Sdk
+  base: org.electronjs.Electron2.BaseApp
+  baseVersion: '24.08'
+  finishArgs:
+    - --share=ipc
+    - --share=network
+    - --socket=x11
+    - --socket=wayland
+    - --socket=pulseaudio
+    - --device=dri
+    - --filesystem=home
+    - --talk-name=org.freedesktop.Notifications
+    - --talk-name=org.freedesktop.secrets
+
+# Where the AppImage looks for updates (electron-updater; the release workflow uploads
+# latest-linux.yml with each release). Nothing is uploaded from a local `pnpm package`.
+publish:
+  provider: github
+  owner: ariehant
+  repo: workspace
+  releaseType: release

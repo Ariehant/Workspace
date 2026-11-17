@@ -13,6 +13,7 @@ import {
   type SyncSignIn,
   type ThemeSource,
   type TeamRequest,
+  type UpdateState,
 } from '../shared/ipc';
 
 type Unsubscribe = () => void;
@@ -92,6 +93,15 @@ const api = {
       ipcRenderer.invoke(IPC.historySnapshot, docId, reason),
   },
   setTheme: (theme: ThemeSource): void => ipcRenderer.send(IPC.themeSet, theme),
+  updates: {
+    get: (): Promise<UpdateState> => ipcRenderer.invoke(IPC.updateGet),
+    check: (): void => ipcRenderer.send(IPC.updateCheck),
+    install: (): void => ipcRenderer.send(IPC.updateInstall),
+    setAuto: (on: boolean): void => ipcRenderer.send(IPC.updateSetAuto, on),
+    onChange: (listener: (state: UpdateState) => void): Unsubscribe =>
+      on(IPC.updateChanged, listener),
+  },
+  version: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
   zoom: {
     get: (): Promise<number> => ipcRenderer.invoke(IPC.zoomGet),
     set: (factor: number): void => ipcRenderer.send(IPC.zoomSet, factor),

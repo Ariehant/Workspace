@@ -235,7 +235,7 @@ The design decisions and their reasons are in [docs/PLAN.md](docs/PLAN.md#1-arch
 | 4. Sync server               | ✅ Done | [PHASE4.md](docs/PHASE4.md)               |
 | 5. Collaboration             | ✅ Done | [PHASE5.md](docs/PHASE5.md)               |
 | 6. Automations and API       | ✅ Done | [PHASE6.md](docs/PHASE6.md)               |
-| 7. Polish and release (v1.0) | 🚧 M4   | [PHASE7.md](docs/PHASE7.md)               |
+| 7. Polish and release (v1.0) | 🚧 M5   | [PHASE7.md](docs/PHASE7.md)               |
 
 Out of scope: Notion AI, Notion Mail, Notion Calendar as a separate app, and the marketplace.
 

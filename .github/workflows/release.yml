@@ -1,0 +1,196 @@
+name: Release
+
+# A version tag (v1.2.3, or v1.2.3-rc.1 for a pre-release) builds every package, installs
+# each one in a clean system to smoke-test it, then publishes a GitHub release and the apt
+# repository. Signing needs the GPG_PRIVATE_KEY secret (and GPG_PASSPHRASE if the key has
+# one); the Snap Store upload needs SNAPCRAFT_STORE_CREDENTIALS. Without them, those steps
+# are skipped and the release says so. See CONTRIBUTING.md, "Making a release".
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (it must exist)'
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Build the packages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Version from the tag
+        run: node scripts/version.mjs set "$TAG"
+      - name: Allow user namespaces for the Chromium sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Packaging tools (Snapcraft, Flatpak)
+        run: |
+          sudo snap install snapcraft --classic
+          sudo apt-get update -q
+          sudo apt-get install -y -q flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - run: pnpm --filter @workspace/desktop build
+      - name: .deb, AppImage, Snap and Flatpak
+        working-directory: apps/desktop
+        run: npx electron-builder --linux deb AppImage snap flatpak --publish never
+      - name: The AppImage updates itself (from this version to the next)
+        run: bash scripts/test-appimage-update.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: |
+            apps/desktop/dist/*.deb
+            apps/desktop/dist/*.AppImage
+            apps/desktop/dist/*.snap
+            apps/desktop/dist/*.flatpak
+            apps/desktop/dist/latest-linux.yml
+          if-no-files-found: error
+
+  install:
+    name: Install and smoke-test (${{ matrix.package }} on ${{ matrix.system }})
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { package: deb, system: 'ubuntu:24.04' }
+          - { package: deb, system: 'ubuntu:25.04' }
+          - { package: AppImage, system: 'ubuntu:24.04' }
+          - { package: snap, system: runner }
+          - { package: flatpak, system: runner }
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: packages
+      - name: The .deb in a clean container
+        if: matrix.package == 'deb'
+        run: |
+          docker run --rm -v "$PWD/packages:/pkg:ro" "${{ matrix.system }}" bash -c '
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq /pkg/*.deb xvfb xauth >/dev/null
+            useradd -m tester
+            su tester -c "xvfb-run -a workspace-app --no-sandbox --smoke-test"'
+      - name: The AppImage in a clean container
+        if: matrix.package == 'AppImage'
+        run: |
+          docker run --rm -v "$PWD/packages:/pkg:ro" "${{ matrix.system }}" bash -c '
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq xvfb xauth libgtk-3-0t64 libnss3 libasound2t64 libgbm1 >/dev/null
+            cp /pkg/*.AppImage /tmp/workspace.AppImage && chmod +x /tmp/workspace.AppImage
+            APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a /tmp/workspace.AppImage --no-sandbox --smoke-test'
+      - name: The Snap, installed on the runner
+        if: matrix.package == 'snap'
+        run: |
+          sudo snap install --dangerous packages/*.snap
+          name="$(unsquashfs -cat packages/*.snap meta/snap.yaml | awk '/^name:/{print $2}')"
+          xvfb-run -a snap run "$name" --smoke-test
+      - name: The Flatpak, installed on the runner
+        if: matrix.package == 'flatpak'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q flatpak xvfb
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive packages/*.flatpak
+          xvfb-run -a flatpak run io.github.ariehant.workspace --smoke-test
+
+  publish:
+    name: Publish the release and the apt repository
+    needs: install
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: packages
+      - name: Import the signing key
+        id: key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "No GPG_PRIVATE_KEY secret: the packages and the apt repository stay unsigned."
+            echo "id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          if [ -n "$GPG_PASSPHRASE" ]; then
+            echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
+            gpg-connect-agent reloadagent /bye
+            for grip in $(gpg --list-secret-keys --with-keygrip --with-colons | awk -F: '/^grp/{print $10}'); do
+              /usr/lib/gnupg/gpg-preset-passphrase --preset --passphrase "$GPG_PASSPHRASE" "$grip"
+            done
+          fi
+          echo "id=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')" >> "$GITHUB_OUTPUT"
+      - name: Checksums and signatures
+        working-directory: packages
+        run: |
+          sha256sum *.deb *.AppImage *.snap *.flatpak > SHA256SUMS
+          if [ -n "${{ steps.key.outputs.id }}" ]; then
+            gpg --batch --yes --default-key "${{ steps.key.outputs.id }}" -abs -o SHA256SUMS.asc SHA256SUMS
+            for f in *.deb *.AppImage; do
+              gpg --batch --yes --default-key "${{ steps.key.outputs.id }}" -abs -o "$f.asc" "$f"
+            done
+          fi
+      - name: The GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" packages/* --title "Workspace ${TAG#v}" --generate-notes \
+            --verify-tag $prerelease
+      - name: The apt repository (GitHub Pages, gh-pages branch)
+        if: ${{ !contains(env.TAG, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q apt-utils
+          git fetch origin gh-pages:gh-pages || git branch gh-pages
+          git worktree add pages gh-pages
+          key=()
+          if [ -n "${{ steps.key.outputs.id }}" ]; then key=(--key "${{ steps.key.outputs.id }}"); fi
+          bash scripts/apt-repo.sh pages/apt packages/*.deb "${key[@]}"
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A apt
+          git commit -m "apt repository: $TAG"
+          git push origin gh-pages
+      - name: The Snap Store (stable channel)
+        if: ${{ !contains(env.TAG, '-') }}
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          if [ -z "$SNAPCRAFT_STORE_CREDENTIALS" ]; then
+            echo "No SNAPCRAFT_STORE_CREDENTIALS secret: the snap is on the GitHub release only."
+            exit 0
+          fi
+          sudo snap install snapcraft --classic
+          snapcraft upload --release=stable packages/*.snap

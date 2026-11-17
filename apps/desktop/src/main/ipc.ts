@@ -1,7 +1,7 @@
 import type { DocManager, SqliteStore } from '@workspace/storage-local';
 import { randomUUID } from 'node:crypto';
 import { userInfo } from 'node:os';
-import { BrowserWindow, ipcMain, nativeTheme, type WebContents } from 'electron';
+import { BrowserWindow, app, ipcMain, nativeTheme, type WebContents } from 'electron';
 import { IPC, type ThemeSource } from '../shared/ipc';
 
 const isDocId = (value: unknown): value is string =>
@@ -153,6 +153,7 @@ export function registerIpc(
   });
 
   ipcMain.on(IPC.ready, () => onReady());
+  ipcMain.handle(IPC.appVersion, () => app.getVersion());
 
   ipcMain.on(IPC.windowOpen, (_event, pageId: unknown) => {
     if (isDocId(pageId)) openWindow(pageId);

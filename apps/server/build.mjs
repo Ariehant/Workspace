@@ -20,8 +20,11 @@ const noViteGlob = {
   },
 };
 
+const { version } = JSON.parse(await readFile('package.json', 'utf8'));
+
 await build({
   entryPoints: ['src/main.ts', 'src/admin.ts'],
+  define: { __WORKSPACE_VERSION__: JSON.stringify(version) },
   outdir: 'dist',
   bundle: true,
   platform: 'node',

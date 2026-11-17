@@ -37,6 +37,8 @@ export interface Platform {
   setTheme(theme: ThemePreference): void;
   /** The app's zoom (the desktop; a browser has its own). */
   zoom?: ZoomPlatform;
+  /** Versions, and updates where the host updates itself (the AppImage). */
+  about?: AboutPlatform;
   onCommand(listener: (command: AppCommand) => void): () => void;
   /** The host asks to show a page, optionally scrolled to a block (links, notifications). */
   onNavigate(listener: (pageId: string, blockId: string | null) => void): () => void;
@@ -108,6 +110,36 @@ export interface Platform {
    * server (the desktop). With a server (`team`), the server runs them instead.
    */
   automations?: LocalAutomationsPlatform;
+}
+
+export interface AboutPlatform {
+  appVersion(): Promise<string>;
+  /** The server's version, while on one; null otherwise. */
+  serverVersion?(): Promise<string | null>;
+  updates?: UpdatesPlatform;
+}
+
+/** Where updating this install stands. */
+export interface UpdateInfo {
+  /** This install updates itself (the AppImage; the others update through apt or a store). */
+  supported: boolean;
+  current: string;
+  /** Look for updates by itself. */
+  auto: boolean;
+  status: 'idle' | 'checking' | 'none' | 'downloading' | 'ready' | 'error';
+  /** The version found (downloading or ready). */
+  version: string | null;
+  progress: number | null;
+  error: string | null;
+}
+
+export interface UpdatesPlatform {
+  get(): Promise<UpdateInfo>;
+  check(): void;
+  /** Restart into the downloaded version. */
+  install(): void;
+  setAuto(on: boolean): void;
+  onChange(listener: (info: UpdateInfo) => void): () => void;
 }
 
 /** The app's zoom level, as a factor (1.1 is 110%), shared by every window. */
@@ -242,6 +274,7 @@ export interface SyncInfo {
 
 export interface SyncServerInfo {
   server: string;
+  version?: string;
   signup: 'open' | 'invite' | 'disabled';
   needsSetup: boolean;
   providers: { id: string; name: string }[];

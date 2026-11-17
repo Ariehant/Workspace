@@ -66,6 +66,25 @@ Set `PERF_RESULTS=<file>` to record the results as JSON, and compare two runs wi
 `PERF_ROWS` and `PERF_BLOCKS` change the sizes. To profile the app, build it with
 `WORKSPACE_NO_MINIFY=1` so function names stay readable.
 
+## Making a release
+
+1. Pick the version (`1.2.3`, or `1.2.3-rc.1` for a release candidate) and tag the commit:
+   `git tag v1.2.3 && git push origin v1.2.3`.
+2. The [release workflow](.github/workflows/release.yml) sets the version in every app from the
+   tag (`node scripts/version.mjs set`), builds the `.deb`, AppImage, Snap and Flatpak, checks
+   that the AppImage updates itself to a newer build, installs each package in a clean
+   system (the `.deb` on Ubuntu 24.04 and 25.04) and starts it, then publishes the GitHub
+   release with checksums and the apt repository on GitHub Pages (`gh-pages`, under `apt/`).
+   A release candidate is a GitHub pre-release only: no apt repository, no store.
+3. Secrets: `GPG_PRIVATE_KEY` (and `GPG_PASSPHRASE`) sign the checksums, the `.deb` and
+   AppImage and the apt repository; `SNAPCRAFT_STORE_CREDENTIALS` uploads the snap to the stable
+   channel. Without them those steps are skipped, and the workflow log says so.
+4. Flathub takes a manifest pull request to its own repository, made by hand for the first
+   release; after that, Flathub's bot proposes each update.
+
+Between releases the apps keep the version of the last one; `pnpm lint` checks that they agree.
+To try the update path locally: `bash scripts/test-appimage-update.sh` (needs `xvfb-run`).
+
 ## What a change needs
 
 - **Tests** for the behaviour it adds or fixes: unit tests next to the code, and an end-to-end

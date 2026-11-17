@@ -25,7 +25,14 @@ import { buildMenu } from './menu';
 import { resolveDataDir } from './paths';
 import { broadcastSync, registerSyncIpc } from './sync/ipc';
 import { SyncService, type CarrySettings } from './sync/service';
+import { registerUpdates } from './updates';
 import { createZoom } from './zoom';
+
+// `--print-version`: print the version and exit (install and update checks).
+if (process.argv.includes('--print-version')) {
+  process.stdout.write(`${app.getVersion()}\n`);
+  process.exit(0);
+}
 
 const isDev = !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL);
 /** `--smoke-test`: start, wait for the UI to render, then exit 0 (or 1 on timeout). */
@@ -318,6 +325,7 @@ registerImport({ manager, dbPath, dataDir, onFiles: () => sync.fileAdded() });
 registerSyncIpc(sync);
 registerPresence(sync);
 registerNotifications(sync, store, manager, reminders);
+registerUpdates(store);
 
 // A second launch (e.g. the desktop opening a workspace:// link) hands over to us.
 app.on('second-instance', (_event, argv) => {

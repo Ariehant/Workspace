@@ -1,3 +1,4 @@
+import { VERSION } from '../version';
 import { isTimeZone } from '@workspace/core';
 import { createHash } from 'node:crypto';
 import type { SessionKind, User } from '@workspace/storage-remote';
@@ -117,6 +118,7 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
 
   // What the sign-in screen needs to know.
   app.get('/api/auth/config', async () => ({
+    version: VERSION,
     signup: ctx.config.signup,
     needsSetup: (await accounts.countUsers()) === 0,
     providers: ctx.oidc.list(),

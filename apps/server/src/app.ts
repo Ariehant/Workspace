@@ -1,3 +1,4 @@
+import { VERSION } from './version';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import type { PgStore } from '@workspace/storage-remote';
@@ -37,7 +38,7 @@ import { settingsRoutes } from './settings-routes';
 import { webApp } from './web';
 import { workspaceRoutes } from './workspaces';
 
-export const VERSION = '0.1.0';
+export { VERSION };
 
 declare module 'fastify' {
   interface FastifyInstance {
