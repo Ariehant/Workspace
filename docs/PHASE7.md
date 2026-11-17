@@ -567,7 +567,15 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
   the server's export, Unsplash and API tests; desktop E2E for crop (and its dialog in the axe
   checks), formatted text and quick find after an import; web E2E for export and PDF, offline
   (the server stopped, the tab reloaded, the server back) and Unsplash covers.
-- **Runs:** unit tests all pass; the E2E runs are recorded in the next commit.
+- **Runs:** unit tests all pass. Web E2E 6 passed (export, offline and Unsplash included).
+  Desktop E2E, nine full runs on the builds along the way: four all passed (158, 3 skipped);
+  twice the page cover test stalled for its minute right after the page icon test, late in the
+  worker, the old teardown hang (below, under the release check); twice the formatted text
+  test ran against a build from before it. The others: the
+  table keyboard test failed 3 runs in 10 on a real bug (Escape and Enter in a text cell typed
+  into at once were dropped: the editor was only known after a timer), fixed and 15 in 15
+  since; and the synced blocks test read the clipboard twice, which X11 can refuse ("Clipboard
+  data has changed"), now once.
 
 ### Release check (≈ 0.5 weeks)
 
@@ -578,6 +586,34 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
   schema, and run the scenario tests against it.
 - **The release:** `v1.0.0`, with release notes, the license, and the README's install section
   pointing at the published packages.
+
+#### So far
+
+- **License:** `LICENSE` (the AGPL-3.0 text, from SPDX), `AGPL-3.0-or-later` in every
+  package.json (the `.deb` carries it). About shows the license and links to the source; a
+  server names its own with `SOURCE_URL`, as the AGPL asks of a modified server.
+- **Server upgrade** (`scripts/test-server-upgrade.sh`): the Phase 6 server (built from its
+  commit in a worktree) writes a workspace (a desktop syncing pages, content and a database;
+  an integration with access), then this server starts on the same database and files. The
+  schema didn't change since Phase 6 (no migrations), nor the sync protocol (version 5). The
+  session, the desktop's sync, the integration's token and access, the API, database values
+  and search all carry over, and formatted text and exports work on the old data. It found a
+  bug in the new web export (a page whose own doc was never written, so has no scope yet, was
+  refused), fixed.
+- **Packages:** the `.deb` installs in a clean Ubuntu 24.04 container and starts (its smoke
+  test). Ubuntu 25.04 reached its end of life in January 2026 (its archive moved, so apt in it
+  fails): the release workflow now tests the `.deb` on 24.04 and 26.04, the supported LTS
+  releases. 26.04 can't be pulled here (Docker Hub's rate limit, and its mirror isn't
+  reachable from this environment), so it's checked in CI, on the tag.
+- **Release notes:** `docs/releases/v1.0.0.md`; the release workflow uses a version's notes
+  (GitHub's generated ones list pull requests, and this repository has none).
+- **The E2E hang**, twice in nine full runs since M6 started: the page cover test, right
+  after the page icon test with about 110 tests in the worker, stalls for its minute, and the
+  worker's teardown times out. None of the guards spoke: not the launch, not the start, not
+  the teardown's close. The test restarts the app mid-way with `quit()`, a plain
+  `app.close()` with no limit, so that's where it stalls: closing the app, as in Phase 6.
+  `quit()` now closes through the same guard, so the next time names the processes still
+  running and what they're waiting on.
 
 #### Parity (PLAN §3, line by line)
 
