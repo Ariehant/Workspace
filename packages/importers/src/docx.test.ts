@@ -375,13 +375,19 @@ describe('importing Word documents', () => {
   });
 
   it('refuses a document that unpacks to more than the limit', () => {
-    const big = new Uint8Array(MAX_DOCX_BYTES + 1);
+    // The guard reads each part's size from the zip's directory before inflating anything, so
+    // a small zip that declares a big part stands in for a real one (compressing 200 MB would
+    // take seconds).
+    const zip = zipSync({ 'word/document.xml': strToU8('<w:document/>') }, { level: 0 });
+    const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+    for (let i = 0; i + 4 <= zip.length; i++) {
+      const signature = view.getUint32(i, true);
+      // The uncompressed size in the local header and in the central directory.
+      if (signature === 0x04034b50) view.setUint32(i + 22, MAX_DOCX_BYTES + 1, true);
+      if (signature === 0x02014b50) view.setUint32(i + 24, MAX_DOCX_BYTES + 1, true);
+    }
     const t = target();
-    const report = importFiles(
-      [{ path: 'Huge.docx', data: zipSync({ 'word/document.xml': big }, { level: 9 }) }],
-      t.t,
-      { title: 'Huge' },
-    );
+    const report = importFiles([{ path: 'Huge.docx', data: zip }], t.t, { title: 'Huge' });
     expect(report.warnings).toEqual(['“Huge” is too large to import']);
   });
 });
