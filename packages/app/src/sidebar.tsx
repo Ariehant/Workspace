@@ -143,6 +143,7 @@ export interface SidebarProps {
 }
 
 export function Sidebar(props: SidebarProps) {
+  const zoomFactor = useZoomFactor(props.zoom);
   const { workspace, sections, favorites, width, onCreate, onCollapse, onSelect, onSearch } = props;
   const { theme, onThemeChange, fileUrl, account } = props;
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -394,7 +395,9 @@ export function Sidebar(props: SidebarProps) {
               <MenuRadioItem value="light">Light</MenuRadioItem>
               <MenuRadioItem value="dark">Dark</MenuRadioItem>
             </MenuRadioGroup>
-            {props.zoom && <ZoomItems zoom={props.zoom} />}
+            {props.zoom && zoomFactor !== null && (
+              <ZoomItems zoom={props.zoom} factor={zoomFactor} />
+            )}
           </MenuContent>
         </Menu>
       </div>
@@ -403,18 +406,28 @@ export function Sidebar(props: SidebarProps) {
   );
 }
 
-/** Zoom in the Appearance menu: the level, and in, out and back to 100% (the menu stays open). */
-function ZoomItems({ zoom }: { zoom: ZoomPlatform }) {
-  const [factor, setFactor] = useState(1);
+/**
+ * The app's zoom, followed while the sidebar is shown (null until known). Kept here rather
+ * than in the Appearance menu, which would show 100% for a moment each time it opens.
+ */
+function useZoomFactor(zoom: ZoomPlatform | undefined): number | null {
+  const [factor, setFactor] = useState<number | null>(null);
   useEffect(() => {
+    if (!zoom) return;
     let live = true;
-    void zoom.get().then((f) => live && setFactor(f));
+    // A change heard first is newer.
+    void zoom.get().then((f) => live && setFactor((current) => current ?? f));
     const off = zoom.onChange(setFactor);
     return () => {
       live = false;
       off();
     };
   }, [zoom]);
+  return factor;
+}
+
+/** Zoom in the Appearance menu: the level, and in, out and back to 100% (the menu stays open). */
+function ZoomItems({ zoom, factor }: { zoom: ZoomPlatform; factor: number }) {
   const keepOpen = (change: () => void) => (event: Event) => {
     event.preventDefault();
     change();
