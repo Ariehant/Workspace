@@ -390,7 +390,7 @@ click landing on the toggle's arrow) was wrong; moving the click didn't help.
   when Enter splits it (`KeepIdOnEmptySplit` in `packages/editor/src/extensions.ts`); Enter at
   the start of a line with text still leaves the line's id with its text.
 - **Not explained yet:** the selection toolbar not showing after Shift+Home, which is likely
-  what those 2 timeouts were. The full runs below keep their output.
+  what those 2 timeouts were. It didn't come back in the three full runs below.
 
 **Tests:**
 
@@ -426,3 +426,12 @@ click landing on the toggle's arrow) was wrong; moving the click didn't help.
   - `a11y.spec.ts`: the layout dialog and a row page with a pinned property, a side panel and
     a relation section, in both themes. (axe found the section's heading out of order; it's an
     `h2` now.)
+
+**Runs:**
+
+- **The full desktop suite, before the empty-split fix:** 167 passed, 3 skipped, 1 failed (the
+  offline test, above). The toggles test passed.
+- **With it, twice:** 168 passed and 3 skipped each time. The watchdog ended one stuck exit in
+  the second run.
+- **The web suite:** 6 passed. Formatting, lint, types, unit tests and the web, server and
+  desktop builds pass.
