@@ -46,22 +46,22 @@ milestones below; the others wait for a decision, by number.
 
 ### B. Databases
 
-| #   | Notion feature                                                                                                                                                              | What it's for (how you use it)                                                                                                                                   | Effort | Suggest |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------- |
-| 11  | **Row page layouts** ("Customize layout": pinned properties under the title, property sections, a tabbed layout; relations shown **as a page section**)                     | Make every row page of a database look the same and tidy: the 3 important properties at the top, the rest folded, related tasks shown as a list inside the page. | M–L    | ✅      |
-| 12  | **Number shown as a bar or ring** (progress), checkbox / status **"show as"** options                                                                                       | A "% done" column drawn as a progress bar; ratings as stars-like bars.                                                                                           | S      | ✅      |
-| 13  | **Freeze columns, row height, load limit** per view                                                                                                                         | Keep the title column visible while scrolling sideways; compact or tall rows; show 25/50/100 rows then "Load more" in big tables.                                | S      | ✅      |
-| 14  | **Bulk edit** (select many rows → set a property, duplicate, delete, move)                                                                                                  | Change the status of 30 tasks at once. (Needs checking: our table has row selection for copy/delete, not "edit property for all".)                               | M      | ✅      |
-| 15  | **Recurring templates** (a template that creates a page every day/week/month)                                                                                               | "Weekly review" or "Daily standup" pages appear by themselves on schedule.                                                                                       | M      | ✅      |
-| 16  | **Form conditional logic** (show a question only if an earlier answer was X) and **file upload questions**                                                                  | Smarter forms: "If bug → ask for steps"; let people attach a screenshot.                                                                                         | M      | ✅      |
-| 17  | **Map view + Place property** (Notion 3.0/3.1)                                                                                                                              | Store addresses/places; see rows as pins on a map. For travel, field work, sites, customers. Needs a map tile source (OpenStreetMap).                            | L      | 🤔      |
-| 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | 🤔      |
-| 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | 🤔      |
-| 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌      |
-| 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | 🤔      |
-| 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | 🤔      |
-| 23  | **Synced databases from GitHub/Jira/external APIs**                                                                                                                         | Issues from GitHub or Jira show up as a live database. Needs each service's API and accounts.                                                                    | L      | ❌      |
-| 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | 🤔      |
+| #   | Notion feature                                                                                                                                                              | What it's for (how you use it)                                                                                                                                   | Effort | Suggest      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ |
+| 11  | **Row page layouts** ("Customize layout": pinned properties under the title, property sections, a tabbed layout; relations shown **as a page section**)                     | Make every row page of a database look the same and tidy: the 3 important properties at the top, the rest folded, related tasks shown as a list inside the page. | M–L    | ✅ Done (N3) |
+| 12  | **Number shown as a bar or ring** (progress), checkbox / status **"show as"** options                                                                                       | A "% done" column drawn as a progress bar; ratings as stars-like bars.                                                                                           | S      | ✅ Done (N3) |
+| 13  | **Freeze columns, row height, load limit** per view                                                                                                                         | Keep the title column visible while scrolling sideways; compact or tall rows; show 25/50/100 rows then "Load more" in big tables.                                | S      | ✅ Done (N3) |
+| 14  | **Bulk edit** (select many rows → set a property, duplicate, delete, move)                                                                                                  | Change the status of 30 tasks at once. (Needs checking: our table has row selection for copy/delete, not "edit property for all".)                               | M      | ✅ Done (N3) |
+| 15  | **Recurring templates** (a template that creates a page every day/week/month)                                                                                               | "Weekly review" or "Daily standup" pages appear by themselves on schedule.                                                                                       | M      | ✅ Done (N3) |
+| 16  | **Form conditional logic** (show a question only if an earlier answer was X) and **file upload questions**                                                                  | Smarter forms: "If bug → ask for steps"; let people attach a screenshot.                                                                                         | M      | ✅ Done (N3) |
+| 17  | **Map view + Place property** (Notion 3.0/3.1)                                                                                                                              | Store addresses/places; see rows as pins on a map. For travel, field work, sites, customers. Needs a map tile source (OpenStreetMap).                            | L      | 🤔           |
+| 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | 🤔           |
+| 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | 🤔           |
+| 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌           |
+| 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | 🤔           |
+| 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | 🤔           |
+| 23  | **Synced databases from GitHub/Jira/external APIs**                                                                                                                         | Issues from GitHub or Jira show up as a live database. Needs each service's API and accounts.                                                                    | L      | ❌           |
+| 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | 🤔           |
 
 ### C. Navigation and workspace
 
@@ -267,3 +267,153 @@ types, unit tests, both builds, the desktop E2E suite twice and the web E2E suit
 - **With the watchdog, twice:** 162 passed and 3 skipped each time. The watchdog ended one
   stuck exit in the first run and none in the second.
 - **The web suite:** 6 passed.
+
+## N3: Databases
+
+N3 is in five parts (the [plan](#milestones) has them as one milestone): show as, freeze and
+load limit (N3a); bulk edit (N3b); repeating templates (N3c); form conditions and file
+questions (N3d); row page layouts (N3e). They went in together: they share the schema, the
+row page and the docs.
+
+### N3a: Show as, frozen columns, load limit (#12, #13)
+
+**Built:**
+
+- **Number "Show as"** (`PropertyConfig.showAs`): a number, a bar or a ring, with its colour,
+  the value that fills it (`divideBy`, 100 by default) and the number beside it or not. It
+  applies to number formulas and rollups too. Exports and the API still give the number.
+- **Status "Show as checkbox"** (`statusShowAs`): ticked when the status is in the Complete
+  group; ticking sets the first Complete option, unticking the first To-do one. The helpers
+  (`isTicked`, `toggledValue`, `numberFill`) are in `packages/database/src/properties.ts`, so
+  the table and the row page toggle the same way.
+- **Frozen columns** (`ViewConfig.frozenColumns`): "Freeze up to this column" in a column's
+  menu keeps those columns in place (`position: sticky`, each at the widths before it) while
+  the table scrolls sideways.
+- **Load limit** (`ViewConfig.loadLimit`, null by default so existing views are unchanged): a
+  table, list or gallery shows 10 to 500 pages, then "Load N more"; per group when grouped.
+  Calculations still cover every row. How many are loaded is kept while the view is open.
+- **Row height:** "Wrap all content" already gives compact or tall rows, so nothing new.
+
+### N3b: Bulk edit (#14)
+
+**Built:**
+
+- **Picking rows:** a checkbox beside each table row (a wider row gutter makes room), Shift+click
+  for a range, Ctrl+A for all the rows in the view, Escape to let go.
+- **The selection bar** above the table: "N selected", **Edit property** (a property's usual
+  editor, on the first picked row, its value then copied to the others; text, numbers and
+  links are typed once and read as pasting would; checkboxes as "checked" or "unchecked"),
+  **Duplicate** (with content), **Copy links**, **Delete**.
+- **One undo step:** `DatabaseHandle.beginUndoGroup` and `endUndoGroup` make everything between
+  them one step of the database's undo stack (`packages/database/src/handle.ts`), so the first
+  row's edit and the copies undo together.
+
+### N3c: Repeating templates (#15)
+
+**Built:**
+
+- **Repeat…** in a template's menu: every day, on chosen weekdays, or monthly on a day, at a
+  time in the person's time zone. It's stored as a scheduled automation of the database, one
+  per template (`repeat-<template id>`), so it shows in the automations dialog too and runs
+  where automations run: on the server while the workspace syncs (once per run: its jobs are
+  keyed by the time), else on the desktop.
+- **Several weekdays:** `Schedule.weekdays` (with `weekday` still read for older schedules);
+  the schedule editor picks days with toggle buttons.
+- **From a template:** the `addPage` action takes a `templateId`. The server's and the
+  desktop's runners make the page with `addRowFromTemplate` (values, icon, cover), then copy
+  the template's content into the new page's doc. On the server the page is placed with its
+  database.
+
+### N3d: Form conditions and file questions (#16)
+
+**Built:**
+
+- **Conditions** (`FormQuestion.showIf`): "Only if" an earlier select, status or multi-select
+  question is one of some options, or an earlier checkbox is ticked or not. They chain (a
+  question shown only if a hidden one was answered stays hidden), and a condition on a
+  question that was removed or moved below is ignored, so it can't hide a question for good.
+  `shownQuestions` in `packages/database/src/forms.ts` decides; `validateSubmission` drops
+  the answers to hidden questions and doesn't require them, on the server too.
+- **In the app:** the builder has "When to show" under each question; the filled-in form
+  shows and hides questions as the answers change.
+- **On the public page (no script):** a `<style>` per form hides conditional questions and
+  shows each one with `form:has(select[name=…] option[value=…]:checked)` (or `:checked`
+  inputs). Browsers without `:has()` show every question; the server still applies the
+  conditions. Conditional questions aren't `required` in the HTML, for the same reason.
+- **File questions** (`files` in `FORM_QUESTION_TYPES`): up to 5 files. In the app they're
+  stored as attachments are, and the in-app submit only takes file ids. The public page sends
+  `multipart/form-data` (`@fastify/multipart`, registered on the public form route only):
+  10 MB a file and 25 MB a response (413 past that), stored as workspace files and linked to
+  the new row. Files of a question the conditions hide aren't kept.
+
+### N3e: Row page layouts (#11)
+
+**Built:**
+
+- **Customize layout** (`DatabaseMeta.layout`, null by default: today's page), from the row
+  page's properties, for people who may edit the database's properties. It applies to every
+  page of the database.
+  - **Pinned:** up to 4 properties under the title, in a compact row.
+  - **The others:** in the page, folded behind "Properties" (with their count), or in a side
+    panel on the right (above the content on narrow windows).
+  - **Relations as sections:** a relation's linked pages listed after the properties, with up
+    to 3 of their properties, "Add a page" (the relation picker) and remove. A linked page
+    opens in a side peek.
+
+### The toggles test, and keys right after a caret move
+
+The toggles test (Phase 1) failed in some full runs: what it typed after Ctrl+End went to the
+wrong place, and then the selection toolbar didn't show. The guess in an earlier draft (its
+click landing on the toggle's arrow) was wrong; moving the click didn't help.
+
+- **The cause:** the browser moves the caret itself for some keys (End, Ctrl+End, Shift+Home),
+  and ProseMirror learns of it from a `selectionchange` event that comes later. Input events
+  run first, so a key pressed straight after (Enter) can act on the old cursor. Logging both
+  selections showed ProseMirror's still at the old place after Ctrl+End in 10 of 12 tries, and
+  Enter acting there in 2 of 4 before the fix. Playwright presses keys back to back; a person
+  typing fast on a busy machine can do the same.
+- **The fix:** before any key is handled, the editor reads the selection from the page
+  (ProseMirror's own handler for that event; nothing happens if they already match), in
+  `packages/editor/src/extensions.ts`. With it, Enter acted at the new caret in 12 of 12.
+- **The test** now checks that Ctrl+End left the toggle before going on. Without the fix that
+  check failed 3 times in 3. With it, the test passed 13 times in 15. The 2 failures were the
+  first two runs after a fresh build, and timed out (30 s steps); their output wasn't kept.
+- **Ruled out:** y-tiptap redraws the whole document when the editor's plugins change (menus,
+  others' cursors), but ProseMirror keeps the blocks' views and the selection then.
+- **Not explained yet:** the selection toolbar not showing after Shift+Home, which is likely
+  what those 2 timeouts were. The full runs below keep their output.
+
+**Tests:**
+
+- **Unit:**
+  - show as: a status ticked and toggled, a checkbox flipped, a bar's fill
+  - views: no frozen columns or load limit until set
+  - undo grouping: two edits in a group undo in one step
+  - schedules on several weekdays, their keys, and a page from a template in a run's plan
+  - form conditions: shown and hidden, chained, ignored when they point below; hidden
+    required questions not enforced and their answers dropped; file answers checked
+  - row layouts: read with defaults, and anything malformed falls back
+- **Server:**
+  - `automations.test.ts`: a scheduled run adds one page from the template, with its values
+    and content, on the server and on the desktop that syncs.
+  - `forms.test.ts`: the public page's condition styles; a hidden question's answer dropped
+    and a hidden required one not enforced; a multipart submission storing a file and linking
+    it; too large refused; files of hidden questions not kept.
+- **Desktop E2E:**
+  - `views.spec.ts`: a number as a bar (50%, then 25% with "Divide by" 200) and a ring; a status
+    as a checkbox; 60 imported rows with a load limit of 25, then 50, then 60; a frozen title
+    staying put while the table scrolls sideways.
+  - `database.spec.ts`: pick five rows with Shift, set their status, undo once; set tags for
+    all; duplicate two; Ctrl+A, delete all, undo.
+  - `local-automations.spec.ts`: a template repeating every day makes a page with its content
+    a day later.
+  - `forms.spec.ts`: a files question shown only when the status is Done, answered with a file
+    in the app; on the public page, signed out, hidden until Done is chosen, then a file
+    uploaded; both rows have their files.
+  - `database.spec.ts`: a row page layout: a pinned property, the rest folded, a relation as a
+    section (add a page, see its property, open it), on another row too and after a restart,
+    then the side panel.
+  - `blocks.spec.ts`: the toggles test checks Ctrl+End left the toggle.
+  - `a11y.spec.ts`: the layout dialog and a row page with a pinned property, a side panel and
+    a relation section, in both themes. (axe found the section's heading out of order; it's an
+    `h2` now.)

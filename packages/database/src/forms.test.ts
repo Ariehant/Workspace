@@ -11,6 +11,7 @@ import {
   formQuestions,
   initDatabase,
   readDatabase,
+  shownQuestions,
   validateSubmission,
   type FormConfig,
 } from './index';
@@ -52,6 +53,7 @@ describe('forms', () => {
     expect(asked).not.toContain(ids.sum);
     expect(asked).not.toContain(ids.files);
     expect(canAsk('rollup')).toBe(false);
+    expect(canAsk('files')).toBe(true);
     // Other views read the default form settings.
     expect(readDatabase(doc).views[0]!.form.questions).toEqual([]);
   });
@@ -176,5 +178,104 @@ describe('forms', () => {
       title: 'Gear',
       values: { [ids.qty]: 12, [ids.ok]: true, [ids.tags]: ['t1', 't2'] },
     });
+  });
+
+  it('shows a question only when an earlier answer meets its condition', () => {
+    const { properties, ids } = setup();
+    const form: FormConfig = {
+      ...defaultForm(properties),
+      questions: [
+        { propertyId: TITLE_PROPERTY_ID, label: '', description: '', required: true },
+        { propertyId: ids.size, label: '', description: '', required: false },
+        {
+          propertyId: ids.notes,
+          label: 'Why large?',
+          description: '',
+          required: true,
+          showIf: { propertyId: ids.size, values: ['l'] },
+        },
+        { propertyId: ids.ok, label: '', description: '', required: false },
+        {
+          propertyId: ids.mail,
+          label: '',
+          description: '',
+          required: true,
+          showIf: { propertyId: ids.ok, values: true },
+        },
+        // Chained: only when "Why large?" is shown.
+        {
+          propertyId: ids.qty,
+          label: '',
+          description: '',
+          required: true,
+          showIf: { propertyId: ids.notes, values: ['never'] },
+        },
+      ],
+    };
+    const shown = (answers: Record<string, unknown>) =>
+      [...shownQuestions(properties, form, answers)].map(
+        (id) => properties.find((p) => p.id === id)!.name,
+      );
+    expect(shown({})).toEqual(['Name', 'Size', 'Agree']);
+    expect(shown({ [ids.size]: 'l', [ids.ok]: true })).toEqual([
+      'Name',
+      'Size',
+      'Notes',
+      'Agree',
+      'Email',
+    ]);
+    // A condition about a question that isn't asked before it doesn't apply.
+    const moved: FormConfig = { ...form, questions: [...form.questions].reverse() };
+    expect(shownQuestions(properties, moved, {}).size).toBe(6);
+    // Hidden questions aren't required, and what's sent for them is dropped.
+    const small = validateSubmission(properties, form, {
+      [TITLE_PROPERTY_ID]: 'Order',
+      [ids.size]: 's',
+      [ids.notes]: 'ignored',
+    });
+    expect(small).toEqual({ ok: true, title: 'Order', values: { [ids.size]: 's' } });
+    const large = validateSubmission(properties, form, {
+      [TITLE_PROPERTY_ID]: 'Order',
+      [ids.size]: 'l',
+    });
+    expect(large).toMatchObject({ ok: false, errors: [{ propertyId: ids.notes }] });
+  });
+
+  it('takes files only from those given for the response', () => {
+    const { properties, ids } = setup();
+    const form: FormConfig = {
+      ...defaultForm(properties),
+      questions: [{ propertyId: ids.files, label: '', description: '', required: true }],
+    };
+    const ok = 'a'.repeat(64) + '.png';
+    const files = (id: string) => id === ok;
+    expect(
+      validateSubmission(
+        properties,
+        form,
+        { [ids.files]: [{ id: ok, name: 'shot.png' }] },
+        { files },
+      ),
+    ).toEqual({ ok: true, title: '', values: { [ids.files]: [{ id: ok, name: 'shot.png' }] } });
+    // Not given for it, too many, or no files allowed here.
+    expect(
+      validateSubmission(
+        properties,
+        form,
+        { [ids.files]: [{ id: 'b'.repeat(64), name: 'x' }] },
+        { files },
+      ),
+    ).toMatchObject({ ok: false });
+    expect(
+      validateSubmission(
+        properties,
+        form,
+        { [ids.files]: Array.from({ length: 6 }, () => ({ id: ok, name: 'x' })) },
+        { files },
+      ),
+    ).toMatchObject({ ok: false });
+    expect(
+      validateSubmission(properties, form, { [ids.files]: [{ id: ok, name: 'x' }] }),
+    ).toMatchObject({ ok: false });
   });
 });

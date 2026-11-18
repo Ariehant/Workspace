@@ -49,6 +49,20 @@ export class DatabaseHandle {
     });
   }
 
+  /**
+   * Edits from now until `endUndoGroup` undo as one step: a bulk edit, made in one row's
+   * editor and then copied to the other selected rows.
+   */
+  beginUndoGroup(): void {
+    this.undo.stopCapturing();
+    this.undo.captureTimeout = Number.MAX_SAFE_INTEGER;
+  }
+
+  endUndoGroup(): void {
+    this.undo.captureTimeout = 0;
+    this.undo.stopCapturing();
+  }
+
   private readonly onRows = (events: Y.YEvent<Y.AbstractType<unknown>>[]) => {
     const rows = rowsMap(this.doc);
     for (const event of events) {

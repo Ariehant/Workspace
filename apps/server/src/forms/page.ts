@@ -1,10 +1,17 @@
 /**
  * A public form's page (`/f/<token>`): plain HTML that posts back to itself, no script.
  * Its questions are inputs named by property id; person questions aren't asked here
- * (nobody signed in can pick workspace members).
+ * (nobody signed in can pick workspace members). Conditions show and hide questions with
+ * CSS; file questions post the form as multipart.
  */
 import { escapeHtml } from '@workspace/exporters';
-import { optionsOf, type FormConfig, type FormQuestion, type Property } from '@workspace/database';
+import {
+  MAX_FORM_FILES,
+  optionsOf,
+  type FormConfig,
+  type FormQuestion,
+  type Property,
+} from '@workspace/database';
 
 /** The field a robot fills in and a person never sees. */
 export const HONEYPOT = 'website';
@@ -60,10 +67,17 @@ const page = (title: string, body: string) =>
 <body><main>${body}</main></body>
 </html>`;
 
-function input(question: FormQuestion, property: Property, value: string | string[] | undefined) {
+function input(
+  question: FormQuestion,
+  property: Property,
+  value: string | string[] | undefined,
+  conditional: boolean,
+) {
   const name = escapeHtml(property.id);
   const one = escapeHtml(Array.isArray(value) ? (value[0] ?? '') : (value ?? ''));
-  const required = question.required ? ' required' : '';
+  // A question that may be hidden can't be required by the browser (a hidden required field
+  // stops the post); the server asks for it when it's shown.
+  const required = question.required && !conditional ? ' required' : '';
   const id = `q-${name}`;
   switch (property.type) {
     case 'text':
@@ -92,6 +106,8 @@ function input(question: FormQuestion, property: Property, value: string | strin
             `<option value="${escapeHtml(o.id)}"${o.id === one ? ' selected' : ''}>${escapeHtml(o.name)}</option>`,
         )
         .join('')}</select>`;
+    case 'files':
+      return `<input id="${id}" type="file" name="${name}" multiple${required}><div class="hint">Up to ${MAX_FORM_FILES} files, 10 MB each.</div>`;
     case 'multiSelect': {
       const chosen = new Set(Array.isArray(value) ? value : value ? [value] : []);
       if (optionsOf(property).length === 0) return '<div class="hint">No options yet.</div>';
@@ -109,21 +125,61 @@ function input(question: FormQuestion, property: Property, value: string | strin
   }
 }
 
+/** Ids that go into CSS selectors as they are. */
+const SAFE_ID = /^[\w-]{1,100}$/;
+
+/**
+ * Questions with a condition show only when it's met, without script: hidden by default, and
+ * shown by a rule matching the earlier answer (`:has()`; a browser without it shows them all,
+ * and the server applies the conditions either way).
+ */
+function conditionStyle(questions: FormPage['questions']): string {
+  const types = new Map(questions.map((q) => [q.property.id, q.property.type]));
+  const rules: string[] = [];
+  for (const { question, property } of questions) {
+    const c = question.showIf;
+    const type = c && types.get(c.propertyId);
+    if (!c || !type || !SAFE_ID.test(property.id) || !SAFE_ID.test(c.propertyId)) continue;
+    const field = `[name="${c.propertyId}"]`;
+    let matches: string[];
+    if (typeof c.values === 'boolean') {
+      matches = [c.values ? `input${field}:checked` : `input${field}:not(:checked)`];
+    } else {
+      const values = c.values.filter((v) => SAFE_ID.test(v));
+      matches = values.map((v) =>
+        type === 'multiSelect'
+          ? `input${field}[value="${v}"]:checked`
+          : `select${field} option[value="${v}"]:checked`,
+      );
+    }
+    const q = `.q[data-q="${property.id}"]`;
+    rules.push(`${q} { display: none; }`);
+    if (matches.length)
+      rules.push(`${matches.map((m) => `form:has(${m}) ${q}`).join(', ')} { display: block; }`);
+  }
+  return rules.length ? `<style>${rules.join('\n')}</style>` : '';
+}
+
 /** The form, to fill in (again, with what's wrong, after a refused post). */
 export function renderForm({ form, fallbackTitle, questions, values = {}, errors }: FormPage) {
   const title = form.title || fallbackTitle || 'Form';
   const general = errors?.get(null);
+  const asked = new Set(questions.map((q) => q.property.id));
+  // File questions post as multipart.
+  const files = questions.some((q) => q.property.type === 'files');
   const body = `
 <h1>${escapeHtml(title)}</h1>
 ${form.description ? `<p class="description">${escapeHtml(form.description)}</p>` : ''}
-<form method="post" accept-charset="utf-8">
+${conditionStyle(questions)}
+<form method="post" accept-charset="utf-8"${files ? ' enctype="multipart/form-data"' : ''}>
 ${general ? `<p class="error" role="alert">${escapeHtml(general)}</p>` : ''}
 ${questions
   .map(({ question, property }) => {
     const label = escapeHtml(question.label || property.name);
     const error = errors?.get(property.id);
     const multi = property.type === 'multiSelect' || property.type === 'checkbox';
-    return `<div class="q">
+    const conditional = !!question.showIf && asked.has(question.showIf.propertyId);
+    return `<div class="q" data-q="${escapeHtml(property.id)}">
   ${
     multi
       ? `<span class="label">${label}${question.required ? ' <span class="required">*</span>' : ''}</span>`
@@ -132,7 +188,7 @@ ${questions
         }</label>`
   }
   ${question.description ? `<div class="hint">${escapeHtml(question.description)}</div>` : ''}
-  ${input(question, property, values[property.id])}
+  ${input(question, property, values[property.id], conditional)}
   ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
 </div>`;
   })

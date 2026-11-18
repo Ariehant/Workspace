@@ -13,6 +13,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
     "@fastify/cookie": "^11.1.2",
+    "@fastify/multipart": "10.1.6",
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/static": "^9.3.0",
     "@workspace/api-model": "workspace:*",

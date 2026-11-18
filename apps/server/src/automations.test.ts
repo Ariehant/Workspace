@@ -10,8 +10,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { createPage } from '@workspace/core';
+import { createPage, getPageContent } from '@workspace/core';
 import {
+  addTemplate,
   addOption,
   addProperty,
   addRow,
@@ -363,6 +364,50 @@ describe('automations', () => {
        AND done_at IS NULL AND failed_at IS NULL`,
     );
     expect(rows[0]!.n).toBe(1);
+  });
+});
+
+describe('repeating templates (Phase 8 N3)', () => {
+  it('a scheduled run adds one page from the template: its values and its content', async () => {
+    const real = Date.now();
+    const w = await world(() => real - 120_000);
+    const db = w.a.doc('tasks');
+    const template = addTemplate(db, { actor: w.ada.id, title: 'Weekly review' });
+    setCell(db, template, w.ids.status, 'todo', w.ada.id);
+    const agenda = new Y.XmlElement('paragraph');
+    agenda.insert(0, [new Y.XmlText('Agenda: wins, blockers, next week')]);
+    getPageContent(w.a.doc(template)).insert(0, [agenda]);
+    const minuteAgo = new Date(real - 60_000);
+    const time = `${String(minuteAgo.getUTCHours()).padStart(2, '0')}:${String(minuteAgo.getUTCMinutes()).padStart(2, '0')}`;
+    setAutomation(
+      db,
+      w.automation({
+        id: `repeat-${template}`,
+        trigger: { kind: 'schedule', schedule: { every: 'day', time, timeZone: 'UTC' } },
+        actions: [{ kind: 'addPage', title: '', values: {}, templateId: template }],
+      }),
+    );
+    await w.settled(w.a);
+    const made = async () =>
+      readDatabase(await w.state()).rows.filter(
+        (r) => r.title === 'Weekly review' && !r.isTemplate && r.trashedAt === null,
+      );
+    await until(async () => (await made()).length === 1, 'the page from the template');
+    const [row] = await made();
+    expect(row!.values[w.ids.status]).toBe('todo');
+    await until(
+      async () =>
+        getPageContent(await w.state(row!.id))
+          .toString()
+          .includes('Agenda'),
+      'the template’s content in the new page',
+    );
+    // Ada's device gets it too (the page is placed with its database).
+    await until(
+      () => getPageContent(w.a.doc(row!.id)).toString().includes('Agenda'),
+      'the content on the device',
+    );
+    expect(await made()).toHaveLength(1);
   });
 });
 

@@ -67,12 +67,22 @@ Database" on an empty page).
   links: Ctrl+B, I, U, E and K while editing, or its toolbar), number (with formats), select,
   multi-select, status, date (ranges, times, reminders), checkbox, URL, email, phone, files,
   person, formula, relation, rollup, button, created and edited time and by, and unique ID.
+- **Show as:** a number (or a number formula or rollup) as a progress bar or a ring, with its
+  colour, the value that fills it ("Divide by", 100 by default) and the number beside it or
+  not; a status as a checkbox, ticked when it's in the Complete group (ticking sets the first
+  Complete option, unticking the first To-do one).
 - **Views:** table, board, list, gallery, calendar, timeline, chart (bar, line, pie, donut) and
   form. Each view has its own filters (simple chips or nested AND/OR), sorts, grouping and
   sub-grouping, column calculations, visible properties, card preview and size, and a search.
 - **Table:** edit cells in place, keyboard navigation, copy and paste, undo; rename, retype,
-  hide, resize, reorder, duplicate and delete columns; drag rows to reorder. Large tables only
+  hide, resize, reorder, duplicate and delete columns; drag rows to reorder. "Freeze up to this
+  column" keeps the first columns in place when the table scrolls sideways. Large tables only
   render the rows in view.
+- **Load limit:** a table, list or gallery can show 10, 25, 50, 100 or 500 pages (per group
+  when grouped), then "Load more".
+- **Bulk edit:** tick rows in a table (Shift+click for a range, Ctrl+A for all, Escape to let
+  go), then set a property for all of them at once (one undo step), duplicate them, copy their
+  links or delete them.
 - **Formulas:** Notion's Formula 2.0 language, with an editor that highlights, autocompletes,
   documents functions, previews live and points at errors. Results sort, filter and group by
   type.
@@ -83,10 +93,17 @@ Database" on an empty page).
 - **Calendar and timeline:** month and week calendars, drag to reschedule and resize; timeline
   zoom levels, draggable bars and dependency arrows.
 - **Templates:** a default template per database or view, linked views of a database in any
-  page, simple tables turned into databases and back, locked views and properties.
+  page, simple tables turned into databases and back, locked views and properties. A template
+  can **repeat**: a new page from it every day, on chosen weekdays or every month, at a time
+  (it's a scheduled automation, run by the server while the workspace syncs, or by the
+  desktop).
 - **Rows are pages:** open them in a side peek, a center peek or full page, with their
   properties above the content. Rows show up in quick find, can be linked to, and go to the
   trash when deleted.
+- **Customize layout** (on a row page, for every page of the database): up to four properties
+  pinned under the title; the others in the page, folded behind "Properties", or in a side
+  panel; relations shown as sections of the page, listing the linked pages with a few of
+  their properties, to open, add or remove.
 
 ## Workspace and navigation
 
@@ -169,6 +186,13 @@ These need the [self-hosted server](self-hosting.md).
   schedules).
 - **Forms:** a database's form view, filled in from the app, or shared by link and filled in
   by anyone in a browser. Each response is a new row.
+  - **Conditions:** a question can show only when an earlier select, status or multi-select
+    answer is one of some options, or a checkbox is ticked (or not). The public page does this
+    without script (CSS), and the server applies the conditions to what it's sent: a hidden
+    question isn't required, and an answer to it is dropped.
+  - **File questions:** up to 5 files (10 MB each, 25 MB a response on the public page),
+    stored as the workspace's attachments and shown in the row's files property. A new form
+    doesn't ask for files until a file question is added.
 
 ## API and integrations
 

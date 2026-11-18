@@ -108,6 +108,16 @@ export interface PropertyConfig {
   numberFormat?: NumberFormat;
   /** number: decimal places (default: as entered). */
   precision?: number;
+  /** number (and number formulas): shown as the number, a bar or a ring (as Notion's "Show as"). */
+  showAs?: 'number' | 'bar' | 'ring';
+  /** number as a bar or ring: the value that fills it (default 100). */
+  divideBy?: number;
+  /** number as a bar or ring: the number beside it too (default true). */
+  showNumber?: boolean;
+  /** number as a bar or ring, its colour (default green). */
+  color?: OptionColor;
+  /** status: shown as its option, or as a checkbox ticked when it's in the Complete group. */
+  statusShowAs?: 'select' | 'checkbox';
   /** date, created time, last edited time. */
   dateFormat?: DateFormat;
   timeFormat?: TimeFormat;
@@ -220,6 +230,11 @@ export interface FormQuestion {
   label: string;
   description: string;
   required: boolean;
+  /**
+   * Asked only when an earlier question's answer is one of `values` (select, status,
+   * multi-select: option ids) or, for a checkbox, ticked (`true`) or not (`false`).
+   */
+  showIf?: { propertyId: string; values: string[] | boolean } | null;
 }
 
 /** A form view's settings (its responses are the database's new rows). */
@@ -364,6 +379,10 @@ export interface ViewConfig {
   openPagesIn: OpenPagesIn;
   /** Wrap long cell content instead of cutting it off. */
   wrap: boolean;
+  /** Table: the first this many columns stay in place when the table scrolls sideways. */
+  frozenColumns: number;
+  /** Table, list and gallery: rows shown before "Load more" (null: all). Per group when grouped. */
+  loadLimit: number | null;
   /** Board and gallery: the image on cards, fit inside (or cropped to) the preview area. */
   cardPreview: CardPreview;
   fitImage: boolean;
@@ -487,6 +506,21 @@ export interface DatabaseMeta {
   lockProperties: boolean;
   /** How new views open pages. */
   openPagesIn: OpenPagesIn;
+  /** How every row's page is laid out (null: properties above the content, as before). */
+  layout: RowLayout | null;
+}
+
+/** Most properties a row page pins under its title. */
+export const MAX_PINNED = 4;
+
+/** A database's row page layout (Notion's "Customize layout"). */
+export interface RowLayout {
+  /** Property ids shown under the title, as a compact row (at most `MAX_PINNED`). */
+  pinned: string[];
+  /** Where the rest go: in the page, folded behind "Properties", or in a side panel. */
+  properties: 'page' | 'collapsed' | 'side';
+  /** Relation properties shown as sections of the page: the linked pages, listed. */
+  relationSections: string[];
 }
 
 export const META_MAP = 'meta';
@@ -500,6 +534,8 @@ export const DEFAULT_VIEW_CONFIG: ViewConfig = {
   calculations: {},
   openPagesIn: 'sidePeek',
   wrap: false,
+  frozenColumns: 0,
+  loadLimit: null,
   cardPreview: { kind: 'none' },
   fitImage: false,
   cardSize: 'medium',

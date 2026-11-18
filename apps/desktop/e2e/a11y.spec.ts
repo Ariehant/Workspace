@@ -195,6 +195,20 @@ for (const theme of THEMES) {
       await window.getByTestId('table-row').first().getByRole('gridcell').nth(1).click();
       await expect(window.getByTestId('cell-popover')).toBeVisible();
     });
+    // A relation (to the database itself), shown below as a section of the row page.
+    await window.getByTestId('table-view').getByRole('button', { name: 'Add a property' }).click();
+    await window
+      .getByTestId('add-property-menu')
+      .getByRole('menuitem', { name: 'Relation', exact: true })
+      .click();
+    await window
+      .getByTestId('relation-setup')
+      .getByLabel('Related to')
+      .selectOption({ label: 'This database (Tasks)' });
+    await window
+      .getByTestId('relation-setup')
+      .getByRole('button', { name: 'Add relation' })
+      .click();
     // A row opened as a page.
     await window.getByTestId('row-title').first().hover();
     await window
@@ -204,6 +218,31 @@ for (const theme of THEMES) {
       .click();
     await expect(window.getByTestId('row-peek')).toBeVisible();
     await expectAccessible(window, s('a row page'), { modal: true });
+    const peek = window.getByTestId('row-peek');
+    await checkOpen(window, s('the layout dialog'), () =>
+      peek.getByRole('button', { name: 'Customize layout' }).click(),
+    );
+    // Its layout: Status pinned, the rest in a side panel, the relation as a section.
+    await peek.getByRole('button', { name: 'Customize layout' }).click();
+    const layout = window.getByTestId('layout-dialog');
+    await layout
+      .getByRole('group', { name: /Pinned under the title/ })
+      .getByLabel('Status')
+      .check();
+    await layout.getByLabel('In a side panel (wide windows)').check();
+    await layout
+      .getByRole('group', { name: 'Relations as sections of the page' })
+      .getByLabel('Related')
+      .check();
+    await layout.getByTestId('layout-save').click();
+    await expect(peek.getByTestId('relation-section')).toBeVisible();
+    await expectAccessible(window, s('a row page with a custom layout'), { modal: true });
+    // Back to the default for the next theme's run (a new app, but the same steps).
+    await peek
+      .getByTestId('properties-side')
+      .getByRole('button', { name: 'Customize layout' })
+      .click();
+    await window.getByTestId('layout-dialog').getByRole('button', { name: 'Reset' }).click();
   });
 }
 

@@ -2,7 +2,7 @@ import type { Row } from '@workspace/database';
 import { Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Card, PREVIEW_HEIGHT, shownProperties, type LayoutViewProps } from './cards';
-import { Lines, buildLines, useLayoutGroups } from './list';
+import { LoadMoreLine, Lines, buildLines, useLayoutGroups, useLoadMore } from './list';
 
 const MIN_CARD = { small: 180, medium: 240, large: 320 } as const;
 const GAP = 16;
@@ -24,13 +24,18 @@ export function GalleryView(props: LayoutViewProps) {
   const perRow = Math.max(1, Math.floor((width + GAP) / (MIN_CARD[view.cardSize] + GAP)));
 
   // Each group's cards, split into rows of the grid.
-  const lines = buildLines<Row[]>(result, (rows, path) => {
-    const chunks: { key: string; item: Row[] }[] = [];
-    for (let i = 0; i < rows.length; i += perRow) {
-      chunks.push({ key: `${path}#${i / perRow}`, item: rows.slice(i, i + perRow) });
-    }
-    return chunks;
-  });
+  const { loaded, more } = useLoadMore();
+  const lines = buildLines<Row[]>(
+    result,
+    (rows, path) => {
+      const chunks: { key: string; item: Row[] }[] = [];
+      for (let i = 0; i < rows.length; i += perRow) {
+        chunks.push({ key: `${path}#${i / perRow}`, item: rows.slice(i, i + perRow) });
+      }
+      return chunks;
+    },
+    { limit: view.loadLimit, loaded },
+  );
   const cardHeight =
     (view.cardPreview.kind === 'none' ? 0 : PREVIEW_HEIGHT[view.cardSize]) +
     40 +
@@ -45,6 +50,9 @@ export function GalleryView(props: LayoutViewProps) {
         }
         render={(line) => {
           if (line.kind === 'header') return groups.header(line);
+          if (line.kind === 'more') {
+            return <LoadMoreLine line={line} limit={view.loadLimit ?? line.total} onMore={more} />;
+          }
           if (line.kind === 'new') {
             return editable && groups.canAdd(line.infos) ? (
               <button

@@ -11,20 +11,24 @@
  */
 import { roleAllows } from '@workspace/core';
 import {
+  CONDITION_TYPES,
   FORM_QUESTION_TYPES,
   addProperty,
   addRow,
   canAsk,
   formQuestions,
+  MAX_FORM_FILES,
   newPropertyName,
   optionsOf,
   propertyKind,
   updateView,
+  shownQuestions,
   validateSubmission,
   type DatabaseHandle,
   type DatabaseSnapshot,
   type FormAudience,
   type FormConfig,
+  type FileValue,
   type FormQuestion,
   type Property,
   type View,
@@ -224,6 +228,12 @@ function FormBuilder({
             placeholder="Description (optional)"
             onChange={(e) => change(i, { description: e.target.value })}
             className="mt-1 w-full bg-transparent text-sm text-muted outline-none placeholder:text-faint"
+          />
+          <ConditionEditor
+            property={property}
+            question={question}
+            earlier={asked.slice(0, i).filter((q) => CONDITION_TYPES.includes(q.property.type))}
+            onChange={(showIf) => change(i, { showIf })}
           />
         </div>
       ))}
@@ -428,8 +438,14 @@ function FormFill({
   const { user } = useApp();
   const ctx = useDisplayContext();
   const form = view.form;
-  const questions = formQuestions(snapshot.properties, form);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  // Questions whose condition isn't met (by the answers so far) are left out.
+  const shown = shownQuestions(snapshot.properties, form, answers);
+  const questions = formQuestions(snapshot.properties, form).filter((q) =>
+    shown.has(q.property.id),
+  );
+  // Files uploaded for this response (a files question may name only these).
+  const [uploaded, setUploaded] = useState<ReadonlySet<string>>(() => new Set());
   const [errors, setErrors] = useState<Map<string | null, string>>(new Map());
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -445,6 +461,7 @@ function FormFill({
     );
     const checked = validateSubmission(snapshot.properties, form, sent, {
       members: new Set(people),
+      files: (id) => uploaded.has(id),
     });
     if (!checked.ok) {
       setErrors(new Map(checked.errors.map((e) => [e.propertyId, e.message])));
@@ -458,6 +475,7 @@ function FormFill({
       else addRow(handle.doc, { actor: user.id, title: checked.title, values: checked.values });
       setDone(true);
       setAnswers({});
+      setUploaded(new Set());
     } catch (e) {
       setErrors(new Map([[null, errorText(e)]]));
     }
@@ -508,6 +526,7 @@ function FormFill({
               onChange={(v) => set(property.id, v)}
               people={people}
               names={ctx.users}
+              onUploaded={(id) => setUploaded((current) => new Set(current).add(id))}
             />
           </div>
           {errors.get(property.id) && (
@@ -529,13 +548,25 @@ function Answer({
   onChange,
   people,
   names,
+  onUploaded,
 }: {
   property: Property;
   value: unknown;
   onChange(value: unknown): void;
   people: readonly string[];
   names: ReadonlyMap<string, string>;
+  onUploaded(id: string): void;
 }) {
+  if (property.type === 'files') {
+    return (
+      <FilesAnswer
+        id={`form-${property.id}`}
+        files={Array.isArray(value) ? (value as FileValue[]) : []}
+        onChange={onChange}
+        onUploaded={onUploaded}
+      />
+    );
+  }
   const id = `form-${property.id}`;
   const text = typeof value === 'string' ? value : '';
   const list = Array.isArray(value) ? (value as string[]) : [];
@@ -648,4 +679,142 @@ function Answer({
         />
       );
   }
+}
+
+/** A files question: pick files (stored as attachments are), and remove them again. */
+function FilesAnswer({
+  id,
+  files,
+  onChange,
+  onUploaded,
+}: {
+  id: string;
+  files: FileValue[];
+  onChange(value: FileValue[]): void;
+  onUploaded(id: string): void;
+}) {
+  const { platform } = useApp();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="space-y-1">
+      {files.map((f, i) => (
+        <div
+          key={`${f.id}:${i}`}
+          className="flex items-center gap-2 text-sm"
+          data-testid="form-file"
+        >
+          <span className="min-w-0 flex-1 truncate">{f.name}</span>
+          <IconButton
+            label={`Remove ${f.name}`}
+            size="sm"
+            onClick={() => onChange(files.filter((_, j) => j !== i))}
+          >
+            <X size={14} />
+          </IconButton>
+        </div>
+      ))}
+      {files.length < MAX_FORM_FILES && (
+        <input
+          id={id}
+          type="file"
+          multiple
+          disabled={busy}
+          onChange={async (e) => {
+            const picked = [...(e.target.files ?? [])].slice(0, MAX_FORM_FILES - files.length);
+            e.target.value = '';
+            if (!picked.length) return;
+            setBusy(true);
+            setError(null);
+            try {
+              const added: FileValue[] = [];
+              for (const file of picked) {
+                const ref = await platform.importFile(file);
+                onUploaded(ref.id);
+                added.push({ id: ref.id, name: ref.name, mime: ref.mime });
+              }
+              onChange([...files, ...added]);
+            } catch (err) {
+              setError(errorText(err));
+            }
+            setBusy(false);
+          }}
+          className="text-sm"
+        />
+      )}
+      {busy && <p className="text-xs text-muted">Uploading…</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+/** "Show only if" an earlier choice question's answer is one of some options (or ticked). */
+function ConditionEditor({
+  property,
+  question,
+  earlier,
+  onChange,
+}: {
+  property: Property;
+  question: FormQuestion;
+  earlier: { question: FormQuestion; property: Property }[];
+  onChange(showIf: FormQuestion['showIf']): void;
+}) {
+  const c = question.showIf ?? null;
+  const target = c ? earlier.find((q) => q.property.id === c.propertyId)?.property : undefined;
+  if (earlier.length === 0) return null;
+  const values = c && Array.isArray(c.values) ? c.values : [];
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+      <select
+        aria-label={`When to show ${property.name}`}
+        value={target ? target.id : ''}
+        onChange={(e) => {
+          const next = earlier.find((q) => q.property.id === e.target.value)?.property;
+          onChange(
+            next ? { propertyId: next.id, values: next.type === 'checkbox' ? true : [] } : null,
+          );
+        }}
+        className="h-7 rounded border border-line bg-surface px-1"
+      >
+        <option value="">Always shown</option>
+        {earlier.map((q) => (
+          <option key={q.property.id} value={q.property.id}>
+            Only if “{q.question.label || q.property.name}”
+          </option>
+        ))}
+      </select>
+      {c && target?.type === 'checkbox' && (
+        <select
+          aria-label="Condition"
+          value={String(c.values)}
+          onChange={(e) => onChange({ ...c, values: e.target.value === 'true' })}
+          className="h-7 rounded border border-line bg-surface px-1"
+        >
+          <option value="true">is ticked</option>
+          <option value="false">isn’t ticked</option>
+        </select>
+      )}
+      {c && target && target.type !== 'checkbox' && (
+        <span role="group" aria-label="Is one of" className="flex flex-wrap items-center gap-2">
+          is
+          {optionsOf(target).map((o) => (
+            <label key={o.id} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={values.includes(o.id)}
+                onChange={(e) =>
+                  onChange({
+                    ...c,
+                    values: e.target.checked ? [...values, o.id] : values.filter((v) => v !== o.id),
+                  })
+                }
+              />
+              {o.name}
+            </label>
+          ))}
+        </span>
+      )}
+    </div>
+  );
 }

@@ -17,9 +17,10 @@
  *   when one fails for good.
  */
 import { createHash } from 'node:crypto';
-import { MEMBERS_DOC_ID, isCommentsDocId, isTreeDocId } from '@workspace/core';
+import { MEMBERS_DOC_ID, copyPageContent, isCommentsDocId, isTreeDocId } from '@workspace/core';
 import {
   addRow,
+  addRowFromTemplate,
   isDatabaseDoc,
   nextRun,
   planActions,
@@ -353,11 +354,24 @@ export class Automations {
           if (effect.title !== undefined) setRowTitle(doc, effect.rowId, effect.title, bot);
         });
         return;
-      case 'add':
-        await this.ctx.docs.edit(workspaceId, databaseId, as, (doc) =>
-          addRow(doc, { actor: bot, title: effect.title, values: effect.values }),
-        );
+      case 'add': {
+        const { result: rowId } = await this.ctx.docs.edit(workspaceId, databaseId, as, (doc) => {
+          if (!effect.templateId) {
+            return addRow(doc, { actor: bot, title: effect.title, values: effect.values });
+          }
+          // From a template (a repeating one): its values, icon and cover; then its content.
+          const id = addRowFromTemplate(doc, effect.templateId, {
+            actor: bot,
+            values: effect.values,
+            context: { me: a.createdBy, now: this.now() },
+          });
+          if (effect.title) setRowTitle(doc, id, effect.title, bot);
+          return id;
+        });
+        if (effect.templateId)
+          await this.copyContent(workspaceId, databaseId, as, effect.templateId, rowId);
         return;
+      }
       case 'notify':
         for (const userId of effect.userIds) {
           await this.ctx.notifier.automationNotice(workspaceId, {
@@ -382,6 +396,28 @@ export class Automations {
         ]);
         void this.ctx.jobs.poke();
       }
+    }
+  }
+
+  /** A template's page content, into a page made from it (placed with its database). */
+  private async copyContent(
+    workspaceId: string,
+    databaseId: string,
+    as: { as: string; userId: string },
+    templateId: string,
+    rowId: string,
+  ): Promise<void> {
+    const state = await this.ctx.store.docState(workspaceId, templateId);
+    if (!state) return; // an empty template
+    const template = new Y.Doc();
+    Y.applyUpdate(template, state);
+    try {
+      const access = await this.ctx.access.workspace(workspaceId);
+      await this.ctx.docs.edit(workspaceId, rowId, as, (doc) => copyPageContent(template, doc), {
+        scope: access.placementOf(databaseId) ?? null,
+      });
+    } finally {
+      template.destroy();
     }
   }
 

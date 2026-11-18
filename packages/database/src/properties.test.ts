@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { cellText, propertyKind, rowPropertiesText, type Property, type Row } from './index';
+import {
+  cellText,
+  isTicked,
+  numberFill,
+  propertyKind,
+  rowPropertiesText,
+  statusAsCheckbox,
+  toggledValue,
+  togglesOnClick,
+  type Property,
+  type Row,
+} from './index';
 
 const ctx = { users: new Map([['u1', 'Ravi']]) };
 const prop = (type: Property['type'], config: Property['config'] = {}): Property => ({
@@ -93,5 +104,55 @@ describe('property types', () => {
     expect(rowPropertiesText(row({ tags: ['a'], note: 'torque' }), [tags, note], ctx)).toBe(
       'Alpha\ntorque',
     );
+  });
+});
+
+describe('show as', () => {
+  const status: Property = {
+    id: 's',
+    name: 'Status',
+    type: 'status',
+    sortKey: 'a1',
+    config: {
+      statusShowAs: 'checkbox',
+      options: [
+        { id: 'todo', name: 'Not started', color: 'default', group: 'todo' },
+        { id: 'doing', name: 'In progress', color: 'blue', group: 'inProgress' },
+        { id: 'done', name: 'Done', color: 'green', group: 'complete' },
+      ],
+    },
+  };
+  const checkbox: Property = prop('checkbox');
+
+  it('ticks a status shown as a checkbox when it is complete, and toggles it', () => {
+    expect(statusAsCheckbox(status)).toBe(true);
+    expect(
+      statusAsCheckbox({ ...status, config: { ...status.config, statusShowAs: 'select' } }),
+    ).toBe(false);
+    expect(togglesOnClick(status)).toBe(true);
+    expect(isTicked(status, 'done')).toBe(true);
+    expect(isTicked(status, 'doing')).toBe(false);
+    expect(toggledValue(status, 'doing')).toBe('done');
+    expect(toggledValue(status, null)).toBe('done');
+    expect(toggledValue(status, 'done')).toBe('todo');
+    expect(
+      toggledValue({ ...status, config: { statusShowAs: 'checkbox', options: [] } }, null),
+    ).toBe(null);
+  });
+
+  it('flips a checkbox', () => {
+    expect(togglesOnClick(checkbox)).toBe(true);
+    expect(toggledValue(checkbox, true)).toBe(false);
+    expect(toggledValue(checkbox, undefined)).toBe(true);
+  });
+
+  it('fills a bar from 0 to its "divide by"', () => {
+    const number: Property = prop('number', { showAs: 'bar' });
+    expect(numberFill(number, 50)).toBe(0.5);
+    expect(numberFill(number, 150)).toBe(1);
+    expect(numberFill(number, -3)).toBe(0);
+    expect(numberFill(number, null)).toBe(0);
+    expect(numberFill({ ...number, config: { divideBy: 8 } }, 2)).toBe(0.25);
+    expect(numberFill({ ...number, config: { divideBy: 0 } }, 50)).toBe(0.5);
   });
 });

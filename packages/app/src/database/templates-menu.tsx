@@ -10,6 +10,7 @@ import {
   type DatabaseSnapshot,
   type View,
 } from '@workspace/database';
+import { roleAllows } from '@workspace/core';
 import { PageIcon } from '@workspace/editor';
 import {
   IconButton,
@@ -29,12 +30,14 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Repeat,
   Star,
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../context';
 import { newRow } from './actions';
+import { RepeatDialog, repeatOf } from './repeat-dialog';
 
 /** The "New" button and its templates dropdown (new from a template, edit, defaults). */
 export function NewButton({
@@ -50,8 +53,11 @@ export function NewButton({
   databaseTitle: string;
   onOpenRow(rowId: string): void;
 }) {
-  const { user, client, platform } = useApp();
+  const { user, client, platform, pages } = useApp();
   const [open, setOpen] = useState(false);
+  // Repeating a template is an automation: for those who may change the database.
+  const [repeating, setRepeating] = useState<string | null>(null);
+  const canRepeat = roleAllows(pages.role(handle.id), 'edit');
   const doc = handle.doc;
   const templates = templatesOf(snapshot);
   const current = defaultTemplate(snapshot, view);
@@ -95,6 +101,18 @@ export function NewButton({
             <MenuItem icon={<Pencil size={14} />} onSelect={() => edit(id)}>
               Edit
             </MenuItem>
+            {canRepeat && (
+              <MenuItem
+                icon={<Repeat size={14} />}
+                onSelect={() => {
+                  setOpen(false);
+                  setRepeating(id);
+                }}
+              >
+                <span className="flex-1">Repeat…</span>
+                {repeatOf(handle, id)?.enabled && <span className="text-xs text-accent">On</span>}
+              </MenuItem>
+            )}
             <MenuItem
               icon={<Copy size={14} />}
               onSelect={() => duplicateTemplate(doc, id, user.id)}
@@ -180,6 +198,14 @@ export function NewButton({
           </button>
         </PopoverContent>
       </Popover>
+      {repeating && (
+        <RepeatDialog
+          handle={handle}
+          templateId={repeating}
+          templateTitle={templates.find((t) => t.id === repeating)?.title ?? ''}
+          onClose={() => setRepeating(null)}
+        />
+      )}
     </div>
   );
 }

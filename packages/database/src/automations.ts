@@ -37,6 +37,8 @@ export interface Schedule {
   timeZone: string;
   /** Weekly: 0 = Sunday. */
   weekday?: number;
+  /** Weekly on several days (0 = Sunday); when set, it's used instead of `weekday`. */
+  weekdays?: number[];
   /** Monthly: the day (the month's last day when it's shorter). */
   monthDay?: number;
 }
@@ -54,8 +56,13 @@ export type ActionValue =
 export type AutomationAction =
   /** Set properties of the page that started it. */
   | { kind: 'setProperties'; values: Record<string, ActionValue> }
-  /** Add a page to this database. */
-  | { kind: 'addPage'; title: string; values: Record<string, ActionValue> }
+  /** Add a page to this database (from a template: its values, icon and content). */
+  | {
+      kind: 'addPage';
+      title: string;
+      values: Record<string, ActionValue>;
+      templateId?: string | null;
+    }
   /** Tell people (and/or the people in a person property of the page). */
   | { kind: 'notify'; people: string[]; peopleProperty: string | null; message: string }
   /** POST the page (or the run) as JSON to a URL. */
@@ -157,7 +164,7 @@ export function triggeredBy(
 /** What a run of an automation does, concretely. */
 export type Effect =
   | { kind: 'edit'; rowId: string; values: Record<string, unknown>; title?: string }
-  | { kind: 'add'; title: string; values: Record<string, unknown> }
+  | { kind: 'add'; title: string; values: Record<string, unknown>; templateId?: string }
   | { kind: 'notify'; userIds: string[]; message: string; rowId: string | null }
   | { kind: 'webhook'; url: string; headers: Record<string, string>; body: WebhookBody };
 
@@ -262,7 +269,12 @@ export function planActions(
       }
       case 'addPage': {
         const { title, values } = resolveValues(action.values, row, byId, run);
-        effects.push({ kind: 'add', title: title ?? action.title, values });
+        effects.push({
+          kind: 'add',
+          title: title ?? action.title,
+          values,
+          ...(action.templateId ? { templateId: action.templateId } : {}),
+        });
         break;
       }
       case 'notify': {
@@ -317,7 +329,10 @@ function wallDate(t: number, timeZone: string) {
 /** Is the schedule valid (a time, a zone, and the day it needs)? */
 export function isValidSchedule(s: Schedule): boolean {
   if (!TIME.test(s.time) || !isTimeZone(s.timeZone)) return false;
-  if (s.every === 'week') return Number.isInteger(s.weekday) && s.weekday! >= 0 && s.weekday! <= 6;
+  if (s.every === 'week') {
+    const days = weekdaysOf(s);
+    return days.length > 0 && days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+  }
   if (s.every === 'month') {
     return Number.isInteger(s.monthDay) && s.monthDay! >= 1 && s.monthDay! <= 31;
   }
@@ -333,7 +348,7 @@ export function nextRun(s: Schedule, after: number): number | null {
     // Walk wall-clock days (UTC arithmetic on the date only).
     const date = new Date(Date.UTC(start.year, start.month - 1, start.day + i));
     const [year, month, day] = [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
-    if (s.every === 'week' && date.getUTCDay() !== s.weekday) continue;
+    if (s.every === 'week' && !weekdaysOf(s).includes(date.getUTCDay())) continue;
     if (s.every === 'month') {
       const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
       if (day !== Math.min(s.monthDay!, last)) continue;
@@ -344,6 +359,12 @@ export function nextRun(s: Schedule, after: number): number | null {
   return null;
 }
 
+/** The days a weekly schedule runs on (several, or its one `weekday`). */
+export const weekdaysOf = (s: Schedule): number[] =>
+  s.weekdays?.length ? s.weekdays : s.weekday === undefined ? [] : [s.weekday];
+
 /** A schedule as a string (a scheduled run checks it's still the automation's schedule). */
 export const scheduleKey = (s: Schedule) =>
-  `${s.every}|${s.time}|${s.timeZone}|${s.weekday ?? ''}|${s.monthDay ?? ''}`;
+  `${s.every}|${s.time}|${s.timeZone}|${s.weekday ?? ''}|${s.monthDay ?? ''}${
+    s.weekdays?.length ? `|${[...s.weekdays].sort().join(',')}` : ''
+  }`;

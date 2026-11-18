@@ -26,6 +26,8 @@ import {
   setRowPageFields,
   setRowTitle,
   templatesOf,
+  toggledValue,
+  togglesOnClick,
   trashRow,
   type DatabaseHandle,
   type DatabaseSnapshot,
@@ -36,7 +38,17 @@ import {
   type Row,
 } from '@workspace/database';
 import { IconButton, Menu, MenuContent, MenuItem, MenuTrigger, cn } from '@workspace/ui';
-import { ChevronDown, ChevronsRight, Eye, EyeOff, Maximize2, Plus, X } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronsRight,
+  Eye,
+  EyeOff,
+  LayoutTemplate,
+  Maximize2,
+  Plus,
+  X,
+} from 'lucide-react';
 import {
   useEffect,
   useLayoutEffect,
@@ -64,6 +76,7 @@ import { PageMenu } from '../page-menu';
 import { applyTemplateToRow, duplicateRowWithContent } from './actions';
 import { FormulaEditor } from './formula-editor';
 import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup';
+import { LayoutDialog, RelationSection } from './row-layout';
 import {
   CellDisplay,
   PopoverCellEditor,
@@ -140,6 +153,7 @@ export function PropertiesPanel({
   row,
   editable,
   adderRef,
+  part = 'all',
 }: {
   handle: DatabaseHandle;
   snapshot: DatabaseSnapshot;
@@ -147,6 +161,8 @@ export function PropertiesPanel({
   editable: boolean;
   /** For the page's `/` menu (`/relation`…). */
   adderRef?: PropertyAdder;
+  /** With a side panel layout: the pinned properties (under the title), or the rest. */
+  part?: 'all' | 'pinned' | 'rest';
 }) {
   const base = useDisplayContext();
   const ctx = { ...base, pages: snapshot.related };
@@ -155,10 +171,29 @@ export function PropertiesPanel({
   const [showAll, setShowAll] = useState(false);
   const [formulaFor, setFormulaFor] = useState<string | null>(null);
   const [setup, setSetup] = useState<SetupRequest | null>(null);
-  const all = snapshot.properties.filter((p) => p.id !== TITLE_PROPERTY_ID);
+  const [layoutOpen, setLayoutOpen] = useState(false);
+  // The database's layout: pinned properties first; relations shown as sections aren't listed.
+  const layout = snapshot.meta.layout;
+  const listed = snapshot.properties.filter((p) => p.id !== TITLE_PROPERTY_ID);
+  const pinnedIds = layout?.pinned ?? [];
+  const pinned =
+    part === 'rest'
+      ? []
+      : pinnedIds
+          .map((id) => listed.find((p) => p.id === id))
+          .filter((p): p is Property => p !== undefined);
+  const all =
+    part === 'pinned'
+      ? []
+      : listed.filter(
+          (p) => !pinnedIds.includes(p.id) && !(layout?.relationSections ?? []).includes(p.id),
+        );
+  // Folded behind "Properties" until opened (the "collapsed" layout).
+  const [unfolded, setUnfolded] = useState(false);
+  const folded = layout?.properties === 'collapsed' && part !== 'pinned' && !unfolded;
   const hideEmpty = snapshot.meta.hideEmptyProperties;
   // Empty properties fold away (unless being edited) when the database asks for it.
-  const isEmpty = (p: Property) => isCellEmpty(row, p) && p.type !== 'checkbox';
+  const isEmpty = (p: Property) => isCellEmpty(row, p) && !togglesOnClick(p);
   const hidden = hideEmpty && !showAll ? all.filter((p) => isEmpty(p) && p.id !== editing) : [];
   const properties = all.filter((p) => !hidden.includes(p));
   const emptyCount = all.filter(isEmpty).length;
@@ -187,7 +222,7 @@ export function PropertiesPanel({
     }
   };
   useLayoutEffect(() => {
-    if (!adderRef) return;
+    if (!adderRef || part === 'pinned') return;
     adderRef.current = canAdd ? addType : null;
     return () => {
       adderRef.current = null;
@@ -196,24 +231,60 @@ export function PropertiesPanel({
   return (
     <div
       ref={panelRef}
-      className="mt-2 border-b border-line pb-3 text-sm"
-      data-testid="row-properties"
+      className={cn(
+        'text-sm',
+        part === 'pinned' ? 'mt-2' : 'mt-2 border-b border-line pb-3',
+        part === 'rest' && layout?.properties === 'side' && 'border-b-0',
+      )}
+      data-testid={part === 'pinned' ? 'pinned-properties' : 'row-properties'}
     >
-      {properties.map((property) => (
-        <PropertyRow
-          key={property.id}
-          handle={handle}
-          row={row}
-          property={property}
-          ctx={ctx}
-          editable={editable}
-          editing={editing === property.id}
-          onEdit={(on) => {
-            if (on && property.type === 'formula') setFormulaFor(property.id);
-            else setEditing(on ? property.id : null);
-          }}
-        />
-      ))}
+      {pinned.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-x-6 gap-y-1" data-testid="pinned">
+          {pinned.map((property) => (
+            <PropertyRow
+              key={property.id}
+              compact
+              handle={handle}
+              row={row}
+              property={property}
+              ctx={ctx}
+              editable={editable}
+              editing={editing === property.id}
+              onEdit={(on) => {
+                if (on && property.type === 'formula') setFormulaFor(property.id);
+                else setEditing(on ? property.id : null);
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {part !== 'pinned' && layout?.properties === 'collapsed' && (
+        <button
+          type="button"
+          aria-expanded={!folded}
+          onClick={() => setUnfolded(!unfolded)}
+          className="flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+        >
+          {folded ? <ChevronRight size={14} /> : <ChevronDown size={14} />} Properties
+          <span className="text-faint">{all.length}</span>
+        </button>
+      )}
+      {!folded &&
+        properties.map((property) => (
+          <PropertyRow
+            key={property.id}
+            handle={handle}
+            row={row}
+            property={property}
+            ctx={ctx}
+            editable={editable}
+            editing={editing === property.id}
+            onEdit={(on) => {
+              if (on && property.type === 'formula') setFormulaFor(property.id);
+              else setEditing(on ? property.id : null);
+            }}
+          />
+        ))}
       {formulaFor && snapshot.properties.find((p) => p.id === formulaFor) && (
         <FormulaEditor
           handle={handle}
@@ -235,7 +306,7 @@ export function PropertiesPanel({
           onClose={() => setSetup(null)}
         />
       )}
-      {hidden.length > 0 && (
+      {!folded && hidden.length > 0 && (
         <button
           type="button"
           onClick={() => setShowAll(true)}
@@ -245,44 +316,58 @@ export function PropertiesPanel({
           {hidden.length === 1 ? 'property' : 'properties'}
         </button>
       )}
-      <div className="flex flex-wrap items-center gap-1">
-        {canAdd && (
-          <Menu>
-            <MenuTrigger asChild>
-              <button
-                type="button"
-                className="mt-1 flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
-              >
-                <Plus size={14} /> Add a property
-              </button>
-            </MenuTrigger>
-            <MenuContent className="max-h-96 w-56 overflow-y-auto">
-              {PROPERTY_TYPES.map((type) => (
-                <MenuItem
-                  key={type}
-                  icon={<PropertyIcon type={type} />}
-                  onSelect={() => addType(type)}
+      {part !== 'pinned' && !folded && (
+        <div className="flex flex-wrap items-center gap-1">
+          {canAdd && (
+            <Menu>
+              <MenuTrigger asChild>
+                <button
+                  type="button"
+                  className="mt-1 flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
                 >
-                  {propertyKind(type).label}
-                </MenuItem>
-              ))}
-            </MenuContent>
-          </Menu>
-        )}
-        {editable && canEditProperties && (emptyCount > 0 || hideEmpty) && (
-          <button
-            type="button"
-            onClick={() => {
-              setMeta(handle.doc, { hideEmptyProperties: !hideEmpty });
-              setShowAll(false);
-            }}
-            className="mt-1 flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
-          >
-            {hideEmpty ? <Eye size={14} /> : <EyeOff size={14} />}
-            {hideEmpty ? 'Show empty properties' : 'Hide empty properties'}
-          </button>
-        )}
-      </div>
+                  <Plus size={14} /> Add a property
+                </button>
+              </MenuTrigger>
+              <MenuContent className="max-h-96 w-56 overflow-y-auto">
+                {PROPERTY_TYPES.map((type) => (
+                  <MenuItem
+                    key={type}
+                    icon={<PropertyIcon type={type} />}
+                    onSelect={() => addType(type)}
+                  >
+                    {propertyKind(type).label}
+                  </MenuItem>
+                ))}
+              </MenuContent>
+            </Menu>
+          )}
+          {editable && canEditProperties && (emptyCount > 0 || hideEmpty) && (
+            <button
+              type="button"
+              onClick={() => {
+                setMeta(handle.doc, { hideEmptyProperties: !hideEmpty });
+                setShowAll(false);
+              }}
+              className="mt-1 flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+            >
+              {hideEmpty ? <Eye size={14} /> : <EyeOff size={14} />}
+              {hideEmpty ? 'Show empty properties' : 'Hide empty properties'}
+            </button>
+          )}
+          {editable && canEditProperties && (
+            <button
+              type="button"
+              onClick={() => setLayoutOpen(true)}
+              className="mt-1 flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+            >
+              <LayoutTemplate size={14} /> Customize layout
+            </button>
+          )}
+        </div>
+      )}
+      {layoutOpen && (
+        <LayoutDialog handle={handle} snapshot={snapshot} onClose={() => setLayoutOpen(false)} />
+      )}
     </div>
   );
 }
@@ -295,6 +380,7 @@ function PropertyRow({
   editable,
   editing,
   onEdit,
+  compact = false,
 }: {
   handle: DatabaseHandle;
   row: Row;
@@ -303,6 +389,8 @@ function PropertyRow({
   editable: boolean;
   editing: boolean;
   onEdit(on: boolean): void;
+  /** Pinned under the title: the name small, above the value. */
+  compact?: boolean;
 }) {
   const { user } = useApp();
   // Formulas are edited as a whole (their expression, part of the property), from the
@@ -311,16 +399,28 @@ function PropertyRow({
   const canEdit =
     editable && (isEditable(property.type) || (property.type === 'formula' && canEditProperties));
   const toggle = () =>
-    editable && setCell(handle.doc, row.id, property.id, row.values[property.id] !== true, user.id);
+    editable &&
+    setCell(
+      handle.doc,
+      row.id,
+      property.id,
+      toggledValue(property, row.values[property.id]),
+      user.id,
+    );
   const editorProps = { handle, row, property, ctx, onDone: () => onEdit(false) };
-  const empty = isCellEmpty(row, property) && property.type !== 'checkbox';
+  const empty = isCellEmpty(row, property) && !togglesOnClick(property);
   return (
     <div
-      className="flex min-h-[34px] items-start gap-1"
+      className={cn('flex min-h-[34px] items-start gap-1', compact && 'min-w-32 flex-col gap-0')}
       data-testid="property-row"
       data-property-id={property.id}
     >
-      <div className="flex h-[34px] w-40 shrink-0 items-center gap-1.5 px-2 text-muted">
+      <div
+        className={cn(
+          'flex shrink-0 items-center gap-1.5 px-2 text-muted',
+          compact ? 'h-5 text-xs' : 'h-[34px] w-40',
+        )}
+      >
         <PropertyIcon type={property.type} size={15} />
         <span className="truncate">{property.name}</span>
       </div>
@@ -379,6 +479,7 @@ function RowContent({
   const awareness = usePresence(rowId, pageDoc);
   const articleRef = useRef<HTMLElement>(null);
   useScrollToBlock(articleRef, pageDoc ? (blockTarget ?? null) : null);
+  const displayCtx = useDisplayContext();
   // `/relation`, `/select`… in the page add properties, through the panel.
   const adderRef: PropertyAdder = useRef(null);
   const rowProperties = useMemo(
@@ -397,6 +498,12 @@ function RowContent({
   );
   if (!found) return <div className="h-24" aria-busy="true" />;
   const { handle, snapshot, row, model } = found;
+  // The database's row page layout: a side panel, and relations shown as sections.
+  const layout = snapshot.meta.layout;
+  const side = layout?.properties === 'side';
+  const sections = (layout?.relationSections ?? [])
+    .map((id) => snapshot.properties.find((p) => p.id === id && p.type === 'relation'))
+    .filter((p): p is Property => p !== undefined);
   // As its database: read-only for someone who may only view or comment ("can edit
   // content" edits rows and their pages).
   const editable = !row.locked && !model.trashed && roleAllows(pages.role(rowId), 'content');
@@ -418,20 +525,51 @@ function RowContent({
           snapshot={snapshot}
           row={row}
           editable={editable}
-          adderRef={adderRef}
+          adderRef={side ? undefined : adderRef}
+          part={side ? 'pinned' : 'all'}
         />
-        {editable && !row.isTemplate && pageDoc && (
-          <TemplatePicker handle={handle} snapshot={snapshot} rowId={rowId} pageDoc={pageDoc} />
-        )}
-        <div className="mt-4">
-          <PageBody
-            pageId={rowId}
-            pageDoc={pageDoc}
-            editable={editable}
-            onEditor={onEditor}
-            awareness={awareness}
-            rowProperties={rowProperties}
-          />
+        <div className={cn(side && 'flex gap-8 max-lg:flex-col')}>
+          <div className="min-w-0 flex-1">
+            {sections.map((property) => (
+              <RelationSection
+                key={property.id}
+                handle={handle}
+                row={row}
+                property={property}
+                ctx={{ ...displayCtx, pages: snapshot.related }}
+                editable={editable}
+              />
+            ))}
+            {editable && !row.isTemplate && pageDoc && (
+              <TemplatePicker handle={handle} snapshot={snapshot} rowId={rowId} pageDoc={pageDoc} />
+            )}
+            <div className="mt-4">
+              <PageBody
+                pageId={rowId}
+                pageDoc={pageDoc}
+                editable={editable}
+                onEditor={onEditor}
+                awareness={awareness}
+                rowProperties={rowProperties}
+              />
+            </div>
+          </div>
+          {side && (
+            <aside
+              className="w-72 shrink-0 max-lg:order-first max-lg:w-auto"
+              aria-label="Properties"
+              data-testid="properties-side"
+            >
+              <PropertiesPanel
+                handle={handle}
+                snapshot={snapshot}
+                row={row}
+                editable={editable}
+                adderRef={adderRef}
+                part="rest"
+              />
+            </aside>
+          )}
         </div>
       </article>
     </>

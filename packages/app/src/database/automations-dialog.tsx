@@ -19,6 +19,7 @@ import {
   type DatabaseHandle,
   type Property,
   type Schedule,
+  weekdaysOf,
 } from '@workspace/database';
 import { Button, Dialog, DialogContent, IconButton, cn } from '@workspace/ui';
 import { Plus, Trash2, X } from 'lucide-react';
@@ -65,13 +66,18 @@ export function triggerText(trigger: AutomationTrigger, properties: readonly Pro
     const option = p ? optionsOf(p).find((o) => o.id === trigger.to) : undefined;
     return `When ${name} is set to ${option?.name ?? String(trigger.to)}`;
   }
-  const s = trigger.schedule;
+  return describeSchedule(trigger.schedule);
+}
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** "Every week on Mondays and Thursdays at 09:00". */
+export function describeSchedule(s: Schedule): string {
+  const days = weekdaysOf(s).length ? weekdaysOf(s) : [1];
+  const names = [...days].sort().map((d) => `${WEEKDAYS[d]}s`);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
   const day =
-    s.every === 'week'
-      ? ` on ${['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][s.weekday ?? 1]}`
-      : s.every === 'month'
-        ? ` on day ${s.monthDay ?? 1}`
-        : '';
+    s.every === 'week' ? ` on ${list}` : s.every === 'month' ? ` on day ${s.monthDay ?? 1}` : '';
   return `Every ${s.every}${day} at ${s.time}`;
 }
 
@@ -395,7 +401,7 @@ function PropertyTrigger({
   );
 }
 
-function ScheduleEditor({
+export function ScheduleEditor({
   schedule,
   onChange,
 }: {
@@ -412,7 +418,13 @@ function ScheduleEditor({
           onChange({
             ...schedule,
             every,
-            weekday: every === 'week' ? (schedule.weekday ?? 1) : undefined,
+            weekday: undefined,
+            weekdays:
+              every === 'week'
+                ? weekdaysOf(schedule).length
+                  ? weekdaysOf(schedule)
+                  : [1]
+                : undefined,
             monthDay: every === 'month' ? (schedule.monthDay ?? 1) : undefined,
           });
         }}
@@ -423,20 +435,32 @@ function ScheduleEditor({
         <option value="month">Every month</option>
       </select>
       {schedule.every === 'week' && (
-        <select
-          aria-label="Day of the week"
-          value={schedule.weekday ?? 1}
-          onChange={(e) => onChange({ ...schedule, weekday: Number(e.target.value) })}
-          className={field}
-        >
-          {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(
-            (d, i) => (
-              <option key={d} value={i}>
-                on {d}
-              </option>
-            ),
-          )}
-        </select>
+        // The days it runs on: one or several.
+        <span role="group" aria-label="Days of the week" className="flex gap-0.5">
+          {WEEKDAYS.map((d, i) => {
+            const days = weekdaysOf(schedule);
+            const on = days.includes(i);
+            return (
+              <button
+                key={d}
+                type="button"
+                aria-label={d}
+                aria-pressed={on}
+                // At least one day.
+                onClick={() => {
+                  const next = on ? days.filter((x) => x !== i) : [...days, i].sort();
+                  if (next.length) onChange({ ...schedule, weekday: undefined, weekdays: next });
+                }}
+                className={cn(
+                  'size-7 rounded text-xs',
+                  on ? 'bg-accent text-accent-fg' : 'border border-line text-muted hover:bg-hover',
+                )}
+              >
+                {d.slice(0, 2)}
+              </button>
+            );
+          })}
+        </span>
       )}
       {schedule.every === 'month' && (
         <input

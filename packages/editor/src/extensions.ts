@@ -71,6 +71,36 @@ export const BLOCK_NODE_TYPES = [
 ];
 
 /** Highlights for find-in-page; Mod-F opens the find bar. */
+/**
+ * Keys act on the cursor the person sees. The browser moves the caret itself for some keys
+ * (End, Ctrl+End, Shift+Home…), and ProseMirror learns of it from a `selectionchange`
+ * event that comes later. A key pressed before that event (typing fast, or on a busy
+ * machine, where input runs first) would act on the old cursor: Enter splitting the line
+ * the caret just left. So the selection is read from the page before any key is handled.
+ */
+const KeysUseCurrentSelection = Extension.create({
+  name: 'keysUseCurrentSelection',
+  // Before every keymap.
+  priority: 10_000,
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          handleKeyDown(view, event) {
+            // Not while composing: the IME owns the selection then.
+            if (view.composing || event.isComposing || event.keyCode === 229) return false;
+            // ProseMirror's own handler for that event (a no-op if they already match).
+            (
+              view as unknown as { domObserver: { onSelectionChange(): void } }
+            ).domObserver.onSelectionChange();
+            return false;
+          },
+        },
+      }),
+    ];
+  },
+});
+
 const FindInPage = Extension.create({
   name: 'findInPage',
   addProseMirrorPlugins: () => [search()],
@@ -219,5 +249,6 @@ export function pageExtensions(
     SlashCommand,
     OpenLinkOnModClick,
     uiBridgeExtension(bridge),
+    KeysUseCurrentSelection,
   ];
 }

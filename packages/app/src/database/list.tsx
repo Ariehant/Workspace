@@ -8,7 +8,7 @@ import {
 } from '@workspace/database';
 import { PageIcon } from '@workspace/editor';
 import { cn } from '@workspace/ui';
-import { Plus } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useApp } from '../context';
 import { newRow } from './actions';
@@ -27,21 +27,55 @@ import { usePageVirtualizer } from './virtual';
 export type Line<T> =
   | { kind: 'header'; key: string; depth: number; group: ViewGroup; infos: GroupInfo[] }
   | { kind: 'item'; key: string; depth: number; item: T }
-  | { kind: 'new'; key: string; depth: number; infos: GroupInfo[] };
+  | { kind: 'new'; key: string; depth: number; infos: GroupInfo[] }
+  /** The view's load limit hides rows here: `section` names the group (or `/`). */
+  | { kind: 'more'; key: string; depth: number; section: string; shown: number; total: number };
+
+/** Rows loaded past a view's load limit, per section, while the view is open. */
+export function useLoadMore() {
+  const [loaded, setLoaded] = useState<ReadonlyMap<string, number>>(() => new Map());
+  return {
+    loaded,
+    more: (section: string, upTo: number) =>
+      setLoaded((current) => new Map(current).set(section, upTo)),
+  };
+}
 
 /**
  * Flatten a view result into lines: group headers (hidden groups left out, collapsed
  * ones without their content), then `chunk(rows)` items and a "+ New" line per group.
+ * With a load limit, each section shows that many rows (or as many as were loaded there),
+ * then a line to load more.
  */
 export function buildLines<T>(
   result: ViewResult,
   chunk: (rows: Row[], path: string) => { key: string; item: T }[],
+  limit: { limit: number | null; loaded: ReadonlyMap<string, number> } = {
+    limit: null,
+    loaded: new Map(),
+  },
 ): Line<T>[] {
+  const section = (rows: Row[], path: string, depth: number): Line<T>[] => {
+    const shown = limit.limit ? Math.max(limit.limit, limit.loaded.get(path) ?? 0) : rows.length;
+    const lines: Line<T>[] = chunk(rows.slice(0, shown), path).map((c) => ({
+      kind: 'item' as const,
+      depth,
+      ...c,
+    }));
+    if (rows.length > shown) {
+      lines.push({
+        kind: 'more',
+        key: `more:${path}`,
+        depth,
+        section: path,
+        shown,
+        total: rows.length,
+      });
+    }
+    return lines;
+  };
   if (!result.groups) {
-    return [
-      ...chunk(result.rows, '/').map((c) => ({ kind: 'item' as const, depth: 0, ...c })),
-      { kind: 'new', key: 'new:/', depth: 0, infos: [] },
-    ];
+    return [...section(result.rows, '/', 0), { kind: 'new', key: 'new:/', depth: 0, infos: [] }];
   }
   const lines: Line<T>[] = [];
   const add = (groups: ViewGroup[], depth: number, parents: GroupInfo[], path: string) => {
@@ -55,7 +89,7 @@ export function buildLines<T>(
         add(group.subgroups, depth + 1, infos, key);
         continue;
       }
-      for (const c of chunk(group.rows, key)) lines.push({ kind: 'item', depth, ...c });
+      lines.push(...section(group.rows, key, depth));
       lines.push({ kind: 'new', key: `new:${key}`, depth, infos });
     }
   };
@@ -112,6 +146,32 @@ export function Lines<T>({
   );
 }
 
+/** The line that loads the next rows of a section (list and gallery). */
+export function LoadMoreLine({
+  line,
+  limit,
+  onMore,
+}: {
+  line: Extract<Line<unknown>, { kind: 'more' }>;
+  limit: number;
+  onMore(section: string, upTo: number): void;
+}) {
+  const next = Math.min(limit, line.total - line.shown);
+  return (
+    <button
+      type="button"
+      data-testid="load-more"
+      onClick={() => onMore(line.section, line.shown + next)}
+      className="mb-2 flex h-9 w-full items-center gap-1.5 rounded px-2 text-muted hover:bg-hover"
+    >
+      <ChevronDown size={14} /> Load {next} more
+      <span className="text-faint">
+        ({line.shown} of {line.total})
+      </span>
+    </button>
+  );
+}
+
 /** Group header, collapse/hide and "+ New" handling shared by list and gallery. */
 export function useLayoutGroups(props: LayoutViewProps) {
   const { handle, view, snapshot } = props;
@@ -155,8 +215,11 @@ export function ListView(props: LayoutViewProps) {
   const { platform } = useApp();
   const properties = shownProperties(view, snapshot);
   const groups = useLayoutGroups(props);
-  const lines = buildLines<Row>(result, (rows, path) =>
-    rows.map((row) => ({ key: `${path}${row.id}`, item: row })),
+  const { loaded, more } = useLoadMore();
+  const lines = buildLines<Row>(
+    result,
+    (rows, path) => rows.map((row) => ({ key: `${path}${row.id}`, item: row })),
+    { limit: view.loadLimit, loaded },
   );
   return (
     <div data-testid="list-view" className="pt-1 pb-4 text-sm">
@@ -165,6 +228,9 @@ export function ListView(props: LayoutViewProps) {
         estimate={(line) => (line.kind === 'header' ? 41 : 36)}
         render={(line) => {
           if (line.kind === 'header') return groups.header(line);
+          if (line.kind === 'more') {
+            return <LoadMoreLine line={line} limit={view.loadLimit ?? line.total} onMore={more} />;
+          }
           if (line.kind === 'new') {
             return editable && groups.canAdd(line.infos) ? (
               <button

@@ -9,8 +9,11 @@ import {
   effectiveType,
   isDateValue,
   nextOptionColor,
+  isTicked,
+  numberFill,
   optionsOf,
   propertyKind,
+  togglesOnClick,
   readRelation,
   isLiveRow,
   relationIds,
@@ -158,6 +161,67 @@ export interface CellDisplayProps {
   variant?: 'cell' | 'panel';
 }
 
+/** A number shown as a bar or a ring (with the number beside it, unless turned off). */
+function NumberShown({
+  property,
+  value,
+  text,
+}: {
+  property: Property;
+  value: unknown;
+  text: string;
+}) {
+  const fill = numberFill(property, value);
+  const color = property.config.color ?? 'green';
+  const stroke = color === 'default' ? 'var(--ws-muted)' : `var(--ws-${color})`;
+  const percent = Math.round(fill * 100);
+  const meter = {
+    role: 'meter',
+    'aria-label': property.name,
+    'aria-valuemin': 0,
+    'aria-valuemax': 100,
+    'aria-valuenow': percent,
+    'data-testid': 'number-meter',
+  } as const;
+  const number = property.config.showNumber !== false && (
+    <span className="shrink-0 tabular-nums">{text}</span>
+  );
+  if (property.config.showAs === 'ring') {
+    const r = 6;
+    const length = 2 * Math.PI * r;
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <svg width="16" height="16" viewBox="0 0 16 16" {...meter} className="shrink-0">
+          <circle cx="8" cy="8" r={r} fill="none" stroke="var(--ws-border)" strokeWidth="2.5" />
+          <circle
+            cx="8"
+            cy="8"
+            r={r}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="2.5"
+            strokeDasharray={`${length * fill} ${length}`}
+            transform="rotate(-90 8 8)"
+            strokeLinecap="round"
+          />
+        </svg>
+        {number}
+      </span>
+    );
+  }
+  return (
+    <span className="flex w-full min-w-0 items-center gap-2">
+      {number}
+      <span {...meter} className="h-1 min-w-8 flex-1 overflow-hidden rounded-full bg-hover">
+        <span
+          className="block h-full rounded-full"
+          style={{ width: `${percent}%`, backgroundColor: stroke }}
+        />
+      </span>
+    </span>
+  );
+}
+
 /** A property value as shown in a table cell or the row page's property list. */
 export function CellDisplay({
   row,
@@ -194,6 +258,9 @@ export function CellDisplay({
       );
     }
     if (kind.isEmpty(value)) return null;
+    if (type === 'number' && (property.config.showAs ?? 'number') !== 'number') {
+      return <NumberShown property={property} value={value} text={cellText(row, property, ctx)} />;
+    }
     return (
       <span
         data-testid="formula-value"
@@ -204,8 +271,8 @@ export function CellDisplay({
     );
   }
 
-  if (property.type === 'checkbox') {
-    const on = value === true;
+  if (togglesOnClick(property)) {
+    const on = isTicked(property, value);
     return (
       <button
         type="button"
@@ -327,6 +394,11 @@ export function CellDisplay({
       );
     }
     case 'number':
+      if ((property.config.showAs ?? 'number') !== 'number') {
+        return (
+          <NumberShown property={property} value={value} text={cellText(row, property, ctx)} />
+        );
+      }
       return (
         <span className={cn('truncate tabular-nums', variant === 'cell' && 'ml-auto')}>
           {cellText(row, property, ctx)}
@@ -726,7 +798,7 @@ function OptionsEditor({ handle, row, property, initialText, onDone }: CellEdito
   );
 }
 
-const COLOR_LABEL = (c: OptionColor) => c.charAt(0).toUpperCase() + c.slice(1);
+export const COLOR_LABEL = (c: OptionColor) => c.charAt(0).toUpperCase() + c.slice(1);
 
 function OptionSettings({
   option,

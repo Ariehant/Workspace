@@ -18,8 +18,10 @@ import {
   moveViewColumn,
   readDatabase,
   setCell,
+  setMeta,
   setRowTitle,
   trashRow,
+  updateView,
   updateViewColumn,
   viewColumns,
 } from './index';
@@ -118,6 +120,39 @@ describe('database doc', () => {
     expect(names(doc)).not.toContain('Estimate');
     expect(est in readDatabase(doc).rows[0]!.values).toBe(false);
     expect(() => deleteProperty(doc, TITLE_PROPERTY_ID)).toThrow();
+  });
+
+  it('has no frozen columns or load limit until a view sets them (older views too)', () => {
+    const doc = setup();
+    const view = readDatabase(doc).views[0]!;
+    expect(view.frozenColumns).toBe(0);
+    expect(view.loadLimit).toBeNull();
+    updateView(doc, view.id, { frozenColumns: 2, loadLimit: 25 });
+    expect(readDatabase(doc).views[0]).toMatchObject({ frozenColumns: 2, loadLimit: 25 });
+  });
+
+  it('reads a row page layout safely: none by default, at most four pinned', () => {
+    const doc = setup();
+    expect(readDatabase(doc).meta.layout).toBeNull();
+    setMeta(doc, {
+      layout: {
+        pinned: ['a', 'b', 'c', 'd', 'e'],
+        properties: 'side',
+        relationSections: ['r'],
+      },
+    });
+    expect(readDatabase(doc).meta.layout).toEqual({
+      pinned: ['a', 'b', 'c', 'd'],
+      properties: 'side',
+      relationSections: ['r'],
+    });
+    // Something malformed (an older or other client's) falls back.
+    doc.getMap('meta').set('layout', { pinned: 'x', properties: 'nope' });
+    expect(readDatabase(doc).meta.layout).toEqual({
+      pinned: [],
+      properties: 'page',
+      relationSections: [],
+    });
   });
 
   it('reorders, hides and resizes columns per view; the title stays first', () => {

@@ -6,12 +6,14 @@
 import {
   TITLE_PROPERTY_ID,
   type DateValue,
+  type FileValue,
   type FormConfig,
+  type FormQuestion,
   type Property,
   type PropertyType,
 } from './schema';
 
-/** Properties a form can ask (computed ones, files and relations can't be). */
+/** Properties a form can ask (computed ones and relations can't be). */
 export const FORM_QUESTION_TYPES: readonly PropertyType[] = [
   'title',
   'text',
@@ -25,20 +27,33 @@ export const FORM_QUESTION_TYPES: readonly PropertyType[] = [
   'email',
   'phone',
   'person',
+  'files',
 ];
+
+/** Questions a later question's condition can be about. */
+export const CONDITION_TYPES: readonly PropertyType[] = [
+  'select',
+  'status',
+  'multiSelect',
+  'checkbox',
+];
+
+/** Files one file question takes. */
+export const MAX_FORM_FILES = 5;
 
 export const canAsk = (type: PropertyType) => FORM_QUESTION_TYPES.includes(type);
 
 /** Longest text answer (as Notion's rich text items). */
 export const MAX_ANSWER_LENGTH = 2000;
 
-/** A new form: every property it can ask, the title first, none required. */
+/** A new form: every property it can ask (but files), the title first, none required. */
 export function defaultForm(properties: readonly Property[]): FormConfig {
   return {
     title: '',
     description: '',
+    // File questions are added on purpose (anyone with a public link could send files).
     questions: properties
-      .filter((p) => canAsk(p.type))
+      .filter((p) => canAsk(p.type) && p.type !== 'files')
       .map((p) => ({ propertyId: p.id, label: '', description: '', required: false })),
     audience: 'access',
     submittedMessage: 'Thanks! Your response was recorded.',
@@ -69,6 +84,39 @@ export type Submission =
 export interface SubmissionOptions {
   /** Who person questions may name; without it, person questions can't be answered. */
   members?: ReadonlySet<string>;
+  /** Which stored files a files question may name; without it, files can't be added. */
+  files?: (id: string) => boolean;
+}
+
+/** Does an answer meet a question's condition? */
+function meets(condition: NonNullable<FormQuestion['showIf']>, answer: unknown): boolean {
+  if (typeof condition.values === 'boolean') return (answer === true) === condition.values;
+  const picked = Array.isArray(answer) ? answer : [answer];
+  return picked.some((id) => (condition.values as string[]).includes(id as string));
+}
+
+/**
+ * The questions shown for these answers, in order: a question with a condition shows when
+ * the earlier question it's about is shown and its answer meets it (so conditions chain).
+ */
+export function shownQuestions(
+  properties: readonly Property[],
+  form: FormConfig,
+  answers: Readonly<Record<string, unknown>>,
+): Set<string> {
+  const shown = new Set<string>();
+  // Questions asked before this one: a condition about anything else (a question removed or
+  // moved below it) doesn't apply.
+  const before = new Set<string>();
+  for (const { question, property } of formQuestions(properties, form)) {
+    const c = question.showIf;
+    const applies = c && before.has(c.propertyId);
+    if (!applies || (shown.has(c.propertyId) && meets(c, answers[c.propertyId]))) {
+      shown.add(property.id);
+    }
+    before.add(property.id);
+  }
+  return shown;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/;
@@ -101,7 +149,10 @@ export function validateSubmission(
   }
   let title = '';
   const values: Record<string, unknown> = {};
+  // Questions hidden by their condition: not required, and what was sent for them is dropped.
+  const shown = shownQuestions(properties, form, answers);
   for (const { question, property } of asked) {
+    if (!shown.has(property.id)) continue;
     const answer = answers[property.id];
     // A required checkbox must be ticked; other answers must be there.
     const missing = property.type === 'checkbox' ? answer !== true : isBlank(answer);
@@ -181,6 +232,27 @@ function checkAnswer(
       const start = typeof answer === 'string' ? answer : (answer as DateValue | null)?.start;
       if (typeof start !== 'string' || !DATE_RE.test(start)) return { error: 'Not a date' };
       return { start } satisfies DateValue;
+    }
+    case 'files': {
+      const { files } = options;
+      if (!files) return { error: 'Files can’t be added here' };
+      if (!Array.isArray(answer) || answer.length > MAX_FORM_FILES) {
+        return { error: `At most ${MAX_FORM_FILES} files` };
+      }
+      const out: FileValue[] = [];
+      for (const item of answer as unknown[]) {
+        const f = item as Partial<FileValue> | null;
+        if (
+          typeof f?.id !== 'string' ||
+          !files(f.id) ||
+          typeof f.name !== 'string' ||
+          f.name.length > 255
+        ) {
+          return { error: 'Not a file of this response' };
+        }
+        out.push({ id: f.id, name: f.name, ...(typeof f.mime === 'string' && { mime: f.mime }) });
+      }
+      return out;
     }
     case 'person': {
       const { members } = options;

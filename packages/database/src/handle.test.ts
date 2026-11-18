@@ -66,4 +66,21 @@ describe('DatabaseHandle', () => {
     handle.undo.undo();
     expect(handle.row(row)).toBeUndefined();
   });
+
+  it('undoes a group of edits (a bulk edit) in one step', () => {
+    const doc = new Y.Doc();
+    initDatabase(doc, { databaseId: 'db' });
+    const handle = new DatabaseHandle('db', doc);
+    const a = addRow(doc, { actor: null, title: 'A' });
+    const b = addRow(doc, { actor: null, title: 'B' });
+    handle.beginUndoGroup();
+    setRowTitle(doc, a, 'A2', null);
+    setRowTitle(doc, b, 'B2', null);
+    handle.endUndoGroup();
+    setRowTitle(doc, a, 'A3', null);
+    handle.undo.undo();
+    expect(handle.row(a)?.title).toBe('A2');
+    handle.undo.undo();
+    expect([handle.row(a)?.title, handle.row(b)?.title]).toEqual(['A', 'B']);
+  });
 });

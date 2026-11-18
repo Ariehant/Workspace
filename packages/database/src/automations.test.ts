@@ -7,15 +7,18 @@ import {
   addRow,
   deleteAutomation,
   initDatabase,
+  isValidSchedule,
   nextRun,
   planActions,
   readAutomations,
   readDatabase,
+  scheduleKey,
   setAutomation,
   setCell,
   trashRow,
   triggeredBy,
   type Automation,
+  type Schedule,
 } from './index';
 
 const ctx = { users: new Map([['u-ada', 'Ada']]) };
@@ -208,5 +211,39 @@ describe('automations', () => {
     ).toBe(at('2026-11-30T00:00:00Z'));
     expect(nextRun({ every: 'day', time: '25:00', timeZone: 'UTC' }, 0)).toBeNull();
     expect(nextRun({ every: 'day', time: '09:00', timeZone: 'Mars/Base' }, 0)).toBeNull();
+  });
+
+  it('schedules on several weekdays (a repeating template)', () => {
+    const at = (iso: string) => Date.parse(iso);
+    // Mondays and Thursdays at 09:00 UTC; 2026-10-12 is a Monday.
+    const s: Schedule = { every: 'week', time: '09:00', timeZone: 'UTC', weekdays: [1, 4] };
+    expect(isValidSchedule(s)).toBe(true);
+    expect(nextRun(s, at('2026-10-12T10:00:00Z'))).toBe(at('2026-10-15T09:00:00Z'));
+    expect(nextRun(s, at('2026-10-15T10:00:00Z'))).toBe(at('2026-10-19T09:00:00Z'));
+    expect(isValidSchedule({ every: 'week', time: '09:00', timeZone: 'UTC', weekdays: [] })).toBe(
+      false,
+    );
+    expect(isValidSchedule({ every: 'week', time: '09:00', timeZone: 'UTC', weekdays: [7] })).toBe(
+      false,
+    );
+    // A change of days is a different schedule (runs lined up for the old one are dropped).
+    expect(scheduleKey(s)).not.toBe(scheduleKey({ ...s, weekdays: [1] }));
+    expect(scheduleKey(s)).toBe(scheduleKey({ ...s, weekdays: [4, 1] }));
+  });
+
+  it('adds a page from a template', () => {
+    const a: Automation = {
+      id: 'a',
+      name: 'Weekly review',
+      enabled: true,
+      trigger: { kind: 'schedule', schedule: { every: 'day', time: '09:00', timeZone: 'UTC' } },
+      condition: null,
+      actions: [{ kind: 'addPage', title: '', values: {}, templateId: 'tpl' }],
+      createdBy: 'u1',
+      createdAt: 0,
+    };
+    expect(planActions(a, null, [], { databaseId: 'db', actorId: null, now: 0 })).toEqual([
+      { kind: 'add', title: '', values: {}, templateId: 'tpl' },
+    ]);
   });
 });

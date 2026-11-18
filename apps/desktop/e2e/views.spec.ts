@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { addProperty, addRow, cell, header, newDatabase, popover, rows, table, titles } from './db';
 import { expect, quit, test } from './helpers';
@@ -331,4 +334,117 @@ test('row pages hide empty properties; date reminders notify', async ({ launch }
     );
   await expect.poll(notifications, { timeout: 10_000 }).toHaveLength(1);
   expect((await notifications())[0]).toMatchObject({ title: 'Alpha', body: 'Due: Alpha' });
+});
+
+test('show as: a number as a bar or ring, a status as a checkbox', async ({ launch }) => {
+  const { window } = await launch();
+  await newDatabase(window, 'Progress');
+  await addRow(window, 'Arm');
+  await addProperty(window, 'Number', 'Done');
+  await (await cell(window, 'Arm', 'Done')).click();
+  await window.keyboard.type('50');
+  await window.keyboard.press('Enter');
+
+  const showAs = async (column: string, choice: string) => {
+    await header(window, column).click();
+    const menu = window.getByTestId('property-menu');
+    await menu.getByRole('menuitem', { name: /^Show as/ }).click();
+    // By keyboard: the pointer crossing other items on its way would close the submenu.
+    await window.getByRole('menuitemradio', { name: choice }).press('Enter');
+    await window.keyboard.press('Escape');
+    await window.keyboard.press('Escape');
+  };
+  await showAs('Done', 'Bar');
+  const meter = (await cell(window, 'Arm', 'Done')).getByTestId('number-meter');
+  await expect(meter).toHaveAttribute('aria-valuenow', '50');
+  await expect(await cell(window, 'Arm', 'Done')).toContainText('50');
+  // A bar filled at 200: 50 is a quarter.
+  await header(window, 'Done').click();
+  await window.getByTestId('property-menu').getByLabel('Divide by').fill('200');
+  await window.getByTestId('property-menu').getByLabel('Divide by').press('Enter');
+  await window.keyboard.press('Escape');
+  await expect(meter).toHaveAttribute('aria-valuenow', '25');
+  await showAs('Done', 'Ring');
+  await expect((await cell(window, 'Arm', 'Done')).locator('svg[role="meter"]')).toBeVisible();
+
+  // A status as a checkbox: ticking it sets Done, unticking Not started.
+  await addProperty(window, 'Status', 'State');
+  await showAs('State', 'Checkbox');
+  const box = (await cell(window, 'Arm', 'State')).getByRole('checkbox');
+  await expect(box).toHaveAttribute('aria-checked', 'false');
+  await box.click();
+  await expect(box).toHaveAttribute('aria-checked', 'true');
+  await showAs('State', 'Select');
+  await expect(await cell(window, 'Arm', 'State')).toHaveText('Done');
+});
+
+test('freeze columns, and a load limit with "Load more"', async ({ launch }) => {
+  const launched = await launch();
+  const { app, window } = launched;
+  const dir = mkdtempSync(join(tmpdir(), 'workspace-limit-'));
+  const csv = join(dir, 'Parts.csv');
+  const columns = ['Name', 'Supplier', 'Material', 'Finish', 'Notes', 'Location', 'Owner'];
+  writeFileSync(
+    csv,
+    [
+      columns.join(','),
+      ...Array.from(
+        { length: 60 },
+        (_, i) =>
+          `Part ${i + 1},${columns
+            .slice(1)
+            .map((c) => `${c} ${i + 1}`)
+            .join(',')}`,
+      ),
+    ].join('\n'),
+  );
+  await app.evaluate(({ dialog }, file) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as never;
+  }, csv);
+  await window.getByRole('button', { name: 'Import', exact: true }).click();
+  const report = window.getByTestId('import-report');
+  await expect(report.getByTestId('import-counts')).toContainText('60 rows', { timeout: 20_000 });
+  await report.getByRole('button', { name: 'Done' }).click();
+  // The import is a page named after the file, with the database linked in it.
+  await window.getByTestId('page-editor').getByRole('button', { name: 'Parts' }).click();
+  await expect(rows(window)).toHaveCount(60);
+
+  // Load limit: 25, then 25 more, then the last 10.
+  await window.getByRole('tab', { name: 'Table' }).click();
+  await window
+    .getByTestId('view-menu')
+    .getByRole('menuitem', { name: /Load limit/ })
+    .click();
+  await window.getByRole('menuitemradio', { name: '25 pages' }).click();
+  await window.keyboard.press('Escape');
+  await window.keyboard.press('Escape');
+  await expect(rows(window)).toHaveCount(25);
+  await table(window).getByTestId('load-more').click();
+  await expect(rows(window)).toHaveCount(50);
+  await expect(table(window).getByTestId('load-more')).toContainText('Load 10 more');
+  await table(window).getByTestId('load-more').click();
+  await expect(rows(window)).toHaveCount(60);
+  await expect(table(window).getByTestId('load-more')).toHaveCount(0);
+
+  // Freeze the title: it stays in place while the table scrolls sideways.
+  await header(window, 'Name').click();
+  await window
+    .getByTestId('property-menu')
+    .getByRole('menuitem', { name: 'Freeze up to this column' })
+    .click();
+  await window.keyboard.press('Escape');
+  await expect(header(window, 'Name')).toHaveAttribute('data-frozen', '');
+  const title = await cell(window, 'Part 1', 'Name');
+  const before = (await title.boundingBox())!.x;
+  const supplierBefore = (await header(window, 'Supplier').boundingBox())!.x;
+  // The table is its own sideways scroll area.
+  await table(window).evaluate((grid) => {
+    grid.scrollLeft = 400;
+  });
+  await expect.poll(() => table(window).evaluate((grid) => grid.scrollLeft)).toBeGreaterThan(100);
+  await expect.poll(async () => (await title.boundingBox())!.x).toBe(before);
+  // Columns not frozen scroll away under it.
+  expect((await header(window, 'Supplier').boundingBox())!.x).toBeLessThan(supplierBefore - 100);
+  await expect(header(window, 'Supplier')).not.toHaveAttribute('data-frozen', '');
+  rmSync(dir, { recursive: true, force: true });
 });

@@ -92,6 +92,7 @@ import {
   type LucideIcon,
   Trash2,
   WrapText,
+  ListEnd,
   X,
   ListTree,
   GitBranch,
@@ -1085,6 +1086,28 @@ function ViewMenu({
             {view.wrap ? 'On' : 'Off'}
           </span>
         </MenuItem>
+        {['table', 'list', 'gallery'].includes(view.type) && (
+          <MenuSub>
+            <MenuSubTrigger icon={<ListEnd size={14} />}>
+              <span className="flex-1">Load limit</span>
+              <span className="text-xs text-faint">{view.loadLimit ?? 'All'}</span>
+            </MenuSubTrigger>
+            <MenuSubContent>
+              <MenuRadioGroup
+                value={String(view.loadLimit ?? 'all')}
+                onValueChange={(value) =>
+                  onChange({ loadLimit: value === 'all' ? null : Number(value) })
+                }
+              >
+                {LOAD_LIMITS.map((limit) => (
+                  <MenuRadioItem key={limit} value={String(limit)}>
+                    {limit === 'all' ? 'All' : `${limit} pages`}
+                  </MenuRadioItem>
+                ))}
+              </MenuRadioGroup>
+            </MenuSubContent>
+          </MenuSub>
+        )}
         <MenuSeparator />
         {(
           [
@@ -1133,6 +1156,9 @@ function ViewMenu({
 }
 
 /** An inline database inside a page: its title (open as full page) above the views. */
+/** Rows a view shows before "Load more" (as Notion offers). */
+const LOAD_LIMITS = [10, 25, 50, 100, 500, 'all'] as const;
+
 export function InlineDatabase({ databaseId, viewSet }: { databaseId: string; viewSet?: string }) {
   const { workspace, platform, pages } = useApp();
   const { navigate } = useNavigation();

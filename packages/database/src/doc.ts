@@ -7,6 +7,7 @@ import { defaultForm } from './forms';
 import { cellText, propertyKind, optionsOf } from './properties';
 import {
   DEFAULT_VIEW_CONFIG,
+  MAX_PINNED,
   META_MAP,
   ROWS_MAP,
   RowField,
@@ -14,6 +15,7 @@ import {
   TITLE_PROPERTY_ID,
   VIEWS_MAP,
   type DatabaseMeta,
+  type RowLayout,
   type DatabaseSnapshot,
   type GroupBy,
   type DisplayContext,
@@ -45,6 +47,20 @@ export function readMeta(doc: Y.Doc): DatabaseMeta {
     lockViews: meta.get('lockViews') === true,
     lockProperties: meta.get('lockProperties') === true,
     openPagesIn: (meta.get('openPagesIn') as DatabaseMeta['openPagesIn'] | undefined) ?? 'sidePeek',
+    layout: readLayout(meta.get('layout')),
+  };
+}
+
+/** A stored row layout, made safe to use (anything missing or malformed falls back). */
+function readLayout(value: unknown): RowLayout | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<RowLayout>;
+  const ids = (list: unknown) =>
+    Array.isArray(list) ? list.filter((id): id is string => typeof id === 'string') : [];
+  return {
+    pinned: ids(v.pinned).slice(0, MAX_PINNED),
+    properties: v.properties === 'collapsed' || v.properties === 'side' ? v.properties : 'page',
+    relationSections: ids(v.relationSections),
   };
 }
 
@@ -103,6 +119,8 @@ export function readView(map: YMap): View {
     calculations: get('calculations'),
     openPagesIn: get('openPagesIn'),
     wrap: get('wrap'),
+    frozenColumns: get('frozenColumns'),
+    loadLimit: get('loadLimit'),
     cardPreview: get('cardPreview'),
     fitImage: get('fitImage'),
     cardSize: get('cardSize'),

@@ -6,7 +6,7 @@
  * - She shares it with anyone who has the link. Someone signed out fills it in, in a
  *   browser: the row appears on Ada's desktop, live, and her inbox says so.
  */
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Browser, type Page } from '@playwright/test';
@@ -132,4 +132,64 @@ test('shared with anyone who has the link, it’s answered signed out', async ()
     { timeout: 15_000 },
   );
   await shot(A, 'forms-4-inbox');
+});
+
+test('conditions and file questions, in the app and on the public page', async () => {
+  const A = ada.window;
+  const files = mkdtempSync(join(tmpdir(), 'workspace-form-files-'));
+  const drawing = join(files, 'drawing.txt');
+  const photo = join(files, 'photo.txt');
+  writeFileSync(drawing, 'a drawing of the part');
+  writeFileSync(photo, 'a photo of the part');
+
+  // A status question, and a files question shown only when the status is Done.
+  await db(A).getByRole('tab', { name: 'Form' }).click();
+  await A.getByTestId('form-mode-build').click();
+  const builder = A.getByTestId('form-builder');
+  await A.getByTestId('form-add-question').click();
+  await A.getByRole('menuitem', { name: 'New status question' }).click();
+  await A.getByTestId('form-add-question').click();
+  await A.getByRole('menuitem', { name: 'New files & media question' }).click();
+  await expect(builder.getByTestId('form-question')).toHaveCount(5);
+  await builder.getByLabel('Question for Files & media').fill('Drawings');
+  await builder
+    .getByLabel('When to show Files & media')
+    .selectOption({ label: 'Only if “Status”' });
+  const drawings = builder.getByTestId('form-question').last();
+  await drawings.getByRole('group', { name: 'Is one of' }).getByLabel('Done').check();
+
+  // In the app: the files question appears once Done is picked, and takes a file.
+  await A.getByTestId('form-mode-fill').click();
+  const fill = A.getByTestId('form-fill');
+  await expect(fill.getByLabel('Drawings')).toHaveCount(0);
+  await fill.getByLabel('Part').fill('Shaft, 8 mm');
+  await fill.getByLabel('Status').selectOption({ label: 'Done' });
+  await fill.getByLabel('Drawings').setInputFiles(drawing);
+  await expect(fill.getByTestId('form-file')).toHaveText('drawing.txt');
+  await fill.getByTestId('form-submit').click();
+  await expect(A.getByTestId('form-submitted')).toContainText('Your response was recorded');
+
+  // Signed out, in a browser: hidden until Done is chosen (by CSS, the page has no script).
+  await synced(A);
+  const visitor = await browser!.newPage({ viewport: { width: 900, height: 900 } });
+  await visitor.goto(link);
+  await expect(visitor.getByLabel('Drawings')).toBeHidden();
+  await visitor.getByLabel('Part').fill('Pulley');
+  await visitor.getByLabel('Status').selectOption({ label: 'In progress' });
+  await expect(visitor.getByLabel('Drawings')).toBeHidden();
+  await visitor.getByLabel('Status').selectOption({ label: 'Done' });
+  await expect(visitor.getByLabel('Drawings')).toBeVisible();
+  await visitor.getByLabel('Drawings').setInputFiles(photo);
+  await shot(visitor, 'forms-5-conditions');
+  await visitor.getByRole('button', { name: 'Submit' }).click();
+  await expect(visitor.getByRole('status')).toContainText('Your response was recorded');
+
+  // Both responses are rows, with their files.
+  await db(A).getByRole('tab', { name: 'Table' }).click();
+  await expect(titles(A)).toHaveText(['Bearing 608', 'Gear, 12 teeth', 'Shaft, 8 mm', 'Pulley'], {
+    timeout: 15_000,
+  });
+  await expect(db(A).getByText('drawing.txt')).toBeVisible();
+  await expect(db(A).getByText('photo.txt')).toBeVisible({ timeout: 15_000 });
+  rmSync(files, { recursive: true, force: true });
 });

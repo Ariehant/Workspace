@@ -158,6 +158,55 @@ test('a schedule runs at its time, and once at the next start when it was missed
   await shot(me.window, 'local-automations-3-scheduled');
 });
 
+test('a repeating template adds a page from itself, with its content, on its days', async () => {
+  const W = me.window;
+  const db = W.getByTestId('database-view').first();
+  const templates = W.getByTestId('templates-menu');
+  const peek = W.getByTestId('row-peek');
+  await db.getByRole('button', { name: 'Choose a template' }).click();
+  await templates.getByRole('button', { name: 'New template' }).click();
+  await peek.getByLabel('Page title').fill('Weekly review');
+  await peek.getByTestId('page-editor').click();
+  await W.keyboard.type('Agenda: wins, blockers, next week');
+  await peek.getByRole('button', { name: 'Close' }).click();
+
+  // Repeat it every day at 09:00 (every weekday shown as on).
+  await db.getByRole('button', { name: 'Choose a template' }).click();
+  await templates.getByRole('button', { name: 'Weekly review options' }).click();
+  await W.getByTestId('template-options')
+    .getByRole('menuitem', { name: /Repeat/ })
+    .click();
+  const dialog = W.getByTestId('repeat-dialog');
+  await dialog.getByLabel('Every').selectOption('week');
+  for (const day of ['Sunday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']) {
+    await dialog.getByRole('button', { name: day, exact: true }).click();
+  }
+  await expect(dialog).toContainText(
+    'Every week on Sundays, Mondays, Tuesdays, Wednesdays, Thursdays, Fridays and Saturdays',
+  );
+  await dialog.getByLabel('Time').fill('09:00');
+  await dialog.getByTestId('repeat-save').click();
+  await expect(dialog).toHaveCount(0);
+
+  // A day later: one page from it, with its content.
+  await W.waitForTimeout(800);
+  await me.app.evaluate(
+    (_electron, offset) => {
+      const g = globalThis as { __automationClockOffset?: number; __automationsTick?: () => void };
+      g.__automationClockOffset = offset;
+      g.__automationsTick?.();
+    },
+    5 * DAY + 60_000,
+  );
+  await expect(titles(W).filter({ hasText: 'Weekly review' })).toHaveCount(1, { timeout: 10_000 });
+  await titles(W).filter({ hasText: 'Weekly review' }).hover();
+  await W.getByTestId('table-view').getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(peek.getByTestId('page-editor')).toContainText('Agenda: wins, blockers', {
+    timeout: 10_000,
+  });
+  await peek.getByRole('button', { name: 'Close' }).click();
+});
+
 test('a button sends a signed webhook and a notification from the desktop', async () => {
   const W = me.window;
   await W.getByRole('button', { name: 'New page', exact: true }).click();

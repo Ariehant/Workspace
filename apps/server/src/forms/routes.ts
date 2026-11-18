@@ -21,12 +21,19 @@ import {
   type FormConfig,
   type Property,
 } from '@workspace/database';
+import multipart from '@fastify/multipart';
 import { getPage } from '@workspace/core';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { createHash, randomUUID } from 'node:crypto';
+import { rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import * as Y from 'yjs';
 import { atLeast } from '../access/roles';
 import { fail, requireUser } from '../auth/context';
 import type { ServerContext } from '../context';
+import { FILE_ID, fileKey } from '../files/storage';
+import { decideMime } from '../files/sniff';
 import { HONEYPOT, renderForm, renderGone, renderSubmitted } from './page';
 
 const uuid = { type: 'string', format: 'uuid' } as const;
@@ -50,6 +57,65 @@ const CSP = [
 ].join('; ');
 
 type FormParams = { id: string; databaseId: string; viewId: string };
+
+/** A file question's file, as a public form sent it (ids as the apps make them). */
+interface SentFile {
+  id: string;
+  name: string;
+  mime: string;
+  bytes: Buffer;
+}
+
+/** Largest file a public form takes, and all of a response's files together. */
+const MAX_FORM_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FORM_BYTES = 25 * 1024 * 1024;
+
+/** `photo.JPG` → `.jpg` (as the apps name stored files). */
+const extensionOf = (name: string) => {
+  const ext = name.includes('.') ? (name.split('.').pop() ?? '').toLowerCase() : '';
+  return /^[a-z0-9]{1,10}$/.test(ext) ? `.${ext}` : '';
+};
+
+/** A multipart post's fields, and its files by field (empty file inputs left out). */
+async function readMultipart(
+  request: FastifyRequest,
+): Promise<
+  { fields: Record<string, string | string[]>; files: Map<string, SentFile[]> } | { error: string }
+> {
+  const fields: Record<string, string | string[]> = Object.create(null);
+  const files = new Map<string, SentFile[]>();
+  let total = 0;
+  try {
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        const bytes = await part.toBuffer();
+        if (!part.filename || bytes.byteLength === 0) continue;
+        total += bytes.byteLength;
+        if (total > MAX_FORM_BYTES) return { error: 'The files are larger than 25 MB together.' };
+        const id = `${createHash('sha256').update(bytes).digest('hex')}${extensionOf(part.filename)}`;
+        const mime = decideMime(part.mimetype || 'application/octet-stream', bytes.subarray(0, 64));
+        const list = files.get(part.fieldname) ?? [];
+        list.push({ id, name: part.filename.slice(0, 255), mime, bytes });
+        files.set(part.fieldname, list);
+      } else {
+        const value = String(part.value ?? '');
+        const previous = fields[part.fieldname];
+        fields[part.fieldname] =
+          previous === undefined
+            ? value
+            : Array.isArray(previous)
+              ? [...previous, value]
+              : [previous, value];
+      }
+    }
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === 'FST_REQ_FILE_TOO_LARGE') return { error: 'A file is larger than 10 MB.' };
+    if (code?.startsWith('FST_')) return { error: 'Too much was sent.' };
+    throw error;
+  }
+  return { fields, files };
+}
 
 interface LoadedForm {
   properties: Property[];
@@ -126,6 +192,27 @@ export function formRoutes(app: FastifyInstance, ctx: ServerContext) {
     return rowId;
   }
 
+  /** A file a public response sent, stored as an upload of the workspace (by nobody). */
+  async function storeFile(workspaceId: string, file: SentFile): Promise<void> {
+    if (
+      (await store.getFile(workspaceId, file.id)) &&
+      (await ctx.files.has(fileKey(workspaceId, file.id)))
+    )
+      return;
+    const tmp = join(tmpdir(), `workspace-form-${randomUUID()}`);
+    try {
+      await writeFile(tmp, file.bytes);
+      await ctx.files.putFile(fileKey(workspaceId, file.id), tmp, file.bytes.byteLength, file.mime);
+      await store.putFile(
+        workspaceId,
+        { id: file.id, name: file.name, mime: file.mime, size: file.bytes.byteLength },
+        null,
+      );
+    } finally {
+      await rm(tmp, { force: true });
+    }
+  }
+
   /** The caller's role on the database (null, after a 404, if they can't see it). */
   async function roleOn(request: FastifyRequest<{ Params: FormParams }>, reply: FastifyReply) {
     const userId = request.auth!.user.id;
@@ -167,6 +254,8 @@ export function formRoutes(app: FastifyInstance, ctx: ServerContext) {
       const access = await ctx.access.workspace(workspaceId);
       const submission = validateSubmission(loaded.properties, loaded.form, request.body.answers, {
         members: new Set(access.memberIds()),
+        // Files uploaded to the workspace (from a desktop, they may still be on their way).
+        files: (fileId) => FILE_ID.test(fileId),
       });
       if (!submission.ok) {
         return reply
@@ -287,6 +376,17 @@ export function formRoutes(app: FastifyInstance, ctx: ServerContext) {
       },
     );
 
+    // Forms with file questions post as multipart: files are read into memory, within limits.
+    await scope.register(multipart, {
+      limits: {
+        fileSize: MAX_FORM_FILE_BYTES,
+        files: MAX_FIELDS,
+        fields: MAX_FIELDS,
+        fieldSize: MAX_BODY,
+        parts: MAX_FIELDS * 2,
+      },
+    });
+
     scope.get<{ Params: { token: string } }>('/f/:token', async (request, reply) => {
       const found = await publicForm(request.params.token);
       pageHeaders(reply);
@@ -310,7 +410,24 @@ export function formRoutes(app: FastifyInstance, ctx: ServerContext) {
         if (!found) return reply.code(404).send(renderGone());
         const { link, loaded, fallbackTitle } = found;
         const fields: Record<string, string | string[]> = Object.create(null);
-        const body = (request.body ?? {}) as Record<string, string | string[]>;
+        let body = (request.body ?? {}) as Record<string, string | string[]>;
+        // Files sent, by question (multipart posts).
+        let sent = new Map<string, SentFile[]>();
+        if (request.isMultipart()) {
+          const read = await readMultipart(request);
+          if ('error' in read) {
+            return reply.code(413).send(
+              renderForm({
+                form: loaded.form,
+                fallbackTitle,
+                questions: formQuestions(loaded.properties, loaded.form),
+                errors: new Map([[null, read.error]]),
+              }),
+            );
+          }
+          body = read.fields;
+          sent = read.files;
+        }
         for (const [key, value] of Object.entries(body)) if (key !== HONEYPOT) fields[key] = value;
         // A robot filled in the field people don't see: thank it, keep nothing.
         const honeypot = body[HONEYPOT];
@@ -318,7 +435,13 @@ export function formRoutes(app: FastifyInstance, ctx: ServerContext) {
           return reply.send(renderSubmitted(loaded.form, fallbackTitle));
         }
         const answers = answersFromFields(loaded.properties, loaded.form, fields);
-        const submission = validateSubmission(loaded.properties, loaded.form, answers);
+        for (const [propertyId, files] of sent) {
+          answers[propertyId] = files.map((f) => ({ id: f.id, name: f.name, mime: f.mime }));
+        }
+        const sentIds = new Set([...sent.values()].flat().map((f) => f.id));
+        const submission = validateSubmission(loaded.properties, loaded.form, answers, {
+          files: (fileId) => sentIds.has(fileId),
+        });
         if (!submission.ok) {
           const questions = formQuestions(loaded.properties, loaded.form);
           const asked = new Set(questions.map((q) => q.property.id));
@@ -334,6 +457,16 @@ export function formRoutes(app: FastifyInstance, ctx: ServerContext) {
             .send(
               renderForm({ form: loaded.form, fallbackTitle, questions, values: fields, errors }),
             );
+        }
+        // The files the response kept (those of questions shown), stored as uploads are.
+        const kept = new Set(
+          Object.values(submission.values)
+            .flatMap((v) => (Array.isArray(v) ? v : []))
+            .map((v) => (v as { id?: unknown })?.id)
+            .filter((id): id is string => typeof id === 'string'),
+        );
+        for (const file of [...sent.values()].flat()) {
+          if (kept.has(file.id)) await storeFile(link.workspaceId, file);
         }
         await respond(link.workspaceId, link.databaseId, loaded, submission, null);
         return reply.send(renderSubmitted(loaded.form, fallbackTitle));

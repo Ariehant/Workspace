@@ -289,6 +289,137 @@ describe('forms', () => {
     expect((await w.app.inject({ method: 'GET', url: '/f/nope' })).statusCode).toBe(404);
   });
 
+  it('public forms: conditions shown with CSS and applied by the server; file uploads', async () => {
+    const w = await world();
+    const { size } = w.ids;
+    const db = w.a.doc('parts');
+    const why = addProperty(db, { name: 'Why large', type: 'text' });
+    const photos = addProperty(db, { name: 'Photos', type: 'files' });
+    w.setForm({
+      audience: 'public',
+      questions: [
+        { propertyId: TITLE_PROPERTY_ID, label: 'Part', description: '', required: true },
+        { propertyId: size, label: '', description: '', required: false },
+        {
+          propertyId: why,
+          label: 'Why large?',
+          description: '',
+          required: true,
+          showIf: { propertyId: size, values: ['l'] },
+        },
+        { propertyId: photos, label: 'Photos', description: '', required: false },
+      ],
+    });
+    await until(() => w.a.outbox.length === 0, 'outbox sent');
+    const path = new URL((await w.call('PUT', `${w.base}/link`, w.ada.token)).body.link as string)
+      .pathname;
+
+    // The page: a multipart form, the conditional question hidden until "Large" is picked,
+    // and not marked required for the browser (it may stay hidden).
+    const page = await w.app.inject({ method: 'GET', url: path });
+    expect(page.body).toContain('enctype="multipart/form-data"');
+    expect(page.body).toContain(`.q[data-q="${why}"] { display: none; }`);
+    expect(page.body).toContain(
+      `form:has(select[name="${size}"] option[value="l"]:checked) .q[data-q="${why}"]`,
+    );
+    expect(page.body).not.toMatch(new RegExp(`name="${why}"[^>]*required`));
+    expect(page.body).toContain(`type="file" name="${photos}" multiple`);
+
+    const boundary = 'formboundary42';
+    const multipart = (
+      fields: [string, string][],
+      files: { field: string; name: string; type: string; body: Buffer }[] = [],
+    ) => {
+      const parts: Buffer[] = [];
+      for (const [k, v] of fields) {
+        parts.push(
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`,
+          ),
+        );
+      }
+      for (const f of files) {
+        parts.push(
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="${f.field}"; filename="${f.name}"\r\nContent-Type: ${f.type}\r\n\r\n`,
+          ),
+          f.body,
+          Buffer.from('\r\n'),
+        );
+      }
+      parts.push(Buffer.from(`--${boundary}--\r\n`));
+      return w.app.inject({
+        method: 'POST',
+        url: path,
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+        payload: Buffer.concat(parts),
+      });
+    };
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842AAAAAElFTkSuQmCC',
+      'base64',
+    );
+
+    // "Large" without saying why: refused (the condition is the server's too).
+    const refused = await multipart([
+      [TITLE_PROPERTY_ID, 'Gear'],
+      [size, 'l'],
+    ]);
+    expect(refused.statusCode).toBe(400);
+    expect(refused.body).toContain('Required');
+    // "Small": "why" isn't asked, and what's sent for it is dropped. A photo comes along.
+    const before = (await w.rows()).length;
+    const done = await multipart(
+      [
+        [TITLE_PROPERTY_ID, 'Gear'],
+        [size, 's'],
+        [why, 'dropped'],
+      ],
+      [{ field: photos, name: 'Gear.PNG', type: 'image/png', body: png }],
+    );
+    expect(done.statusCode).toBe(200);
+    const row = (await w.rows()).at(-1)!;
+    expect((await w.rows()).length).toBe(before + 1);
+    expect(row.values[why]).toBeUndefined();
+    const [photo] = row.values[photos] as { id: string; name: string; mime: string }[];
+    expect(photo).toMatchObject({ name: 'Gear.PNG', mime: 'image/png' });
+    expect(photo!.id).toMatch(/^[0-9a-f]{64}\.png$/);
+    // Stored as the workspace's file: Ada can fetch it.
+    const file = await w.app.inject({
+      method: 'GET',
+      url: `/api/workspaces/${w.ws}/files/${photo!.id}`,
+      headers: { authorization: `Bearer ${w.ada.token}` },
+    });
+    expect(file.statusCode).toBe(200);
+    expect(file.rawPayload.equals(png)).toBe(true);
+
+    // Too large, or too many files: refused, nothing kept.
+    const big = await multipart(
+      [[TITLE_PROPERTY_ID, 'Big']],
+      [
+        {
+          field: photos,
+          name: 'big.bin',
+          type: 'application/octet-stream',
+          body: Buffer.alloc(10 * 1024 * 1024 + 1),
+        },
+      ],
+    );
+    expect(big.statusCode).toBe(413);
+    expect(big.body).toContain('larger than 10 MB');
+    const many = await multipart(
+      [[TITLE_PROPERTY_ID, 'Many']],
+      Array.from({ length: 6 }, (_, i) => ({
+        field: photos,
+        name: `p${i}.png`,
+        type: 'image/png',
+        body: Buffer.concat([png, Buffer.from([i])]),
+      })),
+    );
+    expect(many.statusCode).toBe(400);
+    expect((await w.rows()).length).toBe(before + 1);
+  });
+
   it('limits how fast one address posts to public forms', async () => {
     const w = await world();
     w.setForm({ audience: 'public' });

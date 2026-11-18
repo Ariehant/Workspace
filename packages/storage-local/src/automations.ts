@@ -17,9 +17,10 @@
  *   does nothing (`active`).
  */
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
-import { MEMBERS_DOC_ID, isCommentsDocId, isTreeDocId } from '@workspace/core';
+import { MEMBERS_DOC_ID, copyPageContent, isCommentsDocId, isTreeDocId } from '@workspace/core';
 import {
   addRow,
+  addRowFromTemplate,
   isDatabaseDoc,
   nextRun,
   planActions,
@@ -267,6 +268,27 @@ export class LocalAutomations {
   }
 
   /** The database as it is now (a copy to read). */
+  /** A template's page content, into a page made from it. */
+  private copyContent(templateId: string, rowId: string): void {
+    const template = this.current(templateId);
+    if (!template) return; // an empty template
+    const state = this.manager.open(rowId);
+    this.manager.release(rowId);
+    const doc = new Y.Doc();
+    try {
+      Y.applyUpdate(doc, state);
+      const updates: Uint8Array[] = [];
+      doc.on('update', (u: Uint8Array) => updates.push(u));
+      copyPageContent(template, doc);
+      if (updates.length) {
+        this.manager.applyUpdate(rowId, Y.mergeUpdates(updates), AUTOMATION_ORIGIN);
+      }
+    } finally {
+      doc.destroy();
+      template.destroy();
+    }
+  }
+
   private current(databaseId: string): Y.Doc | null {
     const state = this.manager.open(databaseId);
     this.manager.release(databaseId);
@@ -432,11 +454,29 @@ export class LocalAutomations {
           }
         });
         return;
-      case 'add':
-        this.edit(run.databaseId, (doc) =>
-          addRow(doc, { actor, title: effect.title, values: effect.values, now: this.now() }),
-        );
+      case 'add': {
+        let rowId = '';
+        this.edit(run.databaseId, (doc) => {
+          if (!effect.templateId) {
+            rowId = addRow(doc, {
+              actor,
+              title: effect.title,
+              values: effect.values,
+              now: this.now(),
+            });
+            return;
+          }
+          // From a template (a repeating one): its values, icon and cover; then its content.
+          rowId = addRowFromTemplate(doc, effect.templateId, {
+            actor,
+            values: effect.values,
+            context: { me: actor, now: this.now() },
+          });
+          if (effect.title) setRowTitle(doc, rowId, effect.title, actor, this.now());
+        });
+        if (effect.templateId && rowId) this.copyContent(effect.templateId, rowId);
         return;
+      }
       case 'notify':
         // One person uses a local workspace: whoever it names, it's shown here.
         this.options.notify({

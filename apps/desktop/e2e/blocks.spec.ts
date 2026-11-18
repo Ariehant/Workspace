@@ -51,12 +51,15 @@ test('toggles: "> " shortcut, collapsing, toggle headings and turn into', async 
   await toggle.locator(':scope > button').click();
   await expect(toggle.getByText('Hidden content')).toBeVisible();
 
-  // Turn a text block into a toggle heading: its text becomes the title.
-  await editor(window).click({ position: { x: 5, y: 5 } });
+  // Turn a text block into a toggle heading: its text becomes the title. (Into the text, not
+  // the page's corner: the toggle's arrow button is there, and could take the click.)
+  await toggle.getByText('Hidden content').click();
   await window.keyboard.press('Control+End');
   await window.keyboard.press('Enter');
   await window.keyboard.press('Enter');
   await window.keyboard.type('Section title');
+  // Ctrl+End left the toggle (Enter didn't act on where the caret was before it).
+  await expect(blocks(window).last()).toHaveText('Section title');
   await window.keyboard.press('Shift+Home');
   const toolbar = window.getByTestId('selection-toolbar');
   await toolbar.getByRole('button', { name: 'Turn into' }).click();

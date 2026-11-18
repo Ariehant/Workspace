@@ -418,3 +418,161 @@ test('text properties: bold, links and colour, kept after a restart and in the r
   const peek = window.getByTestId('row-peek');
   await expect(peek.getByTestId('rich-text').locator('strong')).toHaveText('2 Nm');
 });
+
+test('bulk edit: pick rows with Shift, set a status for all, undo once; duplicate and delete', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newDatabase(window, 'Bulk');
+  for (let i = 1; i <= 8; i++) await addRow(window, `R${i}`);
+  await addProperty(window, 'Status', 'State');
+  const check = async (title: string, shift = false) => {
+    const row = rows(window).filter({ has: window.getByText(title, { exact: true }) });
+    await row.hover();
+    await row.getByTestId('row-check').click({ modifiers: shift ? ['Shift'] : [] });
+  };
+  const bar = window.getByTestId('bulk-bar');
+
+  // R2, then Shift+R6: five rows.
+  await check('R2');
+  await check('R6', true);
+  await expect(bar.getByTestId('bulk-count')).toHaveText('5 selected');
+
+  // Their State, all at once.
+  await bar.getByRole('button', { name: 'Edit property' }).click();
+  await window.getByTestId('bulk-properties').getByRole('menuitem', { name: 'State' }).click();
+  await popover(window).getByRole('option', { name: 'Done' }).click();
+  await expect(popover(window)).toHaveCount(0);
+  for (const title of ['R2', 'R3', 'R4', 'R5', 'R6']) {
+    await expect(await cell(window, title, 'State')).toHaveText('Done');
+  }
+  await expect(await cell(window, 'R1', 'State')).toHaveText('');
+  await expect(await cell(window, 'R7', 'State')).toHaveText('');
+
+  // One undo puts them all back.
+  await table(window).focus();
+  await window.keyboard.press('Control+z');
+  for (const title of ['R2', 'R3', 'R4', 'R5', 'R6']) {
+    await expect(await cell(window, title, 'State')).toHaveText('');
+  }
+
+  // A text property for all: typed once.
+  await bar.getByRole('button', { name: 'Edit property' }).click();
+  await window.getByTestId('bulk-properties').getByRole('menuitem', { name: 'Tags' }).click();
+  await popover(window).getByLabel('Search for an option').fill('Arm');
+  await window.keyboard.press('Enter');
+  await window.keyboard.press('Escape');
+  await expect(await cell(window, 'R4', 'Tags')).toHaveText('Arm');
+
+  // Duplicate two; then all of them (Ctrl+A) to the trash, and back with undo.
+  await bar.getByRole('button', { name: 'Clear selection' }).click();
+  await expect(bar).toHaveCount(0);
+  await check('R7');
+  await check('R8');
+  await bar.getByRole('button', { name: 'Duplicate' }).click();
+  await expect(rows(window)).toHaveCount(10);
+  await table(window).focus();
+  await window.keyboard.press('Control+a');
+  await expect(bar.getByTestId('bulk-count')).toHaveText('10 selected');
+  await bar.getByRole('button', { name: 'Delete' }).click();
+  await expect(rows(window)).toHaveCount(0);
+  await table(window).focus();
+  await window.keyboard.press('Control+z');
+  await expect(rows(window)).toHaveCount(10);
+});
+
+test('row page layout: pinned, folded and side properties, relations as sections, kept after a restart', async ({
+  launch,
+}) => {
+  const first = await launch();
+  let { window } = first;
+  await newDatabase(window, 'Parts');
+  await addProperty(window, 'Number', 'Stock');
+  await addRow(window, 'Bearing');
+  await (await cell(window, 'Bearing', 'Stock')).click();
+  await window.keyboard.type('12');
+  await window.keyboard.press('Enter');
+  await window.keyboard.press('Escape');
+  await addRow(window, 'Gear');
+
+  await newDatabase(window, 'Robots');
+  await addRow(window, 'Rover');
+  await addRow(window, 'Arm');
+  await table(window).getByRole('button', { name: 'Add a property' }).click();
+  await window
+    .getByTestId('add-property-menu')
+    .getByRole('menuitem', { name: 'Relation', exact: true })
+    .click();
+  const setup = window.getByTestId('relation-setup');
+  await setup.getByLabel('Related to').selectOption({ label: 'Parts' });
+  await setup.getByRole('button', { name: 'Add relation' }).click();
+  await expect(header(window, 'Parts')).toBeVisible();
+
+  // Customize the layout from a row page: Tags pinned, the rest folded, Parts as a section.
+  const open = async (title: string) => {
+    await (await cell(window, title, 'Name')).hover();
+    await table(window).getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(window.getByTestId('row-peek').getByLabel('Page title')).toHaveValue(title);
+    return window.getByTestId('row-peek');
+  };
+  let peek = await open('Rover');
+  await peek.getByRole('button', { name: 'Customize layout' }).click();
+  const dialog = window.getByTestId('layout-dialog');
+  await dialog
+    .getByRole('group', { name: /Pinned under the title/ })
+    .getByLabel('Tags')
+    .check();
+  await dialog.getByLabel('Folded behind “Properties”').check();
+  await dialog
+    .getByRole('group', { name: 'Relations as sections of the page' })
+    .getByLabel('Parts')
+    .check();
+  await dialog.getByTestId('layout-save').click();
+  await expect(dialog).toHaveCount(0);
+
+  await expect(peek.getByTestId('pinned').getByRole('button', { name: 'Edit Tags' })).toBeVisible();
+  const fold = peek.getByRole('button', { name: /^Properties/ });
+  await expect(fold).toHaveAttribute('aria-expanded', 'false');
+  await fold.click();
+  await expect(fold).toHaveAttribute('aria-expanded', 'true');
+  await expect(
+    peek.getByTestId('row-properties').getByRole('button', { name: 'Edit Parts' }),
+  ).toHaveCount(0);
+
+  // The section: add a linked page, which shows its Stock, then open it.
+  const section = peek.getByTestId('relation-section');
+  await expect(section).toContainText('No linked pages');
+  await section.getByRole('button', { name: 'Add a page' }).click();
+  await window.getByTestId('relation-editor').getByRole('option', { name: 'Bearing' }).click();
+  await window.keyboard.press('Escape');
+  await expect(section.getByTestId('relation-section-page')).toHaveText(/Bearing.*12/);
+  await expect((await cell(window, 'Rover', 'Parts')).getByTestId('relation-page')).toHaveText([
+    'Bearing',
+  ]);
+  await section.getByRole('button', { name: 'Bearing', exact: true }).click();
+  await expect(window.getByTestId('row-peek').getByLabel('Page title')).toHaveValue('Bearing');
+
+  // Every page of the database has the layout, side panel included, after a restart.
+  await window.getByRole('treeitem').filter({ hasText: 'Robots' }).first().click();
+  peek = await open('Arm');
+  await expect(peek.getByTestId('relation-section')).toBeVisible();
+  await expect(peek.getByRole('button', { name: /^Properties/ })).toBeVisible();
+  await quit(first.app);
+  ({ window } = await launch());
+  await window.getByRole('treeitem').filter({ hasText: 'Robots' }).first().click();
+  peek = await open('Rover');
+  await expect(peek.getByTestId('relation-section-page')).toHaveText(/Bearing/);
+  await expect(peek.getByTestId('pinned')).toBeVisible();
+
+  // The rest of the properties in a side panel instead.
+  await peek.getByRole('button', { name: /^Properties/ }).click();
+  await peek.getByRole('button', { name: 'Customize layout' }).click();
+  await window.getByTestId('layout-dialog').getByLabel('In a side panel (wide windows)').check();
+  await window.getByTestId('layout-dialog').getByTestId('layout-save').click();
+  const side = peek.getByTestId('properties-side');
+  await expect(side.getByRole('button', { name: 'Customize layout' })).toBeVisible();
+  await expect(
+    peek.getByTestId('pinned-properties').getByRole('button', { name: 'Edit Tags' }),
+  ).toBeVisible();
+  await expect(side.getByRole('button', { name: 'Edit Tags' })).toHaveCount(0);
+});

@@ -26,6 +26,9 @@ import {
   TIME_FORMATS,
   setCell,
   setPropertyConfig,
+  OPTION_COLORS,
+  toggledValue,
+  togglesOnClick,
   trashRow,
   type DatabaseMeta,
   updateView,
@@ -73,7 +76,10 @@ import {
   Copy,
   EyeOff,
   GripVertical,
+  Gauge,
   Hash,
+  Palette,
+  Pin,
   Link2,
   ListFilter,
   Maximize2,
@@ -105,11 +111,13 @@ import {
   removeProperty,
   writeCell,
 } from './actions';
+import { BulkBar } from './bulk-bar';
 import { FormulaEditor } from './formula-editor';
 import { useCanEditProperties } from './hooks';
 import { editButton } from '../buttons/button-dialog';
 import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup';
 import {
+  COLOR_LABEL,
   CellDisplay,
   OptionPill,
   PopoverCellEditor,
@@ -125,6 +133,8 @@ const MIN_WIDTH = 80;
 const defaultWidth = (p: Property) => (p.type === 'title' ? 280 : 200);
 /** Above this many rows, only the rows in view are rendered. */
 const VIRTUALIZE_FROM = 100;
+/** The space left of the table for each row's checkbox and handle (the scroll area's `pl-12`). */
+const ROW_GUTTER_PX = 48;
 
 export interface TableViewProps {
   handle: DatabaseHandle;
@@ -158,7 +168,9 @@ type Item =
       nest?: { level: number; children: number };
     }
   | { kind: 'new'; key: string; depth: number; values: GroupValue[] }
-  | { kind: 'calc'; key: string; depth: number; rows: Row[] };
+  | { kind: 'calc'; key: string; depth: number; rows: Row[] }
+  /** The view's load limit hides rows here: `section` names the group (or `/`). */
+  | { kind: 'more'; key: string; depth: number; section: string; shown: number; total: number };
 
 const GROUP_HEIGHT = 41;
 
@@ -203,29 +215,47 @@ function nestedRows(
   return out;
 }
 
-/** Flatten groups into lines: header, rows, "+ New", calculations; hidden groups left out. */
+/**
+ * Flatten groups into lines: header, rows, "+ New", calculations; hidden groups left out.
+ * With a load limit, each section (the table, or each group) shows that many rows (or as
+ * many as were loaded there) and a line to load more; calculations cover all of them.
+ */
 function buildItems(
   result: ViewResult,
   view: View,
   subItems: DatabaseMeta['subItems'],
   expanded: ReadonlySet<string>,
+  loaded: ReadonlyMap<string, number>,
 ): Item[] {
+  const limited = <T,>(lines: T[], section: string, depth: number): (T | Item)[] => {
+    const limit = view.loadLimit;
+    const shown = limit ? Math.max(limit, loaded.get(section) ?? 0) : lines.length;
+    if (lines.length <= shown) return lines;
+    return [
+      ...lines.slice(0, shown),
+      { kind: 'more', key: `more:${section}`, depth, section, shown, total: lines.length },
+    ];
+  };
   if (!result.groups && subItems) {
     return [
-      ...nestedRows(result.rows, subItems.parentId, expanded),
+      ...(limited(nestedRows(result.rows, subItems.parentId, expanded), '/', 0) as Item[]),
       { kind: 'new', key: 'new:/', depth: 0, values: [] },
       { kind: 'calc', key: 'calc:/', depth: 0, rows: result.rows },
     ];
   }
   if (!result.groups) {
     return [
-      ...result.rows.map((row) => ({
-        kind: 'row' as const,
-        key: `/${row.id}`,
-        depth: 0,
-        row,
-        values: [],
-      })),
+      ...(limited(
+        result.rows.map((row) => ({
+          kind: 'row' as const,
+          key: `/${row.id}`,
+          depth: 0,
+          row,
+          values: [],
+        })),
+        '/',
+        0,
+      ) as Item[]),
       { kind: 'new', key: 'new:/', depth: 0, values: [] },
       { kind: 'calc', key: 'calc:/', depth: 0, rows: result.rows },
     ];
@@ -246,9 +276,19 @@ function buildItems(
         add(group.subgroups, depth + 1, values, key);
         continue;
       }
-      for (const row of group.rows) {
-        items.push({ kind: 'row', key: `${key}${row.id}`, depth, row, values });
-      }
+      items.push(
+        ...(limited(
+          group.rows.map((row) => ({
+            kind: 'row' as const,
+            key: `${key}${row.id}`,
+            depth,
+            row,
+            values,
+          })),
+          key,
+          depth,
+        ) as Item[]),
+      );
       items.push({ kind: 'new', key: `new:${key}`, depth, values });
       items.push({ kind: 'calc', key: `calc:${key}`, depth, rows: group.rows });
     }
@@ -311,14 +351,48 @@ export function TableView({
     [view, snapshot.properties, byId],
   );
   const widthOf = (id: string, width: number) => (resizing?.id === id ? resizing.width : width);
+  // Frozen columns: each stays at the gutter's edge plus the widths of those before it.
+  const frozen = Math.min(view.frozenColumns, columns.length);
+  const stickyAt = (index: number): Sticky | undefined => {
+    if (index >= frozen) return undefined;
+    let left = ROW_GUTTER_PX;
+    for (let i = 0; i < index; i++) left += widthOf(columns[i]!.property.id, columns[i]!.width);
+    return { left, last: index === frozen - 1 };
+  };
+  // Rows picked with their checkboxes, for bulk edits; Shift+click picks a range.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  const anchor = useRef<string | null>(null);
+  // Rows loaded past the view's load limit, per section (kept while the view is open).
+  const [loaded, setLoaded] = useState<ReadonlyMap<string, number>>(() => new Map());
   const items = useMemo(
-    () => buildItems(result, view, subItems, expanded),
-    [result, view, subItems, expanded],
+    () => buildItems(result, view, subItems, expanded, loaded),
+    [result, view, subItems, expanded, loaded],
   );
   const rowItems = useMemo(
     () => items.filter((i): i is Extract<Item, { kind: 'row' }> => i.kind === 'row'),
     [items],
   );
+  // The picked rows still in the view, once each (a row can show in several groups).
+  const pickedRows = useMemo(() => {
+    const seen = new Set<string>();
+    return rowItems
+      .map((i) => i.row)
+      .filter((row) => picked.has(row.id) && !seen.has(row.id) && seen.add(row.id));
+  }, [rowItems, picked]);
+  const pickRow = (rowId: string, range: boolean) => {
+    const ids = rowItems.map((i) => i.row.id);
+    const from = anchor.current ? ids.indexOf(anchor.current) : -1;
+    const to = ids.indexOf(rowId);
+    setPicked((current) => {
+      const next = new Set(current);
+      if (range && from >= 0 && to >= 0) {
+        for (const id of ids.slice(Math.min(from, to), Math.max(from, to) + 1)) next.add(id);
+      } else if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+    if (!range) anchor.current = rowId;
+  };
   const totalWidth = columns.reduce((sum, c) => sum + widthOf(c.property.id, c.width), 0);
 
   const focusGrid = () => gridRef.current?.focus({ preventScroll: true });
@@ -351,8 +425,8 @@ export function TableView({
     const property = byId.get(cell.propertyId);
     const row = handle.row(cell.rowId);
     if (!editable || !property || !row) return;
-    if (property.type === 'checkbox') {
-      setCell(doc, row.id, property.id, row.values[property.id] !== true, user.id);
+    if (togglesOnClick(property)) {
+      setCell(doc, row.id, property.id, toggledValue(property, row.values[property.id]), user.id);
       return;
     }
     if (isEditable(property.type)) setEditing({ ...cell, initialText });
@@ -368,6 +442,17 @@ export function TableView({
     }
     if (mod && event.key.toLowerCase() === 'y') {
       handle.undo.redo();
+      event.preventDefault();
+      return;
+    }
+    // Ctrl+A picks every row in the view; Escape lets them go.
+    if (mod && event.key.toLowerCase() === 'a' && !editing && editable) {
+      setPicked(new Set(rowItems.map((i) => i.row.id)));
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape' && !editing && picked.size > 0) {
+      setPicked(new Set());
       event.preventDefault();
       return;
     }
@@ -636,6 +721,29 @@ export function TableView({
             </div>
           </div>
         ) : null;
+      case 'more': {
+        const next = Math.min(view.loadLimit ?? item.total, item.total - item.shown);
+        return (
+          <div role="row">
+            <div role="gridcell">
+              <button
+                type="button"
+                onClick={() =>
+                  setLoaded((current) => new Map(current).set(item.section, item.shown + next))
+                }
+                data-testid="load-more"
+                className="flex h-[33px] w-full items-center gap-1.5 border-b border-line px-2 text-muted hover:bg-hover"
+                style={{ width: totalWidth }}
+              >
+                <ChevronDown size={14} /> Load {next} more
+                <span className="text-faint">
+                  ({item.shown} of {item.total})
+                </span>
+              </button>
+            </div>
+          </div>
+        );
+      }
       case 'calc':
         return (
           <div role="row" className="group/calc flex h-[33px]" data-testid="calc-row">
@@ -672,6 +780,25 @@ export function TableView({
               dragRow === row.id && 'opacity-50',
             )}
           >
+            {editable && (
+              <div
+                role="gridcell"
+                className={cn(
+                  'absolute top-[9px] -left-11 flex',
+                  picked.size > 0 ? 'visible' : 'invisible group-hover/row:visible',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  data-testid="row-check"
+                  aria-label={`Select ${row.title || 'Untitled'}`}
+                  checked={picked.has(row.id)}
+                  onChange={(e) => pickRow(row.id, (e.nativeEvent as MouseEvent).shiftKey)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="size-3.5 cursor-pointer accent-[var(--ws-accent)]"
+                />
+              </div>
+            )}
             {dropRow?.key === item.key && (
               <span
                 aria-hidden
@@ -714,7 +841,7 @@ export function TableView({
                 setDropRow(null);
               }}
             />
-            {columns.map(({ property, width }) => {
+            {columns.map(({ property, width }, index) => {
               const cell = { key: item.key, rowId: row.id, propertyId: property.id };
               const isSelected = selected?.key === item.key && selected.propertyId === property.id;
               const isEditing = editing?.key === item.key && editing.propertyId === property.id;
@@ -744,6 +871,7 @@ export function TableView({
                   }}
                   onDone={(exit) => finishEdit(cell, exit)}
                   onOpen={() => onOpenRow(row.id)}
+                  sticky={stickyAt(index)}
                   nest={
                     property.type === 'title' && item.nest
                       ? {
@@ -763,174 +891,189 @@ export function TableView({
   };
 
   return (
-    <div
-      ref={gridRef}
-      role="grid"
-      aria-label="Table"
-      aria-rowcount={rowItems.length + 1}
-      tabIndex={0}
-      // The selected cell is the grid's focus for assistive technology.
-      aria-activedescendant={selected ? cellId(selected.key, selected.propertyId) : undefined}
-      data-testid="table-view"
-      onKeyDown={onKeyDown}
-      onFocus={(e) => {
-        // Arriving with Tab selects the first cell, so the arrow keys work at once. Not on a
-        // click (focus-visible is for the keyboard): scrolling to the first cell would move
-        // the clicked one from under the pointer.
-        const [first] = rowItems;
-        const column = columns[0];
-        const byKeyboard = e.currentTarget.matches(':focus-visible');
-        if (e.target === e.currentTarget && byKeyboard && !selected && first && column)
-          setSelected({ key: first.key, rowId: first.row.id, propertyId: column.property.id });
-      }}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null) && !editing)
-          setSelected(null);
-      }}
-      className="relative -ml-8 overflow-x-auto pb-2 pl-8 text-sm outline-none"
-    >
-      <div style={{ width: totalWidth + 140 }}>
-        {/* Header */}
-        <div role="row" className="flex h-[33px] border-y border-line text-muted">
-          {columns.map(({ property, width }) => (
-            <HeaderCell
-              key={property.id}
-              handle={handle}
-              property={property}
-              view={view}
-              ctx={ctx}
-              width={widthOf(property.id, width)}
-              editable={editable}
-              locks={{ views: snapshot.meta.lockViews, properties: snapshot.meta.lockProperties }}
-              menuOpen={headerMenu === property.id}
-              onMenuOpenChange={(open) => setHeaderMenu(open ? property.id : null)}
-              onResize={(w) => setResizing(w === null ? null : { id: property.id, width: w })}
-              onResizeEnd={(w) => {
-                setResizing(null);
-                updateViewColumn(doc, view.id, property.id, { width: w });
-              }}
-              dragging={dragCol === property.id}
-              drop={dropCol?.id === property.id ? (dropCol.before ? 'before' : 'after') : null}
-              onDragStart={() => setDragCol(property.id)}
-              onDragOver={(event) => {
-                if (!dragCol || dragCol === property.id) return;
-                event.preventDefault();
-                const rect = event.currentTarget.getBoundingClientRect();
-                const before = event.clientX < rect.left + rect.width / 2;
-                if (property.id === TITLE_PROPERTY_ID && before) return;
-                if (dropCol?.id !== property.id || dropCol.before !== before) {
-                  setDropCol({ id: property.id, before });
-                }
-              }}
-              onDrop={finishColDrop}
-              onDragEnd={() => {
-                setDragCol(null);
-                setDropCol(null);
-              }}
-              onInsert={(side) => {
-                const index = columns.findIndex((c) => c.property.id === property.id);
-                const afterId = side === 'right' ? property.id : columns[index - 1]?.property.id;
-                const id = addProperty(doc, {
-                  name: newPropertyName(doc),
-                  type: 'text',
-                  afterId: afterId ?? TITLE_PROPERTY_ID,
-                });
-                setHeaderMenu(id);
-              }}
-              onFilter={() => onFilter(property.id)}
-              onEditFormula={() => setFormulaFor(property.id)}
-              onSetup={setSetup}
-            />
-          ))}
-          {editable && !snapshot.meta.lockProperties && (
-            <div role="columnheader">
-              <AddPropertyButton
-                onAdd={(type) => {
-                  // Relations are set up before they are added.
-                  if (type === 'relation') {
-                    setSetup({ kind: 'relation', mode: 'add', afterId: lastColumn });
-                    return;
-                  }
-                  const id = addProperty(doc, {
-                    name: newPropertyName(doc, propertyKind(type).label),
-                    type,
-                    afterId: lastColumn,
-                  });
-                  // A new formula opens straight in the formula editor, as in Notion.
-                  if (type === 'formula') setFormulaFor(id);
-                  else if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
-                  else if (type === 'button') {
-                    const added = readProperties(doc).find((p) => p.id === id);
-                    if (added) void editPropertyButton(handle, added);
-                  } else setHeaderMenu(id);
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Body */}
-        <div
-          ref={bodyRef}
-          role="rowgroup"
-          className="relative"
-          style={virtual ? { height: virtualizer.getTotalSize() } : undefined}
-        >
-          {visibleItems.map(({ item, virtual: v }) => (
-            <div
-              key={item.key}
-              data-index={v?.index}
-              ref={
-                v && (view.wrap || item.kind === 'group') ? virtualizer.measureElement : undefined
-              }
-              className={v ? 'absolute top-0 left-0 w-full' : undefined}
-              style={
-                v
-                  ? { transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }
-                  : undefined
-              }
-            >
-              {renderItem(item)}
-            </div>
-          ))}
-        </div>
-      </div>
-      {setup?.kind === 'relation' && (
-        <RelationSetup
-          handle={handle}
-          request={setup}
-          ctx={ctx}
-          onClose={() => {
-            setSetup(null);
-            focusGrid();
-          }}
-        />
-      )}
-      {setup?.kind === 'rollup' && (
-        <RollupSetup
-          handle={handle}
-          properties={snapshot.properties}
-          propertyId={setup.propertyId}
-          onClose={() => {
-            setSetup(null);
-            focusGrid();
-          }}
-        />
-      )}
-      {formulaFor && byId.get(formulaFor) && (
-        <FormulaEditor
+    <>
+      {pickedRows.length > 0 && (
+        <BulkBar
           handle={handle}
           snapshot={snapshot}
-          property={byId.get(formulaFor)!}
-          row={result.rows[0]}
+          rows={pickedRows}
           ctx={ctx}
-          onClose={() => {
-            setFormulaFor(null);
-            focusGrid();
-          }}
+          editable={editable}
+          onClear={() => setPicked(new Set())}
         />
       )}
-    </div>
+      <div
+        ref={gridRef}
+        role="grid"
+        aria-label="Table"
+        aria-rowcount={rowItems.length + 1}
+        tabIndex={0}
+        // The selected cell is the grid's focus for assistive technology.
+        aria-activedescendant={selected ? cellId(selected.key, selected.propertyId) : undefined}
+        data-testid="table-view"
+        onKeyDown={onKeyDown}
+        onFocus={(e) => {
+          // Arriving with Tab selects the first cell, so the arrow keys work at once. Not on a
+          // click (focus-visible is for the keyboard): scrolling to the first cell would move
+          // the clicked one from under the pointer.
+          const [first] = rowItems;
+          const column = columns[0];
+          const byKeyboard = e.currentTarget.matches(':focus-visible');
+          if (e.target === e.currentTarget && byKeyboard && !selected && first && column)
+            setSelected({ key: first.key, rowId: first.row.id, propertyId: column.property.id });
+        }}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null) && !editing)
+            setSelected(null);
+        }}
+        className="relative -ml-12 overflow-x-auto pb-2 pl-12 text-sm outline-none"
+      >
+        <div style={{ width: totalWidth + 140 }}>
+          {/* Header */}
+          <div role="row" className="flex h-[33px] border-y border-line text-muted">
+            {columns.map(({ property, width }, index) => (
+              <HeaderCell
+                key={property.id}
+                index={index}
+                frozen={frozen}
+                sticky={stickyAt(index)}
+                handle={handle}
+                property={property}
+                view={view}
+                ctx={ctx}
+                width={widthOf(property.id, width)}
+                editable={editable}
+                locks={{ views: snapshot.meta.lockViews, properties: snapshot.meta.lockProperties }}
+                menuOpen={headerMenu === property.id}
+                onMenuOpenChange={(open) => setHeaderMenu(open ? property.id : null)}
+                onResize={(w) => setResizing(w === null ? null : { id: property.id, width: w })}
+                onResizeEnd={(w) => {
+                  setResizing(null);
+                  updateViewColumn(doc, view.id, property.id, { width: w });
+                }}
+                dragging={dragCol === property.id}
+                drop={dropCol?.id === property.id ? (dropCol.before ? 'before' : 'after') : null}
+                onDragStart={() => setDragCol(property.id)}
+                onDragOver={(event) => {
+                  if (!dragCol || dragCol === property.id) return;
+                  event.preventDefault();
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const before = event.clientX < rect.left + rect.width / 2;
+                  if (property.id === TITLE_PROPERTY_ID && before) return;
+                  if (dropCol?.id !== property.id || dropCol.before !== before) {
+                    setDropCol({ id: property.id, before });
+                  }
+                }}
+                onDrop={finishColDrop}
+                onDragEnd={() => {
+                  setDragCol(null);
+                  setDropCol(null);
+                }}
+                onInsert={(side) => {
+                  const index = columns.findIndex((c) => c.property.id === property.id);
+                  const afterId = side === 'right' ? property.id : columns[index - 1]?.property.id;
+                  const id = addProperty(doc, {
+                    name: newPropertyName(doc),
+                    type: 'text',
+                    afterId: afterId ?? TITLE_PROPERTY_ID,
+                  });
+                  setHeaderMenu(id);
+                }}
+                onFilter={() => onFilter(property.id)}
+                onEditFormula={() => setFormulaFor(property.id)}
+                onSetup={setSetup}
+              />
+            ))}
+            {editable && !snapshot.meta.lockProperties && (
+              <div role="columnheader">
+                <AddPropertyButton
+                  onAdd={(type) => {
+                    // Relations are set up before they are added.
+                    if (type === 'relation') {
+                      setSetup({ kind: 'relation', mode: 'add', afterId: lastColumn });
+                      return;
+                    }
+                    const id = addProperty(doc, {
+                      name: newPropertyName(doc, propertyKind(type).label),
+                      type,
+                      afterId: lastColumn,
+                    });
+                    // A new formula opens straight in the formula editor, as in Notion.
+                    if (type === 'formula') setFormulaFor(id);
+                    else if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
+                    else if (type === 'button') {
+                      const added = readProperties(doc).find((p) => p.id === id);
+                      if (added) void editPropertyButton(handle, added);
+                    } else setHeaderMenu(id);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Body */}
+          <div
+            ref={bodyRef}
+            role="rowgroup"
+            className="relative"
+            style={virtual ? { height: virtualizer.getTotalSize() } : undefined}
+          >
+            {visibleItems.map(({ item, virtual: v }) => (
+              <div
+                key={item.key}
+                data-index={v?.index}
+                ref={
+                  v && (view.wrap || item.kind === 'group') ? virtualizer.measureElement : undefined
+                }
+                className={v ? 'absolute top-0 left-0 w-full' : undefined}
+                style={
+                  v
+                    ? { transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }
+                    : undefined
+                }
+              >
+                {renderItem(item)}
+              </div>
+            ))}
+          </div>
+        </div>
+        {setup?.kind === 'relation' && (
+          <RelationSetup
+            handle={handle}
+            request={setup}
+            ctx={ctx}
+            onClose={() => {
+              setSetup(null);
+              focusGrid();
+            }}
+          />
+        )}
+        {setup?.kind === 'rollup' && (
+          <RollupSetup
+            handle={handle}
+            properties={snapshot.properties}
+            propertyId={setup.propertyId}
+            onClose={() => {
+              setSetup(null);
+              focusGrid();
+            }}
+          />
+        )}
+        {formulaFor && byId.get(formulaFor) && (
+          <FormulaEditor
+            handle={handle}
+            snapshot={snapshot}
+            property={byId.get(formulaFor)!}
+            row={result.rows[0]}
+            ctx={ctx}
+            onClose={() => {
+              setFormulaFor(null);
+              focusGrid();
+            }}
+          />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1098,6 +1241,7 @@ interface CellProps {
   onOpen(): void;
   /** Sub-items: indent the title and show a toggle. */
   nest?: { level: number; children: number; expanded: boolean; onToggle(): void };
+  sticky?: Sticky;
 }
 
 function Cell(props: CellProps) {
@@ -1119,10 +1263,13 @@ function Cell(props: CellProps) {
       aria-selected={selected}
       data-cell={props.cellKey}
       data-testid="table-cell"
+      data-frozen={props.sticky ? '' : undefined}
       onClick={onClick}
-      style={{ width }}
+      style={{ width, ...stickyStyle(props.sticky) }}
       className={cn(
         'group/cell relative flex min-h-[33px] shrink-0 border-r border-line px-2 py-1.5 leading-5',
+        props.sticky && 'bg-surface',
+        props.sticky?.last && 'shadow-[1px_0_0_var(--ws-border)]',
         !wrap && 'h-[33px] overflow-hidden',
         property.type === 'checkbox' ? 'items-center' : 'items-start',
         selected && !editing && 'shadow-[inset_0_0_0_2px_var(--ws-accent)]',
@@ -1322,7 +1469,22 @@ interface HeaderCellProps {
   onFilter(): void;
   onEditFormula(): void;
   onSetup(request: SetupRequest): void;
+  /** Its place among the columns, and how many are frozen. */
+  index: number;
+  frozen: number;
+  /** Frozen: where it stays as the table scrolls sideways. */
+  sticky?: Sticky;
 }
+
+/** A frozen column's place (px from the scroll area's left) and whether it's the last one. */
+interface Sticky {
+  left: number;
+  last: boolean;
+}
+
+/** Styles that keep a frozen column's cells in place. */
+const stickyStyle = (sticky?: Sticky) =>
+  sticky ? { position: 'sticky' as const, left: sticky.left, zIndex: 2 } : {};
 
 function HeaderCell(props: HeaderCellProps) {
   const { handle, property, view, ctx, width, editable, menuOpen, onMenuOpenChange } = props;
@@ -1354,7 +1516,8 @@ function HeaderCell(props: HeaderCellProps) {
       role="columnheader"
       data-testid="column-header"
       data-property-id={property.id}
-      style={{ width }}
+      data-frozen={props.sticky ? '' : undefined}
+      style={{ width, ...stickyStyle(props.sticky) }}
       draggable={editable && viewOps && !isTitle}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
@@ -1367,7 +1530,12 @@ function HeaderCell(props: HeaderCellProps) {
         props.onDrop();
       }}
       onDragEnd={props.onDragEnd}
-      className={cn('relative flex shrink-0 border-r border-line', props.dragging && 'opacity-50')}
+      className={cn(
+        'relative flex shrink-0 border-r border-line',
+        props.sticky && 'bg-surface',
+        props.sticky?.last && 'shadow-[1px_0_0_var(--ws-border)]',
+        props.dragging && 'opacity-50',
+      )}
     >
       {props.drop && (
         <span
@@ -1531,6 +1699,16 @@ function HeaderCell(props: HeaderCellProps) {
                   Hide in view
                 </MenuItem>
               )}
+              <MenuItem
+                icon={<Pin size={14} />}
+                onSelect={() =>
+                  updateView(doc, view.id, {
+                    frozenColumns: props.frozen === props.index + 1 ? 0 : props.index + 1,
+                  })
+                }
+              >
+                {props.frozen === props.index + 1 ? 'Unfreeze columns' : 'Freeze up to this column'}
+              </MenuItem>
             </>
           )}
           {schema && <MenuSeparator />}
@@ -1652,12 +1830,58 @@ function PropertyFormatMenu({ handle, property }: { handle: DatabaseHandle; prop
 
   const type = effectiveType(property);
   if (type === 'number') {
+    const showAs = property.config.showAs ?? 'number';
+    return (
+      <>
+        {radio(
+          'Number format',
+          <Hash size={14} />,
+          property.config.numberFormat ?? 'number',
+          NUMBER_FORMATS,
+          (numberFormat) => set({ numberFormat }),
+        )}
+        {radio('Show as', <Gauge size={14} />, showAs, SHOW_AS, (value) => set({ showAs: value }))}
+        {showAs !== 'number' && (
+          <>
+            {radio(
+              'Color',
+              <Palette size={14} />,
+              property.config.color ?? 'green',
+              OPTION_COLORS.map((id) => ({ id, label: COLOR_LABEL(id) })),
+              (color) => set({ color }),
+            )}
+            <MenuItem
+              icon={<Hash size={14} />}
+              onSelect={(e) => {
+                e.preventDefault();
+                set({ showNumber: property.config.showNumber === false });
+              }}
+            >
+              <span className="flex-1">Show number</span>
+              <span className="text-xs text-faint">
+                {property.config.showNumber === false ? 'Off' : 'On'}
+              </span>
+            </MenuItem>
+            <NumberInput
+              label="Divide by"
+              value={property.config.divideBy ?? 100}
+              onChange={(divideBy) => set({ divideBy })}
+            />
+          </>
+        )}
+      </>
+    );
+  }
+  if (property.type === 'status') {
     return radio(
-      'Number format',
-      <Hash size={14} />,
-      property.config.numberFormat ?? 'number',
-      NUMBER_FORMATS,
-      (numberFormat) => set({ numberFormat }),
+      'Show as',
+      <Gauge size={14} />,
+      property.config.statusShowAs ?? 'select',
+      [
+        { id: 'select', label: 'Select' },
+        { id: 'checkbox', label: 'Checkbox' },
+      ],
+      (statusShowAs) => set({ statusShowAs }),
     );
   }
   if (['date', 'createdTime', 'lastEditedTime'].includes(type)) {
@@ -1686,6 +1910,49 @@ function PropertyFormatMenu({ handle, property }: { handle: DatabaseHandle; prop
     );
   }
   return null;
+}
+
+const SHOW_AS: { id: 'number' | 'bar' | 'ring'; label: string }[] = [
+  { id: 'number', label: 'Number' },
+  { id: 'bar', label: 'Bar' },
+  { id: 'ring', label: 'Ring' },
+];
+
+/** A positive number in a menu (a bar's "divide by"). */
+function NumberInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange(value: number): void;
+}) {
+  const [text, setText] = useState(String(value));
+  const commit = () => {
+    const n = Number(text);
+    if (Number.isFinite(n) && n > 0 && n !== value) onChange(n);
+    else setText(String(value));
+  };
+  return (
+    <label
+      className="flex items-center gap-2 p-1 pl-2 text-sm"
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <span className="flex-1 text-muted">{label}</span>
+      <input
+        value={text}
+        inputMode="decimal"
+        aria-label={label}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+        }}
+        className="h-7 w-20 rounded border border-line bg-surface px-2 text-right outline-none focus:border-accent"
+      />
+    </label>
+  );
 }
 
 function PrefixInput({ value, onChange }: { value: string; onChange(prefix: string): void }) {

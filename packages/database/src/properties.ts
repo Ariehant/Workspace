@@ -475,3 +475,38 @@ export function rowPropertiesText(
       .join('\n')
   );
 }
+
+// --- Show as ----------------------------------------------------------------------------
+
+/** A status shown as a checkbox (`statusShowAs`). */
+export const statusAsCheckbox = (property: Property): boolean =>
+  property.type === 'status' && property.config.statusShowAs === 'checkbox';
+
+/** Is a checkbox, or a status shown as one, ticked? (A status: its option is Complete.) */
+export function isTicked(property: Property, value: unknown): boolean {
+  if (property.type === 'checkbox') return value === true;
+  return optionsOf(property).find((o) => o.id === value)?.group === 'complete';
+}
+
+/** Changes on a click, without an editor: a checkbox, or a status shown as one. */
+export const togglesOnClick = (property: Property): boolean =>
+  property.type === 'checkbox' || statusAsCheckbox(property);
+
+/**
+ * What a click on a checkbox-like value sets: a checkbox flips; a status shown as a
+ * checkbox goes to the first Complete option, or back to the first To-do one (null if the
+ * status has none).
+ */
+export function toggledValue(property: Property, value: unknown): unknown {
+  if (property.type === 'checkbox') return value !== true;
+  const group = isTicked(property, value) ? 'todo' : 'complete';
+  return optionsOf(property).find((o) => o.group === group)?.id ?? null;
+}
+
+/** A number shown as a bar or ring: how full, from 0 to 1 (`divideBy` fills it). */
+export function numberFill(property: Property, value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  const divideBy = property.config.divideBy;
+  const max = typeof divideBy === 'number' && divideBy > 0 ? divideBy : 100;
+  return Math.min(1, Math.max(0, value / max));
+}
