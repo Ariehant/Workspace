@@ -66,6 +66,7 @@ import {
   CommentsButton,
   CommentsPanel,
   PageCommentsSection,
+  useCommentsMode,
   usePageComments,
   type PageComments,
 } from './comments';
@@ -288,6 +289,7 @@ export function PageHero({
   const { platform } = useApp();
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [commenting, setCommenting] = useState(false);
+  const [commentsMode] = useCommentsMode(model.id);
   const { meta } = model;
   const canComment = !!comments?.canComment && !!comments.doc;
   const uploadImage = async (file: File) => (await platform.importFile(file)).id;
@@ -369,6 +371,7 @@ export function PageHero({
           <PageCommentsSection
             key={`comments:${model.id}`}
             comments={comments}
+            mode={commentsMode}
             composing={commenting}
             onDone={() => setCommenting(false)}
           />
@@ -610,6 +613,7 @@ export function PageView({
   const { user } = useApp();
   const role = pages.role(pageId);
   const comments = usePageComments(isDatabase ? null : pageId, role);
+  const [commentsMode] = useCommentsMode(pageId);
   const awareness = usePresence(isDatabase ? null : pageId, pageDoc);
   const people = uniquePeople(usePeers(awareness, user.id));
   const articleRef = useRef<HTMLElement>(null);
@@ -657,6 +661,7 @@ export function PageView({
                 ? undefined
                 : { on: comments.suggesting, toggle: comments.toggleSuggesting }
             }
+            hasComments={!isDatabase && !!comments.doc}
           />
         }
       />
@@ -664,7 +669,12 @@ export function PageView({
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto" data-testid="page-scroll" data-scroll-root>
           <HeroCover model={model} editable={editable} />
-          <article ref={articleRef} {...articleProps(meta, isDatabase)}>
+          <article
+            ref={articleRef}
+            {...articleProps(meta, isDatabase)}
+            data-comments={commentsMode}
+            data-comments-panel={comments.panelOpen || undefined}
+          >
             <PageHero
               model={model}
               editable={editable}

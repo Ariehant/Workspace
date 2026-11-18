@@ -31,12 +31,14 @@ import {
   LayoutTemplate,
   Link2,
   Lock,
+  MessageSquare,
   MoreHorizontal,
   PenLine,
   Plug,
   Trash2,
 } from 'lucide-react';
 import { useBacklinksMode, type BacklinksMode } from './backlinks';
+import { useCommentsMode, type CommentsMode } from './comments';
 import { useApp } from './context';
 import { HistoryDialog } from './history-dialog';
 import { can } from './platform';
@@ -65,6 +67,8 @@ export interface PageMenuProps {
   follow?: { get(): Promise<boolean>; set(on: boolean): Promise<void> };
   /** Suggest edits: on, and its toggle (null when it's always on: they may only comment). */
   suggest?: { on: boolean; toggle: (() => void) | null };
+  /** The page has comments (not a database or its rows): how they show. */
+  hasComments?: boolean;
 }
 
 const FONTS: { font: PageFont; label: string; sample: string }[] = [
@@ -116,6 +120,7 @@ export function PageMenu({
   suggest,
   follow,
   views,
+  hasComments = false,
 }: PageMenuProps) {
   const [following, setFollowing] = useState<boolean | null>(null);
   const [seen, setSeen] = useState<{ views: number; viewers: number } | null>(null);
@@ -123,6 +128,7 @@ export function PageMenu({
   const [stats, setStats] = useState<{ words: number; now: number } | null>(null);
   const [history, setHistory] = useState(false);
   const [backlinks, setBacklinks] = useBacklinksMode(page.id);
+  const [commentsMode, setCommentsMode] = useCommentsMode(page.id);
   const { platform } = useApp();
 
   return (
@@ -239,6 +245,23 @@ export function PageMenu({
                   <MenuRadioItem value="expanded">Expanded</MenuRadioItem>
                   <MenuRadioItem value="popover">As a popover</MenuRadioItem>
                   <MenuRadioItem value="off">Off</MenuRadioItem>
+                </MenuRadioGroup>
+              </MenuSubContent>
+            </MenuSub>
+          )}
+          {hasComments && (
+            <MenuSub>
+              <MenuSubTrigger icon={<MessageSquare size={14} />}>
+                <span className="flex-1">Show comments</span>
+              </MenuSubTrigger>
+              <MenuSubContent>
+                <MenuRadioGroup
+                  value={commentsMode}
+                  onValueChange={(mode) => setCommentsMode(mode as CommentsMode)}
+                >
+                  <MenuRadioItem value="show">On the page</MenuRadioItem>
+                  <MenuRadioItem value="minimized">Minimized</MenuRadioItem>
+                  <MenuRadioItem value="hidden">Hidden</MenuRadioItem>
                 </MenuRadioGroup>
               </MenuSubContent>
             </MenuSub>

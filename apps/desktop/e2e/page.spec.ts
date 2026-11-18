@@ -179,3 +179,83 @@ test('move to puts a page under another', async ({ launch }) => {
   await expect(dialog).toHaveCount(0);
   await expect(window.getByRole('list', { name: 'Breadcrumb' })).toHaveText(/Parts\/Motors/);
 });
+
+test('comments display: on the page, minimized, hidden; kept after a restart', async ({
+  launch,
+}) => {
+  const launched = await launch();
+  let { window } = launched;
+  await newPage(window, 'Review');
+  await window.keyboard.type('Check the torque limits.');
+  // A comment on "torque", and one on the whole page.
+  await editor(window).evaluate((el) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const node = walker.nextNode()!;
+    const at = node.textContent!.indexOf('torque');
+    const range = document.createRange();
+    range.setStart(node, at);
+    range.setEnd(node, at + 'torque'.length);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(range);
+  });
+  await window.keyboard.press('Control+Shift+M');
+  const panel = window.getByTestId('comments-panel');
+  await panel.getByTestId('comment-input').fill('Which joint?');
+  await panel.getByTestId('comment-input').press('Enter');
+  const highlight = editor(window).locator('.ws-comment');
+  await expect(highlight).toHaveText('torque');
+  await panel.getByRole('button', { name: 'Close comments' }).click();
+  await window.getByLabel('Page title').hover();
+  await window.getByRole('button', { name: 'Add comment' }).click();
+  const pageComments = window.getByTestId('page-comments');
+  await pageComments.getByTestId('comment-input').fill('Ready for review.');
+  await pageComments.getByTestId('comment-input').press('Enter');
+  const body = pageComments.getByTestId('comment-body');
+  await expect(body).toHaveText('Ready for review.');
+
+  const show = async (choice: string) => {
+    await (await openPageMenu(window)).getByRole('menuitem', { name: /Show comments/ }).click();
+    await window.getByRole('menuitemradio', { name: choice }).press('Enter');
+    await window.keyboard.press('Escape');
+    await window.keyboard.press('Escape');
+  };
+
+  // Minimized: page comments fold into one line that opens them.
+  await show('Minimized');
+  const toggle = window.getByTestId('page-comments-toggle');
+  await expect(toggle).toHaveText('1 comment');
+  await expect(body).toBeHidden();
+  await toggle.click();
+  await expect(body).toHaveText('Ready for review.');
+  await expect(highlight).toHaveCSS('background-color', /rgba\(255, 212, 0/);
+
+  // Hidden: neither page comments nor highlights; the panel still lists them.
+  await show('Hidden');
+  await expect(pageComments).toBeHidden();
+  await expect(highlight).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await highlight.click();
+  await expect(panel).toBeHidden();
+  await window.getByTestId('comments-button').click();
+  // (The page comment and the one on the text.)
+  await expect(panel.getByTestId('comment-thread')).toHaveCount(2);
+  await panel.getByRole('button', { name: 'Close comments' }).click();
+
+  // The setting stays with the page.
+  await waitForIndexed(window, 'torque');
+  await quit(launched.app);
+  ({ window } = await launch());
+  await expect(window.getByLabel('Page title')).toHaveValue('Review');
+  await expect(editor(window).locator('.ws-comment')).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  );
+  await expect(window.getByTestId('page-comments')).toBeHidden();
+  await show('On the page');
+  await expect(window.getByTestId('page-comments').getByTestId('comment-body')).toHaveText(
+    'Ready for review.',
+  );
+  await expect(editor(window).locator('.ws-comment')).toHaveCSS(
+    'background-color',
+    /rgba\(255, 212, 0/,
+  );
+});

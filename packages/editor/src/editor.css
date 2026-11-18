@@ -1213,6 +1213,13 @@
 .ws-comment.is-active {
   background-color: rgba(255, 212, 0, 0.42);
 }
+/* Comments hidden (a page setting): no highlights, except the thread open in the panel. */
+[data-comments='hidden'] .ws-comment:not(.is-active),
+[data-comments='hidden']:not([data-comments-panel]) .ws-comment {
+  background-color: transparent;
+  border-bottom-color: transparent;
+  cursor: text;
+}
 /* Suggested edits: what would go struck through, what would come underlined. */
 .ws-suggest-delete {
   color: var(--ws-red, #d44c47);
