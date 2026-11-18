@@ -40,10 +40,14 @@ describe('rich text', () => {
       },
       { type: 'text', text: ' link', marks: [{ type: 'link', attrs: { href: 'https://lab.io' } }] },
       { type: 'hardBreak' },
-      { type: 'mention', attrs: { kind: 'user', userId: ADA } },
+      { type: 'mention', attrs: { kind: 'person', userId: ADA } },
       { type: 'mention', attrs: { kind: 'page', pageId: PAGE } },
       { type: 'mention', attrs: { kind: 'date', date: '2026-10-12', reminder: false } },
       { type: 'inlineMath', attrs: { latex: 'E=mc^2' } },
+      {
+        type: 'mention',
+        attrs: { kind: 'link', url: 'https://github.com/lab/arm/pull/7', title: 'Arm PR #7' },
+      },
     ];
     const out = richTextOut(inline, ctx);
     expect(out[0]).toMatchObject({ plain_text: 'Bold', annotations: { bold: true, color: 'red' } });
@@ -56,7 +60,19 @@ describe('rich text', () => {
       'Gear plan',
       '2026-10-12',
       'E=mc^2',
+      'Arm PR #7',
     ]);
+    expect(out.at(-1)).toMatchObject({
+      href: 'https://github.com/lab/arm/pull/7',
+      mention: {
+        type: 'link_mention',
+        link_mention: { href: 'https://github.com/lab/arm/pull/7' },
+      },
+    });
+    // Person mentions the API wrote before (as "user") still read as people.
+    expect(
+      richTextOut([{ type: 'mention', attrs: { kind: 'user', userId: ADA } }], ctx)[0]?.plain_text,
+    ).toBe('@Ada');
     const back = richTextIn(out, 'r', write);
     expect(back.filter((n) => n.type !== 'hardBreak')).toEqual(
       inline.filter((n) => n.type !== 'hardBreak').map((n) => (n.type === 'text' ? { ...n } : n)),
@@ -67,6 +83,18 @@ describe('rich text', () => {
     expect(() =>
       richTextIn([{ text: { content: 'x', link: { url: 'javascript:alert(1)' } } }], 'r', write),
     ).toThrow(/web address/);
+    expect(() =>
+      richTextIn(
+        [
+          {
+            type: 'mention',
+            mention: { type: 'link_mention', link_mention: { href: 'javascript:x' } },
+          },
+        ],
+        'r',
+        write,
+      ),
+    ).toThrow(/http\(s\) URL/);
   });
 
   it('comments keep mentions of people', () => {

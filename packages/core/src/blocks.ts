@@ -74,6 +74,9 @@ export function pageText(doc: Y.Doc): string {
   const walk = (blocks: Block[]) => {
     for (const block of blocks) {
       if (block.text) lines.push(block.text);
+      // A tab's title is an attribute, not text.
+      if (block.type === 'tab' && typeof block.props.title === 'string' && block.props.title)
+        lines.push(block.props.title);
       walk(block.children);
     }
   };

@@ -2,9 +2,6 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
-import { EMBED_PROVIDERS } from '../../packages/editor/src/nodes/embeds';
-
-const EMBED_ORIGINS = EMBED_PROVIDERS.map((provider) => provider.origin);
 
 /** Strict CSP for builds (the dev server needs inline scripts for HMR). */
 const csp = (): Plugin => ({
@@ -21,8 +18,9 @@ const csp = (): Plugin => ({
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob: https: http:",
           "media-src 'self' blob: https:",
-          // PDFs (attachments, same origin) and embeds.
-          `frame-src 'self' ${EMBED_ORIGINS.join(' ')}`,
+          // PDFs (attachments, same origin), and embeds: any https page (the editor's
+          // embeds.ts), sandboxed.
+          "frame-src 'self' https:",
           "font-src 'self' data:",
           // The API and the sync socket, on this origin ('self' covers ws/wss in CSP3).
           "connect-src 'self'",

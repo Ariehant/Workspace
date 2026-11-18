@@ -26,7 +26,14 @@ export function inlineHtml(inline: readonly Inline[], ctx: RenderContext): strin
         if (part.node === 'hardBreak') return '<br>';
         if (part.node === 'inlineMath')
           return `<code class="equation">${escapeHtml(String(attrs.latex ?? ''))}</code>`;
-        if (attrs.kind === 'person') {
+        if (attrs.kind === 'link') {
+          const url = String(attrs.url ?? '');
+          const text = escapeHtml(String(attrs.title || url));
+          return /^https?:\/\//i.test(url)
+            ? `<a class="mention link" href="${escapeHtml(url)}">${text}</a>`
+            : `<span class="mention link">${text}</span>`;
+        }
+        if (attrs.kind === 'person' || attrs.kind === 'user') {
           const name = ctx.userName?.(String(attrs.userId ?? '')) ?? 'Someone';
           return `<span class="mention person">@${escapeHtml(name)}</span>`;
         }
@@ -172,6 +179,13 @@ export function blockHtml(node: ContentNode, ctx: RenderContext): string {
               .join('')}</tr>`,
         )
         .join('')}</table>`;
+    case 'tabs':
+      return `<div class="tabs">${node.children
+        .map(
+          (tab) =>
+            `<section class="tab"><h4 class="tab-title">${escapeHtml(String(tab.attrs.title || 'Untitled'))}</h4>${blocksHtml(tab.children, ctx)}</section>`,
+        )
+        .join('')}</div>`;
     case 'columnList':
       return `<div class="columns">${node.children
         .map((column) => `<div class="column">${blocksHtml(column.children, ctx)}</div>`)

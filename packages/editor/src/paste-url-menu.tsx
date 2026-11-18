@@ -1,6 +1,6 @@
 import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 import type { Editor } from '@tiptap/react';
-import { Bookmark, Code2, Link } from 'lucide-react';
+import { AtSign, Bookmark, Code2, Link } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { replaceCurrentBlock } from './blocks/commands';
 import { toEmbedUrl } from './nodes/embeds';
@@ -32,7 +32,20 @@ function convert(editor: Editor, { url, from, to }: PastedUrl, type: 'bookmark' 
   chain.command(replaceCurrentBlock(block)).run();
 }
 
-/** Small menu after pasting a link: keep it as a link, or make a bookmark or embed. */
+/** Replace the pasted link with a link mention (its title and icon are looked up). */
+function mention(editor: Editor, { url, from, to }: PastedUrl) {
+  if (editor.state.doc.textBetween(from, to) !== url) return;
+  editor
+    .chain()
+    .focus()
+    .insertContentAt({ from, to }, [
+      { type: 'mention', attrs: { kind: 'link', url } },
+      { type: 'text', text: ' ' },
+    ])
+    .run();
+}
+
+/** Small menu after pasting a link: keep it as a link, or make a mention, bookmark or embed. */
 export function PasteUrlMenu({
   editor,
   pasted,
@@ -92,6 +105,17 @@ export function PasteUrlMenu({
       <div className="px-2 py-1 text-xs text-muted">Paste as</div>
       <button type="button" role="menuitem" className={item} onClick={onClose}>
         <Link size={14} className="text-muted" /> URL
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className={item}
+        onClick={() => {
+          onClose();
+          mention(editor, pasted);
+        }}
+      >
+        <AtSign size={14} className="text-muted" /> Mention
       </button>
       <button type="button" role="menuitem" className={item} onClick={() => choose('bookmark')}>
         <Bookmark size={14} className="text-muted" /> Bookmark

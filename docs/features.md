@@ -35,12 +35,20 @@ planned is in [PHASE7.md](PHASE7.md).
   workspace macros and live errors.
 - **Media:** images (upload, paste or drop; resize; crop and rotate, the file kept as it is;
   captions), video, audio, PDFs viewed in the page, any file (opens in its default app), web
-  bookmarks with previews, and embeds from
-  YouTube, Vimeo, Loom, Figma, CodePen and Google Maps. Pasting a link offers Bookmark or Embed.
+  bookmarks with previews, and embeds: any https website (in a sandboxed frame, with its site
+  named above it and a link to open it, since some sites refuse frames), with links from
+  YouTube, Vimeo, Loom, Figma, CodePen, Google Maps, Google Docs, Sheets, Slides, Forms and
+  Drive, GitHub Gists, Miro, X, Spotify, SoundCloud, Typeform, Airtable and Excalidraw turned
+  into their players. Pasting a link offers Mention, Bookmark or Embed.
+- **Tabs** (`/tabs`): content in tabs, one shown at a time. Click the open tab to rename it; `+`
+  adds one and `×` deletes the open one; arrow keys move between them. Which tab is open is
+  your own (it isn't saved in the page), and moving the cursor into a hidden tab opens it.
+  Exports write the tabs one after another, each under its title.
 - **Inline formatting:** a toolbar on selected text for bold, italic, underline, strikethrough,
   code, links, colors, equations and turn into. Ctrl+click opens a link.
 - **Mentions:** `@` for pages (live titles), people, and dates ("next fri", "in 2 weeks");
-  `@remind tomorrow` sets a reminder for 9:00. `:` suggests emoji.
+  `@remind tomorrow` sets a reminder for 9:00. `:` suggests emoji. A pasted link can become a
+  link mention: the site's icon and the page's title, as a link.
 - **Find and replace** in a page (`Ctrl+F`).
 - **Synced blocks:** the same content in several places, edited anywhere.
 - **Buttons:** insert blocks, add or edit database pages, send a webhook or a notification;

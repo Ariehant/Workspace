@@ -19,7 +19,7 @@ export function commentRichText(body: string, ctx: BlockContext) {
   let at = 0;
   for (const m of body.matchAll(MENTION)) {
     if (m.index > at) inline.push({ type: 'text', text: body.slice(at, m.index) });
-    inline.push({ type: 'mention', attrs: { kind: 'user', userId: m[1] } });
+    inline.push({ type: 'mention', attrs: { kind: 'person', userId: m[1] } });
     at = m.index + m[0].length;
   }
   if (at < body.length) inline.push({ type: 'text', text: body.slice(at) });
@@ -33,7 +33,8 @@ export function commentBodyIn(raw: unknown, ctx: WriteContext): string {
     .map((n) => {
       if (n.type === 'text') return n.text ?? '';
       if (n.type === 'hardBreak') return '\n';
-      if (n.type === 'mention' && n.attrs?.kind === 'user') return `<@${String(n.attrs.userId)}>`;
+      if (n.type === 'mention' && (n.attrs?.kind === 'person' || n.attrs?.kind === 'user'))
+        return `<@${String(n.attrs.userId)}>`;
       if (n.type === 'mention' && n.attrs?.kind === 'date') return String(n.attrs.date);
       if (n.type === 'inlineMath') return String(n.attrs?.latex ?? '');
       return '';

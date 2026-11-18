@@ -234,12 +234,12 @@ test('web bookmark fetches a preview card', async ({ launch }) => {
   await expect(card).toHaveAttribute('href', `${origin}/article`);
 });
 
-test('pasting a link offers bookmark or embed', async ({ launch }) => {
+test('pasting a link offers a mention, a bookmark or an embed', async ({ launch }) => {
   const { window } = await launch();
   await newPage(window, 'Links');
   await pasteText(window, `${origin}/article`);
   const menu = window.getByTestId('paste-url-menu');
-  await expect(menu.getByRole('menuitem')).toHaveText(['URL', 'Bookmark']);
+  await expect(menu.getByRole('menuitem')).toHaveText(['URL', 'Mention', 'Bookmark']);
   await menu.getByRole('menuitem', { name: 'Bookmark' }).click();
   await expect(editor(window).getByTestId('bookmark')).toContainText('Motor control primer');
 
@@ -251,6 +251,14 @@ test('pasting a link offers bookmark or embed', async ({ launch }) => {
     'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
   );
 
+  // A mention: the page's title, looked up, as a link.
+  await editor(window).locator('p').last().click();
+  await pasteText(window, `${origin}/article`);
+  await menu.getByRole('menuitem', { name: 'Mention' }).click();
+  const mention = editor(window).getByTestId('mention');
+  await expect(mention).toContainText('Motor control primer');
+  await expect(mention.locator('a')).toHaveAttribute('href', `${origin}/article`);
+
   // Dismissing keeps a plain link.
   await editor(window).locator('p').last().click();
   await pasteText(window, 'https://example.com/spec');
@@ -261,9 +269,20 @@ test('pasting a link offers bookmark or embed', async ({ launch }) => {
   );
 });
 
-test('embeds reject unsupported sites and offer a bookmark instead', async ({ launch }) => {
+test('embeds show any https site; plain http offers a bookmark instead', async ({ launch }) => {
   const { window } = await launch();
   await newPage(window, 'Embeds');
+  // Any https page, with its site named above it (some sites refuse frames: Open is there).
+  await slash(window, 'embed');
+  await editor(window).getByLabel('Embed link').fill('https://example.com/robot-spec');
+  await editor(window).getByLabel('Embed link').press('Enter');
+  const frame = editor(window).locator('.ws-embed iframe');
+  await expect(frame).toHaveAttribute('src', 'https://example.com/robot-spec');
+  await expect(frame).toHaveAttribute('sandbox', /allow-scripts/);
+  await expect(editor(window).getByTestId('embed-site')).toHaveText('example.com');
+  await editor(window).locator('p').last().click();
+
+  // An http page can't be shown inside the app.
   await slash(window, 'embed');
   await editor(window).getByLabel('Embed link').fill(`${origin}/article`);
   await editor(window).getByLabel('Embed link').press('Enter');

@@ -314,3 +314,63 @@ test('quick commands in the / menu: colour, turn into, duplicate, delete, date, 
   await window.keyboard.press('Escape');
   await expect(editor(window)).not.toContainText('/');
 });
+
+test('tabs: switch, rename, add and delete tabs, kept after a restart', async ({ launch }) => {
+  const launched = await launch();
+  let { window } = launched;
+  await newPage(window, 'Arm');
+  await slash(window, 'tabs');
+  const tabs = editor(window).locator('.ws-tabs');
+  const tabButtons = tabs.getByRole('tab');
+  await expect(tabButtons).toHaveText(['Tab 1', 'Tab 2']);
+  await window.keyboard.type('Torque limit 2 Nm');
+
+  // The second tab: the first one's content hides, the cursor goes in.
+  await tabButtons.nth(1).click();
+  await expect(tabButtons.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await expect(tabs.getByText('Torque limit 2 Nm')).toBeHidden();
+  await window.keyboard.type('Bench run passed');
+  await expect(tabs.getByText('Bench run passed')).toBeVisible();
+
+  // Rename the open tab by clicking it.
+  await tabButtons.nth(1).click();
+  await tabs.getByLabel('Tab name').fill('Tests');
+  await tabs.getByLabel('Tab name').press('Enter');
+  await expect(tabButtons).toHaveText(['Tab 1', 'Tests']);
+
+  // Add a tab (an image in it shows), then delete it.
+  await tabs.getByRole('button', { name: 'Add tab' }).click();
+  await expect(tabButtons).toHaveText(['Tab 1', 'Tests', 'Tab 3']);
+  await window.keyboard.type('Scratch');
+  await window.keyboard.press('Enter');
+  await slash(window, 'image');
+  await editor(window)
+    .getByTestId('media-placeholder')
+    .getByLabel('Upload file')
+    .setInputFiles({
+      name: 'dot.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842AAAAAElFTkSuQmCC',
+        'base64',
+      ),
+    });
+  await expect(tabs.locator('.ws-image img')).toBeVisible();
+  await tabs.getByRole('button', { name: 'Delete tab Tab 3' }).click();
+  await expect(tabButtons).toHaveText(['Tab 1', 'Tests']);
+
+  // Arrow keys move between tabs.
+  await tabButtons.nth(1).focus();
+  await window.keyboard.press('ArrowLeft');
+  await expect(tabButtons.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await expect(tabs.getByText('Torque limit 2 Nm')).toBeVisible();
+  await waitForIndexed(window, 'Bench');
+
+  await quit(launched.app);
+  ({ window } = await launch());
+  const after = editor(window).locator('.ws-tabs');
+  await expect(after.getByRole('tab')).toHaveText(['Tab 1', 'Tests']);
+  await after.getByRole('tab', { name: 'Tests' }).click();
+  await expect(after.getByText('Bench run passed')).toBeVisible();
+  await expect(after.getByText('Torque limit 2 Nm')).toBeHidden();
+});

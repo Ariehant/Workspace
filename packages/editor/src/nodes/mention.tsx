@@ -5,8 +5,8 @@ import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from 
 import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
 import { formatDate, parseDate, reminderTime, toIsoDate } from '@workspace/core';
 import { Avatar, cn } from '@workspace/ui';
-import { AlarmClock, ArrowUpRight, CalendarDays } from 'lucide-react';
-import { forwardRef, useRef, useSyncExternalStore } from 'react';
+import { AlarmClock, ArrowUpRight, CalendarDays, Globe } from 'lucide-react';
+import { forwardRef, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   useEditorServices,
   usePageRef,
@@ -167,9 +167,77 @@ function useMinute(): number {
   return useSyncExternalStore(subscribeMinute, () => Math.floor(Date.now() / MINUTE) * MINUTE);
 }
 
-function MentionView({ node, updateAttributes, editor, selected }: ReactNodeViewProps) {
+/** A web link's host, or null when it isn't one. */
+export function linkHost(url: unknown): string | null {
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A web link as a mention: the site's icon and the page's title. A new one (no title yet)
+ * looks them up, once, where it can be edited.
+ */
+function LinkMention({ node, updateAttributes, editor, selected }: ReactNodeViewProps) {
   const services = useEditorServices();
-  const kind = node.attrs.kind as 'page' | 'person' | 'date';
+  const url = node.attrs.url as string | null;
+  const title = node.attrs.title as string | null;
+  const icon = node.attrs.icon as string | null;
+  const host = linkHost(url);
+  const editable = editor.isEditable;
+  useEffect(() => {
+    if (title || !url || !host || !editable) return;
+    let live = true;
+    void services
+      .linkPreview(url)
+      .catch(() => null)
+      .then((preview) => {
+        if (!live) return;
+        updateAttributes({
+          title: preview?.title || preview?.siteName || host,
+          icon: preview?.icon && /^https:\/\//.test(preview.icon) ? preview.icon : null,
+        });
+      });
+    return () => {
+      live = false;
+    };
+  }, [title, url, host, editable, services, updateAttributes]);
+  return (
+    <NodeViewWrapper
+      as="span"
+      className={cn('ws-mention', selected && 'is-selected')}
+      data-testid="mention"
+    >
+      <a
+        href={host ? url! : undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={url ?? undefined}
+        className="ws-mention-page ws-mention-link"
+      >
+        <span className="ws-mention-icon">
+          {icon ? (
+            <img src={icon} alt="" width={14} height={14} className="rounded-sm" />
+          ) : (
+            <Globe size={14} aria-hidden className="text-muted" />
+          )}
+        </span>
+        {host && title && title !== host && <span className="text-muted">{host}</span>}
+        <span className="ws-mention-title">{title || host || url || 'Link'}</span>
+      </a>
+    </NodeViewWrapper>
+  );
+}
+
+function MentionView(props: ReactNodeViewProps) {
+  const { node, updateAttributes, editor, selected } = props;
+  const services = useEditorServices();
+  // `user` is how the API wrote people before (Phase 6).
+  const kind = (node.attrs.kind === 'user' ? 'person' : node.attrs.kind) as
+    'page' | 'person' | 'date' | 'link';
   const pageId = node.attrs.pageId as string | null;
   const page = usePageRef(kind === 'page' ? pageId : null);
   const userId = node.attrs.userId as string | null;
@@ -177,6 +245,7 @@ function MentionView({ node, updateAttributes, editor, selected }: ReactNodeView
   const dateInput = useRef<HTMLInputElement>(null);
   const now = useMinute();
 
+  if (kind === 'link') return <LinkMention {...props} />;
   if (kind === 'page') {
     const missing = !page || page.inTrash;
     return (
@@ -257,12 +326,18 @@ function MentionView({ node, updateAttributes, editor, selected }: ReactNodeView
 export const mentionKey = new PluginKey('mention');
 
 const label = (attrs: Record<string, unknown>) =>
-  attrs.kind === 'date' ? `@${String(attrs.date)}` : attrs.kind === 'person' ? '@person' : '@page';
+  attrs.kind === 'date'
+    ? `@${String(attrs.date)}`
+    : attrs.kind === 'person' || attrs.kind === 'user'
+      ? '@person'
+      : attrs.kind === 'link'
+        ? String(attrs.url ?? '')
+        : '@page';
 
 /**
  * Inline @-mention of a page (live title, click to open), a person (a member of the
- * workspace, by id; the name stays current), or a date, optionally a reminder (the
- * main process notifies at 9:00 on that day).
+ * workspace, by id; the name stays current), a date, optionally a reminder (the
+ * main process notifies at 9:00 on that day), or a web link (its site's icon and title).
  */
 export const Mention = Node.create({
   name: 'mention',
@@ -289,6 +364,10 @@ export const Mention = Node.create({
       userId: attr('userId', 'user-id'),
       date: attr('date', 'date'),
       reminder: attr('reminder', 'reminder', false),
+      // A link mention: the address, and the page's title and icon as looked up.
+      url: attr('url', 'url'),
+      title: attr('title', 'title'),
+      icon: attr('icon', 'icon'),
     };
   },
 

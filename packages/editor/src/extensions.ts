@@ -27,6 +27,7 @@ import { SyncedBlock } from './nodes/synced-block';
 import { ButtonBlock } from './nodes/button';
 import { Quote } from './nodes/quote';
 import { Table } from './nodes/table';
+import { Tab, Tabs } from './nodes/tabs';
 import { TodoItem, TodoList } from './nodes/todo';
 import { ToggleExtensions } from './nodes/toggle';
 import { uiBridgeExtension, type UiBridgeHandle } from './services';
@@ -51,6 +52,8 @@ export const BLOCK_NODE_TYPES = [
   'table',
   'columnList',
   'column',
+  'tabs',
+  'tab',
   'pageLink',
   'database',
   'linkedDatabase',
@@ -186,6 +189,8 @@ export function pageExtensions(
     Table,
     ColumnList,
     Column,
+    Tabs,
+    Tab,
     PageLink,
     DatabaseBlock,
     LinkedDatabaseBlock,

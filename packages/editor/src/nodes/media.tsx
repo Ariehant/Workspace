@@ -19,7 +19,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useEditorServices, type EditorServices, type FileRef } from '../services';
 import { atomBlock, dataAttr } from './atom';
 import { CroppedImage, ImageCropDialog } from './image-crop';
-import { isUrl, toEmbedUrl } from './embeds';
+import { WEBSITE, isUrl, toEmbedUrl } from './embeds';
 
 export type MediaKind = 'image' | 'video' | 'audio' | 'pdf' | 'file';
 
@@ -521,7 +521,7 @@ function EmbedView({ node, updateAttributes, editor, getPos, selected }: ReactNo
       <NodeViewWrapper>
         <Placeholder
           icon={LinkIcon}
-          label="Embed a YouTube, Vimeo, Loom, Figma, CodePen or Google Maps link"
+          label="Embed a link: any website, YouTube, Figma, Google Docs, Spotify…"
           linkLabel="Embed link"
           editable={editor.isEditable}
           onLink={(link) => updateAttributes({ url: link })}
@@ -567,11 +567,27 @@ function EmbedView({ node, updateAttributes, editor, getPos, selected }: ReactNo
     );
   }
 
+  const website = embed.provider === WEBSITE;
   return (
     <NodeViewWrapper className={cn('ws-embed', selected && 'is-selected')}>
+      {/* A website: which one, and a way out (some sites refuse to show in a frame). */}
+      {website && (
+        <div
+          contentEditable={false}
+          className="flex h-7 items-center gap-2 border-b border-line px-2 text-xs text-muted"
+        >
+          <LinkIcon size={12} aria-hidden />
+          <span className="min-w-0 flex-1 truncate" data-testid="embed-site">
+            {new URL(embed.src).hostname}
+          </span>
+          <a href={embed.src} target="_blank" rel="noopener noreferrer" className="hover:text-fg">
+            Open
+          </a>
+        </div>
+      )}
       <iframe
         src={embed.src}
-        title={`${embed.provider} embed`}
+        title={website ? `Embedded page: ${embed.src}` : `${embed.provider} embed`}
         data-provider={embed.provider}
         style={{ height: node.attrs.height as number }}
         sandbox="allow-scripts allow-same-origin allow-popups allow-presentation allow-forms"

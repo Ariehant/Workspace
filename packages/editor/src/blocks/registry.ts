@@ -32,6 +32,7 @@ import {
   Type,
   RefreshCw,
   MousePointerClick,
+  PanelsTopLeft,
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
@@ -419,9 +420,20 @@ export const BLOCKS: readonly BlockDefinition[] = [
     'embed',
     'embed',
     'Embed',
-    'YouTube, Vimeo, Loom, Figma, CodePen, Google Maps.',
+    'Any website, or YouTube, Figma, Google Docs, Spotify…',
     LinkIcon,
-    ['iframe', 'youtube', 'video', 'figma', 'map'],
+    [
+      'iframe',
+      'website',
+      'youtube',
+      'video',
+      'figma',
+      'map',
+      'google docs',
+      'gist',
+      'spotify',
+      'tweet',
+    ],
   ),
 
   // --- Advanced blocks ---
@@ -539,6 +551,17 @@ export const BLOCKS: readonly BlockDefinition[] = [
     apply: (chain) => chain.insertColumns(count),
     ...insertOnly,
   })),
+
+  {
+    id: 'tabs',
+    title: 'Tabs',
+    description: 'Show content in tabs, one at a time.',
+    keywords: ['tabs', 'tab', 'tabbed', 'sections', 'layout'],
+    icon: PanelsTopLeft,
+    group: 'layout',
+    apply: (chain) => chain.insertTabs(),
+    ...insertOnly,
+  },
 
   // --- Inline ---
   {

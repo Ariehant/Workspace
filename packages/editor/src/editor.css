@@ -580,6 +580,63 @@
   background: var(--ws-border);
 }
 
+/* Tabs: a bar of titles, then the open tab's blocks */
+.ws-prose .ws-tabs {
+  margin: 4px 0;
+  border: 1px solid var(--ws-border);
+  border-radius: 6px;
+}
+.ws-tabs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--ws-border);
+  user-select: none;
+  font-size: 14px;
+}
+.ws-tabs-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.ws-tabs-tab {
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--ws-muted);
+}
+.ws-tabs-tab:hover,
+.ws-tabs-remove:hover,
+.ws-tabs-add:hover {
+  background: var(--ws-hover);
+}
+.ws-tabs-tab[aria-selected='true'] {
+  color: var(--ws-fg);
+  font-weight: 500;
+  box-shadow: inset 0 -2px 0 var(--ws-fg);
+}
+.ws-tabs-remove,
+.ws-tabs-add {
+  border-radius: 4px;
+  padding: 0 6px;
+  color: var(--ws-muted);
+}
+.ws-tabs-rename {
+  width: 10rem;
+  border: 1px solid var(--ws-accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: transparent;
+  outline: none;
+}
+.ws-prose .ws-tabs-body {
+  padding: 4px 12px 6px;
+}
+.ws-prose .ws-tab[hidden] {
+  display: none;
+}
+
 /* Link to page, breadcrumb, table of contents */
 .ws-prose .ws-page-link {
   color: inherit;

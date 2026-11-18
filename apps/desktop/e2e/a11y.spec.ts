@@ -131,10 +131,17 @@ for (const theme of THEMES) {
       await expect(window.getByTestId('export-dialog')).toBeVisible();
     });
 
-    // An image and its crop dialog.
+    // A tabs block.
     await editor(window).first().click();
     await window.keyboard.press('Control+End');
     await window.keyboard.press('Enter');
+    await window.keyboard.type('/tabs');
+    await window.getByTestId('slash-menu').getByRole('option', { name: /^Tabs/ }).click();
+    await window.keyboard.type('In the first tab');
+    await expectAccessible(window, s('a tabs block'));
+
+    // An image and its crop dialog, on the line after the tabs.
+    await editor(window).first().locator(':scope > p').last().click();
     await window.keyboard.type('/image');
     await window
       .getByTestId('slash-menu')

@@ -68,6 +68,46 @@ describe('Markdown export', () => {
     );
   });
 
+  it('writes tabs one after another, each under its title', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el(
+        'tabs',
+        {},
+        el('tab', { title: 'Specs' }, el('paragraph', {}, 'Torque 2 Nm')),
+        el('tab', { title: 'Tests' }, el('paragraph', {}, 'Bench run')),
+      ),
+    );
+    expect(blocksMarkdown(readContent(doc), ctx)).toBe(
+      '**Specs**\n\nTorque 2 Nm\n\n**Tests**\n\nBench run',
+    );
+    expect(blocksHtml(readContent(doc), ctx)).toBe(
+      '<div class="tabs"><section class="tab"><h4 class="tab-title">Specs</h4><p>Torque 2 Nm</p></section><section class="tab"><h4 class="tab-title">Tests</h4><p>Bench run</p></section></div>',
+    );
+  });
+
+  it('writes link mentions as links with their titles', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el(
+        'paragraph',
+        {},
+        'See ',
+        el('mention', { kind: 'link', url: 'https://github.com/lab/arm/pull/7', title: 'PR #7' }),
+        ' and ',
+        el('mention', { kind: 'link', url: 'javascript:alert(1)', title: 'bad' }),
+      ),
+    );
+    expect(blocksMarkdown(readContent(doc), ctx)).toBe(
+      'See [PR #7](https://github.com/lab/arm/pull/7) and bad',
+    );
+    const html = blocksHtml(readContent(doc), ctx);
+    expect(html).toContain(
+      '<a class="mention link" href="https://github.com/lab/arm/pull/7">PR #7</a>',
+    );
+    expect(html).not.toContain('javascript:');
+  });
+
   it('writes lists (nested, numbered, to-dos), quotes, code, rules and equations', () => {
     expect(
       md(

@@ -142,6 +142,8 @@ Webhooks only go to public `https://` addresses unless the server allows otherwi
   bold, italic, strikethrough, underline, code, colours and links, as page content does;
   mentions and equations in a text property come in as their text.
 - **Comments on selected text** report the page as their parent.
+- **Tabs blocks** (and buttons) read as `unsupported`: the API has no block for them. Link
+  mentions read and write as Notion's `link_mention`.
 - **Icons and covers:** emoji icons can be set, and covers removed; images as icons or covers
   can't be set through the API yet.
 - **Public (OAuth) integrations** aren't supported: internal integrations with tokens cover

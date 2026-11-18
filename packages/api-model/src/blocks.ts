@@ -122,13 +122,32 @@ export function richTextOut(inline: readonly PMNode[] | undefined, ctx: BlockCon
           plain_text: ctx.pageTitle(attrs.pageId) ?? 'Untitled',
           href: ctx.pageUrl(attrs.pageId),
         });
-      } else if (attrs.kind === 'user' && typeof attrs.userId === 'string') {
+      } else if (
+        (attrs.kind === 'person' || attrs.kind === 'user') &&
+        typeof attrs.userId === 'string'
+      ) {
         out.push({
           type: 'mention',
           mention: { type: 'user', user: { object: 'user', id: attrs.userId } },
           annotations: a,
           plain_text: `@${ctx.userName(attrs.userId) ?? 'Someone'}`,
           href: null,
+        });
+      } else if (attrs.kind === 'link' && typeof attrs.url === 'string') {
+        const title = typeof attrs.title === 'string' && attrs.title ? attrs.title : attrs.url;
+        out.push({
+          type: 'mention',
+          mention: {
+            type: 'link_mention',
+            link_mention: {
+              href: attrs.url,
+              title,
+              ...(typeof attrs.icon === 'string' && attrs.icon ? { icon_url: attrs.icon } : {}),
+            },
+          },
+          annotations: a,
+          plain_text: title,
+          href: attrs.url,
         });
       } else if (attrs.kind === 'date' && typeof attrs.date === 'string') {
         out.push({
@@ -232,7 +251,17 @@ export function richTextIn(raw: unknown, where: string, ctx: WriteContext): PMNo
       out.push({ type: 'inlineMath', attrs: { latex: e.expression } });
     } else if (type === 'mention') {
       const m = asObject(o.mention, `${at}.mention`);
-      const kind = m.type ?? (m.page ? 'page' : m.user ? 'user' : m.date ? 'date' : undefined);
+      const kind =
+        m.type ??
+        (m.page
+          ? 'page'
+          : m.user
+            ? 'user'
+            : m.date
+              ? 'date'
+              : m.link_mention
+                ? 'link_mention'
+                : undefined);
       if (kind === 'page' || kind === 'database') {
         const id = parseId(asObject(m[kind], `${at}.mention.${kind}`).id);
         if (!id) throw invalid(`${at}.mention.${kind}.id should be a valid uuid.`);
@@ -241,7 +270,7 @@ export function richTextIn(raw: unknown, where: string, ctx: WriteContext): PMNo
         const id = parseId(asObject(m.user, `${at}.mention.user`).id);
         if (!id || !ctx.isUser(id))
           throw invalid(`${at}.mention.user.id should be a user of the workspace.`);
-        out.push({ type: 'mention', attrs: { kind: 'user', userId: id } });
+        out.push({ type: 'mention', attrs: { kind: 'person', userId: id } });
       } else if (kind === 'date') {
         const start = asObject(m.date, `${at}.mention.date`).start;
         if (typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(start)) {
@@ -251,7 +280,17 @@ export function richTextIn(raw: unknown, where: string, ctx: WriteContext): PMNo
           type: 'mention',
           attrs: { kind: 'date', date: start.slice(0, 10), reminder: false },
         });
-      } else throw invalid(`${at}.mention should be a page, database, user or date mention.`);
+      } else if (kind === 'link_mention') {
+        const link = asObject(m.link_mention, `${at}.mention.link_mention`);
+        const href = link.href;
+        if (typeof href !== 'string' || !/^https?:\/\/\S+$/i.test(href) || href.length > 2000) {
+          throw invalid(`${at}.mention.link_mention.href should be an http(s) URL.`);
+        }
+        const title = typeof link.title === 'string' ? link.title.slice(0, 500) : null;
+        out.push({ type: 'mention', attrs: { kind: 'link', url: href, title } });
+      } else {
+        throw invalid(`${at}.mention should be a page, database, user, date or link mention.`);
+      }
     } else throw invalid(`${at}.type should be "text", "mention" or "equation".`);
   });
   return out;

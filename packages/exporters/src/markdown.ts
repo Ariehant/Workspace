@@ -18,7 +18,12 @@ export function inlineMarkdown(inline: readonly Inline[], ctx: RenderContext): s
         if (part.node === 'hardBreak') return '<br>';
         if (part.node === 'inlineMath') return `$${String(attrs.latex ?? '')}$`;
         if (attrs.kind === 'date') return `@${formatDateMention(String(attrs.date ?? ''))}`;
-        if (attrs.kind === 'person') {
+        if (attrs.kind === 'link') {
+          const url = String(attrs.url ?? '');
+          const text = escapeText(String(attrs.title || url));
+          return /^https?:\/\//i.test(url) ? `[${text}](${encodeHref(url)})` : text;
+        }
+        if (attrs.kind === 'person' || attrs.kind === 'user') {
           return `@${escapeText(ctx.userName?.(String(attrs.userId ?? '')) ?? 'Someone')}`;
         }
         const pageId = String(attrs.pageId ?? '');
@@ -143,6 +148,15 @@ export function blockMarkdown(node: ContentNode, ctx: RenderContext): string {
       return tableMarkdown(node, ctx);
     case 'columnList':
       return node.children.map((column) => blocksMarkdown(column.children, ctx)).join('\n\n');
+    // Tabs, one after another: each title in bold, then its content.
+    case 'tabs':
+      return node.children
+        .map((tab) => {
+          const title = `**${escapeText(String(tab.attrs.title || 'Untitled'))}**`;
+          const body = blocksMarkdown(tab.children, ctx);
+          return body ? `${title}\n\n${body}` : title;
+        })
+        .join('\n\n');
     case 'pageLink':
     case 'database': {
       const pageId = String(attrs.pageId ?? '');

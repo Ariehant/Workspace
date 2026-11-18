@@ -1,6 +1,7 @@
 # Phase 8: What Notion has that Workspace didn't
 
-**Status:** in progress. N1 (the slash menu and keyboard) is done.
+**Status:** in progress. N1 (the slash menu and keyboard) and N2 (tabs, embeds, link mentions)
+are done.
 
 ## Context
 
@@ -34,9 +35,9 @@ milestones below; the others wait for a decision, by number.
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ |
 | 1   | **Property commands in `/`** (`/relation`, `/rollup`, `/date`, `/select`, `/formula`…)                                                                                        | On a database row's page, type `/relation` to add that kind of property to the database without going to the table header. Faster setup of databases. | S      | ✅ Done (N1) |
 | 2   | **Other quick `/` commands**: `/red`, `/blue background` (colour the block), `/comment`, `/date` or `/today`, `/mention`, `/emoji`, `/duplicate`, `/delete`, `/turn into`     | Do the block menu's actions from the keyboard without the mouse.                                                                                      | S      | ✅ Done (N1) |
-| 3   | **Tabs block** (`/tabs`, Notion 3.4, March 2026)                                                                                                                              | Put content in clickable tabs on one page (e.g. "Specs / Tests / Notes") instead of making sub-pages.                                                 | M      | ✅           |
-| 4   | **Embed any website** (generic embed) and more providers: GitHub Gist, Google Docs/Sheets/Slides/Drive, Miro, X/Twitter, Spotify, SoundCloud, Typeform, Airtable, Excalidraw… | Paste any link and see it live in the page. Today only YouTube, Vimeo, Loom, Figma, CodePen and Google Maps work; everything else becomes a bookmark. | M      | ✅           |
-| 5   | **Link mentions** (paste a URL → "Mention" chip with the site's icon and title)                                                                                               | A small inline link that shows what it points to (a GitHub PR, a Figma file, a web page), instead of a bare URL.                                      | S–M    | ✅           |
+| 3   | **Tabs block** (`/tabs`, Notion 3.4, March 2026)                                                                                                                              | Put content in clickable tabs on one page (e.g. "Specs / Tests / Notes") instead of making sub-pages.                                                 | M      | ✅ Done (N2) |
+| 4   | **Embed any website** (generic embed) and more providers: GitHub Gist, Google Docs/Sheets/Slides/Drive, Miro, X/Twitter, Spotify, SoundCloud, Typeform, Airtable, Excalidraw… | Paste any link and see it live in the page. Today only YouTube, Vimeo, Loom, Figma, CodePen and Google Maps work; everything else becomes a bookmark. | M      | ✅ Done (N2) |
+| 5   | **Link mentions** (paste a URL → "Mention" chip with the site's icon and title)                                                                                               | A small inline link that shows what it points to (a GitHub PR, a Figma file, a web page), instead of a bare URL.                                      | S–M    | ✅ Done (N2) |
 | 6   | **Presentation mode** (Notion 3.4, beta)                                                                                                                                      | Turn a page into a slideshow (each divider = new slide), full-screen, arrow keys to move. For meetings and demos.                                     | M      | 🤔           |
 | 7   | **Custom emoji** (upload your own, used anywhere `:` works)                                                                                                                   | Team logos, project icons as emoji.                                                                                                                   | M      | 🤔           |
 | 8   | **Simple table colours** (colour a row or a column)                                                                                                                           | Highlight a header row or a total column in a plain table.                                                                                            | S      | 🤔           |
@@ -176,3 +177,93 @@ types, unit tests, both builds, the desktop E2E suite twice and the web E2E suit
     the last colour, a sub-page with `Ctrl+Alt+9`, the parent page, back and forward, dark
     mode, and the shortcuts list.
   - `a11y.spec.ts`: the shortcuts list, in both themes.
+
+**After the full run:** the desktop suite found two things, fixed in a follow-up commit:
+
+- `/h2` also listed "Turn into heading 2": the commands on the block matched scattered letters
+  (as blocks do). They now need a word to match, and "Turn into" items come up when the search
+  starts with "turn" or "convert".
+- The `/relation` test typed before a new page's editor had the focus.
+
+## N2: Tabs, embeds of any site, link mentions
+
+**Built:**
+
+- **Tabs** (#3, `packages/editor/src/nodes/tabs.ts`): a `tabs` block of `tab` blocks, each with
+  a title and blocks of its own.
+  - **The bar:** click a tab to open it (the cursor goes into it), click the open tab to rename
+    it, `+` to add one, `×` to delete the open one. The arrow keys, Home and End move between
+    tabs.
+  - **Which tab is open** is per view, like a toggle's open state: it isn't saved in the page or
+    synced. Moving the cursor into a hidden tab (with the keyboard, or a link to a block) opens
+    it.
+  - **Elsewhere:** tab titles are searchable. Markdown and HTML exports write the tabs one after
+    another, each under its title. The API reads tabs as `unsupported`, as it does buttons.
+  - Inserting tabs at the end of a page leaves a line after them to go on writing.
+- **Embeds** (#4, `packages/editor/src/nodes/embeds.ts`):
+  - **Any https page** embeds as it is, in the sandboxed frame embeds already used. A bar above
+    it names the site and links to it, because some sites refuse to be shown in a frame and
+    show nothing.
+  - **The app's content security policy** now allows frames from any https origin, instead of
+    the providers' list.
+  - **Plain http pages** still can't be embedded, and offer a bookmark instead.
+  - **New providers:** Google Docs, Sheets, Slides, Forms and Drive files, Google Maps places,
+    GitHub Gists, Miro, X posts, Spotify, SoundCloud, Typeform, Airtable and Excalidraw. Their
+    links turn into the provider's player.
+- **Link mentions** (#5): pasting a link offers **Mention**.
+  - **What it shows:** the site's icon and the page's title, as a link. It's a new kind of
+    mention (`kind: 'link'`), so search, copying, exports and the API carry it like other
+    mentions.
+  - **The title and icon** are looked up once by whoever first has the mention open with edit
+    access, through the link preview bookmarks already use. They are then kept in the page and
+    work offline.
+  - **In the API:** reads and writes as Notion's `link_mention`.
+
+**Found on the way:**
+
+- **Person mentions and the API.** The API read and wrote person mentions as
+  `kind: 'user'`, while the editor stores `kind: 'person'`. So people mentioned in the app were
+  left out of the API's rich text, and a person mentioned through the API showed in the app as
+  a broken date. The API now uses `person`. Mentions it wrote before still read as people
+  everywhere: in the editor, the exports, the API and comments.
+- **The tab bar and screen readers.** The accessibility test found that the tab list held the
+  add and delete buttons, while a tab list may hold only tabs. They now sit beside it.
+- **Known limit:** after clicking a tab, `Ctrl+End` stays at the end of that tab instead of going
+  to the end of the page.
+- **The E2E teardown hang (Phase 7), found.**
+  - **Where it stops:** the page cover test stopped closing again, and the guard reported it:
+    the window's process gone, the main process waiting. In E2E runs the main process now logs
+    each step of quitting, and the report includes them. Every step finished, up to Electron's
+    `quit` event; then Chromium didn't end the process.
+  - **What brings it on:** narrowed test by test, it was saving a cover image's position and
+    quitting at once. A plain drag didn't, nor did the cover upload alone, the cursor, or how
+    the file is served.
+  - **For people, not just tests:** a process left like this would keep the app from starting
+    again (one instance at a time).
+  - **The fix:** after the app's own cleanup, a watchdog on a thread of its own (the main
+    thread's timers stop once quitting begins) ends the process if it's still there 4 s later.
+    Nothing is open by then. In twelve runs of that test, all passed, and the watchdog ended
+    seven stuck exits.
+  - **Still open:** why Chromium stops there.
+
+**Tests:**
+
+- **Unit:**
+  - each new provider's link, any https page, and the unsafe ones (http, localhost, passwords
+    in the address, `javascript:`, `data:`, a malformed escape)
+  - the API's `link_mention` both ways, refusing a non-web address, and old `user` mentions
+  - Markdown and HTML for tabs and link mentions
+- **Desktop E2E:**
+  - `blocks.spec.ts`: tabs. Switch, rename, add with an image in it, delete, arrow keys, and kept
+    after a restart.
+  - `media.spec.ts`: an https site embedded with its bar; the paste menu's Mention looks up the
+    page's title.
+  - `a11y.spec.ts`: a tabs block, in both themes.
+
+**Runs:**
+
+- **The full desktop suite,** before the watchdog: 161 passed, 3 skipped, 1 failed (the
+  teardown hang, above).
+- **With the watchdog, twice:** 162 passed and 3 skipped each time. The watchdog ended one
+  stuck exit in the first run and none in the second.
+- **The web suite:** 6 passed.
