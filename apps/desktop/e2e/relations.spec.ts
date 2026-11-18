@@ -269,6 +269,7 @@ test('/relation and other property commands in a row page add properties', async
   // Not on an ordinary page.
   await window.getByRole('button', { name: 'New page' }).click();
   await window.getByLabel('Page title').press('Enter');
+  await expect(window.getByTestId('page-editor')).toBeFocused();
   await window.keyboard.type('/relation');
   await expect(slash).toContainText('No results');
 });

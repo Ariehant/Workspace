@@ -207,13 +207,19 @@ export function actionBlocks(
       );
     }
   }
-  for (const block of convertible) {
+  // "Turn into …" when asked for (a block's own name finds the block itself).
+  for (const block of /^\s*(turn|conv)/i.test(query) ? convertible : []) {
     blocks.push(
       action({
         id: `turnInto:${block.id}`,
         title: `Turn into ${block.title.toLowerCase()}`,
         description: `Change this block to ${block.title.toLowerCase()}.`,
-        keywords: ['turn', 'convert', 'turn into', ...block.keywords.map((k) => `turn${k}`)],
+        keywords: [
+          'turn',
+          'convert',
+          'turn into',
+          ...block.keywords.flatMap((k) => [`turn${k}`, `turn into ${k}`]),
+        ],
         icon: Repeat2,
         group: 'turnInto',
         run: (ed) => block.apply(ed.chain().focus(), {}).run(),

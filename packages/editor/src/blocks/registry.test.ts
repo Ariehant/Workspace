@@ -124,6 +124,8 @@ describe('commands on the block', () => {
     );
     expect(search('turn into h')[0]).toBe('turnInto:heading1');
     expect(search('turnh2')[0]).toBe('turnInto:heading2');
+    expect(search('turn into h2')[0]).toBe('turnInto:heading2');
+    expect(search('turn into ul')[0]).toBe('turnInto:bulletList');
     expect(search('turn into to-do')[0]).toBe('turnInto:todo');
     expect(search('duplicate')[0]).toBe('action:duplicate');
     expect(search('delete')[0]).toBe('action:delete');
@@ -147,8 +149,9 @@ describe('commands on the block', () => {
     expect(search(query, fakeEditor({ text: `Torque /${query}` }))).not.toContain('action:comment');
   });
 
-  it('only turn into blocks that convert', () => {
-    const ids = slashBlocks(fakeEditor({}))
+  it('turn into only when asked, and only into blocks that convert', () => {
+    expect(search('h2')).toEqual(['heading2', 'toggleHeading2']);
+    const ids = slashBlocks(fakeEditor({}), 'turn')
       .filter((b) => b.group === 'turnInto')
       .map((b) => b.id.replace('turnInto:', ''));
     expect(ids).toEqual(CONVERTIBLE_BLOCKS.map((b) => b.id));

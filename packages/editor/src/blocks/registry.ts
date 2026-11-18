@@ -617,9 +617,12 @@ export function searchBlocks(query: string, blocks: readonly BlockDefinition[] =
     return i === q.length ? 1 : 0;
   };
 
-  return blocks
-    .map((block, index) => ({ block, index, score: score(block) }))
-    .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .map((r) => r.block);
+  return (
+    blocks
+      .map((block, index) => ({ block, index, score: score(block) }))
+      // Commands on the block need a word to match, not scattered letters ("/h2" isn't "/red").
+      .filter((r) => r.score > (r.block.searchOnly ? 1 : 0))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map((r) => r.block)
+  );
 }
