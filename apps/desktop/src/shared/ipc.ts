@@ -38,6 +38,7 @@ export const IPC = {
   fileOpen: 'file:open',
   linkPreview: 'link:preview',
   backlinks: 'links:backlinks',
+  remindersUpcoming: 'reminders:upcoming',
   syncedPlaces: 'links:synced',
   historyList: 'history:list',
   historyGet: 'history:get',

@@ -1126,6 +1126,33 @@ export class SqliteStore {
     }));
   }
 
+  /** The next `limit` reminders still to come (from `from` on), on pages not in the trash. */
+  upcomingReminders(
+    from: number,
+    limit: number,
+  ): (Omit<Reminder, 'blockId'> & { blockId: string | null })[] {
+    const rows = this.stmt(
+      `SELECT r.page_id, r.block_id, r.fire_at, r.text, p.title
+         FROM reminders r JOIN pages p ON p.id = r.page_id
+         WHERE r.fired = 0 AND r.fire_at >= ? AND p.in_trash = 0
+         ORDER BY r.fire_at LIMIT ?`,
+    ).all(from, limit) as {
+      page_id: string;
+      block_id: string;
+      fire_at: number;
+      text: string;
+      title: string;
+    }[];
+    return rows.map((r) => ({
+      pageId: r.page_id,
+      // A date property's reminder isn't at a block.
+      blockId: r.block_id.startsWith(PROPERTY_REMINDER) ? null : r.block_id,
+      fireAt: r.fire_at,
+      text: r.text,
+      pageTitle: r.title,
+    }));
+  }
+
   markReminderFired(reminder: Pick<Reminder, 'pageId' | 'blockId' | 'fireAt'>): void {
     this.stmt(
       'UPDATE reminders SET fired = 1 WHERE page_id = ? AND block_id = ? AND fire_at = ?',

@@ -75,6 +75,8 @@ export interface Platform {
   backlinks(pageId: string): Promise<Backlink[]>;
   /** How many pages show a synced block. */
   syncedPlaces(syncedId: string): Promise<number>;
+  /** The next reminders, soonest first (Home's Upcoming; hosts that keep them). */
+  upcoming?(): Promise<UpcomingReminder[]>;
   /** Page history: saved versions of a doc, newest first. */
   listVersions(docId: string): Promise<DocVersionInfo[]>;
   /** The saved Yjs state of a version. */
@@ -377,6 +379,16 @@ export type ExportStatus =
   | { state: 'done'; path: string }
   | { state: 'cancelled' }
   | { state: 'failed'; error: string };
+
+/** A reminder still to come: an `@remind` in a page, or on a date property of a row. */
+export interface UpcomingReminder {
+  pageId: string;
+  /** The block it's in (null for a date property's). */
+  blockId: string | null;
+  fireAt: number;
+  text: string;
+  pageTitle: string;
+}
 
 export interface Backlink {
   id: string;

@@ -110,6 +110,8 @@ export function registerIpc(
   ipcMain.handle(IPC.backlinks, (_event, id: unknown) =>
     isDocId(id) ? store.backlinks(id, ['mention', 'link', 'pageLink', 'relation']) : [],
   );
+  // Home's Upcoming: the next reminders, in pages and on date properties.
+  ipcMain.handle(IPC.remindersUpcoming, () => store.upcomingReminders(Date.now(), 20));
   ipcMain.handle(IPC.syncedPlaces, (_event, id: unknown) =>
     isDocId(id) ? store.syncedPlaces(id) : 0,
   );

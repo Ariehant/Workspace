@@ -92,6 +92,15 @@ const api = {
         snippet: string;
       }[]
     > => ipcRenderer.invoke(IPC.backlinks, pageId),
+    upcoming: (): Promise<
+      {
+        pageId: string;
+        blockId: string | null;
+        fireAt: number;
+        text: string;
+        pageTitle: string;
+      }[]
+    > => ipcRenderer.invoke(IPC.remindersUpcoming),
     syncedPlaces: (syncedId: string): Promise<number> =>
       ipcRenderer.invoke(IPC.syncedPlaces, syncedId),
   },

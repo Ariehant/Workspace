@@ -70,6 +70,7 @@ const platform: Platform = {
   openFile: (id) => void api.files.open(id),
   linkPreview: (url) => api.linkPreview(url),
   backlinks: (id) => api.links.backlinks(id),
+  upcoming: () => api.links.upcoming(),
   syncedPlaces: (id) => api.links.syncedPlaces(id),
   listVersions: (docId) => api.history.list(docId),
   getVersion: (id) => api.history.get(id),

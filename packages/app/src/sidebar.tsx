@@ -35,6 +35,7 @@ import {
   CornerUpRight,
   Download,
   FileInput,
+  House,
   Info,
   Keyboard,
   Languages,
@@ -140,6 +141,10 @@ export interface SidebarProps {
     onSettings(scopeId: string): void;
     onLeave(scopeId: string): void;
   };
+  /** Show Home (recent pages, upcoming reminders). */
+  onHome?(): void;
+  /** Home is shown. */
+  homeActive?: boolean;
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -262,6 +267,17 @@ export function Sidebar(props: SidebarProps) {
         <span className="flex-1 text-left">Search</span>
         <kbd className="font-sans text-xs text-faint">Ctrl+K</kbd>
       </button>
+      {props.onHome && (
+        <button
+          type="button"
+          onClick={props.onHome}
+          aria-current={props.homeActive ? 'page' : undefined}
+          className={cn(navButton, props.homeActive && 'bg-active text-fg')}
+        >
+          <House size={16} />
+          Home
+        </button>
+      )}
       {props.inbox?.(navButton)}
       <button type="button" onClick={() => onCreate(null)} className={navButton}>
         <SquarePen size={16} />

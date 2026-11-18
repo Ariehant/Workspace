@@ -47,6 +47,7 @@ import { DatabaseRegistry } from './database/registry';
 import { useRegistryVersion } from './database/hooks';
 import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
+import { Home } from './home';
 import { NoAccess } from './no-access';
 import { PageDirectory } from './pages';
 import { useForest } from './forest';
@@ -293,6 +294,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(initial.sidebarOpen);
   const [sidebarWidth, setSidebarWidth] = useState(initial.sidebarWidth);
   const [finding, setFinding] = useState(false);
+  // Home is shown over the tab's page (it isn't a page in the history).
+  const [home, setHome] = useState(false);
   const [templates, setTemplates] = useState(false);
   // The export dialog: for a page, or (null) the whole workspace.
   const [exporting, setExporting] = useState<PageId | null | undefined>(undefined);
@@ -369,6 +372,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       }
       setPeek(null);
       setMissing(null);
+      setHome(false);
       show(id);
     },
     [show, newTabIntent, scroll, setMissing],
@@ -386,6 +390,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     (update: (prev: TabsState) => TabsState) => {
       scroll.save();
       setPeek(null);
+      setHome(false);
       setTabs(update);
     },
     [scroll],
@@ -415,13 +420,18 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const blockNonce = useRef(0);
   const go = useCallback(
     (direction: -1 | 1) => {
+      // Back from Home is the page it was opened over.
+      if (home) {
+        if (direction === -1) setHome(false);
+        return;
+      }
       const next = stepHistory(history, direction, exists);
       if (!next) return;
       setHistory(next);
       setMissing(null);
       show(next.entries[next.index]!);
     },
-    [history, exists, show, setHistory, setMissing],
+    [home, history, exists, show, setHistory, setMissing],
   );
 
   const onboarding = useRef(false);
@@ -727,7 +737,13 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     onGo: go,
   };
 
-  const content = missing ? (
+  const content = home ? (
+    <Home
+      chrome={{ ...chrome, canGoBack: currentPageId !== null, canGoForward: false }}
+      recent={recent}
+      onOpen={showPage}
+    />
+  ) : missing ? (
     <NoAccess
       key={`${missing}:${missingPage?.n}`}
       pageId={missing}
@@ -777,7 +793,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             icons={teamspaceIcons}
             favorites={favorites}
             width={sidebarWidth}
-            currentPageId={currentPageId}
+            currentPageId={home ? null : currentPageId}
             expanded={expanded}
             theme={theme}
             onSelect={navigate}
@@ -789,6 +805,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onDrop={drop}
             onToggleFavorite={toggleFavorite}
             onSearch={() => setFinding(true)}
+            onHome={() => {
+              setPeek(null);
+              setHome(true);
+            }}
+            homeActive={home}
             onTemplates={() => setTemplates(true)}
             onImport={() =>
               void platform
