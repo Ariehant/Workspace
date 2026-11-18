@@ -4,6 +4,7 @@
 
 | Guide                                      | What's in it                                                                |
 | ------------------------------------------ | --------------------------------------------------------------------------- |
+| [Getting started](getting-started.md)      | A short tour: pages, databases, finding things, importing, working together |
 | [Features](features.md)                    | Everything the app and the server do, area by area                          |
 | [The desktop app](desktop.md)              | Installing, where your data lives, backups, sync, keyboard shortcuts        |
 | [Self-hosting the server](self-hosting.md) | Docker Compose, settings, single sign-on, email, S3, backups, the admin CLI |
