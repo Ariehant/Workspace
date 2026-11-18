@@ -564,3 +564,19 @@ click landing on the toggle's arrow) was wrong; moving the click didn't help.
 - **Desktop E2E** (`import.spec.ts`): LibreOffice's file through the Import button: the counts,
   the title, a heading, a bold word, a nested numbered list, the table's header, the code, the
   picture loaded, and the page found by quick find.
+
+**Runs:**
+
+- **The full desktop suite, twice:** 173 passed and 3 skipped each time. The watchdog ended no
+  stuck exits.
+- **The web suite:** 6 passed. Formatting, lint, types, unit tests and the web, server and
+  desktop builds pass.
+
+## The README and the guide
+
+With Phase 8 done, the README describes Workspace for people who'll use it: Phase 8's features,
+an **Install** and a **Use it** section, and Word and Google Docs import. A new
+[getting started guide](getting-started.md) walks through pages, databases, finding things,
+importing and working with others. The screenshots were taken again from
+`apps/desktop/e2e/readme-shots.spec.ts`, which now also shows quick find's filters, bulk edit, a
+row page's layout, an imported Word document and a tabs block (the last only in the spec).

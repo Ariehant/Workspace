@@ -5,6 +5,7 @@
  *   README_SHOTS=../../docs/images xvfb-run -a npx playwright test e2e/readme-shots.spec.ts
  */
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { editor, expect, test } from './helpers';
 
@@ -123,6 +124,106 @@ test('README screenshots', async ({ launch }) => {
     }
     await shot(window, name);
   }
+
+  // Phase 8: tabs, quick find's filters, bulk edit, a row page's layout, a Word document.
+  await window.getByRole('button', { name: 'New page', exact: true }).click();
+  await window.getByLabel('Page title').fill('Gripper test plan');
+  await window.getByLabel('Page title').press('Enter');
+  await expect(editor(window).first()).toBeFocused();
+  await window.keyboard.type('Each finger material is tested the same way.');
+  await window.keyboard.press('Enter');
+  await window.keyboard.type('/tabs');
+  await window.keyboard.press('Enter');
+  const tabs = editor(window).first().locator('.ws-tabs');
+  await window.keyboard.type('Load cell under the fingertip, 10 grasps per material.');
+  await window.keyboard.press('Enter');
+  await window.keyboard.type('[] Calibrate the load cell');
+  await window.keyboard.press('Enter');
+  await window.keyboard.type('Clamp the sample');
+  // Clicking the open tab renames it.
+  const rename = async (i: number, name: string) => {
+    await tabs.getByRole('tab').nth(i).click();
+    await tabs.getByLabel('Tab name').fill(name);
+    await tabs.getByLabel('Tab name').press('Enter');
+  };
+  await rename(0, 'Setup');
+  await tabs.getByRole('tab').nth(1).click();
+  await window.keyboard.type('Silicone held 4.2 N before slipping.');
+  await rename(1, 'Results');
+  await tabs.getByRole('button', { name: 'Add tab' }).click();
+  await window.keyboard.type('Try a softer silicone next.');
+  await rename(2, 'Notes');
+  await tabs.getByRole('tab', { name: 'Setup' }).click();
+  await window.mouse.click(1300, 860);
+  await shot(window, 'tabs');
+
+  await window.keyboard.press('Control+k');
+  const find = window.getByTestId('quick-find');
+  await find.getByLabel('Search pages').fill('grip');
+  await find.getByRole('button', { name: 'Edited: Any time' }).click();
+  await window.getByRole('menuitemradio', { name: 'Past 7 days' }).click();
+  await find.getByRole('button', { name: 'Sort: Best match' }).click();
+  await window.getByRole('menuitemradio', { name: 'Last edited' }).click();
+  await expect(find.getByTestId('quick-find-result').first()).toBeVisible({ timeout: 15_000 });
+  await shot(window, 'quick-find');
+  await window.keyboard.press('Escape');
+
+  await window.keyboard.press('Control+k');
+  await find.getByLabel('Search pages').fill('Tasks');
+  await find
+    .getByTestId('quick-find-result')
+    .filter({ has: window.getByText('Tasks', { exact: true }) })
+    .first()
+    .click();
+  const grid = window.getByTestId('table-view').first();
+  for (const [i, shift] of [
+    [0, false],
+    [2, true],
+  ] as const) {
+    const taskRow = grid.getByTestId('table-row').nth(i);
+    await taskRow.hover();
+    await taskRow.getByTestId('row-check').click({ modifiers: shift ? ['Shift'] : [] });
+  }
+  await expect(window.getByTestId('bulk-count')).toHaveText('3 selected');
+  await shot(window, 'bulk-edit');
+  await window.keyboard.press('Escape');
+
+  await window.keyboard.press('Control+k');
+  await find.getByLabel('Search pages').fill('Gripper v2');
+  await find
+    .getByTestId('quick-find-result')
+    .filter({ has: window.getByText('Gripper v2', { exact: true }) })
+    .first()
+    .click();
+  const row = window.getByTestId('row-page');
+  await row.getByRole('button', { name: 'Customize layout' }).click();
+  const layout = window.getByTestId('layout-dialog');
+  for (const name of ['Status', 'Start', 'End']) {
+    await layout
+      .getByRole('group', { name: /Pinned under the title/ })
+      .getByLabel(name)
+      .check();
+  }
+  await layout
+    .getByRole('group', { name: 'Relations as sections of the page' })
+    .getByLabel('Tasks')
+    .check();
+  await layout.getByTestId('layout-save').click();
+  await expect(row.getByTestId('relation-section-page')).toHaveCount(3);
+  await window.mouse.click(1300, 860);
+  await shot(window, 'row-layout');
+
+  const docx = fileURLToPath(
+    new URL('../../../packages/importers/fixtures/docx/libreoffice.docx', import.meta.url),
+  );
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as never;
+  }, docx);
+  await window.getByRole('button', { name: 'Import', exact: true }).click();
+  await window.getByTestId('import-report').getByRole('button', { name: 'Done' }).click();
+  await expect(window.getByLabel('Page title')).toHaveValue('Gripper design review');
+  await window.mouse.click(1300, 860);
+  await shot(window, 'word-import');
 
   // The dark theme.
   await window.getByRole('button', { name: 'Appearance' }).click();
