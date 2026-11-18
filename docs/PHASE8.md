@@ -523,3 +523,10 @@ click landing on the toggle's arrow) was wrong; moving the click didn't help.
   - `a11y.spec.ts`: quick find with a filter menu open and filtered, a page that doesn't exist,
     and an inbox with a request, in both themes
 - **Web E2E:** quick find's Titles only and Created by on the server's search.
+
+**Runs:**
+
+- **The full desktop suite, twice:** 172 passed and 3 skipped each time. The watchdog ended no
+  stuck exits.
+- **The web suite:** 6 passed. Formatting, lint, types, unit tests and the web, server and
+  desktop builds pass.
