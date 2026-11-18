@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { searchOptionsFromQuery } from '@workspace/core';
 import { fail, requireUser } from './auth/context';
 import type { ServerContext } from './context';
 
@@ -71,7 +72,19 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
   );
 
   // Quick find for the web app: titles, row properties and content, like the desktop's.
-  app.get<{ Params: { id: string }; Querystring: { q: string; limit?: number } }>(
+  // Quick find's filters (Phase 8 N4): titles only, page trees, edited since, created by, sort.
+  app.get<{
+    Params: { id: string };
+    Querystring: {
+      q: string;
+      limit?: number;
+      titles?: string;
+      tree?: string[];
+      editedAfter?: number;
+      createdBy?: string;
+      sort?: string;
+    };
+  }>(
     '/api/workspaces/:id/search',
     {
       preHandler: signedIn,
@@ -83,6 +96,15 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
           properties: {
             q: { type: 'string', maxLength: 200 },
             limit: { type: 'integer', minimum: 1, maximum: 50 },
+            titles: { type: 'string', enum: ['1', 'true'] },
+            tree: {
+              type: 'array',
+              maxItems: 50,
+              items: { type: 'string', pattern: '^[A-Za-z0-9_:-]{1,128}$' },
+            },
+            editedAfter: { type: 'integer', minimum: 0 },
+            createdBy: { type: 'string', pattern: '^[A-Za-z0-9_:-]{1,128}$' },
+            sort: { type: 'string', enum: ['relevance', 'edited', 'created'] },
           },
         },
       },
@@ -96,6 +118,7 @@ export function workspaceRoutes(app: FastifyInstance, ctx: ServerContext) {
         request.query.q,
         request.query.limit ?? 20,
         await ctx.access.readableScopes(request.params.id, request.auth!.user.id),
+        searchOptionsFromQuery(request.query),
       );
       return { results };
     },

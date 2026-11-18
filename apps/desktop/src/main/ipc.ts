@@ -2,6 +2,7 @@ import type { DocManager, SqliteStore } from '@workspace/storage-local';
 import { randomUUID } from 'node:crypto';
 import { userInfo } from 'node:os';
 import { BrowserWindow, app, ipcMain, nativeTheme, type WebContents } from 'electron';
+import { cleanSearchOptions } from '@workspace/core';
 import { IPC, type ThemeSource } from '../shared/ipc';
 
 const isDocId = (value: unknown): value is string =>
@@ -97,8 +98,8 @@ export function registerIpc(
     if (isSettingKey(key)) store.setSetting(key, value ?? null);
   });
 
-  ipcMain.handle(IPC.search, (_event, query: unknown) =>
-    typeof query === 'string' ? store.search(query.slice(0, 200)) : [],
+  ipcMain.handle(IPC.search, (_event, query: unknown, options: unknown) =>
+    typeof query === 'string' ? store.search(query.slice(0, 200), cleanSearchOptions(options)) : [],
   );
 
   ipcMain.handle(IPC.pageLocate, (_event, id: unknown) =>

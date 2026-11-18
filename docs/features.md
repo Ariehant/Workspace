@@ -111,7 +111,11 @@ Database" on an empty page).
   width. On a server workspace: sections for teamspaces, pages shared with you and your private
   pages.
 - **Quick find** (`Ctrl+K` / `Ctrl+P`) over titles and content, with recent pages;
-  `Ctrl+Enter` opens the result in a new window.
+  `Ctrl+Enter` opens the result in a new window. Filters narrow it: titles only, a section
+  (a teamspace, Shared or Private), when it was edited (today, past 7 or 30 days, past year)
+  and, on a server, who created it. It sorts by best match, last edited or created; with a
+  filter and nothing typed, it lists what the filter lets through. Pages made before Phase 8
+  N4 don't record who created them (database rows always did).
 - **Tabs and windows:** `Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`; Ctrl+click or middle-click opens in a new
   tab; drag tabs to reorder them or out of the window. Several windows stay in sync live
   (`Ctrl+Shift+N`). Tabs and their history come back after a restart.
@@ -167,12 +171,17 @@ These need the [self-hosted server](self-hosting.md).
 - **Sharing:** teamspaces and per-page sharing with full access, can edit, can edit content
   (database rows only), can comment and can view, inherited down the page tree. The server
   enforces it on every write.
+- **Request access:** a link or mention of a page you can't open shows "You don't have access
+  to this page" (nothing else about it), where you ask to view, comment or edit, with a
+  message. The people with full access to it get the request in their inbox and in its share
+  dialog, and share it in one click (or decline); once shared, it opens where you were. A
+  database row is asked for as its database. Up to 20 requests an hour.
 - **Presence:** avatars in the page header, named cursors in the editor, dots in the sidebar
   and avatars on database rows others have open.
 - **Comments:** on selected text or the whole page, with replies, @-mentions, reactions and
   resolve. People who may only comment suggest edits, which an editor accepts or rejects.
-- **Inbox:** mentions, comments and replies on pages you follow, reminders, and pages shared
-  with you, live, with desktop notifications. Email digests: after a mention, or daily, with
+- **Inbox:** mentions, comments and replies on pages you follow, reminders, pages shared with
+  you and requests for access (with Share and Decline), live, with desktop notifications. Email digests: after a mention, or daily, with
   one-click unsubscribe.
 - **Publish to web:** a public, read-only page (with its sub-pages if you like), with view
   counts.

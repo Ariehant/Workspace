@@ -174,6 +174,24 @@ export function teamApi(team: TeamPlatform) {
       r<{ scope: ScopeDetails }>('POST', `pages/${pageId}/share`, { scope: from }),
     movePage: (pageId: string, from: string, to: string, parentId: string | null) =>
       r<{ ok: true }>('POST', `pages/${pageId}/move`, { from, to, parentId }),
+    // Requests for access (Phase 8 N4): asking for a page you can't open, and answering.
+    pageAccess: (pageId: string) => r<PageAccess>('GET', `pages/${pageId}/access`),
+    requestAccess: (pageId: string, role: RequestedRole, message: string) =>
+      r<{ request: OwnAccessRequest }>('POST', `pages/${pageId}/access-requests`, {
+        role,
+        message,
+      }),
+    accessRequests: (pageId?: string) =>
+      r<{ requests: AccessRequestInfo[] }>(
+        'GET',
+        pageId ? `access-requests?pageId=${encodeURIComponent(pageId)}` : 'access-requests',
+      ),
+    accessRequest: (id: string) =>
+      r<{ request: AccessRequestInfo }>('GET', `access-requests/${id}`),
+    approveRequest: (id: string, role: RequestedRole) =>
+      r<{ request: AccessRequestInfo }>('POST', `access-requests/${id}/approve`, { role }),
+    declineRequest: (id: string) =>
+      r<{ request: AccessRequestInfo }>('POST', `access-requests/${id}/decline`),
     me: async () => (await r<{ user: Profile }>('GET', 'me')).user,
     updateMe: async (change: { name?: string; avatar?: string | null }) =>
       (await r<{ user: Profile }>('PATCH', 'me', change)).user,
@@ -254,6 +272,33 @@ export function teamApi(team: TeamPlatform) {
     removeWebhook: (id: string) => r<{ ok: true }>('DELETE', `integrations/${id}/webhook`),
   };
 }
+
+/** What may be asked for: the rest is for the people who share to decide. */
+export type RequestedRole = 'view' | 'comment' | 'edit';
+export const REQUESTED_ROLES: readonly RequestedRole[] = ['view', 'comment', 'edit'];
+
+/** Your own request, as you see it. */
+export interface OwnAccessRequest {
+  id: string;
+  role: RequestedRole;
+  status: 'pending' | 'approved' | 'declined';
+  createdAt: number;
+  decidedAt: number | null;
+}
+
+/** A request, as the people who can share the page see it. */
+export interface AccessRequestInfo extends OwnAccessRequest {
+  pageId: string;
+  requesterId: string;
+  message: string;
+  decidedBy: string | null;
+}
+
+/** Whether you can open a page (and, if not, whether you asked). */
+export type PageAccess =
+  | { exists: false }
+  | { exists: true; readable: true }
+  | { exists: true; readable: false; request: OwnAccessRequest | null };
 
 export interface PublishSettings {
   slug: string;

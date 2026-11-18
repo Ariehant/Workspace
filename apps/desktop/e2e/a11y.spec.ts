@@ -89,6 +89,24 @@ for (const theme of THEMES) {
       window.getByRole('button', { name: 'Page options' }).click(),
     );
     await checkOpen(window, s('quick find'), () => window.keyboard.press('Control+k'));
+    // Its filters: a menu open over it, then the results of a filter.
+    await window.keyboard.press('Control+k');
+    await window
+      .getByTestId('quick-find-filters')
+      .getByRole('button', { name: 'Edited: Any time' })
+      .click();
+    await expectAccessible(window, s('a quick find filter'), { modal: true });
+    await window.getByRole('menuitemradio', { name: 'Today' }).click();
+    await expect(window.getByTestId('quick-find-result').first()).toBeVisible();
+    await expectAccessible(window, s('quick find, filtered'), { modal: true });
+    await window.keyboard.press('Escape');
+    // A link to a page that isn't here.
+    await window.evaluate(
+      () => void globalThis.open('workspace://page/00000000-0000-4000-8000-000000000000'),
+    );
+    await expect(window.getByTestId('no-access')).toContainText('This page doesn’t exist');
+    await expectAccessible(window, s('a page that doesn’t exist'));
+    await window.keyboard.press('Alt+ArrowLeft');
     await checkOpen(window, s('templates'), () => sidebarButton('Templates').click());
     await checkOpen(window, s('the trash'), () => sidebarButton('Trash').click());
     await checkOpen(window, s('sync settings'), () => window.getByTestId('sync-indicator').click());
@@ -246,6 +264,64 @@ for (const theme of THEMES) {
   });
 }
 
+/** Bob joins Ada's workspace and asks for her page `title` (found with her search). */
+async function requestAsBob(base: string, title: string) {
+  const call = async (method: string, path: string, token: string | null, body?: object) => {
+    const res = await fetch(`${base}${path}`, {
+      method,
+      headers: {
+        'x-workspace-client': 'desktop',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(body ? { 'content-type': 'application/json' } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (await res.json()) as any;
+  };
+  const ada = (
+    await call('POST', '/api/auth/login', null, {
+      email: 'ada@lab.io',
+      password: 'correct horse battery',
+      client: 'desktop',
+    })
+  ).token as string;
+  const ws = (await call('GET', '/api/workspaces', ada)).workspaces[0].id as string;
+  const { invites } = await call('POST', `/api/workspaces/${ws}/invites`, ada, {
+    emails: ['bob@lab.io'],
+    role: 'member',
+  });
+  const bob = (
+    await call('POST', '/api/auth/signup', null, {
+      email: 'bob@lab.io',
+      name: 'Bob',
+      password: 'correct horse battery',
+      client: 'desktop',
+      invite: (invites[0].link as string).split('/invite/')[1],
+    })
+  ).token as string;
+  let pageId: string | undefined;
+  await expect
+    .poll(
+      async () => {
+        const { results } = await call(
+          'GET',
+          `/api/workspaces/${ws}/search?q=${encodeURIComponent(title)}`,
+          ada,
+        );
+        pageId = results?.[0]?.id;
+        return pageId;
+      },
+      { timeout: 20_000 },
+    )
+    .toBeTruthy();
+  const asked = await call('POST', `/api/workspaces/${ws}/pages/${pageId}/access-requests`, bob, {
+    role: 'view',
+    message: 'For the review',
+  });
+  expect(asked, JSON.stringify(asked)).toHaveProperty('request');
+}
+
 test('the screens of a server workspace: sharing, members, the inbox and comments', async () => {
   test.setTimeout(180_000);
   const root = mkdtempSync(join(tmpdir(), 'workspace-a11y-'));
@@ -273,6 +349,14 @@ test('the screens of a server workspace: sharing, members, the inbox and comment
     await expect(editor(A)).toBeFocused();
     await A.keyboard.type('Planetary, three stages.');
 
+    // Bob (over the API) asks for Ada's private page: a request in her inbox, with buttons.
+    await A.getByRole('button', { name: 'Add a page to Private' }).click();
+    await A.getByLabel('Page title').fill('Budget');
+    await A.getByLabel('Page title').press('Enter');
+    await expect(A.getByTestId('sync-indicator')).toHaveText('Synced', { timeout: 20_000 });
+    await requestAsBob(server.base, 'Budget');
+    await expect(A.getByTestId('inbox-unread')).toHaveText('1', { timeout: 20_000 });
+
     for (const theme of THEMES) {
       await setTheme(A, theme);
       const s = (name: string) => `${name} (${theme}, server)`;
@@ -284,7 +368,10 @@ test('the screens of a server workspace: sharing, members, the inbox and comment
         await A.getByRole('button', { name: 'Members', exact: true }).click();
         await expect(A.getByTestId('members-dialog')).toBeVisible();
       });
-      await checkOpen(A, s('the inbox'), () => A.getByTestId('inbox-button').click());
+      await checkOpen(A, s('the inbox, with a request'), async () => {
+        await A.getByTestId('inbox-button').click();
+        await expect(A.getByTestId('request-actions')).toBeVisible();
+      });
       await A.getByRole('button', { name: 'Comments' }).first().click();
       await expect(A.getByTestId('comments-panel')).toBeVisible();
       await expectAccessible(A, s('comments'));

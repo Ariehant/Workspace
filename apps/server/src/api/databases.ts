@@ -238,7 +238,14 @@ async function createDatabase(api: ApiView, body: Body) {
   const id = newId();
   const { changes, linked } = await readSchemaChanges(api, schemaInput, [], true);
   await api.edit(page.scope.treeDoc, (tree) =>
-    createPage(tree, { id, parentId: page.id, kind: 'database', title, icon }),
+    createPage(tree, {
+      id,
+      parentId: page.id,
+      kind: 'database',
+      title,
+      icon,
+      createdBy: api.botId,
+    }),
   );
   await api.editLinked(
     id,

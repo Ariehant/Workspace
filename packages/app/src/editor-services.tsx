@@ -39,8 +39,10 @@ export function useEditorServices(
       listPages: () => pages.list(),
       getBreadcrumb: () => pages.breadcrumb(pageId),
       navigate,
-      createSubpage: () => createPage(workspace, { parentId: pages.hostOf(pageId) }),
-      createDatabase: () => createDatabase(client, workspace, { parentId: pages.hostOf(pageId) }),
+      createSubpage: () =>
+        createPage(workspace, { parentId: pages.hostOf(pageId), createdBy: user.id }),
+      createDatabase: () =>
+        createDatabase(client, workspace, { parentId: pages.hostOf(pageId), createdBy: user.id }),
       renderDatabase: (id) => <InlineDatabase databaseId={id} />,
       renderLinkedDatabase: (id, viewSet) => <InlineDatabase databaseId={id} viewSet={viewSet} />,
       syncedPlaces: (id) => platform.syncedPlaces(id),
@@ -59,7 +61,10 @@ export function useEditorServices(
       editButton: (config, buttonId) =>
         editButton({ config, mode: 'block', buttonId, hostPageId: pageId }),
       tableToDatabase: async (cells, header) => {
-        const id = await createDatabase(client, workspace, { parentId: pages.hostOf(pageId) });
+        const id = await createDatabase(client, workspace, {
+          parentId: pages.hostOf(pageId),
+          createdBy: user.id,
+        });
         const handle = await databases.load(id);
         fillFromTable(handle.doc, cells, { header, actor: user.id });
         return id;

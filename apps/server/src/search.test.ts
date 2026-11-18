@@ -157,6 +157,37 @@ describe('server search', () => {
     ).toEqual([]);
   });
 
+  it("takes quick find's filters as query parameters", async () => {
+    const s = await setup();
+    s.device.client.start();
+    const workspace = s.device.doc(WORKSPACE_DOC_ID);
+    const a = createPage(workspace, { title: 'Arm spec', createdBy: 'u-ada', now: 1000 });
+    const b = createPage(workspace, { title: 'Notes', createdBy: 'u-bob', now: 2000 });
+    getPageContent(s.device.doc(b)).insert(0, [paragraph('The spec of the gripper.')]);
+    const get = async (params: string) => {
+      const res = await s.app.inject({
+        url: `/api/workspaces/${s.ws.id}/search?${params}`,
+        headers: { authorization: `Bearer ${s.token}` },
+      });
+      return {
+        status: res.statusCode,
+        ids: (res.json() as { results?: { id: string }[] }).results?.map((r) => r.id),
+      };
+    };
+    await eventually(
+      () => get('q=spec'),
+      (r) => r.ids?.length === 2,
+    );
+    expect((await get('q=spec&titles=1')).ids).toEqual([a]);
+    expect((await get('q=spec&createdBy=u-bob')).ids).toEqual([b]);
+    expect((await get('q=spec&sort=created')).ids).toEqual([b, a]);
+    expect((await get('q=&sort=created&limit=1')).ids).toEqual([b]);
+    // A tree that isn't one of this workspace's: nothing.
+    expect((await get('q=spec&tree=nope')).ids).toEqual([]);
+    expect((await get('q=spec&sort=sideways')).status).toBe(400);
+    expect((await get('q=spec&createdBy=a%20b')).status).toBe(400);
+  });
+
   it('catches up at startup and rebuilds with workspace-admin reindex', async () => {
     const s = await setup();
     // Written straight into the log (as if before the server had search).

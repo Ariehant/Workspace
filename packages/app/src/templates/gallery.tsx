@@ -69,7 +69,7 @@ export function TemplatesGallery({
   onUse(pageId: PageId): void;
   onClose(): void;
 }) {
-  const { client, workspace } = useApp();
+  const { client, workspace, user } = useApp();
   const store = useDoc(client, TEMPLATES_DOC_ID);
   const saved = useSavedTemplates(store);
   const [category, setCategory] = useState<Category>(TEMPLATE_CATEGORIES[0]);
@@ -110,7 +110,7 @@ export function TemplatesGallery({
     if (!preview) return;
     setBusy(true);
     try {
-      const id = await applyTemplate(client, workspace, preview);
+      const id = await applyTemplate(client, workspace, preview, null, user.id);
       onUse(id);
       onClose();
     } finally {

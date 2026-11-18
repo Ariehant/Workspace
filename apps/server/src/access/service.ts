@@ -89,6 +89,23 @@ export class WorkspaceAccess {
     return this.model.members.map((m) => m.userId);
   }
 
+  /** The workspace's owners and admins. */
+  managerIds(): string[] {
+    return this.model.members
+      .filter((m) => m.role === 'owner' || m.role === 'admin')
+      .map((m) => m.userId);
+  }
+
+  /**
+   * Who can share what's in a scope: the people with full access to it, else (nobody has)
+   * the workspace's owners and admins. Bots aside.
+   */
+  sharersOf(scopeId: string): string[] {
+    const people = this.model.members.filter((m) => m.role !== 'bot').map((m) => m.userId);
+    const full = people.filter((id) => atLeast(this.roles(id).get(scopeId), 'full'));
+    return full.length ? full : this.managerIds();
+  }
+
   roles(userId: string): Roles {
     let roles = this.roleCache.get(userId);
     if (!roles) this.roleCache.set(userId, (roles = rolesFor(this.model, userId)));

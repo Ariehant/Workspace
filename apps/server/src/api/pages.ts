@@ -176,7 +176,7 @@ async function createSubpage(api: ApiView, parent: Located, body: Body) {
   if (body.cover !== undefined) parseCover(body.cover);
   const id = newId();
   await api.edit(parent.scope.treeDoc, (tree) =>
-    createPage(tree, { id, parentId: parent.id, title, icon }),
+    createPage(tree, { id, parentId: parent.id, title, icon, createdBy: api.botId }),
   );
   return id;
 }

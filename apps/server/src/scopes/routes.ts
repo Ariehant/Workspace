@@ -8,11 +8,9 @@
  * appending ordinary updates), moves the pages' docs to the new scope, records the move
  * (for devices that were away), and the open connections get what they gained or lost.
  */
-import { MEMBERS_DOC_ID, moveSubtree, subtreeIds } from '@workspace/core';
-import { isDatabaseDoc, readDatabase } from '@workspace/database';
+import { MEMBERS_DOC_ID } from '@workspace/core';
 import type { Scope, ScopeRole, ScopeVisibility } from '@workspace/storage-remote';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import * as Y from 'yjs';
 import { atLeast, rolesFor } from '../access/roles';
 import type { Roles } from '../access/service';
 import { fail, requireUser } from '../auth/context';
@@ -33,16 +31,7 @@ type Params = { id: string; scopeId: string; pageId: string };
 export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
   const signedIn = requireUser(ctx);
   const { store } = ctx;
-  /** One scope operation at a time per workspace (moves read and write two trees). */
-  const locks = new Map<string, Promise<unknown>>();
-  const locked = <T>(workspaceId: string, fn: () => Promise<T>): Promise<T> => {
-    const run = (locks.get(workspaceId) ?? Promise.resolve()).then(fn, fn);
-    locks.set(
-      workspaceId,
-      run.catch(() => {}),
-    );
-    return run;
-  };
+  const { sharing } = ctx;
 
   /** The caller's roles in the workspace's scopes (404 for outsiders). */
   async function rolesOf(
@@ -383,74 +372,11 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
       ) {
         return fail(reply, 400, 'invalid', 'No such group.');
       }
-      const { rows: had } = await store.pool.query(
-        'SELECT 1 FROM scope_access WHERE scope_id = $1 AND principal = $2',
-        [scopeId, principal],
-      );
-      await store.scopes.setAccess(scopeId, principal, request.body.role);
+      await sharing.grant(id, scopeId, principal, request.body.role, request.auth!.user.id);
       request.log.info({ workspaceId: id, scopeId, principal, role: request.body.role }, 'access');
-      await ctx.access.changed(id);
-      // Someone added (not a role changed): tell them.
-      if (request.body.role && had.length === 0 && principal.startsWith('user:')) {
-        await ctx.notifier.accessGranted(id, scopeId, request.auth!.user.id, [principal.slice(5)]);
-      }
       return { ok: true };
     },
   );
-
-  /**
-   * Move page `pageId` (in `from`'s tree) with its sub-pages to `to`'s tree. With
-   * `stub`, a stub stays in its place (sharing). Returns false if the page isn't there.
-   */
-  async function movePage(
-    workspaceId: string,
-    page: string,
-    from: Scope,
-    to: Scope,
-    options: { parentId?: string | null; stub?: boolean },
-  ): Promise<boolean> {
-    const load = async (docId: string) => {
-      const doc = new Y.Doc();
-      const state = await store.docState(workspaceId, docId);
-      if (state) Y.applyUpdate(doc, state);
-      return doc;
-    };
-    const source = await load(from.treeDoc);
-    const target = await load(to.treeDoc);
-    const before = [Y.encodeStateVector(source), Y.encodeStateVector(target)] as const;
-    if (subtreeIds(source, page).length === 0) return false;
-    const pages = moveSubtree(source, target, page, {
-      parentId: options.parentId,
-      stubScope: options.stub ? to.id : null,
-    });
-    // The pages' own docs: content (or database) docs, comments, and database rows.
-    const docIds = new Set<string>();
-    for (const id of pages) {
-      docIds.add(id);
-      docIds.add(`comments:${id}`);
-      const doc = await load(id);
-      if (isDatabaseDoc(doc)) {
-        for (const row of readDatabase(doc).rows) {
-          docIds.add(row.id);
-          docIds.add(`comments:${row.id}`);
-        }
-      }
-      doc.destroy();
-    }
-    const seqs = await ctx.realtime.appendFromServer(workspaceId, [
-      { docId: from.treeDoc, data: Y.encodeStateAsUpdate(source, before[0]) },
-      { docId: to.treeDoc, data: Y.encodeStateAsUpdate(target, before[1]) },
-    ]);
-    const moved = await store.scopes.move(
-      workspaceId,
-      [...docIds],
-      from.id,
-      to.id,
-      Math.max(...seqs),
-    );
-    await ctx.access.moved(workspaceId, moved, from.id, to.id);
-    return true;
-  }
 
   // Share a page on its own: it becomes its own scope (inheriting where it was, so
   // nobody loses it), ready for people to be added. Needs full access where it is.
@@ -469,21 +395,9 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
       const found = await scopeWith(request, reply, request.body.scope, 'full');
       if (!found) return reply;
       const from = found.scope;
-      return locked(id, async () => {
-        const created = await store.scopes.create({
-          workspaceId: id,
-          kind: 'shared',
-          name: '',
-          parentId: from.id,
-          inherit: true,
-          access: [],
-        });
-        await ctx.access.changed(id);
-        if (!(await movePage(id, page, from, created, { stub: true }))) {
-          await store.pool.query('DELETE FROM scopes WHERE id = $1', [created.id]);
-          await ctx.access.changed(id);
-          return fail(reply, 404, 'not_found', 'That page isn’t in this scope.');
-        }
+      return sharing.locked(id, async () => {
+        const created = await sharing.sharePage(id, page, from);
+        if (!created) return fail(reply, 404, 'not_found', 'That page isn’t in this scope.');
         return reply.code(201).send({ scope: describe(created, 'full') });
       });
     },
@@ -515,8 +429,8 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
       if (!source) return reply;
       const target = await scopeWith(request, reply, to, 'edit');
       if (!target) return reply;
-      return locked(id, async () => {
-        const ok = await movePage(id, page, source.scope, target.scope, {
+      return sharing.locked(id, async () => {
+        const ok = await sharing.movePage(id, page, source.scope, target.scope, {
           parentId: request.body.parentId ?? null,
         });
         if (!ok) return fail(reply, 404, 'not_found', 'That page isn’t in this scope.');

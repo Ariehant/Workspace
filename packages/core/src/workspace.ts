@@ -72,6 +72,7 @@ function getPageMap(tree: PageTree, id: PageId): PageMap {
  */
 export function readPageMap(page: Y.Map<unknown>): PageMeta {
   const title = page.get(PageField.title);
+  const createdBy = page.get(PageField.createdBy);
   return {
     id: page.get(PageField.id) as string,
     kind: (page.get(PageField.kind) as PageKind | undefined) ?? 'page',
@@ -88,6 +89,8 @@ export function readPageMap(page: Y.Map<unknown>): PageMeta {
     smallText: page.get(PageField.smallText) === true,
     font: (page.get(PageField.font) as PageFont | undefined) ?? 'default',
     locked: page.get(PageField.locked) === true,
+    // Only when known (pages made before Phase 8 N4 don't say).
+    ...(typeof createdBy === 'string' && { createdBy }),
   };
 }
 
@@ -217,6 +220,8 @@ export interface CreatePageOptions {
   /** Position among siblings; defaults to the end. */
   index?: number;
   now?: number;
+  /** Who is making it (a user id). */
+  createdBy?: string | null;
   /**
    * A forest's tree for a top-level page (default: `Forest.primary`). A sub-page goes to
    * its parent's tree.
@@ -259,6 +264,7 @@ export function createPage(tree: PageTree, options: CreatePageOptions = {}): Pag
     page.set(PageField.sortKey, sortKeyAt(siblings, options.index ?? siblings.length));
     page.set(PageField.createdAt, now);
     page.set(PageField.updatedAt, now);
+    if (options.createdBy) page.set(PageField.createdBy, options.createdBy);
     page.set(PageField.trashedAt, null);
     getPagesMap(doc).set(id, page);
   });
@@ -496,6 +502,7 @@ export function duplicatePageTree(
   tree: PageTree,
   id: PageId,
   now = Date.now(),
+  createdBy: string | null = null,
 ): Map<PageId, PageId> {
   const root = getPage(tree, id);
   if (!root) throw new Error(`Page not found: ${id}`);
@@ -510,6 +517,7 @@ export function duplicatePageTree(
         kind: page.kind,
         index,
         now,
+        createdBy,
         tree: root.home,
       });
       const { cover, fullWidth, smallText, font, locked } = page;

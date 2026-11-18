@@ -20,3 +20,4 @@ export * from './zoom';
 export * from './region';
 export * from './slug';
 export * from './image-view';
+export * from './search';

@@ -256,7 +256,7 @@ function MentionView(props: ReactNodeViewProps) {
       >
         <span
           role="link"
-          onClick={() => pageId && !missing && services.navigate(pageId)}
+          onClick={() => pageId && !page?.inTrash && services.navigate(pageId)}
           className={cn('ws-mention-page', missing && 'text-faint')}
         >
           <span className="ws-mention-icon">

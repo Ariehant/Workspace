@@ -243,7 +243,7 @@ export function usePageComments(pageId: PageId | null, role: TreeRole): PageComm
 
 // --- Rendering ----------------------------------------------------------------------------
 
-function timeAgo(ms: number, now = Date.now()): string {
+export function timeAgo(ms: number, now = Date.now()): string {
   const minutes = Math.round((now - ms) / 60_000);
   if (minutes < 1) return 'just now';
   if (minutes < 60) return `${minutes}m ago`;

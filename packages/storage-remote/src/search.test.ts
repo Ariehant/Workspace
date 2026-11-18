@@ -26,6 +26,7 @@ describe('search index', () => {
     expect(toTsQuery("o'brien & | ! :*")).toBe('o:* & brien:*');
     expect(toTsQuery('  ')).toBeNull();
     expect(toTsQuery('Größe 2Nm')).toBe('größe:* & 2nm:*');
+    expect(toTsQuery('Robo arm', true)).toBe('robo:*A & arm:*A');
   });
 
   it('finds pages and rows by title, properties and content, by prefix', async () => {
@@ -50,6 +51,8 @@ describe('search index', () => {
         icon: null,
         databaseId: null,
         snippet: expect.stringContaining('[harmonic]'),
+        createdAt: null,
+        updatedAt: 1,
       },
     ]);
     expect((await s.search(ws.id, 'dynam')).map((h) => [h.id, h.databaseId])).toEqual([
@@ -102,6 +105,59 @@ describe('search index', () => {
     await s.setPages(ws.id, b, [page('pb', 'Beta plan'), page('pa', 'Alpha plan')]);
     await s.setPages(ws.id, a, [page('dba', 'Alpha parts')]);
     expect(await ids('plan', [b])).toEqual(['pa', 'pb']);
+  });
+
+  it("quick find's filters and sorts; an empty query lists what they let through", async () => {
+    const ws = await store.createWorkspace('Filters', null);
+    const s = store.search;
+    const team = await store.scopes.create({
+      workspaceId: ws.id,
+      kind: 'teamspace',
+      name: 'Team',
+      access: [],
+    });
+    const other = await store.scopes.create({
+      workspaceId: ws.id,
+      kind: 'teamspace',
+      name: 'Other',
+      access: [],
+    });
+    await s.setPages(ws.id, team.id, [
+      page('a', 'Arm spec', { createdBy: 'ada', createdAt: 10, updatedAt: 500 }),
+      page('db', 'Parts', { createdBy: 'ada', createdAt: 5 }),
+    ]);
+    await s.setPages(ws.id, other.id, [
+      page('b', 'Notes', { createdBy: 'bob', createdAt: 30, updatedAt: 300 }),
+      page('c', 'Old spec', { createdAt: 20, updatedAt: 50 }),
+    ]);
+    await s.setBody(ws.id, 'b', 'the spec of the gripper');
+    await s.setRows(ws.id, 'db', team.id, [
+      {
+        ...page('r1', 'Spec sheet', { createdBy: 'bob', createdAt: 40, updatedAt: 400 }),
+        props: '',
+      },
+    ]);
+    const ids = async (q: string, o = {}, limit = 20) =>
+      (await s.search(ws.id, q, limit, null, o)).map((h) => h.id);
+    const sorted = async (q: string, o = {}) => (await ids(q, o)).sort();
+
+    expect(await sorted('spec')).toEqual(['a', 'b', 'c', 'r1']);
+    expect(await sorted('spec', { titlesOnly: true })).toEqual(['a', 'c', 'r1']);
+    // A tree: its scope's pages, and the rows of its databases.
+    expect(await sorted('spec', { trees: [team.treeDoc] })).toEqual(['a', 'r1']);
+    expect(await sorted('spec', { editedAfter: 350 })).toEqual(['a', 'r1']);
+    expect(await sorted('spec', { createdBy: 'bob' })).toEqual(['b', 'r1']);
+    expect(await ids('spec', { sort: 'edited' })).toEqual(['a', 'r1', 'b', 'c']);
+    expect(await ids('spec', { sort: 'created' })).toEqual(['r1', 'b', 'c', 'a']);
+    expect(await ids('spec', { sort: 'edited' }, 2)).toEqual(['a', 'r1']);
+    expect(await ids('', { trees: [other.treeDoc], sort: 'edited' })).toEqual(['b', 'c']);
+    expect(await ids('')).toEqual([]);
+    // Still only what the person may read.
+    expect((await s.search(ws.id, 'spec', 20, [other.id], { trees: [team.treeDoc] })).length).toBe(
+      0,
+    );
+    const [hit] = await s.search(ws.id, 'arm');
+    expect([hit!.createdAt, hit!.updatedAt]).toEqual([10, 500]);
   });
 
   it('tracks how far into the log the index is', async () => {

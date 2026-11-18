@@ -1,11 +1,33 @@
 import type pg from 'pg';
 
+/** Quick find's filters and sorting (the same shape as `SearchOptions` in `@workspace/core`). */
+export interface SearchFilters {
+  titlesOnly?: boolean;
+  /** Page trees (each scope's `tree_doc`). */
+  trees?: string[];
+  editedAfter?: number;
+  createdBy?: string;
+  sort?: 'relevance' | 'edited' | 'created';
+}
+
+const hasFilters = (o: SearchFilters) =>
+  Boolean(
+    o.titlesOnly ||
+    o.trees?.length ||
+    o.editedAfter !== undefined ||
+    o.createdBy ||
+    (o.sort && o.sort !== 'relevance'),
+  );
+
 export interface IndexedPage {
   id: string;
   title: string;
   icon: string | null;
   inTrash: boolean;
   updatedAt: number;
+  createdAt?: number;
+  /** Who made it, when known. */
+  createdBy?: string | null;
 }
 
 export interface IndexedRow extends IndexedPage {
@@ -21,15 +43,20 @@ export interface SearchHit {
   databaseId: string | null;
   /** The matching excerpt, hits wrapped in `[` `]` (like the desktop's quick find). */
   snippet: string;
+  createdAt: number | null;
+  updatedAt: number;
 }
 
-/** Turn typed text into a prefix query on every word (`robo arm` → `robo:* & arm:*`). */
-export function toTsQuery(input: string): string | null {
+/**
+ * Turn typed text into a prefix query on every word (`robo arm` → `robo:* & arm:*`). With
+ * `titlesOnly`, each word must be in the title (weight A: `robo:*A`).
+ */
+export function toTsQuery(input: string, titlesOnly = false): string | null {
   const words = input.toLowerCase().match(/[\p{L}\p{N}_]+/gu);
   if (!words) return null;
   return words
     .slice(0, 20)
-    .map((w) => `${w}:*`)
+    .map((w) => `${w}:*${titlesOnly ? 'A' : ''}`)
     .join(' & ');
 }
 
@@ -86,13 +113,16 @@ export class SearchIndex {
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO search_index (workspace_id, id, kind, database_id, title, icon, in_trash, updated_at, scope_id)
-         SELECT $1, id, 'page', NULL, title, icon, in_trash, updated_at, $7
-         FROM unnest($2::text[], $3::text[], $4::text[], $5::boolean[], $6::bigint[])
-           AS t(id, title, icon, in_trash, updated_at)
+        `INSERT INTO search_index (workspace_id, id, kind, database_id, title, icon, in_trash, updated_at, scope_id,
+           created_at, created_by)
+         SELECT $1, id, 'page', NULL, title, icon, in_trash, updated_at, $7, created_at, created_by
+         FROM unnest($2::text[], $3::text[], $4::text[], $5::boolean[], $6::bigint[], $8::bigint[],
+           $9::text[])
+           AS t(id, title, icon, in_trash, updated_at, created_at, created_by)
          ON CONFLICT (workspace_id, id) DO UPDATE SET kind = 'page', database_id = NULL,
            title = excluded.title, icon = excluded.icon, in_trash = excluded.in_trash,
-           updated_at = excluded.updated_at, scope_id = excluded.scope_id`,
+           updated_at = excluded.updated_at, scope_id = excluded.scope_id,
+           created_at = excluded.created_at, created_by = excluded.created_by`,
         [
           workspaceId,
           pages.map((p) => p.id),
@@ -101,6 +131,8 @@ export class SearchIndex {
           pages.map((p) => p.inTrash),
           pages.map((p) => Math.round(p.updatedAt)),
           scopeId,
+          pages.map((p) => (p.createdAt === undefined ? null : Math.round(p.createdAt))),
+          pages.map((p) => p.createdBy ?? null),
         ],
       );
       await client.query(
@@ -129,14 +161,17 @@ export class SearchIndex {
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO search_index (workspace_id, id, kind, database_id, title, icon, props, in_trash, updated_at, scope_id)
-         SELECT $1, id, 'row', $2, title, icon, props, in_trash, updated_at, $9
-         FROM unnest($3::text[], $4::text[], $5::text[], $6::text[], $7::boolean[], $8::bigint[])
-           AS t(id, title, icon, props, in_trash, updated_at)
+        `INSERT INTO search_index (workspace_id, id, kind, database_id, title, icon, props, in_trash, updated_at, scope_id,
+           created_at, created_by)
+         SELECT $1, id, 'row', $2, title, icon, props, in_trash, updated_at, $9, created_at, created_by
+         FROM unnest($3::text[], $4::text[], $5::text[], $6::text[], $7::boolean[], $8::bigint[],
+           $10::bigint[], $11::text[])
+           AS t(id, title, icon, props, in_trash, updated_at, created_at, created_by)
          ON CONFLICT (workspace_id, id) DO UPDATE SET kind = 'row', database_id = $2,
            title = excluded.title, icon = excluded.icon, props = excluded.props,
            in_trash = excluded.in_trash, updated_at = excluded.updated_at,
-           scope_id = excluded.scope_id`,
+           scope_id = excluded.scope_id, created_at = excluded.created_at,
+           created_by = excluded.created_by`,
         [
           workspaceId,
           databaseId,
@@ -147,6 +182,8 @@ export class SearchIndex {
           rows.map((r) => r.inTrash),
           rows.map((r) => Math.round(r.updatedAt)),
           scopeId,
+          rows.map((r) => (r.createdAt === undefined ? null : Math.round(r.createdAt))),
+          rows.map((r) => r.createdBy ?? null),
         ],
       );
       await client.query(
@@ -174,37 +211,74 @@ export class SearchIndex {
 
   /**
    * Pages and rows matching every word (by prefix), best first; trash left out. With
-   * `scopes`, only pages and rows in those scopes (what the person may read).
+   * `scopes`, only pages and rows in those scopes (what the person may read). Quick find's
+   * filters and sorting are `options`; with an empty query and a filter or sort, the pages
+   * that match are listed (no snippet).
    */
   async search(
     workspaceId: string,
     text: string,
     limit = 20,
     scopes: readonly string[] | null = null,
+    options: SearchFilters = {},
   ): Promise<SearchHit[]> {
-    const query = toTsQuery(text);
-    if (!query) return [];
+    const query = toTsQuery(text, options.titlesOnly);
+    const listing = !query && !text.trim() && hasFilters(options);
+    if (!query && !listing) return [];
+    const params: unknown[] = [workspaceId, query ?? '', limit, scopes];
+    const where = [
+      's.workspace_id = $1',
+      's.kind IS NOT NULL',
+      'NOT s.in_trash',
+      '($4::uuid[] IS NULL OR s.scope_id = ANY($4::uuid[]))',
+      `NOT EXISTS (
+         SELECT 1 FROM search_index d
+         WHERE d.workspace_id = s.workspace_id AND d.id = s.database_id AND d.in_trash
+       )`,
+    ];
+    if (query) where.push('s.tsv @@ q');
+    if (options.trees?.length) {
+      params.push(options.trees);
+      where.push(`s.scope_id IN (
+        SELECT id FROM scopes WHERE workspace_id = $1 AND tree_doc = ANY($${params.length}::text[])
+      )`);
+    }
+    if (options.editedAfter !== undefined) {
+      params.push(Math.round(options.editedAfter));
+      where.push(`s.updated_at >= $${params.length}`);
+    }
+    if (options.createdBy) {
+      params.push(options.createdBy);
+      where.push(`s.created_by = $${params.length}`);
+    }
+    const order =
+      options.sort === 'edited'
+        ? 's.updated_at DESC'
+        : options.sort === 'created'
+          ? 's.created_at DESC NULLS LAST, s.updated_at DESC'
+          : query
+            ? 'ts_rank(s.tsv, q) DESC, s.updated_at DESC'
+            : 's.updated_at DESC';
+    const snippet = query
+      ? `ts_headline('simple', concat_ws(' ', s.title, nullif(s.props, ''), nullif(left(s.body, 100000), '')), q,
+           'StartSel=[, StopSel=], MaxWords=14, MinWords=6, MaxFragments=1, FragmentDelimiter=…')`
+      : "''";
     const { rows } = await this.pool.query<{
       id: string;
       title: string;
       icon: string | null;
       database_id: string | null;
       snippet: string;
+      created_at: string | null;
+      updated_at: string;
     }>(
-      `SELECT s.id, s.title, s.icon, s.database_id,
-         ts_headline('simple', concat_ws(' ', s.title, nullif(s.props, ''), nullif(left(s.body, 100000), '')), q,
-           'StartSel=[, StopSel=], MaxWords=14, MinWords=6, MaxFragments=1, FragmentDelimiter=…')
-           AS snippet
-       FROM search_index s, to_tsquery('simple', $2) q
-       WHERE s.workspace_id = $1 AND s.kind IS NOT NULL AND NOT s.in_trash AND s.tsv @@ q
-         AND ($4::uuid[] IS NULL OR s.scope_id = ANY($4::uuid[]))
-         AND NOT EXISTS (
-           SELECT 1 FROM search_index d
-           WHERE d.workspace_id = s.workspace_id AND d.id = s.database_id AND d.in_trash
-         )
-       ORDER BY ts_rank(s.tsv, q) DESC, s.updated_at DESC
+      `SELECT s.id, s.title, s.icon, s.database_id, s.created_at, s.updated_at,
+         ${snippet} AS snippet
+       FROM search_index s, (SELECT CASE WHEN $2 = '' THEN NULL ELSE to_tsquery('simple', $2) END AS q) t
+       WHERE ${where.join(' AND ')}
+       ORDER BY ${order}
        LIMIT $3`,
-      [workspaceId, query, limit, scopes],
+      params,
     );
     return rows.map((r) => ({
       id: r.id,
@@ -212,6 +286,8 @@ export class SearchIndex {
       icon: r.icon,
       databaseId: r.database_id,
       snippet: r.snippet,
+      createdAt: r.created_at === null ? null : Number(r.created_at),
+      updatedAt: Number(r.updated_at),
     }));
   }
 
@@ -229,6 +305,33 @@ export class SearchIndex {
     );
     const row = rows[0];
     return row ? { databaseId: row.kind === 'row' ? row.database_id : null } : null;
+  }
+
+  /**
+   * What the index knows of a page or row, whoever asks (for access requests: the scope it's
+   * in, never shown to someone who can't read it).
+   */
+  async entry(
+    workspaceId: string,
+    id: string,
+  ): Promise<{ scopeId: string | null; databaseId: string | null; title: string } | null> {
+    const { rows } = await this.pool.query<{
+      kind: string;
+      database_id: string | null;
+      scope_id: string | null;
+      title: string;
+    }>(
+      `SELECT kind, database_id, scope_id, title FROM search_index
+       WHERE workspace_id = $1 AND id = $2 AND kind IS NOT NULL`,
+      [workspaceId, id],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      scopeId: row.scope_id,
+      databaseId: row.kind === 'row' ? row.database_id : null,
+      title: row.title,
+    };
   }
 
   /** Forget a workspace's index (to rebuild it). */

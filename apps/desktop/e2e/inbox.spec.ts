@@ -182,7 +182,7 @@ test('a mention: Bob’s inbox counts it, the system shows it, and it opens the 
   );
   await shot(B, 'inbox-1-bob-mentioned');
   await inboxItems(B)
-    .getByRole('button', { name: /^Open: mention/ })
+    .getByRole('button', { name: /mentioned you in Gearbox/ })
     .click();
   await expect(B.getByLabel('Page title')).toHaveValue('Gearbox');
   await expect(editor(B).getByTestId('mention')).toHaveText('@Bob');
@@ -213,7 +213,7 @@ test('a comment reaches Ada, who follows the page; the inbox opens its thread', 
   await expect(inboxItems(A).getByTestId('inbox-text')).toHaveText('Done: 64:1 is fine.');
   await shot(A, 'inbox-2-ada-comment');
   await inboxItems(A)
-    .getByRole('button', { name: /^Open: comment/ })
+    .getByRole('button', { name: /commented in Gearbox/ })
     .click();
   await expect(A.getByLabel('Page title')).toHaveValue('Gearbox');
   const thread = A.getByTestId('comments-panel').getByTestId('comment-thread');

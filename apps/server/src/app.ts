@@ -17,12 +17,14 @@ import type { FileStorage } from './files';
 import { smtpMailer, type Mailer } from './mailer';
 import { inviteRoutes, memberRoutes } from './members/routes';
 import { scopeRoutes } from './scopes/routes';
+import { Sharing } from './scopes/sharing';
 import { MembersDoc } from './members/members-doc';
 import { HistoryKeeper, type HistoryOptions } from './history/keeper';
 import { Notifier } from './notify/notifier';
 import { pageRoutes } from './publish/routes';
 import { Site, siteRoutes } from './publish/site';
 import { notificationRoutes } from './notify/routes';
+import { accessRequestRoutes } from './access-requests/routes';
 import { Indexer } from './search/indexer';
 import { JobRunner, type JobRunnerOptions } from './jobs/runner';
 import { Automations, type AutomationOptions } from './automations/runner';
@@ -174,10 +176,12 @@ export function buildServer({
     docs: new DocEditor(store, access, realtime),
     members: new MembersDoc({ store, append: realtime.appendFromServer }),
     mailer: mailer === undefined ? smtpMailer(config) : mailer,
-    // Made just below: it needs the context.
+    // Made just below: they need the context.
+    sharing: null as unknown as Sharing,
     automations: null as unknown as Automations,
     webhooks: null as unknown as WebhookEvents,
   };
+  ctx.sharing = new Sharing(ctx);
   ctx.automations = new Automations(ctx, {
     ...automationOptions,
     onError: (error, workspaceId) =>
@@ -274,6 +278,7 @@ export function buildServer({
     inviteRoutes(scope, ctx);
     scopeRoutes(scope, ctx);
     notificationRoutes(scope, ctx);
+    accessRequestRoutes(scope, ctx);
     pageRoutes(scope, ctx, site, history);
     siteRoutes(scope, ctx, site);
     formRoutes(scope, ctx);

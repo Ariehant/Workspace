@@ -117,6 +117,17 @@ test('sign up, create a workspace, write a page and a database, reload', async (
   await shot(page, 'web-5-quick-find');
   await find.getByLabel('Search pages').fill('servo');
   await expect(find.getByTestId('quick-find-result').first()).toContainText('Servo motor');
+  // Filters go to the server: "parallel" is only in the Gripper page's content, and the
+  // pages made by the person signed in are listed with nothing typed.
+  await find.getByLabel('Search pages').fill('parallel');
+  await expect(find.getByTestId('quick-find-result').first()).toContainText('Gripper');
+  await find.getByRole('button', { name: 'Titles only' }).click();
+  await expect(find).toContainText('No results');
+  await find.getByRole('button', { name: 'Titles only' }).click();
+  await find.getByLabel('Search pages').fill('');
+  await find.getByRole('button', { name: 'Created by: Anyone' }).click();
+  await page.getByRole('menuitemradio', { name: 'Ada' }).click();
+  await expect(find.getByTestId('quick-find-result').filter({ hasText: 'Gripper' })).toHaveCount(1);
   await page.keyboard.press('Escape');
 });
 

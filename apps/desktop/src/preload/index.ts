@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { SearchOptions } from '@workspace/core';
 import {
   IPC,
   type ExportRequest,
@@ -55,9 +56,18 @@ const api = {
   },
   search: (
     query: string,
+    options?: SearchOptions,
   ): Promise<
-    { id: string; title: string; icon: string | null; databaseId: string | null; snippet: string }[]
-  > => ipcRenderer.invoke(IPC.search, query),
+    {
+      id: string;
+      title: string;
+      icon: string | null;
+      databaseId: string | null;
+      snippet: string;
+      createdAt: number;
+      updatedAt: number;
+    }[]
+  > => ipcRenderer.invoke(IPC.search, query, options),
   locatePage: (id: string): Promise<{ databaseId: string | null } | null> =>
     ipcRenderer.invoke(IPC.pageLocate, id),
   user: (): Promise<{ id: string; name: string }> => ipcRenderer.invoke(IPC.user),

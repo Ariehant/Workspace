@@ -75,6 +75,11 @@ export function applyTemplate(
   workspace: PageTree,
   bundle: PageBundle,
   parentId: PageId | null = null,
+  createdBy: string | null = null,
 ): Promise<PageId> {
-  return instantiateBundle(bundle, workspace, { parentId, withDoc: clientDocs(client) });
+  return instantiateBundle(bundle, workspace, {
+    parentId,
+    withDoc: clientDocs(client),
+    createdBy,
+  });
 }

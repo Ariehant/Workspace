@@ -12,7 +12,12 @@ import type {
   ScopeInfo,
   UnsplashPhoto,
 } from '@workspace/app';
-import { parseNotification, type NotificationData, type PresenceHandlers } from '@workspace/core';
+import {
+  parseNotification,
+  searchOptionsToParams,
+  type NotificationData,
+  type PresenceHandlers,
+} from '@workspace/core';
 import { PartialClient } from '@workspace/sync';
 import { ApiError, api, type Me } from './api';
 import { OfflineDocs, type OfflineStore } from './offline';
@@ -254,13 +259,16 @@ export function createWebPlatform(options: {
     openWindow: (pageId) => {
       window.open(`/w/${workspace.id}#page=${encodeURIComponent(pageId)}`, '_blank', 'noopener');
     },
-    search: async (query) =>
-      (
+    search: async (query, options = {}) => {
+      const params = new URLSearchParams({ q: query.slice(0, 200) });
+      searchOptionsToParams(options, params);
+      return (
         await api<{ results: Awaited<ReturnType<Platform['search']>> }>(
           'GET',
-          `/api/workspaces/${workspace.id}/search?q=${encodeURIComponent(query.slice(0, 200))}`,
+          `/api/workspaces/${workspace.id}/search?${params.toString()}`,
         )
-      ).results,
+      ).results;
+    },
     locatePage: async (id) => {
       try {
         return await api<{ databaseId: string | null }>(

@@ -117,6 +117,8 @@ export class Indexer {
                 icon: p.icon,
                 inTrash: isInTrash(doc, p.id),
                 updatedAt: p.updatedAt,
+                createdAt: p.createdAt,
+                createdBy: p.createdBy ?? null,
               })),
             );
           } else if (isDatabaseDoc(doc)) {
@@ -133,6 +135,8 @@ export class Indexer {
                 // Templates aren't search results (as on the desktop).
                 inTrash: row.trashedAt !== null || row.isTemplate,
                 updatedAt: row.updatedAt,
+                createdAt: row.createdAt,
+                createdBy: row.createdBy,
                 props: rowPropertiesText(row, db.properties, { users: users! }),
               })),
             );

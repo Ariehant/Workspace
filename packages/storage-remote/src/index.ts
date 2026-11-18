@@ -5,6 +5,7 @@ export * from './search';
 export * from './teams';
 export * from './scopes';
 export * from './notifications';
+export * from './access-requests';
 export * from './pages';
 export * from './jobs';
 export * from './forms';

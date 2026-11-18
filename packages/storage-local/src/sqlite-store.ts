@@ -1,4 +1,5 @@
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
+import { hasSearchFilters, type SearchOptions } from '@workspace/core';
 
 /**
  * Local persistence for one workspace, in a single SQLite file.
@@ -142,6 +143,12 @@ export const MIGRATIONS: string[] = [
     WHERE database_id IS NOT NULL;
   DROP TABLE temp.fts_ids;
   `,
+  // 8: quick find's filters (Phase 8 N4): the page tree a page lives in and who made it.
+  // A database row's tree is its database's.
+  `
+  ALTER TABLE pages ADD COLUMN tree_id TEXT;
+  ALTER TABLE pages ADD COLUMN created_by TEXT;
+  `,
 ];
 
 /** Settings that belong to this device's sync (never exported to a backup). */
@@ -185,6 +192,10 @@ export interface PageIndexRow {
   inTrash: boolean;
   createdAt: number;
   updatedAt: number;
+  /** The page tree it lives in, in a forest. */
+  treeId?: string | null;
+  /** Who made it, when known. */
+  createdBy?: string | null;
 }
 
 /** A database row in the page index. */
@@ -196,6 +207,7 @@ export interface RowIndexRow {
   inTrash: boolean;
   createdAt: number;
   updatedAt: number;
+  createdBy?: string | null;
   /** Text of the row's properties, searchable. */
   props: string;
 }
@@ -212,6 +224,8 @@ interface StoredEntry {
   created_at: number;
   updated_at: number;
   props?: string;
+  tree_id: string | null;
+  created_by: string | null;
 }
 
 export interface FileRecord {
@@ -239,6 +253,8 @@ export interface SearchResult {
   databaseId: string | null;
   /** Matching excerpt with hits wrapped in `[` `]`. */
   snippet: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /** Block id prefix of reminders set on date properties (not in page content). */
@@ -432,14 +448,14 @@ export class SqliteStore {
         (
           this.stmt(
             `SELECT id, fts_rowid, parent_id, title, icon, sort_key, in_trash, created_at,
-                      updated_at
+                      updated_at, tree_id, created_by
                FROM pages WHERE database_id IS NULL`,
           ).all() as unknown as StoredEntry[]
         ).map((r) => [r.id, r]),
       );
       const update = this.stmt(`
         UPDATE pages SET parent_id = ?, title = ?, icon = ?, sort_key = ?, in_trash = ?,
-          created_at = ?, updated_at = ?
+          created_at = ?, updated_at = ?, tree_id = ?, created_by = ?
         WHERE id = ?
       `);
       for (const row of rows) {
@@ -458,7 +474,9 @@ export class SqliteStore {
           old.sort_key !== row.sortKey ||
           old.in_trash !== inTrash ||
           old.created_at !== row.createdAt ||
-          old.updated_at !== row.updatedAt
+          old.updated_at !== row.updatedAt ||
+          old.tree_id !== (row.treeId ?? null) ||
+          old.created_by !== (row.createdBy ?? null)
         ) {
           update.run(
             row.parentId,
@@ -468,6 +486,8 @@ export class SqliteStore {
             inTrash,
             row.createdAt,
             row.updatedAt,
+            row.treeId ?? null,
+            row.createdBy ?? null,
             row.id,
           );
         }
@@ -492,7 +512,7 @@ export class SqliteStore {
         (
           this.stmt(
             `SELECT id, fts_rowid, parent_id, title, icon, sort_key, in_trash, created_at,
-                      updated_at, props
+                      updated_at, props, tree_id, created_by
                FROM pages WHERE database_id = ?`,
           ).all(databaseId) as unknown as StoredEntry[]
         ).map((r) => [r.id, r]),
@@ -523,7 +543,7 @@ export class SqliteStore {
     this.transaction(() => {
       const get = this.stmt(
         `SELECT id, database_id, fts_rowid, parent_id, title, icon, sort_key, in_trash,
-                created_at, updated_at, props
+                created_at, updated_at, props, tree_id, created_by
          FROM pages WHERE id = ?`,
       );
       for (const row of changed) {
@@ -560,11 +580,12 @@ export class SqliteStore {
       old.in_trash !== inTrash ||
       old.created_at !== row.createdAt ||
       old.updated_at !== row.updatedAt ||
-      old.props !== row.props
+      old.props !== row.props ||
+      old.created_by !== (row.createdBy ?? null)
     ) {
       this.stmt(
         `UPDATE pages SET title = ?, icon = ?, sort_key = ?, in_trash = ?, created_at = ?,
-             updated_at = ?, props = ?
+             updated_at = ?, props = ?, created_by = ?
            WHERE id = ?`,
       ).run(
         row.title,
@@ -574,6 +595,7 @@ export class SqliteStore {
         row.createdAt,
         row.updatedAt,
         row.props,
+        row.createdBy ?? null,
         row.id,
       );
     }
@@ -630,14 +652,15 @@ export class SqliteStore {
     this.stmt(
       `INSERT INTO pages
            (id, parent_id, database_id, title, icon, sort_key, in_trash, created_at, updated_at,
-            props, fts_rowid)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            props, fts_rowid, tree_id, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET
            parent_id = excluded.parent_id, database_id = excluded.database_id,
            title = excluded.title, icon = excluded.icon, sort_key = excluded.sort_key,
            in_trash = excluded.in_trash, created_at = excluded.created_at,
            updated_at = excluded.updated_at, props = excluded.props,
-           fts_rowid = excluded.fts_rowid`,
+           fts_rowid = excluded.fts_rowid, tree_id = excluded.tree_id,
+           created_by = excluded.created_by`,
     ).run(
       id,
       parentId,
@@ -650,6 +673,8 @@ export class SqliteStore {
       row.updatedAt,
       props,
       ftsRowid,
+      row.treeId ?? null,
+      row.createdBy ?? null,
     );
   }
 
@@ -862,19 +887,62 @@ export class SqliteStore {
     if (rowid !== null) this.stmt('UPDATE page_fts SET body = ? WHERE rowid = ?').run(body, rowid);
   }
 
-  search(query: string, limit = 20): SearchResult[] {
+  /**
+   * Full-text search, with quick find's filters and sorting. With an empty query and a filter
+   * or sort, lists the pages that match (no snippet).
+   */
+  search(query: string, options: SearchOptions = {}): SearchResult[] {
+    const limit = options.limit ?? 20;
     const fts = toFtsQuery(query);
-    if (!fts) return [];
-    const rows = this.stmt(
-      `SELECT p.id, p.title, p.icon, p.database_id AS databaseId,
-                snippet(page_fts, -1, '[', ']', '…', 12) AS snippet
-         FROM page_fts
-         JOIN pages p ON p.id = page_fts.page_id
-         LEFT JOIN pages d ON d.id = p.database_id
-         WHERE page_fts MATCH ? AND p.in_trash = 0 AND COALESCE(d.in_trash, 0) = 0
-         ORDER BY bm25(page_fts, 0, 10.0, 1.0, 2.0)
-         LIMIT ?`,
-    ).all(fts, limit) as unknown as SearchResult[];
+    const where = ['p.in_trash = 0', 'COALESCE(d.in_trash, 0) = 0'];
+    const params: (string | number)[] = [];
+    if (options.trees?.length) {
+      // A row is in its database's tree.
+      where.push(`COALESCE(p.tree_id, d.tree_id) IN (${options.trees.map(() => '?').join(', ')})`);
+      params.push(...options.trees);
+    }
+    if (options.editedAfter !== undefined) {
+      where.push('p.updated_at >= ?');
+      params.push(options.editedAfter);
+    }
+    if (options.createdBy) {
+      where.push('p.created_by = ?');
+      params.push(options.createdBy);
+    }
+    const order =
+      options.sort === 'edited'
+        ? 'p.updated_at DESC'
+        : options.sort === 'created'
+          ? 'p.created_at DESC'
+          : fts
+            ? 'bm25(page_fts, 0, 10.0, 1.0, 2.0)'
+            : 'p.updated_at DESC';
+    const columns = `p.id, p.title, p.icon, p.database_id AS databaseId,
+        p.created_at AS createdAt, p.updated_at AS updatedAt`;
+    let rows: SearchResult[];
+    if (fts) {
+      // Titles only: the match is limited to the title column.
+      const match = options.titlesOnly ? `title : (${fts})` : fts;
+      rows = this.stmt(
+        `SELECT ${columns}, snippet(page_fts, -1, '[', ']', '…', 12) AS snippet
+           FROM page_fts
+           JOIN pages p ON p.id = page_fts.page_id
+           LEFT JOIN pages d ON d.id = p.database_id
+           WHERE page_fts MATCH ? AND ${where.join(' AND ')}
+           ORDER BY ${order}
+           LIMIT ?`,
+      ).all(match, ...params, limit) as unknown as SearchResult[];
+    } else {
+      if (query.trim() || !hasSearchFilters(options)) return [];
+      rows = this.stmt(
+        `SELECT ${columns}, '' AS snippet
+           FROM pages p
+           LEFT JOIN pages d ON d.id = p.database_id
+           WHERE ${where.join(' AND ')}
+           ORDER BY ${order}
+           LIMIT ?`,
+      ).all(...params, limit) as unknown as SearchResult[];
+    }
     return rows.map((r) => ({ ...r }));
   }
 

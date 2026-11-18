@@ -67,7 +67,7 @@ milestones below; the others wait for a decision, by number.
 
 | #   | Notion feature                                                                                                                                                                                                                                              | What it's for (how you use it)                                                            | Effort         | Suggest      |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------- | ------------ |
-| 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅           |
+| 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅ Done (N4) |
 | 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | 🤔           |
 | 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | 🤔           |
 | 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | 🤔           |
@@ -80,7 +80,7 @@ milestones below; the others wait for a decision, by number.
 
 | #   | Notion feature                                                                                          | What it's for (how you use it)                                                            | Effort                     | Suggest                        |
 | --- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------- | ------------------------------ |
-| 33  | **Request access** (someone without access clicks "Request", the owner gets it in the inbox, approves)  | Today they just see "no access" and must ask the owner outside the app.                   | S–M                        | ✅                             |
+| 33  | **Request access** (someone without access clicks "Request", the owner gets it in the inbox, approves)  | Today they just see "no access" and must ask the owner outside the app.                   | S–M                        | ✅ Done (N4)                   |
 | 34  | **Share link for anyone with the link** (view/comment/edit, optionally with expiry), without publishing | Send a page to a client without making it public on the web.                              | M                          | 🤔                             |
 | 35  | **Published sites: custom domain**, site theme/nav bar, "Allow duplicate as template"                   | `notes.yourcompany.com` instead of the server address; let visitors copy a template page. | L (domain) / S (duplicate) | 🤔                             |
 | 36  | **Admin tools**: audit log, admin content search, disable export/download, SAML SSO, SCIM user sync     | Company security and compliance. We already have OIDC single sign-on.                     | M–L each                   | ❌ (unless a company needs it) |
@@ -435,3 +435,91 @@ click landing on the toggle's arrow) was wrong; moving the click didn't help.
   the second run.
 - **The web suite:** 6 passed. Formatting, lint, types, unit tests and the web, server and
   desktop builds pass.
+
+## N4: Quick find filters, request access
+
+### N4a: Quick find filters and sorting (#25)
+
+**Built:**
+
+- **Filters under the search field:** Titles only (a toggle), In (a sidebar section, when
+  there's more than one), Edited (today, past 7 days, past 30 days, past year), Created by
+  (server workspaces) and Sort (best match, last edited, created), with Clear filters. Each is
+  a menu, so they work from the keyboard. With a filter and nothing typed, quick find lists
+  what the filter lets through. Each result says when it was last edited.
+- **In the index:** `search(query, options)` (`SearchOptions` in `packages/core/src/search.ts`,
+  cleaned the same way from IPC and from query parameters). The filters are applied where the
+  limit is, so 20 results are 20 that match.
+  - **Desktop:** two columns in the SQLite index (migration 8): the page tree a page lives in
+    and who made it. A row is in its database's tree. Titles only matches the full-text
+    `title` column.
+  - **Server:** `created_at` and `created_by` in `search_index` (migration 15). A section's
+    trees map to their scopes, still limited to the ones the person can read. Titles only
+    matches the title's weight (`word:*A`).
+  - **A section** is every tree it shows: its own, and those of pages shared into it.
+- **Who made a page:** `PageMeta.createdBy`, set where pages are made (new pages, sub-pages,
+  databases, duplicates, templates, and the API, as the integration). Rows always had it. Pages
+  made before N4 don't say, so a "Created by" filter doesn't list them. The API's pages now
+  give their `created_by`.
+
+### N4b: Request access (#33)
+
+**Built:**
+
+- **A screen for a page you can't open** (`packages/app/src/no-access.tsx`): links, mentions,
+  page links and notifications to a page that isn't here open it, where before nothing
+  happened. The server says only whether the page exists and whether you asked
+  (`GET /api/workspaces/:id/pages/:pageId/access`), never its title. A page made a moment ago
+  may not be in the server's index yet, so "doesn't exist" looks again a few times.
+- **Asking:** the access (view, comment, edit) and a message. One pending request per person
+  and page, 20 an hour, for members and guests. A database row is asked for as its database
+  (a row can't be shared on its own).
+- **Who's told:** everyone with full access where the page is, else the workspace's owners
+  and admins: a `request` notification (live, in the inbox, in desktop notifications and in
+  email digests). Its key is the request's, so when one of them answers, the others' are
+  marked read.
+- **Answering:** Share (with the access asked for, or another) or Decline, from the inbox item
+  or from a "Requests" list in the page's share dialog. Sharing splits the page into its own
+  scope, as the share dialog does, unless it already is one, then grants the role; the
+  existing "shared with you" notification tells the requester, and their screen turns into
+  the page. A declined request shows on the screen next time; they can ask again.
+- **On the server:** `access_requests` (migration 15) and its store
+  (`packages/storage-remote/src/access-requests.ts`), the routes in
+  `apps/server/src/access-requests/routes.ts`, and the desktop's proxy allows them. Sharing a
+  page and granting access moved from the scope routes into `apps/server/src/scopes/sharing.ts`,
+  used by both.
+
+**Found on the way:**
+
+- **"Shared " with no title:** the notification for a page shared on its own used its scope's
+  name, which such a scope doesn't have. It uses the page's title now.
+- **The inbox's accessibility** (found once the a11y test's inbox had an item): each item's
+  button had a label that didn't contain its visible text, and the unread dot had a label but
+  no role. The button is named by what it shows now, and the dot is an image.
+- **Quick find's chips:** accent text on its tint, and the faint grey on a selected row in the
+  dark theme, were under 4.5:1; they use the usual text colours.
+
+**Tests:**
+
+- **Unit:**
+  - desktop index: each filter, both sorts, titles only, the limit, listing with an empty query
+  - server index: the same against Postgres, still limited to readable scopes
+  - search options: cleaned from untrusted input, through query parameters and back, the
+    "Edited" ranges
+  - who made a page, and a duplicate's
+- **Server:**
+  - `search.test.ts`: the search route's filter parameters, and refusing bad ones
+  - `access-requests.test.ts`: what the asker learns (not the title), outsiders refused, once
+    while pending, who's told and with what, only full access answers, sharing (the role
+    given, the requester told and able to read it), declining and asking again, a row asked for
+    as its database, the hourly limit
+- **Desktop E2E:**
+  - `navigation.spec.ts`: titles only, sort by created, the keyboard, Edited with nothing typed,
+    Clear filters
+  - `request-access.spec.ts` (new, two desktops): Bob clicks a mention of Ada's private page,
+    asks to edit with a message; Ada shares it from her inbox; Bob's screen becomes the page and
+    his inbox says so. A link to another page; Ada declines from the share dialog; Bob sees it
+    and may ask again.
+  - `a11y.spec.ts`: quick find with a filter menu open and filtered, a page that doesn't exist,
+    and an inbox with a request, in both themes
+- **Web E2E:** quick find's Titles only and Created by on the server's search.

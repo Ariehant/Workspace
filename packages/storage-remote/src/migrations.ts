@@ -552,6 +552,34 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX notifications_to_email ON notifications (user_id)
     WHERE read_at IS NULL AND archived_at IS NULL AND emailed_at IS NULL;
   `,
+  // 15: Phase 8 N4. Quick find's filters: when each indexed page was made, and by whom.
+  // Requests for access to a page (one pending per person and page), and their
+  // notifications to the people who can share it.
+  `
+  ALTER TABLE search_index ADD COLUMN created_at bigint;
+  ALTER TABLE search_index ADD COLUMN created_by text;
+
+  CREATE TABLE access_requests (
+    id uuid PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    page_id text NOT NULL,
+    requester_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+    role text NOT NULL CHECK (role IN ('view', 'comment', 'edit')),
+    message text NOT NULL DEFAULT '',
+    status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    decided_by uuid REFERENCES users ON DELETE SET NULL,
+    decided_at timestamptz
+  );
+  CREATE UNIQUE INDEX access_requests_pending ON access_requests (workspace_id, page_id, requester_id)
+    WHERE status = 'pending';
+  CREATE INDEX access_requests_requester ON access_requests (requester_id, created_at);
+
+  ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
+  ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
+    CHECK (kind IN ('mention', 'comment', 'reply', 'reminder', 'access', 'form', 'automation',
+      'request'));
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

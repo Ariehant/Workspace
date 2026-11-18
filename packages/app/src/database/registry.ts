@@ -213,7 +213,7 @@ export class DatabaseRegistry {
 export async function createDatabase(
   client: DocClient,
   workspace: PageTree,
-  options: { parentId: PageId | null; title?: string },
+  options: { parentId: PageId | null; title?: string; createdBy?: string | null },
 ): Promise<PageId> {
   const id = createPage(workspace, { ...options, kind: 'database' });
   await setUpDatabaseDoc(client, id);

@@ -13,6 +13,7 @@ import {
 } from '@workspace/core';
 import {
   Avatar,
+  Button,
   IconButton,
   Menu,
   MenuContent,
@@ -28,6 +29,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useApp } from './context';
 import { useDisplayContext } from './database/hooks';
 import type { NotificationsPlatform, TeamPlatform } from './platform';
+import {
+  REQUESTED_ROLES,
+  SCOPE_ROLE_LABELS,
+  type AccessRequestInfo,
+  type RequestedRole,
+} from './team';
 
 export type InboxFilter = 'all' | 'mentions' | 'unread' | 'archived';
 const FILTERS: { id: InboxFilter; label: string }[] = [
@@ -45,6 +52,7 @@ const KIND_LABELS: Record<NotificationKind, string> = {
   access: 'Pages shared with you',
   form: 'Responses to your forms',
   automation: 'Automations',
+  request: 'Requests for access',
 };
 
 /** The server's notification endpoints (through the host's team API). */
@@ -183,8 +191,78 @@ function Headline({ n, actor, page }: { n: NotificationData; actor: string; page
           Automation <span className="font-medium">{n.title}</span>
         </>
       );
+    case 'request':
+      return (
+        <>
+          {who} requested access to {where}
+        </>
+      );
   }
 }
+
+/**
+ * A request for access, answered from the inbox (Phase 8 N4): Share (with the access asked
+ * for, or another) or Decline. Once someone has answered, it says so.
+ */
+function RequestActions({ requestId }: { requestId: string }) {
+  const { team } = useApp();
+  const { users } = useDisplayContext();
+  const [request, setRequest] = useState<AccessRequestInfo | null>(null);
+  const [role, setRole] = useState<RequestedRole | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    team?.accessRequest(requestId).then(
+      (r) => active && setRequest(r.request),
+      // Someone without full access any more: no buttons.
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [team, requestId]);
+  if (!team || !request) return null;
+  const answer = (approve: boolean) =>
+    (approve
+      ? team.approveRequest(request.id, role ?? request.role)
+      : team.declineRequest(request.id)
+    ).then(
+      (r) => setRequest(r.request),
+      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
+  if (request.status !== 'pending') {
+    const by = request.decidedBy ? (users.get(request.decidedBy) ?? 'Someone') : 'Someone';
+    return (
+      <p className="pl-8 text-xs text-muted" data-testid="request-answer">
+        {request.status === 'approved' ? `Shared by ${by}` : `Declined by ${by}`}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 pl-8 text-sm" data-testid="request-actions">
+      <select
+        aria-label="Access to give"
+        value={role ?? request.role}
+        onChange={(e) => setRole(e.target.value as RequestedRole)}
+        className="h-7 rounded border border-line bg-surface px-1 text-xs"
+      >
+        {REQUESTED_ROLES.map((r) => (
+          <option key={r} value={r}>
+            {SCOPE_ROLE_LABELS[r]}
+          </option>
+        ))}
+      </select>
+      <Button variant="primary" onClick={() => void answer(true)}>
+        Share
+      </Button>
+      <Button onClick={() => void answer(false)}>Decline</Button>
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </div>
+  );
+}
+
+const requestIdOf = (n: NotificationData) =>
+  n.kind === 'request' && n.key?.startsWith('request:') ? n.key.slice('request:'.length) : null;
 
 function Item({
   n,
@@ -208,14 +286,9 @@ function Item({
       data-testid="inbox-item"
       data-kind={n.kind}
       data-unread={unread || undefined}
-      className="group/item relative flex gap-2.5 rounded-md px-2 py-2 hover:bg-hover"
+      className="group/item relative flex flex-wrap gap-2.5 rounded-md px-2 py-2 hover:bg-hover"
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex min-w-0 flex-1 gap-2.5 text-left"
-        aria-label={`Open: ${n.kind} ${page}`}
-      >
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 gap-2.5 text-left">
         {n.actorId ? (
           <Avatar id={n.actorId} name={actor} src={avatars?.get(n.actorId)} size={24} />
         ) : (
@@ -237,6 +310,7 @@ function Item({
       </button>
       {unread && (
         <span
+          role="img"
           aria-label="Unread"
           className="mt-2 size-2 shrink-0 rounded-full bg-accent group-hover/item:hidden"
         />
@@ -257,6 +331,11 @@ function Item({
           {n.archivedAt === null ? <Archive size={14} /> : <ArchiveRestore size={14} />}
         </IconButton>
       </span>
+      {requestIdOf(n) && (
+        <div className="basis-full">
+          <RequestActions requestId={requestIdOf(n)!} />
+        </div>
+      )}
     </li>
   );
 }

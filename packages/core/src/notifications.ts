@@ -9,10 +9,12 @@ import { mentionsIn, type ThreadData } from './comments';
 
 /**
  * `form`: a response to a form whose maker asked to be told; `automation`: an
- * automation's "send notification", or a problem with one (Phase 6).
+ * automation's "send notification", or a problem with one (Phase 6); `request`: someone
+ * asks for access to a page this person can share (Phase 8 N4; `key` is
+ * `request:<request id>`).
  */
 export type NotificationKind =
-  'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form' | 'automation';
+  'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form' | 'automation' | 'request';
 export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'mention',
   'comment',
@@ -21,6 +23,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'access',
   'form',
   'automation',
+  'request',
 ];
 
 /** A notification as clients get it (over the socket, and from the list endpoint). */

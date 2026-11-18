@@ -41,6 +41,12 @@ const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [/^notifications(\?filter=(all|mentions|unread|archived)(&before=\d{1,16})?)?$/, ['GET']],
   [/^notifications\/(read|archive)$/, ['POST']],
   [/^pages\/[\w-]{1,128}\/follow$/, ['GET', 'PUT']],
+  // Requests for access (Phase 8 N4): asking, and answering.
+  [/^pages\/[\w-]{1,128}\/access$/, ['GET']],
+  [/^pages\/[\w-]{1,128}\/access-requests$/, ['POST']],
+  [/^access-requests(\?pageId=[\w-]{1,128})?$/, ['GET']],
+  [new RegExp(`^access-requests/${UUID}$`), ['GET']],
+  [new RegExp(`^access-requests/${UUID}/(approve|decline)$`), ['POST']],
   // Publishing and views (Phase 5 M7).
   [/^pages\/[\w-]{1,128}\/publish$/, ['GET', 'PUT', 'DELETE']],
   [/^pages\/[\w-]{1,128}\/analytics$/, ['GET']],

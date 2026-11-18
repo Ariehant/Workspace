@@ -8,6 +8,7 @@ import { IntegrationWebhooks } from './webhooks';
 import { Jobs } from './jobs';
 import { migrate } from './migrations';
 import { SearchIndex } from './search';
+import { AccessRequests } from './access-requests';
 import { Notifications } from './notifications';
 import { Pages } from './pages';
 import { Scopes } from './scopes';
@@ -64,6 +65,7 @@ export class PgStore {
   readonly teams: Teams;
   readonly scopes: Scopes;
   readonly notifications: Notifications;
+  readonly accessRequests: AccessRequests;
   readonly pages: Pages;
   readonly jobs: Jobs;
   readonly formLinks: FormLinks;
@@ -80,6 +82,7 @@ export class PgStore {
     this.teams = new Teams(this.pool);
     this.scopes = new Scopes(this.pool);
     this.notifications = new Notifications(this.pool);
+    this.accessRequests = new AccessRequests(this.pool);
     this.pages = new Pages(this.pool);
     this.jobs = new Jobs(this.pool);
     this.formLinks = new FormLinks(this.pool);

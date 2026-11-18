@@ -18,8 +18,9 @@ export async function duplicatePage(
   client: DocClient,
   workspace: PageTree,
   id: PageId,
+  createdBy: string | null = null,
 ): Promise<PageId> {
-  const mapping = duplicatePageTree(workspace, id);
+  const mapping = duplicatePageTree(workspace, id, Date.now(), createdBy);
   for (const [fromId, toId] of mapping) {
     if (getPage(workspace, fromId)?.kind === 'database') {
       const rows = await withDocs(client, [fromId, toId], ([from, to]) =>

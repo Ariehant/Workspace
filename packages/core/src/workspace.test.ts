@@ -174,3 +174,15 @@ describe('merging edits from two devices', () => {
     expect(titles(buildPageTree(listPages(a)))).toEqual(['Child']);
   });
 });
+
+describe('who made a page', () => {
+  it('is recorded when given, and copied pages are the copier’s', () => {
+    const doc = new Y.Doc();
+    const a = createPage(doc, { title: 'Spec', createdBy: 'ada' });
+    const b = createPage(doc, { title: 'Old' });
+    expect(getPage(doc, a)!.createdBy).toBe('ada');
+    expect(getPage(doc, b)!.createdBy).toBeUndefined();
+    const copy = duplicatePageTree(doc, a, 5, 'bob').get(a)!;
+    expect(getPage(doc, copy)!.createdBy).toBe('bob');
+  });
+});

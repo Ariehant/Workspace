@@ -1,7 +1,7 @@
 import type pg from 'pg';
 
 export type NotificationKindName =
-  'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form' | 'automation';
+  'mention' | 'comment' | 'reply' | 'reminder' | 'access' | 'form' | 'automation' | 'request';
 
 export interface NewNotification {
   workspaceId: string;
@@ -177,6 +177,15 @@ export class Notifications {
       `UPDATE notifications SET read_at = CASE WHEN $4 THEN coalesce(read_at, now()) ELSE NULL END
        WHERE workspace_id = $1 AND user_id = $2 AND ($3::uuid[] IS NULL OR id = ANY($3::uuid[]))`,
       [workspaceId, userId, ids, read],
+    );
+  }
+
+  /** Mark everyone's notifications with this key read (a request someone else answered). */
+  async readByKey(workspaceId: string, key: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE notifications SET read_at = now()
+       WHERE workspace_id = $1 AND key = $2 AND read_at IS NULL`,
+      [workspaceId, key],
     );
   }
 

@@ -44,6 +44,11 @@ export interface PageMeta {
   sortKey: string;
   createdAt: number;
   updatedAt: number;
+  /**
+   * Who made the page (a user id), when known: pages made before Phase 8 N4 don't say. Database
+   * rows have it too (the same field).
+   */
+  createdBy?: string | null;
   /** When the page itself was moved to the trash, or `null`. */
   trashedAt: number | null;
   cover: PageCover | null;
@@ -94,6 +99,7 @@ export const PageField = {
   sortKey: 'sortKey',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
+  createdBy: 'createdBy',
   trashedAt: 'trashedAt',
   cover: 'cover',
   fullWidth: 'fullWidth',

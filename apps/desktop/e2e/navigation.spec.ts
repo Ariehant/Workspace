@@ -176,6 +176,56 @@ test('quick find: recent pages, search in content, open', async ({ launch }) => 
   await expect(dialog).toContainText('No results');
 });
 
+test('quick find filters: titles only, sort, edited, and listing without a query', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newPage(window, 'Spec arm', 'Joint limits.');
+  await newPage(window, 'Notes', 'The spec of the arm.');
+  await newPage(window, 'Zeta spec');
+  await waitForIndexed(window, 'joint');
+  await waitForIndexed(window, 'zeta');
+
+  await window.keyboard.press('Control+k');
+  const dialog = window.getByTestId('quick-find');
+  const results = dialog.getByTestId('quick-find-result');
+  const filters = dialog.getByTestId('quick-find-filters');
+  await window.keyboard.type('spec');
+  await expect(results).toHaveCount(3);
+
+  // Titles only: not "Notes", whose content says it.
+  const titlesOnly = filters.getByRole('button', { name: 'Titles only' });
+  await titlesOnly.click();
+  await expect(titlesOnly).toHaveAttribute('aria-pressed', 'true');
+  await expect(results).toHaveCount(2);
+  await expect(dialog).toContainText('Results');
+
+  // Newest first.
+  await filters.getByRole('button', { name: 'Sort: Best match' }).click();
+  await window.getByRole('menuitemradio', { name: 'Created' }).click();
+  await expect(results.first()).toContainText('Zeta spec');
+  await expect(results.nth(1)).toContainText('Spec arm');
+  await expect(results.first().getByTestId('quick-find-edited')).toHaveText(/just now|ago/);
+
+  // The keyboard still moves through the results and opens one.
+  await dialog.getByLabel('Search pages').focus();
+  await window.keyboard.press('ArrowDown');
+  await window.keyboard.press('Enter');
+  await expect(dialog).toHaveCount(0);
+  await expect(title(window)).toHaveValue('Spec arm');
+
+  // With nothing typed, a filter lists what it lets through.
+  await window.keyboard.press('Control+k');
+  await filters.getByRole('button', { name: 'Edited: Any time' }).click();
+  await window.getByRole('menuitemradio', { name: 'Today' }).click();
+  await expect(filters.getByRole('button', { name: 'Edited: Today' })).toBeVisible();
+  await expect(results.filter({ hasText: 'Notes' })).toHaveCount(1);
+  await expect(results).toHaveCount(4);
+  await filters.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(filters.getByRole('button', { name: 'Edited: Any time' })).toBeVisible();
+  await expect(dialog).toContainText('Recent');
+});
+
 test('back and forward history', async ({ launch }) => {
   const { window } = await launch();
   for (const name of ['One', 'Two', 'Three']) await newPage(window, name);

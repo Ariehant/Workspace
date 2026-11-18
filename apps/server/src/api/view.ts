@@ -341,7 +341,7 @@ export class ApiView {
       id: found.id,
       createdAt: meta.createdAt,
       updatedAt: meta.updatedAt,
-      createdBy: null,
+      createdBy: meta.createdBy ?? null,
       updatedBy: null,
       icon: meta.icon,
       cover: meta.cover,

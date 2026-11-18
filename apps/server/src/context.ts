@@ -10,6 +10,7 @@ import type { MembersDoc } from './members/members-doc';
 import type { HistoryKeeper } from './history/keeper';
 import type { JobRunner } from './jobs/runner';
 import type { Notifier } from './notify/notifier';
+import type { Sharing } from './scopes/sharing';
 import type { Indexer } from './search/indexer';
 import type { WebhookEvents } from './webhooks/integration-events';
 
@@ -50,6 +51,8 @@ export interface ServerContext {
   webhooks: WebhookEvents;
   /** Who may read and write which docs (scopes, roles, placements). */
   access: AccessService;
+  /** Sharing pages and granting access (scope routes, access requests). */
+  sharing: Sharing;
   realtime: Realtime;
   /** Edits to docs made by the server for someone (forms, automations, the API). */
   docs: DocEditor;

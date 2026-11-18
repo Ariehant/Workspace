@@ -60,7 +60,7 @@ const platform: Platform = {
   onCommand: (listener) => api.onCommand((command) => listener(command as AppCommand)),
   onNavigate: (listener) => api.onNavigate(listener),
   openWindow: (pageId) => api.openWindow(pageId),
-  search: (query) => api.search(query),
+  search: (query, options) => api.search(query, options),
   locatePage: (id) => api.locatePage(id),
   getUser: () => api.user(),
   ready: api.ready,

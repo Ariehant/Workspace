@@ -201,8 +201,9 @@ export class Notifier {
     const access = await this.access.workspace(workspaceId);
     const scope = access.scope(scopeId);
     if (!scope) return;
-    // A shared page: its tree's top page.
+    // A shared page: its tree's top page (and its title: such a scope has no name).
     let pageId: string | null = null;
+    let title = scope.name;
     if (scope.kind !== 'teamspace') {
       const state = await this.store.docState(workspaceId, scope.treeDoc);
       if (state) {
@@ -210,7 +211,9 @@ export class Notifier {
         Y.applyUpdate(tree, state);
         const pages = listPages(tree);
         const ids = new Set(pages.map((p) => p.id));
-        pageId = pages.find((p) => !p.parentId || !ids.has(p.parentId))?.id ?? null;
+        const top = pages.find((p) => !p.parentId || !ids.has(p.parentId));
+        pageId = top?.id ?? null;
+        if (!title) title = top?.title || 'Untitled';
         tree.destroy();
       }
     }
@@ -221,10 +224,36 @@ export class Notifier {
         userId,
         kind: 'access',
         pageId,
-        title: scope.name,
+        title,
         actorId,
-        text: scope.kind === 'teamspace' ? `Added you to ${scope.name}` : `Shared ${scope.name}`,
+        text: scope.kind === 'teamspace' ? `Added you to ${title}` : `Shared ${title}`,
         docId: scope.treeDoc,
+      });
+    }
+  }
+
+  /**
+   * Someone asked for access to a page (Phase 8 N4): each person who can share it is told.
+   * Its key is the request's, so an answer from one of them can mark them all read.
+   */
+  async accessRequested(
+    workspaceId: string,
+    request: { id: string; pageId: string; requesterId: string; message: string },
+    title: string,
+    approverIds: readonly string[],
+  ): Promise<void> {
+    const access = await this.access.workspace(workspaceId);
+    for (const userId of approverIds) {
+      await this.notify(access, {
+        workspaceId,
+        userId,
+        kind: 'request',
+        pageId: request.pageId,
+        title,
+        actorId: request.requesterId,
+        text: request.message,
+        docId: request.pageId,
+        key: `request:${request.id}`,
       });
     }
   }

@@ -18,7 +18,7 @@ function PageLinkView({ node, selected }: ReactNodeViewProps) {
         type="button"
         contentEditable={false}
         data-testid="page-link"
-        onClick={() => pageId && !missing && services.navigate(pageId)}
+        onClick={() => pageId && !page?.inTrash && services.navigate(pageId)}
         className={cn(
           'ws-page-link flex w-full items-center gap-1.5 rounded px-0.5 py-1 text-left hover:bg-hover',
           selected && 'bg-hover',

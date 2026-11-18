@@ -47,6 +47,7 @@ import { DatabaseRegistry } from './database/registry';
 import { useRegistryVersion } from './database/hooks';
 import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
+import { NoAccess } from './no-access';
 import { PageDirectory } from './pages';
 import { useForest } from './forest';
 import { PresenceHub, usePageViewers } from './presence';
@@ -302,6 +303,16 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     databaseId: string;
     mode: Exclude<OpenPagesIn, 'fullPage'>;
   } | null>(null);
+  /**
+   * A page asked for that isn't here (no access, or gone): the no-access screen. `n` counts
+   * the times it was asked for, so asking again looks again.
+   */
+  const [missingPage, setMissingPage] = useState<{ id: PageId; n: number } | null>(null);
+  const missing = missingPage?.id ?? null;
+  const setMissing = useCallback(
+    (id: PageId | null) => setMissingPage((m) => (id ? { id, n: (m?.n ?? 0) + 1 } : null)),
+    [],
+  );
   const appliedTheme = useAppliedTheme(theme);
 
   // Fall back to the first page when the remembered one no longer exists.
@@ -357,9 +368,10 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
         setTabs((prev) => updateActiveTab(prev, (h) => pushHistory(h, id)));
       }
       setPeek(null);
+      setMissing(null);
       show(id);
     },
-    [show, newTabIntent, scroll],
+    [show, newTabIntent, scroll, setMissing],
   );
 
   const tabPage = useCallback(
@@ -401,29 +413,15 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   );
 
   const blockNonce = useRef(0);
-  const navigation = useMemo<Navigation>(
-    () => ({
-      navigate,
-      openRow: (rowId, databaseId, mode) => {
-        if (mode === 'fullPage') navigate(rowId);
-        else setPeek({ rowId, databaseId, mode });
-      },
-      navigateToBlock: (pageId, blockId) => {
-        navigate(pageId);
-        if (blockId) setBlockTarget({ pageId, blockId, nonce: ++blockNonce.current });
-      },
-    }),
-    [navigate],
-  );
-
   const go = useCallback(
     (direction: -1 | 1) => {
       const next = stepHistory(history, direction, exists);
       if (!next) return;
       setHistory(next);
+      setMissing(null);
       show(next.entries[next.index]!);
     },
-    [history, exists, show, setHistory],
+    [history, exists, show, setHistory, setMissing],
   );
 
   const onboarding = useRef(false);
@@ -446,7 +444,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     (parentId: PageId | null, tree?: string) => {
       let id: PageId;
       try {
-        id = createPage(workspace, { parentId, tree });
+        id = createPage(workspace, { parentId, tree, createdBy: user.id });
       } catch (error) {
         // No section this person can add pages to.
         console.error('Could not create the page', error);
@@ -454,7 +452,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       }
       navigate(id);
     },
-    [workspace, navigate],
+    [workspace, navigate, user.id],
   );
 
   const toggle = useCallback((id: PageId) => {
@@ -470,11 +468,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
 
   const duplicate = useCallback(
     (id: PageId) => {
-      duplicatePage(client, workspace, id).then(navigate, (error: unknown) =>
+      duplicatePage(client, workspace, id, user.id).then(navigate, (error: unknown) =>
         console.error('Failed to duplicate page', error),
       );
     },
-    [client, workspace, navigate],
+    [client, workspace, navigate, user.id],
   );
 
   const saveTemplate = useCallback(
@@ -676,12 +674,31 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
         if (blockId) setBlockTarget({ pageId, blockId, nonce: ++nonce.current });
       };
       if (exists(pageId)) go();
-      // A row: find and load its database first.
-      else void databases.locate(pageId).then((databaseId) => databaseId && go());
+      // A row: find and load its database first. Neither: it can't be opened (here).
+      else
+        void databases
+          .locate(pageId)
+          .then((databaseId) => (databaseId ? go() : setMissing(pageId)));
     },
-    [exists, navigate, databases],
+    [exists, navigate, databases, setMissing],
   );
   useEffect(() => platform.onNavigate(showPage), [platform, showPage]);
+
+  const navigation = useMemo<Navigation>(
+    () => ({
+      // A page that isn't here: a row to look up, or one this person can't open.
+      navigate: (id) => (exists(id) ? navigate(id) : showPage(id, null)),
+      openRow: (rowId, databaseId, mode) => {
+        if (mode === 'fullPage') navigate(rowId);
+        else setPeek({ rowId, databaseId, mode });
+      },
+      navigateToBlock: (pageId, blockId) => {
+        navigate(pageId);
+        if (blockId) setBlockTarget({ pageId, blockId, nonce: ++blockNonce.current });
+      },
+    }),
+    [navigate, exists, showPage],
+  );
 
   // A notification (the inbox's, or a system one clicked): its page, at its block or thread.
   const openNotification = useCallback(
@@ -710,7 +727,14 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     onGo: go,
   };
 
-  const content = !currentPageId ? (
+  const content = missing ? (
+    <NoAccess
+      key={`${missing}:${missingPage?.n}`}
+      pageId={missing}
+      version={version}
+      onFound={() => showPage(missing, null)}
+    />
+  ) : !currentPageId ? (
     <EmptyState onCreate={() => create(null)} />
   ) : getPage(workspace, currentPageId) ? (
     <PageView
@@ -940,6 +964,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             workspace={workspace}
             platform={platform}
             recent={recent}
+            sections={sections}
+            shared={scoped}
             onOpen={navigate}
             onOpenInWindow={(id) => platform.openWindow(id)}
             onClose={() => setFinding(false)}

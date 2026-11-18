@@ -12,6 +12,8 @@ import { sectionName } from './scope-actions';
 import { AccessRow, usePrincipals } from './teamspace-dialogs';
 import {
   SCOPE_ROLE_LABELS,
+  type AccessRequestInfo,
+  type RequestedRole,
   type IntegrationInfo,
   type ScopeDetails,
   type ScopeRole,
@@ -23,6 +25,11 @@ const select =
   'h-8 rounded-md border border-line bg-surface px-1.5 text-sm text-fg outline-none focus:border-accent disabled:opacity-60';
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const ROLES: ScopeRole[] = ['full', 'edit', 'comment', 'view'];
+const REQUEST_VERBS: Record<RequestedRole, string> = {
+  view: 'view',
+  comment: 'comment',
+  edit: 'edit',
+};
 /** A database also offers "can edit content" (its rows, not its properties or views). */
 const DATABASE_ROLES: ScopeRole[] = ['full', 'edit', 'content', 'comment', 'view'];
 
@@ -119,6 +126,27 @@ export function ShareDialog({
 
   const everyone = own?.access?.find((e) => e.principal === 'workspace')?.role ?? null;
 
+  // Requests for access to this page (Phase 8 N4), for people who can share it.
+  const [requests, setRequests] = useState<AccessRequestInfo[]>([]);
+  const loadRequests = useCallback(
+    () =>
+      team.accessRequests(pageId).then(
+        (r) => setRequests(r.requests),
+        () => setRequests([]),
+      ),
+    [team, pageId],
+  );
+  useEffect(() => {
+    if (canShare) void loadRequests();
+  }, [canShare, loadRequests]);
+  const answer = (request: AccessRequestInfo, approve: boolean) =>
+    act(async () => {
+      await (approve
+        ? team.approveRequest(request.id, request.role)
+        : team.declineRequest(request.id));
+      await loadRequests();
+    });
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -135,6 +163,40 @@ export function ShareDialog({
             </p>
           ) : (
             <>
+              {canShare && requests.length > 0 && (
+                <section aria-label="Requests" data-testid="share-requests" className="text-sm">
+                  <h3 className="mb-1 text-xs font-medium text-muted">Requests</h3>
+                  <ul className="flex flex-col gap-1">
+                    {requests.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex flex-wrap items-center gap-2 rounded-md bg-hover/50 px-2 py-1.5"
+                        data-testid="share-request"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="font-medium">
+                            {describe(`user:${r.requesterId}`).name}
+                          </span>{' '}
+                          <span className="text-muted">
+                            asks to {REQUEST_VERBS[r.role]}
+                            {r.message ? `: “${r.message}”` : ''}
+                          </span>
+                        </span>
+                        <Button
+                          variant="primary"
+                          disabled={busy}
+                          onClick={() => void answer(r, true)}
+                        >
+                          Share
+                        </Button>
+                        <Button disabled={busy} onClick={() => void answer(r, false)}>
+                          Decline
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               {canShare ? (
                 <form
                   className="flex gap-2"

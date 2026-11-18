@@ -73,7 +73,13 @@ function loadDoc(bundle: PageBundle, id: string): Y.Doc {
 export async function instantiateBundle(
   bundle: PageBundle,
   workspace: PageTree,
-  options: { parentId: PageId | null; withDoc: WithDoc; now?: number },
+  options: {
+    parentId: PageId | null;
+    withDoc: WithDoc;
+    now?: number;
+    /** Who is adding it (each page's creator). */
+    createdBy?: string | null;
+  },
 ): Promise<PageId> {
   const now = options.now ?? Date.now();
   const byParent = new Map<PageId | null, PageMeta[]>();
@@ -90,6 +96,7 @@ export async function instantiateBundle(
         icon: page.icon,
         kind: page.kind,
         now,
+        createdBy: options.createdBy ?? null,
       });
       const { cover, fullWidth, smallText, font, locked } = page;
       setPageOptions(workspace, id, { cover, fullWidth, smallText, font, locked }, now);

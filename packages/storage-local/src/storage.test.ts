@@ -172,6 +172,59 @@ describe('DocManager', () => {
     store.close();
   });
 
+  it("searches with quick find's filters and sorts, and lists pages with an empty query", () => {
+    const store = new SqliteStore(dbPath);
+    const page = (id: string, title: string, extra: Record<string, unknown>) => ({
+      id,
+      parentId: null,
+      title,
+      icon: null,
+      sortKey: id,
+      inTrash: false,
+      createdAt: 100,
+      updatedAt: 100,
+      ...extra,
+    });
+    store.syncPageIndex([
+      page('a', 'Arm spec', { treeId: 't1', createdBy: 'ada', createdAt: 10, updatedAt: 500 }),
+      page('b', 'Notes', { treeId: 't2', createdBy: 'bob', createdAt: 30, updatedAt: 300 }),
+      page('c', 'Old spec', { treeId: 't2', createdAt: 20, updatedAt: 50 }),
+      page('db', 'Parts', { treeId: 't1', createdBy: 'ada' }),
+    ]);
+    store.setPageBody('b', 'the spec of the gripper');
+    store.syncRowIndex('db', [
+      {
+        id: 'r1',
+        title: 'Spec sheet',
+        icon: null,
+        sortKey: 'a',
+        inTrash: false,
+        createdAt: 40,
+        updatedAt: 400,
+        createdBy: 'bob',
+        props: '',
+      },
+    ]);
+    const ids = (q: string, o = {}) => store.search(q, o).map((r) => r.id);
+
+    expect(ids('spec').sort()).toEqual(['a', 'b', 'c', 'r1']);
+    // Titles only: not "b", whose content says it.
+    expect(ids('spec', { titlesOnly: true }).sort()).toEqual(['a', 'c', 'r1']);
+    // A tree: a row is in its database's.
+    expect(ids('spec', { trees: ['t1'] }).sort()).toEqual(['a', 'r1']);
+    expect(ids('spec', { editedAfter: 350 }).sort()).toEqual(['a', 'r1']);
+    expect(ids('spec', { createdBy: 'bob' }).sort()).toEqual(['b', 'r1']);
+    expect(ids('spec', { sort: 'edited' })).toEqual(['a', 'r1', 'b', 'c']);
+    expect(ids('spec', { sort: 'created' })).toEqual(['r1', 'b', 'c', 'a']);
+    expect(ids('spec', { limit: 2, sort: 'edited' })).toEqual(['a', 'r1']);
+    // An empty query lists what the filters let through; with none, nothing.
+    expect(ids('', { trees: ['t2'], sort: 'edited' })).toEqual(['b', 'c']);
+    expect(ids('')).toEqual([]);
+    const hit = store.search('arm')[0]!;
+    expect([hit.createdAt, hit.updatedAt]).toEqual([10, 500]);
+    store.close();
+  });
+
   it('stamps updatedAt when page content changes, without echoing to the editor', () => {
     const store = new SqliteStore(dbPath);
     const manager = new DocManager(store);

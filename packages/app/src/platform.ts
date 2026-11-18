@@ -1,4 +1,10 @@
-import type { DocTransport, NotificationData, NotificationKind, User } from '@workspace/core';
+import type {
+  DocTransport,
+  NotificationData,
+  NotificationKind,
+  SearchOptions,
+  User,
+} from '@workspace/core';
 import type { FileRef, LinkPreview } from '@workspace/editor';
 import type { ThemePreference } from '@workspace/ui';
 
@@ -23,6 +29,8 @@ export interface SearchHit {
   databaseId: string | null;
   /** Matching excerpt with hits wrapped in `[` `]`. */
   snippet: string;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 /**
@@ -44,8 +52,8 @@ export interface Platform {
   onNavigate(listener: (pageId: string, blockId: string | null) => void): () => void;
   /** Open a page in a new window. */
   openWindow(pageId: string): void;
-  /** Full-text search over page titles and content. */
-  search(query: string): Promise<SearchHit[]>;
+  /** Full-text search over page titles and content, with quick find's filters and sorting. */
+  search(query: string, options?: SearchOptions): Promise<SearchHit[]>;
   /**
    * Where a page lives, from the index: `databaseId` null for a workspace page, the
    * database for a row; `null` when unknown.

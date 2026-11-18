@@ -198,6 +198,8 @@ function describe(n: StoredNotification, actor: string): string {
       return `New response to ${title}`;
     case 'automation':
       return `${n.title}: ${n.text}`;
+    case 'request':
+      return `${actor} requested access to ${title}`;
   }
 }
 

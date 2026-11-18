@@ -717,6 +717,7 @@ export class DocManager {
           inTrash: row.trashedAt !== null || row.isTemplate,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
+          createdBy: row.createdBy,
           props: rowPropertiesText(row, db.properties, { users }),
         };
         this.rowEntries.set(row, entry);
@@ -794,6 +795,8 @@ export class DocManager {
       inTrash: isInTrash(this.forest, page.id),
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
+      treeId: page.tree ?? null,
+      createdBy: page.createdBy ?? null,
     }));
     this.store.syncPageIndex(rows);
   }
