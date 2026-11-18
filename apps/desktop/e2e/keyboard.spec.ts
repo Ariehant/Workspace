@@ -241,3 +241,80 @@ test('share a page with the keyboard only', async () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('Notion’s shortcuts: move, duplicate, turn into, last colour, to-dos, and app keys', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await window.getByRole('button', { name: 'New page' }).click();
+  await window.getByLabel('Page title').fill('Shortcuts');
+  await window.getByLabel('Page title').press('Enter');
+  await expect(editor(window)).toBeFocused();
+  for (const line of ['One', 'Two', 'Three']) {
+    await window.keyboard.type(line);
+    if (line !== 'Three') await window.keyboard.press('Enter');
+  }
+  const blocks = editor(window).locator(':scope > *');
+
+  // Move the block up and down, duplicate it.
+  await window.keyboard.press('Control+Shift+ArrowUp');
+  await expect(blocks).toHaveText(['One', 'Three', 'Two']);
+  await window.keyboard.press('Control+Shift+ArrowUp');
+  await window.keyboard.press('Control+Shift+ArrowUp');
+  await expect(blocks).toHaveText(['Three', 'One', 'Two']);
+  await window.keyboard.press('Control+Shift+ArrowDown');
+  await expect(blocks).toHaveText(['One', 'Three', 'Two']);
+  await window.keyboard.press('Control+d');
+  await expect(blocks).toHaveText(['One', 'Three', 'Three', 'Two']);
+
+  // Turn into: a heading, a to-do (Ctrl+Enter checks it), text. (Straight after a click:
+  // the shortcut reads where it put the cursor.)
+  await blocks.nth(2).click();
+  await window.keyboard.press('Control+Alt+2');
+  await expect(blocks.nth(2)).toHaveJSProperty('tagName', 'H2');
+  await window.keyboard.press('Control+Alt+4');
+  const todo = editor(window).locator('ul[data-type="taskList"] > li');
+  await expect(todo).toContainText('Three');
+  await window.keyboard.press('Control+Enter');
+  await expect(todo).toHaveAttribute('data-checked', 'true');
+  await window.keyboard.press('Control+Alt+0');
+  await expect(todo).toHaveCount(0);
+  await expect(blocks).toHaveText(['One', 'Three', 'Three', 'Two']);
+
+  // The colour used last, on another block.
+  await window.keyboard.press('End');
+  await window.keyboard.type(' /blue background');
+  await window.keyboard.press('Enter');
+  await expect(blocks.nth(2)).toHaveAttribute('data-color', 'blue_background');
+  await blocks.first().click();
+  await window.keyboard.press('Control+Shift+h');
+  await expect(blocks.first()).toHaveAttribute('data-color', 'blue_background');
+
+  // A sub-page here (Ctrl+Alt+9), up to its parent, back and forward.
+  await blocks.last().click();
+  await window.keyboard.press('End');
+  await window.keyboard.press('Enter');
+  await window.keyboard.press('Control+Alt+9');
+  await expect(window.getByLabel('Page title')).toHaveValue('');
+  await window.getByLabel('Page title').fill('Child');
+  await window.keyboard.press('Control+Shift+u');
+  await expect(window.getByLabel('Page title')).toHaveValue('Shortcuts');
+  await expect(editor(window).getByTestId('page-link')).toContainText('Child');
+  await window.keyboard.press('Control+[');
+  await expect(window.getByLabel('Page title')).toHaveValue('Child');
+  await window.keyboard.press('Control+]');
+  await expect(window.getByLabel('Page title')).toHaveValue('Shortcuts');
+
+  // Dark mode, and the list of shortcuts.
+  const theme = () => window.evaluate(() => document.documentElement.dataset.theme);
+  const before = await theme();
+  await window.keyboard.press('Control+Shift+l');
+  await expect.poll(theme).toBe(before === 'dark' ? 'light' : 'dark');
+  await window.keyboard.press('Control+Shift+l');
+  await expect.poll(theme).toBe(before);
+  await window.keyboard.press('Control+Shift+/');
+  const dialog = window.getByTestId('shortcuts-dialog');
+  await expect(dialog).toContainText('Ctrl+Shift+↑ / ↓');
+  await window.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+});

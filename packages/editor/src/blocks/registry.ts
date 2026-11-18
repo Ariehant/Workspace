@@ -37,11 +37,22 @@ import {
 } from 'lucide-react';
 import { insertBlockEquation, insertInlineEquation } from '../nodes/math';
 import type { ToggleLevel } from '../nodes/toggle';
+import { actionBlocks } from './actions';
 import { replaceCurrentBlock } from './commands';
 import { newId } from '@workspace/core';
 import { createSyncedDoc } from '../nodes/synced-block';
 
-export type BlockGroup = 'basic' | 'database' | 'media' | 'advanced' | 'layout' | 'inline';
+export type BlockGroup =
+  | 'basic'
+  | 'database'
+  | 'media'
+  | 'advanced'
+  | 'layout'
+  | 'inline'
+  | 'properties'
+  | 'actions'
+  | 'color'
+  | 'turnInto';
 
 export const BLOCK_GROUP_LABELS: Record<BlockGroup, string> = {
   basic: 'Basic blocks',
@@ -50,6 +61,10 @@ export const BLOCK_GROUP_LABELS: Record<BlockGroup, string> = {
   advanced: 'Advanced blocks',
   layout: 'Layout',
   inline: 'Inline',
+  properties: 'Page properties',
+  actions: 'Actions',
+  color: 'Color',
+  turnInto: 'Turn into',
 };
 
 /** Values gathered by `prepare` (e.g. a picked page) and passed to `apply`. */
@@ -80,6 +95,14 @@ export interface BlockDefinition {
   /** Runs after `apply`, e.g. to open an editor for the new block. */
   after?(editor: Editor, args: BlockArgs): void;
   isActive(editor: Editor): boolean;
+  /**
+   * Does something with the page or the block at the cursor (adds a property, colours or
+   * duplicates the block) instead of making a new block: the slash menu removes what was
+   * typed and runs it where the cursor is.
+   */
+  action?: boolean;
+  /** Only when searched for (`/red`): kept out of the unfiltered slash menu. */
+  searchOnly?: boolean;
   /**
    * Offered in "Turn into" menus. Insert-only blocks (dividers, tables, page links)
    * are not, and are always placed in an empty block of their own.
@@ -532,6 +555,34 @@ export const BLOCKS: readonly BlockDefinition[] = [
   },
 ];
 
+/**
+ * On a database row's page: one command per property type (`/relation`, `/select`…),
+ * adding it to the database, as in Notion.
+ */
+export function propertyBlocks(editor: Editor): BlockDefinition[] {
+  const rowProperties = editor.storage.uiBridge?.ref.current.services?.rowProperties;
+  return (rowProperties?.types() ?? []).map(({ type, label, icon }) => ({
+    id: `property:${type}`,
+    title: label,
+    description: `Add a ${label.toLowerCase()} property to this database.`,
+    keywords: ['property', 'add property', type.toLowerCase()],
+    icon,
+    group: 'properties',
+    action: true,
+    apply: (chain) => chain,
+    after: () => rowProperties?.add(type),
+    ...insertOnly,
+  }));
+}
+
+/**
+ * Everything the slash menu offers here: the blocks, commands for this page, then those
+ * acting on the block (found by searching). `query` is what's typed after the `/`.
+ */
+export function slashBlocks(editor: Editor, query = ''): BlockDefinition[] {
+  return [...BLOCKS, ...propertyBlocks(editor), ...actionBlocks(editor, query, CONVERTIBLE_BLOCKS)];
+}
+
 /** Blocks the "Turn into" menus offer. */
 export const CONVERTIBLE_BLOCKS = BLOCKS.filter((block) => block.convertible);
 
@@ -553,7 +604,7 @@ export function activeBlock(editor: Editor): BlockDefinition | undefined {
  */
 export function searchBlocks(query: string, blocks: readonly BlockDefinition[] = BLOCKS) {
   const q = query.trim().toLowerCase();
-  if (!q) return [...blocks];
+  if (!q) return blocks.filter((block) => !block.searchOnly);
 
   const score = (block: BlockDefinition): number => {
     const title = block.title.toLowerCase();

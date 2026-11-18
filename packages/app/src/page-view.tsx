@@ -21,6 +21,7 @@ import {
   type Editor,
   type EditorComments,
   type PageRef,
+  type EditorServices,
 } from '@workspace/editor';
 import {
   Avatar,
@@ -489,6 +490,7 @@ export function PageBody({
   onEditor,
   awareness = null,
   comments = null,
+  rowProperties,
 }: {
   pageId: PageId;
   pageDoc: Y.Doc | null;
@@ -498,8 +500,10 @@ export function PageBody({
   awareness?: Awareness | null;
   /** The page's comments (highlights, suggestions). */
   comments?: EditorComments | null;
+  /** On a row's page: `/relation`… add properties to its database. */
+  rowProperties?: EditorServices['rowProperties'];
 }) {
-  const services = useEditorServices(pageId);
+  const services = useEditorServices(pageId, rowProperties);
   const { user } = useApp();
   return pageDoc ? (
     <PageEditor

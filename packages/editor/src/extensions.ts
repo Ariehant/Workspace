@@ -30,6 +30,7 @@ import { Table } from './nodes/table';
 import { TodoItem, TodoList } from './nodes/todo';
 import { ToggleExtensions } from './nodes/toggle';
 import { uiBridgeExtension, type UiBridgeHandle } from './services';
+import { BlockShortcuts } from './shortcuts';
 import { SlashCommand } from './slash-menu/slash-command';
 
 /** Node types that are blocks and get a stable `id` attribute. */
@@ -209,6 +210,7 @@ export function pageExtensions(
     Collaboration.configure({ document: doc, field: PAGE_CONTENT_FIELD }),
     Comments.configure({ host: comments }),
     BlockRange,
+    BlockShortcuts,
     SlashCommand,
     OpenLinkOnModClick,
     uiBridgeExtension(bridge),

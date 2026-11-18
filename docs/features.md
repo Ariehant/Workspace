@@ -15,7 +15,16 @@ planned is in [PHASE7.md](PHASE7.md).
 - **The slash menu** (`/`): text, headings, to-do, bulleted, numbered and toggle lists, toggle
   headings, quote, divider, callout, table, code, Mermaid diagrams, block and inline equations,
   table of contents, breadcrumb, columns, link to page, new sub-page, buttons, synced blocks and
-  databases.
+  databases. Searching it also finds commands for the block you're in: a colour (`/red`,
+  `/blue background`), `/turn into h2`, `/duplicate`, `/delete`, `/comment`, `/today`,
+  `/reminder`, `/mention` and `/emoji`. On a database row's page, `/relation`, `/select`,
+  `/formula` and the other property types add that property to the database (a relation, rollup
+  or formula opens its setup; anything else opens for a value).
+- **Keyboard shortcuts** as in Notion: move blocks (`Ctrl+Shift+↑/↓`), duplicate (`Ctrl+D`),
+  turn into (`Ctrl+Alt+0`–`9`), the last colour again (`Ctrl+Shift+H`), check a to-do or open a
+  toggle (`Ctrl+Enter`), go to the parent page (`Ctrl+Shift+U`), back and forward
+  (`Ctrl+[`/`]`), dark mode (`Ctrl+Shift+L`). `Ctrl+?` (or **Keyboard shortcuts** in the
+  workspace menu) lists them all; so does the [desktop guide](desktop.md#keyboard-shortcuts).
 - **Markdown shortcuts:** `#`, `-`, `1.`, `[]`, `>` (toggle), `"` (quote), ` ``` `, `---`, `$$`
   and `$$x$$` (inline equation). Pasting Markdown gives blocks; copying gives Markdown.
 - **Blocks:** hover a block for `+` (add below) and `⋮⋮` (drag to move; click for turn into,

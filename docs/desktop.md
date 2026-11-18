@@ -111,24 +111,41 @@ is covered in the [self-hosting guide](self-hosting.md).
 
 ## Keyboard shortcuts
 
-| Shortcut                     | Does                                        |
-| ---------------------------- | ------------------------------------------- |
-| `Ctrl+K` or `Ctrl+P`         | Quick find (`Ctrl+Enter`: in a new window)  |
-| `Ctrl+N`                     | New page                                    |
-| `Ctrl+T` / `Ctrl+W`          | New tab / close tab                         |
-| `Ctrl+Tab`                   | Next tab                                    |
-| `Ctrl+Shift+N`               | New window                                  |
-| `Alt+←` / `Alt+→`            | Back / forward                              |
-| `Ctrl+\`                     | Show or hide the sidebar                    |
-| `Ctrl+=` / `Ctrl+-`          | Zoom in / out (also `Ctrl` + mouse wheel)   |
-| `Ctrl+0`                     | Actual size (100%)                          |
-| `Ctrl+F`                     | Find and replace in the page                |
-| `/`                          | Insert a block                              |
-| `@`                          | Mention a page, a person or a date          |
-| `Ctrl+Shift+M`               | Comment on the selection (server workspace) |
-| `Ctrl+B`, `Ctrl+I`, `Ctrl+U` | Bold, italic, underline                     |
-| `Ctrl+E`                     | Inline code                                 |
-| `Tab` / `Shift+Tab`          | Indent / outdent                            |
+**Keyboard shortcuts** in the workspace menu (or `Ctrl+?`) lists these in the app.
+
+| Shortcut                               | Does                                                      |
+| -------------------------------------- | --------------------------------------------------------- |
+| `Ctrl+K` or `Ctrl+P`                   | Quick find (`Ctrl+Enter`: in a new window)                |
+| `Ctrl+N`                               | New page                                                  |
+| `Ctrl+T` / `Ctrl+W`                    | New tab / close tab                                       |
+| `Ctrl+Tab`                             | Next tab                                                  |
+| `Ctrl+Shift+N`                         | New window                                                |
+| `Alt+←` / `Alt+→`, `Ctrl+[` / `Ctrl+]` | Back / forward                                            |
+| `Ctrl+Shift+U`                         | Go to the parent page                                     |
+| `Ctrl+\`                               | Show or hide the sidebar                                  |
+| `Ctrl+Shift+L`                         | Dark or light mode                                        |
+| `Ctrl+=` / `Ctrl+-`                    | Zoom in / out (also `Ctrl` + mouse wheel)                 |
+| `Ctrl+0`                               | Actual size (100%)                                        |
+| `Ctrl+F`                               | Find and replace in the page                              |
+| `Ctrl+?`                               | List the keyboard shortcuts                               |
+| `/`                                    | Insert a block, or a command (`/red`, `/turn into h2`, …) |
+| `@`                                    | Mention a page, a person or a date                        |
+| `:`                                    | Emoji                                                     |
+| `Ctrl+B`, `Ctrl+I`, `Ctrl+U`           | Bold, italic, underline                                   |
+| `Ctrl+Shift+S`                         | Strikethrough                                             |
+| `Ctrl+E` / `Ctrl+Shift+E`              | Inline code / inline equation                             |
+| `Ctrl+Shift+H`                         | The colour used last                                      |
+| `Ctrl+Shift+M`                         | Comment on the selection                                  |
+| `Tab` / `Shift+Tab`                    | Indent / outdent                                          |
+| `Shift+↑` / `Shift+↓`                  | Select blocks                                             |
+| `Ctrl+Shift+↑` / `Ctrl+Shift+↓`        | Move the block (or the selected blocks) up / down         |
+| `Ctrl+D`                               | Duplicate the block (or the selected blocks)              |
+| `Ctrl+Enter`                           | Check a to-do, or open or close a toggle                  |
+| `Ctrl+Alt+0`                           | Turn into text                                            |
+| `Ctrl+Alt+1` / `2` / `3`               | Turn into a heading 1 / 2 / 3                             |
+| `Ctrl+Alt+4` / `5` / `6`               | Turn into a to-do / bulleted list / numbered list         |
+| `Ctrl+Alt+7` / `8`                     | Turn into a toggle / code                                 |
+| `Ctrl+Alt+9`                           | A new sub-page here                                       |
 
 In the sidebar's page tree, `↑` `↓` move between pages, `→` `←` expand and collapse, and
 `Enter` opens the page. In a database table, the arrow keys move between cells, `Enter` or

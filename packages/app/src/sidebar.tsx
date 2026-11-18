@@ -36,6 +36,7 @@ import {
   Download,
   FileInput,
   Info,
+  Keyboard,
   Languages,
   Compass,
   LayoutTemplate,
@@ -109,6 +110,8 @@ export interface SidebarProps {
   onRegion?(): void;
   /** About Workspace (versions, updates). */
   onAbout?(): void;
+  /** The keyboard shortcuts. */
+  onShortcuts?(): void;
   /** A downloaded update, to restart into. */
   updateReady?: { version: string; onRestart(): void };
   /** The app's zoom (hosts that have one), in the Appearance menu. */
@@ -218,6 +221,11 @@ export function Sidebar(props: SidebarProps) {
             {props.can.export && (
               <MenuItem icon={<Download size={14} />} onSelect={props.onExportAll}>
                 Export all workspace content…
+              </MenuItem>
+            )}
+            {props.onShortcuts && (
+              <MenuItem icon={<Keyboard size={14} />} onSelect={props.onShortcuts}>
+                Keyboard shortcuts
               </MenuItem>
             )}
             {props.onAbout && (

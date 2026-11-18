@@ -72,7 +72,7 @@ import { runButton } from '../buttons/run-button';
 
 // --- Icons and pills -------------------------------------------------------------------
 
-const ICONS: Record<PropertyType, LucideIcon> = {
+export const PROPERTY_ICONS: Record<PropertyType, LucideIcon> = {
   title: Type,
   text: AlignLeft,
   number: Hash,
@@ -98,7 +98,7 @@ const ICONS: Record<PropertyType, LucideIcon> = {
 };
 
 export function PropertyIcon({ type, size = 14 }: { type: PropertyType; size?: number }) {
-  const Icon = ICONS[type];
+  const Icon = PROPERTY_ICONS[type];
   return <Icon size={size} className="shrink-0 text-faint" aria-hidden />;
 }
 

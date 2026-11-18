@@ -21,6 +21,7 @@
 | [Phase 5](PHASE5.md) | Members, permissions, presence, comments, the inbox, publishing             |
 | [Phase 6](PHASE6.md) | Forms, automations, the Notion-compatible API, webhooks, email digests      |
 | [Phase 7](PHASE7.md) | Polish and release: performance, accessibility, languages, packaging, v1.0  |
+| [Phase 8](PHASE8.md) | What Notion has that Workspace didn't: the gap list, and adding it          |
 
 Each phase document has the plan, then notes on each milestone as it was done: what changed from
 the plan and why, what was built, the tests, and the test runs.

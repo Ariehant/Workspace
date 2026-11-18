@@ -41,7 +41,7 @@ import {
 } from '@workspace/core';
 import type { OpenPagesIn } from '@workspace/database';
 import { useAppliedTheme, type ThemePreference } from '@workspace/ui';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppContext, useApp } from './context';
 import { DatabaseRegistry } from './database/registry';
 import { useRegistryVersion } from './database/hooks';
@@ -81,6 +81,7 @@ import { PrintView, printFromLocation } from './print-view';
 import { ImportProgress } from './import-dialog';
 import { RegionDialog } from './region-dialog';
 import { AboutDialog, useUpdates } from './about-dialog';
+import { ShortcutsDialog } from './shortcuts-dialog';
 
 const SETTING = {
   theme: 'ui.theme',
@@ -301,7 +302,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     databaseId: string;
     mode: Exclude<OpenPagesIn, 'fullPage'>;
   } | null>(null);
-  useAppliedTheme(theme);
+  const appliedTheme = useAppliedTheme(theme);
 
   // Fall back to the first page when the remembered one no longer exists.
   const selected = history.entries[history.index] ?? null;
@@ -570,6 +571,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const [regionSettings, setRegionSettings] = useState(initial.region);
   const [regionOpen, setRegionOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const updates = useUpdates(platform.about?.updates);
   const changeRegion = useCallback(
     (next: RegionSettings) => {
@@ -587,6 +589,19 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     },
     [platform],
   );
+
+  // What those shortcuts need from this render (read when the key is pressed).
+  const keys = useRef({ toParent: () => {}, toggleTheme: () => {} });
+  useLayoutEffect(() => {
+    keys.current = {
+      toParent: () => {
+        const crumbs = pages.breadcrumb(currentPageId ?? '');
+        const parent = crumbs[crumbs.length - 2];
+        if (parent) navigate(parent.id);
+      },
+      toggleTheme: () => changeTheme(appliedTheme === 'dark' ? 'light' : 'dark'),
+    };
+  });
 
   // Shortcuts that work in the desktop and web builds alike.
   useEffect(() => {
@@ -617,9 +632,19 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
         event.preventDefault();
         return;
       }
-      if (event.shiftKey) return;
       const key = event.key.toLowerCase();
-      if (key === 'n') run('new-page');
+      if (event.shiftKey) {
+        if (key === 'u') keys.current.toParent();
+        else if (key === 'l') keys.current.toggleTheme();
+        // Ctrl+? (Ctrl+Shift+/ on most keyboards).
+        else if (key === '?' || event.code === 'Slash') setShortcutsOpen(true);
+        else return;
+        event.preventDefault();
+        return;
+      }
+      if (key === '[') run('go-back');
+      else if (key === ']') run('go-forward');
+      else if (key === 'n') run('new-page');
       else if (key === 't') run('new-tab');
       else if (key === 'w') run('close-tab');
       else if (key === '\\') run('toggle-sidebar');
@@ -762,6 +787,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onThemeChange={changeTheme}
             onRegion={() => setRegionOpen(true)}
             onAbout={platform.about ? () => setAboutOpen(true) : undefined}
+            onShortcuts={() => setShortcutsOpen(true)}
             updateReady={
               updates?.status === 'ready' && updates.version
                 ? { version: updates.version, onRestart: () => platform.about?.updates?.install() }
@@ -804,6 +830,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             }
           />
         )}
+        {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
         {aboutOpen && platform.about && (
           <AboutDialog about={platform.about} onClose={() => setAboutOpen(false)} />
         )}

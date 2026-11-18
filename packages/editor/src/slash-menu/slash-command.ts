@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/core';
 import { PluginKey } from '@tiptap/pm/state';
 import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
 import { insertBlockFromSlash } from '../blocks/commands';
-import { searchBlocks, type BlockDefinition } from '../blocks/registry';
+import { searchBlocks, slashBlocks, type BlockDefinition } from '../blocks/registry';
 import { floatingList } from '../suggestions/floating';
 import { SlashMenuList } from './slash-menu-list';
 
@@ -21,7 +21,7 @@ export const SlashCommand = Extension.create({
         // Notion matches multi-word queries ("/2 col", "/link to page").
         allowSpaces: true,
         allow: ({ editor }) => !editor.isActive('codeBlock'),
-        items: ({ query }) => searchBlocks(query),
+        items: ({ query, editor }) => searchBlocks(query, slashBlocks(editor, query)),
         command: ({ editor, range, props }) => void insertBlockFromSlash(editor, range, props),
         render: floatingList<BlockDefinition>(SlashMenuList, {
           testId: 'slash-menu',

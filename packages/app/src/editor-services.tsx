@@ -20,12 +20,16 @@ import { editButton } from './buttons/button-dialog';
 import { runButton } from './buttons/run-button';
 
 /** What the editor of page (or row) `pageId` needs from the app. */
-export function useEditorServices(pageId: PageId): EditorServices {
+export function useEditorServices(
+  pageId: PageId,
+  rowProperties?: EditorServices['rowProperties'],
+): EditorServices {
   const { workspace, platform, client, pages, databases, user, members, team } = useApp();
   const { navigate, openRow } = useNavigation();
   return useMemo(
     () => ({
       pageId,
+      rowProperties,
       getPage: (id) => pages.get(id),
       // In a server workspace, a page that isn't here is mostly one this person can't see
       // (a getter: the trees can change after this is made).
@@ -95,6 +99,19 @@ export function useEditorServices(pageId: PageId): EditorServices {
         subscribe: (listener) => observeMathMacros(workspaceDataDoc(workspace), listener),
       },
     }),
-    [workspace, platform, client, pages, databases, user, members, team, pageId, navigate, openRow],
+    [
+      workspace,
+      platform,
+      client,
+      pages,
+      databases,
+      user,
+      members,
+      team,
+      pageId,
+      navigate,
+      openRow,
+      rowProperties,
+    ],
   );
 }

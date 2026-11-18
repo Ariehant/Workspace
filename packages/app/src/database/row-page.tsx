@@ -32,11 +32,19 @@ import {
   type DisplayContext,
   type OpenPagesIn,
   type Property,
+  type PropertyType,
   type Row,
 } from '@workspace/database';
 import { IconButton, Menu, MenuContent, MenuItem, MenuTrigger, cn } from '@workspace/ui';
 import { ChevronDown, ChevronsRight, Eye, EyeOff, Maximize2, Plus, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from 'react';
 import type { BlockTarget } from '../app';
 import { useApp } from '../context';
 import { useNavigation } from '../navigation';
@@ -59,6 +67,7 @@ import { RelationSetup, RollupSetup, type SetupRequest } from './relation-setup'
 import {
   CellDisplay,
   PopoverCellEditor,
+  PROPERTY_ICONS,
   PropertyIcon,
   TEXT_TYPES,
   TextCellEditor,
@@ -122,16 +131,22 @@ function useRow(rowId: string, databaseId: string) {
 
 // --- Properties panel --------------------------------------------------------------------
 
+/** Adds a property to the row's database (set by the panel while that's allowed). */
+export type PropertyAdder = MutableRefObject<((type: PropertyType) => void) | null>;
+
 export function PropertiesPanel({
   handle,
   snapshot,
   row,
   editable,
+  adderRef,
 }: {
   handle: DatabaseHandle;
   snapshot: DatabaseSnapshot;
   row: Row;
   editable: boolean;
+  /** For the page's `/` menu (`/relation`…). */
+  adderRef?: PropertyAdder;
 }) {
   const base = useDisplayContext();
   const ctx = { ...base, pages: snapshot.related };
@@ -147,8 +162,43 @@ export function PropertiesPanel({
   const hidden = hideEmpty && !showAll ? all.filter((p) => isEmpty(p) && p.id !== editing) : [];
   const properties = all.filter((p) => !hidden.includes(p));
   const emptyCount = all.filter(isEmpty).length;
+  const panelRef = useRef<HTMLDivElement>(null);
+  const canAdd = editable && canEditProperties;
+  /** As in Notion: relations are set up before they're added; formulas and rollups open
+   * their setup; anything else opens for a value. */
+  const addType = (type: PropertyType) => {
+    if (type === 'relation') {
+      setSetup({ kind: 'relation', mode: 'add' });
+      return;
+    }
+    const id = addProperty(handle.doc, {
+      name: newPropertyName(handle.doc, propertyKind(type).label),
+      type,
+    });
+    if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
+    else if (type === 'formula') setFormulaFor(id);
+    else if (isEditable(type)) {
+      setEditing(id);
+      requestAnimationFrame(() =>
+        panelRef.current
+          ?.querySelector(`[data-property-id="${id}"]`)
+          ?.scrollIntoView({ block: 'nearest' }),
+      );
+    }
+  };
+  useLayoutEffect(() => {
+    if (!adderRef) return;
+    adderRef.current = canAdd ? addType : null;
+    return () => {
+      adderRef.current = null;
+    };
+  });
   return (
-    <div className="mt-2 border-b border-line pb-3 text-sm" data-testid="row-properties">
+    <div
+      ref={panelRef}
+      className="mt-2 border-b border-line pb-3 text-sm"
+      data-testid="row-properties"
+    >
       {properties.map((property) => (
         <PropertyRow
           key={property.id}
@@ -196,7 +246,7 @@ export function PropertiesPanel({
         </button>
       )}
       <div className="flex flex-wrap items-center gap-1">
-        {editable && canEditProperties && (
+        {canAdd && (
           <Menu>
             <MenuTrigger asChild>
               <button
@@ -211,18 +261,7 @@ export function PropertiesPanel({
                 <MenuItem
                   key={type}
                   icon={<PropertyIcon type={type} />}
-                  onSelect={() => {
-                    if (type === 'relation') {
-                      setSetup({ kind: 'relation', mode: 'add' });
-                      return;
-                    }
-                    const id = addProperty(handle.doc, {
-                      name: newPropertyName(handle.doc, propertyKind(type).label),
-                      type,
-                    });
-                    if (type === 'rollup') setSetup({ kind: 'rollup', propertyId: id });
-                    if (type === 'formula') setFormulaFor(id);
-                  }}
+                  onSelect={() => addType(type)}
                 >
                   {propertyKind(type).label}
                 </MenuItem>
@@ -276,7 +315,11 @@ function PropertyRow({
   const editorProps = { handle, row, property, ctx, onDone: () => onEdit(false) };
   const empty = isCellEmpty(row, property) && property.type !== 'checkbox';
   return (
-    <div className="flex min-h-[34px] items-start gap-1" data-testid="property-row">
+    <div
+      className="flex min-h-[34px] items-start gap-1"
+      data-testid="property-row"
+      data-property-id={property.id}
+    >
       <div className="flex h-[34px] w-40 shrink-0 items-center gap-1.5 px-2 text-muted">
         <PropertyIcon type={property.type} size={15} />
         <span className="truncate">{property.name}</span>
@@ -336,6 +379,22 @@ function RowContent({
   const awareness = usePresence(rowId, pageDoc);
   const articleRef = useRef<HTMLElement>(null);
   useScrollToBlock(articleRef, pageDoc ? (blockTarget ?? null) : null);
+  // `/relation`, `/select`… in the page add properties, through the panel.
+  const adderRef: PropertyAdder = useRef(null);
+  const rowProperties = useMemo(
+    () => ({
+      types: () =>
+        adderRef.current
+          ? PROPERTY_TYPES.map((type) => ({
+              type,
+              label: propertyKind(type).label,
+              icon: PROPERTY_ICONS[type],
+            }))
+          : [],
+      add: (type: string) => adderRef.current?.(type as PropertyType),
+    }),
+    [],
+  );
   if (!found) return <div className="h-24" aria-busy="true" />;
   const { handle, snapshot, row, model } = found;
   // As its database: read-only for someone who may only view or comment ("can edit
@@ -354,7 +413,13 @@ function RowContent({
       <HeroCover model={model} editable={editable} />
       <article ref={articleRef} {...articleProps(model.meta)}>
         <PageHero model={model} editable={editable} onEnter={focusBody} />
-        <PropertiesPanel handle={handle} snapshot={snapshot} row={row} editable={editable} />
+        <PropertiesPanel
+          handle={handle}
+          snapshot={snapshot}
+          row={row}
+          editable={editable}
+          adderRef={adderRef}
+        />
         {editable && !row.isTemplate && pageDoc && (
           <TemplatePicker handle={handle} snapshot={snapshot} rowId={rowId} pageDoc={pageDoc} />
         )}
@@ -365,6 +430,7 @@ function RowContent({
             editable={editable}
             onEditor={onEditor}
             awareness={awareness}
+            rowProperties={rowProperties}
           />
         </div>
       </article>

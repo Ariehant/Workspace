@@ -225,3 +225,50 @@ test('sub-items nest rows under their parent; dependencies add Blocked by / Bloc
   await expect(table(window).getByRole('button', { name: /sub-items/ })).toHaveCount(0);
   await expect(header(window, 'Parent item')).toBeVisible();
 });
+
+test('/relation and other property commands in a row page add properties', async ({ launch }) => {
+  const { window } = await launch();
+  await seedTasks(window);
+  await newDatabase(window, 'Projects');
+  await addRow(window, 'Alpha');
+  await (await cell(window, 'Alpha', 'Name')).hover();
+  await table(window).getByRole('button', { name: 'Open', exact: true }).click();
+  const peek = window.getByTestId('row-peek');
+  const slash = window.getByTestId('slash-menu');
+
+  // `/relation` in the page sets up a relation, as from "Add a property".
+  await peek.getByTestId('page-editor').click();
+  await window.keyboard.type('/relation');
+  await expect(slash.getByRole('option').first()).toContainText('Relation');
+  await window.keyboard.press('Enter');
+  const setup = window.getByTestId('relation-setup');
+  await setup.getByLabel('Related to').selectOption({ label: 'Tasks' });
+  await setup.getByRole('button', { name: 'Add relation' }).click();
+  await expect(setup).toHaveCount(0);
+  const tasks = peek.getByTestId('property-row').filter({ hasText: 'Tasks' });
+  await expect(tasks).toBeVisible();
+  await expect(peek.getByTestId('page-editor')).not.toContainText('/relation');
+
+  // `/select` adds a select and opens it for a value.
+  await peek.getByTestId('page-editor').click();
+  await window.keyboard.type('/select');
+  await expect(slash.getByRole('option').first()).toContainText('Select');
+  await window.keyboard.press('Enter');
+  await popover(window).getByLabel('Search for an option').fill('High');
+  await window.keyboard.press('Enter');
+  // Picking one closes it (a select has one value).
+  await expect(popover(window)).toHaveCount(0);
+  await expect(peek.getByTestId('property-row').filter({ hasText: 'Select' })).toContainText(
+    'High',
+  );
+  await expect(peek.getByTestId('page-editor')).not.toContainText('/select');
+  await peek.getByRole('button', { name: 'Close' }).click();
+  await expect(header(window, 'Tasks')).toBeVisible();
+  await expect(await cell(window, 'Alpha', 'Select')).toContainText('High');
+
+  // Not on an ordinary page.
+  await window.getByRole('button', { name: 'New page' }).click();
+  await window.getByLabel('Page title').press('Enter');
+  await window.keyboard.type('/relation');
+  await expect(slash).toContainText('No results');
+});

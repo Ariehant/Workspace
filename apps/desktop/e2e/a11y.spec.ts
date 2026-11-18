@@ -105,6 +105,12 @@ for (const theme of THEMES) {
       await expect(window.getByTestId('about-dialog')).toBeVisible();
     });
 
+    await checkOpen(window, s('keyboard shortcuts'), async () => {
+      await window.getByRole('button', { name: /workspace menu/i }).click();
+      await window.getByRole('menuitem', { name: 'Keyboard shortcuts' }).click();
+      await expect(window.getByTestId('shortcuts-dialog')).toBeVisible();
+    });
+
     // A page of its own: the slash menu, page history and export.
     await window.getByRole('button', { name: 'New page' }).click();
     await window.getByLabel('Page title').fill('Checked');

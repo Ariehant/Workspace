@@ -21,6 +21,11 @@ export async function insertBlockFromSlash(
     return;
   }
 
+  if (block.action) {
+    block.apply(editor.chain().focus(), args).run();
+    block.after?.(editor, args);
+    return;
+  }
   const { $from } = editor.state.selection;
   const empty = $from.parent.isTextblock && $from.parent.content.size === 0;
   if (!empty && block.group !== 'inline') {
@@ -112,4 +117,20 @@ export function insertBelowWithSlash(editor: Editor, pos: number, node: PMNode):
       return true;
     })
     .run();
+}
+
+/**
+ * Type `text` at the cursor (a menu's trigger, like `@`), after a space unless it starts
+ * the line or follows one, so the menu opens. Returns where `text` starts.
+ */
+export function typeTrigger(editor: Editor, text: string): number {
+  const { $from, from } = editor.state.selection;
+  const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc');
+  const spaced = before !== '' && !/\s$/.test(before);
+  editor
+    .chain()
+    .focus()
+    .insertContent(spaced ? ` ${text}` : text)
+    .run();
+  return from + (spaced ? 1 : 0);
 }

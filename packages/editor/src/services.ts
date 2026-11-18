@@ -1,4 +1,5 @@
 import type { ButtonConfig } from '@workspace/core';
+import type { LucideIcon } from 'lucide-react';
 import type * as Y from 'yjs';
 import { Extension } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
@@ -94,6 +95,16 @@ export interface EditorServices {
   /** Open a stored file with the system's default app. */
   openFile(id: string): void;
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /**
+   * On a database row's page, for someone who may change the database's properties: the
+   * property types `/relation`, `/select`… add to the database (`types` is empty when
+   * they can't now).
+   */
+  rowProperties?: {
+    types(): { type: string; label: string; icon: LucideIcon }[];
+    /** Add one (relations, rollups and formulas open their setup; others their value). */
+    add(type: string): void;
+  };
   /** People to @-mention: the workspace's members (current ones in `list`). */
   people: {
     /** Who's typing (a reminder they set is theirs: only they're reminded). */

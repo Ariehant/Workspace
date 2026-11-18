@@ -1,4 +1,4 @@
-import { Extension } from '@tiptap/core';
+import { Extension, type Editor } from '@tiptap/core';
 import { emojis, type EmojiItem } from '@tiptap/extension-emoji';
 import { PluginKey } from '@tiptap/pm/state';
 import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
@@ -68,6 +68,25 @@ const EmojiList = forwardRef<SuggestionListHandle<EmojiItem>, SuggestionListProp
 
 export const emojiKey = new PluginKey('emojiSuggest');
 
+/** Where `/emoji` typed a ":": its menu shows before a letter is typed. */
+const openedAt = new WeakMap<Editor, number>();
+/** Shown for a bare ":" opened by `/emoji`. */
+const FIRST = EMOJI.slice(0, MAX_RESULTS);
+
+/** Open the emoji menu at the cursor (`/emoji`). */
+export function openEmojiMenu(editor: Editor): void {
+  const { $from, from } = editor.state.selection;
+  const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc');
+  const spaced = before !== '' && !/\s$/.test(before);
+  // Known before the ":" goes in: the menu decides whether to show as it does.
+  openedAt.set(editor, from + (spaced ? 1 : 0));
+  editor
+    .chain()
+    .focus()
+    .insertContent(spaced ? ' :' : ':')
+    .run();
+}
+
 /** ":rock" suggests 🚀 and friends; choosing one inserts the plain character, as in Notion. */
 export const EmojiSuggest = Extension.create({
   name: 'emojiSuggest',
@@ -80,8 +99,9 @@ export const EmojiSuggest = Extension.create({
         allow: ({ editor }) => !editor.isActive('codeBlock'),
         // Wait for a letter after ":" before showing anything. (Returning false from
         // `allow` instead would dismiss the suggestion for good at the bare ":".)
-        shouldShow: ({ query }) => query.length >= 1,
-        items: ({ query }) => searchEmoji(query),
+        shouldShow: ({ editor, range, query }) =>
+          query.length >= 1 || openedAt.get(editor) === range.from,
+        items: ({ query }) => (query ? searchEmoji(query) : FIRST),
         command: ({ editor, range, props }) => {
           editor.chain().focus().insertContentAt(range, props.emoji!).run();
         },

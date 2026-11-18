@@ -67,6 +67,9 @@ const colorAttr = {
     attrs.color ? { 'data-color': attrs.color } : {},
 };
 
+/** Transaction meta: the colour just picked (for "apply the last colour"). */
+export const COLOR_PICKED = 'ws-color';
+
 /** Inline text or background color (one per span, like Notion). */
 export const TextColor = Mark.create({
   name: 'color',
@@ -81,14 +84,22 @@ export const TextColor = Mark.create({
     return {
       setTextColor:
         (value) =>
-        ({ commands }) =>
-          value ? commands.setMark(this.name, { color: value }) : commands.unsetMark(this.name),
+        ({ commands, tr }) => {
+          // Remembered for Ctrl+Shift+H.
+          if (value) tr.setMeta(COLOR_PICKED, value);
+          return value
+            ? commands.setMark(this.name, { color: value })
+            : commands.unsetMark(this.name);
+        },
       setBlockColor:
         (pos, value) =>
         ({ tr, state, dispatch }) => {
           const node = state.doc.nodeAt(pos);
           if (!node || !('color' in node.attrs)) return false;
-          if (dispatch) tr.setNodeMarkup(pos, undefined, { ...node.attrs, color: value });
+          if (dispatch) {
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, color: value });
+            if (value) tr.setMeta(COLOR_PICKED, value);
+          }
           return true;
         },
     };

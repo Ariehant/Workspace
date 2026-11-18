@@ -264,3 +264,53 @@ test('every block type survives a restart', async ({ launch }) => {
   await expect(editor(window).locator('.ws-columns > .ws-column')).toHaveCount(3);
   await expect(editor(window).locator('table tr')).toHaveCount(3);
 });
+
+test('quick commands in the / menu: colour, turn into, duplicate, delete, date, emoji, comment', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newPage(window, 'Quick commands');
+  // (A `/` opens the menu at the start of a line or after a space.)
+  await window.keyboard.type('Torque limit ');
+
+  // Colour and turn into act on the block the cursor is in; what was typed goes.
+  await slash(window, 'red');
+  const first = blocks(window).first();
+  await expect(first).toHaveAttribute('data-color', 'red');
+  await expect(first).toHaveText('Torque limit');
+  await slash(window, 'turn into h2');
+  await expect(editor(window).locator('h2')).toHaveText('Torque limit');
+  await slash(window, 'duplicate');
+  await expect(editor(window).locator('h2')).toHaveText(['Torque limit', 'Torque limit']);
+  await slash(window, 'delete');
+  await expect(editor(window).locator('h2')).toHaveText(['Torque limit']);
+
+  // Comment on the block's text.
+  await editor(window).locator('h2').click();
+  await window.keyboard.press('End');
+  await slash(window, 'comment');
+  const input = window.getByTestId('comments-panel').getByTestId('comment-input');
+  await expect(input).toBeFocused();
+  await input.pressSequentially('Check at 64:1');
+  await input.press('Enter');
+  await expect(editor(window).locator('.ws-comment')).toHaveText('Torque limit');
+
+  // Today's date, an emoji, and the mention menu, on a new line.
+  await editor(window).locator('h2').click();
+  await window.keyboard.press('End');
+  await window.keyboard.press('Enter');
+  await window.keyboard.type('Due ');
+  await slash(window, 'today');
+  await expect(editor(window).getByTestId('mention')).toHaveText('@Today');
+  await slash(window, 'emoji');
+  const emoji = window.getByTestId('emoji-menu');
+  await expect(emoji.getByRole('option').first()).toBeVisible();
+  await window.keyboard.type('rocket');
+  await window.keyboard.press('Enter');
+  await expect(blocks(window).nth(1)).toContainText('Due @Today 🚀');
+  await window.keyboard.type(' ');
+  await slash(window, 'mention a page');
+  await expect(window.getByTestId('mention-menu')).toBeVisible();
+  await window.keyboard.press('Escape');
+  await expect(editor(window)).not.toContainText('/');
+});
