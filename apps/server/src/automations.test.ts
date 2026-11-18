@@ -5,6 +5,7 @@
  * Ada (owner) has the database "tasks" in the first teamspace T (everyone may edit).
  * Bob is a member.
  */
+import { lookup } from 'node:dns/promises';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -521,6 +522,33 @@ describe('webhook delivery', () => {
     const ok = await deliver(hook.url, { a: 1 }, 's', {}, { allowPrivate: true, allowHttp: true });
     expect(ok.status).toBe(200);
     expect(hook.got[0]!.headers['x-notion-signature']).toBe(signature('s', '{"a":1}'));
+  });
+
+  it('delivers to a host name, at the address that was checked', async () => {
+    // A name goes through the pinned lookup (an IP address doesn't), which Node asks for every
+    // address at once when it connects (`all: true`).
+    const got: string[] = [];
+    const server = createServer((req, res) => {
+      req.on('data', (chunk: Buffer) => got.push(chunk.toString()));
+      req.on('end', () => res.end('ok'));
+    });
+    // Where "localhost" goes first (127.0.0.1, or ::1 on some machines).
+    const [first] = await lookup('localhost', { all: true });
+    await new Promise<void>((r) => server.listen(0, first!.address, r));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const sent = await deliver(
+        `http://localhost:${port}/hook`,
+        { a: 1 },
+        's',
+        {},
+        { allowPrivate: true, allowHttp: true },
+      );
+      expect(sent).toEqual({ status: 200, body: 'ok' });
+      expect(got).toEqual(['{"a":1}']);
+    } finally {
+      server.close();
+    }
   });
 
   it('doesn’t follow redirects, and gives up on slow receivers', async () => {
