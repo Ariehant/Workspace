@@ -89,14 +89,14 @@ milestones below; the others wait for a decision, by number.
 
 ### E. Import, export, developer platform
 
-| #   | Notion feature                                                                                 | What it's for (how you use it)                                               | Effort | Suggest |
-| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ | ------- |
-| 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅      |
-| 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | 🤔      |
-| 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌      |
-| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | 🤔      |
-| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔      |
-| 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌      |
+| #   | Notion feature                                                                                 | What it's for (how you use it)                                               | Effort | Suggest      |
+| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ | ------------ |
+| 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅ Done (N5) |
+| 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | 🤔           |
+| 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌           |
+| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | 🤔           |
+| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔           |
+| 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌           |
 
 ### F. Platforms and apps
 
@@ -530,3 +530,37 @@ click landing on the toggle's arrow) was wrong; moving the click didn't help.
   stuck exits.
 - **The web suite:** 6 passed. Formatting, lint, types, unit tests and the web, server and
   desktop builds pass.
+
+## N5: Word and Google Docs (#39)
+
+**Built:**
+
+- **Importing `.docx`** (`packages/importers/src/docx.ts`): Word documents, and Google Docs
+  downloaded as Word, through the same Import button. One document becomes the import's page
+  itself, titled from its Title paragraph (or its properties, or the file name); several
+  become a page each.
+- **What comes over:**
+  - Headings by style, or by outline level, so other languages' "Heading 1" work too.
+  - Bullet, numbered and nested lists, from the document's numbering (lists that redefine
+    their levels, as LibreOffice's do, included), and checklists (☐ and ☑) as to-dos.
+  - Bold, italic, underline, strikethrough, code (monospace fonts and code styles), colours
+    and highlights mapped to the nearest of the app's colours, links, and line breaks.
+  - Quotes, code blocks (consecutive code paragraphs joined), tables with header rows and
+    merged cells, pictures with their captions, and footnotes (numbered where referenced,
+    listed at the end).
+- **What doesn't, and says so in the report:** equations and text boxes come over as text,
+  comments are left out, tracked deletions are left out (the current text is kept), and
+  Windows metafile pictures (EMF, WMF) are left out.
+- **No new dependency:** a `.docx` is a zip of XML. `fflate` (already used for zips) unpacks it,
+  refusing more than 200 MB uncompressed, and a small XML parser
+  (`packages/importers/src/xml.ts`) reads it.
+
+**Tests:**
+
+- **Unit** (`docx.test.ts`): documents built from XML in the test, for each of the above; the
+  XML parser; a damaged file and an oversized one, each a warning; and two real files made by
+  pandoc and LibreOffice from the same Markdown (`packages/importers/fixtures/docx/`), checked
+  block by block.
+- **Desktop E2E** (`import.spec.ts`): LibreOffice's file through the Import button: the counts,
+  the title, a heading, a bold word, a nested numbered list, the table's header, the code, the
+  picture loaded, and the page found by quick find.

@@ -501,6 +501,9 @@ importers:
       '@workspace/editor':
         specifier: workspace:*
         version: link:../editor
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       parse5:
         specifier: ^8.0.1
         version: 8.0.1
@@ -514,9 +517,6 @@ importers:
       '@workspace/exporters':
         specifier: workspace:*
         version: link:../exporters
-      fflate:
-        specifier: ^0.8.3
-        version: 0.8.3
       vite:
         specifier: 7.3.6
         version: 7.3.6(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.33.0)

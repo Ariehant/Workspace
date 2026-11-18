@@ -32,8 +32,19 @@ export function registerImport(deps: {
       properties: ['openFile' as const, 'multiSelections' as const],
       filters: [
         {
-          name: 'Notion, Confluence, Evernote or Trello export, Markdown, HTML, CSV or text',
-          extensions: ['zip', 'enex', 'json', 'md', 'markdown', 'html', 'htm', 'csv', 'txt'],
+          name: 'Word or Google Docs (.docx), Notion, Confluence, Evernote or Trello export, Markdown, HTML, CSV or text',
+          extensions: [
+            'docx',
+            'zip',
+            'enex',
+            'json',
+            'md',
+            'markdown',
+            'html',
+            'htm',
+            'csv',
+            'txt',
+          ],
         },
       ],
     };

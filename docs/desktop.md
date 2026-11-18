@@ -80,19 +80,22 @@ With sync on, the database also holds the changes waiting to be sent, and the si
 **Import** in the sidebar takes the files each app exports. Everything lands under a new page
 named after the file (**Import**, for several files), and a report lists what came across and what didn't.
 
-| From       | Export there                                                       | Import            |
-| ---------- | ------------------------------------------------------------------ | ----------------- |
-| Notion     | Settings → Export all workspace content, Markdown & CSV or HTML    | the `.zip`        |
-| Evernote   | Select notes or a notebook → Export → ENEX (one file per notebook) | the `.enex` files |
-| Trello     | Board menu → Print, export and share → Export as JSON              | the `.json`       |
-| Confluence | Space settings → Export space → HTML                               | the `.zip`        |
-| Anything   | Markdown, HTML, CSV or text files                                  | the files         |
+| From        | Export there                                                       | Import            |
+| ----------- | ------------------------------------------------------------------ | ----------------- |
+| Notion      | Settings → Export all workspace content, Markdown & CSV or HTML    | the `.zip`        |
+| Evernote    | Select notes or a notebook → Export → ENEX (one file per notebook) | the `.enex` files |
+| Trello      | Board menu → Print, export and share → Export as JSON              | the `.json`       |
+| Confluence  | Space settings → Export space → HTML                               | the `.zip`        |
+| Word        | Save as Word Document (`.docx`)                                    | the `.docx` files |
+| Google Docs | File → Download → Microsoft Word (`.docx`)                         | the `.docx` files |
+| Anything    | Markdown, HTML, CSV or text files                                  | the files         |
 
 Each Evernote notebook becomes a database of its notes (tags, created and updated dates and
 the source address as columns). A Trello board becomes a database shown as a board grouped by
 list; its attachments come across as links (the files stay on Trello) and archived cards are
 left out. A Confluence space becomes its page tree. Encrypted text in Evernote notes can't come
-across.
+across. A single Word document becomes the page itself, titled from its Title (or its file
+name); its pictures are stored with it. Older `.doc` files need saving as `.docx` first.
 
 ## Several workspaces
 

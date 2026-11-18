@@ -181,6 +181,39 @@ async function importFile(app: ElectronApplication, window: Page, path: string, 
   return report;
 }
 
+test('import a Word document (LibreOffice’s, as Google Docs and Word make them)', async ({
+  launch,
+}) => {
+  const { app, window } = await launch();
+  const report = await importFile(
+    app,
+    window,
+    join(fixtures, 'docx', 'libreoffice.docx'),
+    '1 page, 0 databases with 0 rows, and 1 file.',
+  );
+  await expect(report).toContainText('Everything came over.');
+  await report.getByRole('button', { name: 'Done' }).click();
+  // The document is the page, titled from its Title paragraph.
+  await expect(window.getByLabel('Page title')).toHaveValue('Gripper design review');
+  const page = editor(window);
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('strong')).toHaveText('moving conveyor');
+  await expect(page.locator('ul ol li')).toHaveText(['Detect the part', 'Plan the grasp']);
+  await expect(page.locator('table th')).toHaveText(['Joint', 'Range', 'Max speed']);
+  await expect(page.locator('table td').first()).toHaveText('Shoulder');
+  await expect(page.locator('pre')).toContainText('def reach(l1, l2):');
+  const image = page.locator('img').first();
+  await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(96);
+  // And it's found, by what it says.
+  await window.keyboard.press('Control+k');
+  await window.getByTestId('quick-find').getByLabel('Search pages').fill('moving conveyor');
+  await expect(window.getByTestId('quick-find-result').first()).toContainText(
+    'Gripper design review',
+    { timeout: 15_000 },
+  );
+  await window.keyboard.press('Escape');
+});
+
 test('import a Trello board, an Evernote notebook and a Confluence space', async ({ launch }) => {
   const { app, window } = await launch();
 

@@ -1,5 +1,6 @@
 export * from './confluence';
 export * from './csv';
+export * from './docx';
 export * from './evernote';
 export * from './html';
 export * from './import';
@@ -7,3 +8,4 @@ export * from './infer';
 export * from './markdown';
 export * from './paths';
 export * from './trello';
+export * from './xml';

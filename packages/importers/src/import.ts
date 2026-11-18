@@ -29,6 +29,7 @@ import { appendContent, type JSONContent } from '@workspace/editor';
 import type * as Y from 'yjs';
 import { importConfluence, isConfluenceExport } from './confluence';
 import { parseCsv } from './csv';
+import { importDocx } from './docx';
 import { importEvernote } from './evernote';
 import { notionHtmlPage, type HtmlColumn } from './html';
 import { inferType, parseNumber, splitList } from './infer';
@@ -107,8 +108,8 @@ function relationTokens(text: string): { title: string; path: string | null }[] 
 
 /**
  * Import files under a new page, by what they are: Evernote notebooks (`.enex`), Trello
- * boards (their JSON export), a Confluence space (its HTML export), or else a Notion export
- * or plain Markdown / HTML / CSV / text files.
+ * boards (their JSON export), Word documents (`.docx`), a Confluence space (its HTML export),
+ * or else a Notion export or plain Markdown / HTML / CSV / text files.
  */
 export function importFiles(
   input: readonly ArchiveFile[],
@@ -135,6 +136,9 @@ export function importFiles(
     }
   });
   if (boards.length && boards.length === files.length) return importTrello(boards, target, options);
+  // Word documents (and Google Docs, downloaded as Word), when that's all there is.
+  const docx = files.filter((f) => /\.docx$/i.test(f.path));
+  if (docx.length && docx.length === files.length) return importDocx(docx, target, options);
   if (isConfluenceExport(files)) return importConfluence(files, target, options);
   return importNotion(files, target, options);
 }

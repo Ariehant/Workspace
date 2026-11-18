@@ -147,6 +147,12 @@ Database" on an empty page).
   and a Confluence space (its HTML export zip) as the page tree, with panels, code, tasks,
   attachments and links between pages. See the
   [desktop guide](desktop.md#import-from-other-apps) for how to export from each.
+- **Import Word and Google Docs** (`.docx`; Google Docs: File → Download → Microsoft Word):
+  headings (by style, in any language), bullet, numbered and nested lists, checklists, bold,
+  italic, underline, strikethrough, code, colours, links, quotes, code blocks, tables (with
+  header rows and merged cells), pictures with their captions, and footnotes. One document
+  becomes the page itself, titled from its Title. Equations, comments and text boxes come
+  across as text, or are listed in the report.
 - **Export** a page (`···` → Export…) or the whole workspace as Markdown & CSV in Notion's
   layout, HTML, or PDF.
 - **Backups:** the whole workspace to a `.zip`, and restore from one.

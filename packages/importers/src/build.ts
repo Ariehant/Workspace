@@ -146,6 +146,12 @@ export class ImportBuilder {
     this.warnings.add(message);
   }
 
+  /** The import's own page, for content of its own (one document imported): counted as one. */
+  usePage(): string {
+    this.pages++;
+    return this.rootId;
+  }
+
   /** A new page (under the import's page by default). */
   page(title: string, parentId: string | null = null, id = newId()): string {
     createPage(this.target.workspace, {
