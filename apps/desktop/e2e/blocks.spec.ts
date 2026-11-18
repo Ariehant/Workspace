@@ -127,8 +127,11 @@ test('equations: block via "$$ ", inline via $…$, and editing', async ({ launc
   await expect(inline).toHaveAttribute('data-latex', '2\\pi r');
 });
 
-test('table: insert, add rows and columns, header row', async ({ launch }) => {
-  const { window } = await launch();
+test('table: insert, add rows and columns, header row, row and column colours', async ({
+  launch,
+}) => {
+  const launched = await launch();
+  let { window } = launched;
   await newPage(window, 'Table');
   await slash(window, 'table');
   const table = editor(window).locator('table');
@@ -142,6 +145,24 @@ test('table: insert, add rows and columns, header row', async ({ launch }) => {
   await expect(table.locator('tr').first().locator('td, th')).toHaveCount(4);
   await menu.getByRole('button', { name: 'Header row' }).click();
   await expect(table.locator('th').first()).toHaveText('Joint');
+
+  // Colour the header row, then the first column; the colours stay after a reload.
+  await menu.getByRole('button', { name: 'Row color' }).click();
+  await menu.getByRole('menuitem', { name: 'Gray background' }).click();
+  await expect(table.locator('th[data-color="gray_background"]')).toHaveCount(4);
+  await table.locator('td').first().click();
+  await menu.getByRole('button', { name: 'Column color' }).click();
+  await menu.getByRole('menuitem', { name: 'Blue text' }).click();
+  await expect(table.locator('td[data-color="blue"]')).toHaveCount(3);
+  await expect(table.locator('th').first()).toHaveAttribute('data-color', 'blue');
+  await waitForIndexed(window, 'Joint');
+  await quit(launched.app);
+  ({ window } = await launch());
+  await expect(editor(window).locator('th').nth(1)).toHaveAttribute(
+    'data-color',
+    'gray_background',
+  );
+  await expect(editor(window).locator('td[data-color="blue"]')).toHaveCount(3);
 });
 
 test('columns: from the slash menu and by dropping a block beside another', async ({ launch }) => {

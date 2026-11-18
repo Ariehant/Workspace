@@ -221,6 +221,32 @@ describe('HTML export', () => {
     expect(html).toContain('<summary>Mermaid source</summary>');
     expect(html).toContain('<input type="checkbox" disabled checked>');
   });
+
+  it('keeps the colours of a simple table’s cells', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el(
+        'table',
+        {},
+        el(
+          'tableRow',
+          {},
+          el('tableHeader', { color: 'gray_background' }, el('paragraph', {}, 'Joint')),
+          el('tableHeader', { color: 'gray_background' }, el('paragraph', {}, 'Limit')),
+        ),
+        el(
+          'tableRow',
+          {},
+          el('tableCell', {}, el('paragraph', {}, 'J1')),
+          el('tableCell', { color: 'red' }, el('paragraph', {}, '90°')),
+        ),
+      ),
+    );
+    expect(blocksHtml(readContent(doc), ctx)).toBe(
+      '<table><tr><th class="bg-gray"><p>Joint</p></th><th class="bg-gray"><p>Limit</p></th></tr>' +
+        '<tr><td><p>J1</p></td><td class="color-red"><p>90°</p></td></tr></table>',
+    );
+  });
 });
 
 describe('cropped images', () => {

@@ -174,7 +174,8 @@ export function blockHtml(node: ContentNode, ctx: RenderContext): string {
             `<tr>${row.children
               .map((cell) => {
                 const tag = cell.type === 'tableHeader' ? 'th' : 'td';
-                return `<${tag}>${blocksHtml(cell.children, ctx)}</${tag}>`;
+                const color = classAttr(colorClass(cell.attrs.color));
+                return `<${tag}${color}>${blocksHtml(cell.children, ctx)}</${tag}>`;
               })
               .join('')}</tr>`,
         )
