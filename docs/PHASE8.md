@@ -380,6 +380,15 @@ click landing on the toggle's arrow) was wrong; moving the click didn't help.
   first two runs after a fresh build, and timed out (30 s steps); their output wasn't kept.
 - **Ruled out:** y-tiptap redraws the whole document when the editor's plugins change (menus,
   others' cursors), but ProseMirror keeps the blocks' views and the selection then.
+- **What it showed next:** with Enter acting at the new caret, the offline test
+  (`exit-check.spec.ts`), where two desktops each press Ctrl+End and Enter on the same page,
+  always splits the same empty last line on both. TipTap's UniqueID gives a split's first
+  half a new id and the second, typed into, the old one, so both desktops made a block with
+  that same id, and the merged page had two. Opening the page again gave one a new id, so the
+  page changed after a restart and the test failed. Before, Enter often acted where the click
+  left the caret, and the two desktops split different lines. Now an empty block keeps its id
+  when Enter splits it (`KeepIdOnEmptySplit` in `packages/editor/src/extensions.ts`); Enter at
+  the start of a line with text still leaves the line's id with its text.
 - **Not explained yet:** the selection toolbar not showing after Shift+Home, which is likely
   what those 2 timeouts were. The full runs below keep their output.
 

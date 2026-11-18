@@ -1,4 +1,4 @@
-import { Extension } from '@tiptap/core';
+import { Extension, combineTransactionSteps } from '@tiptap/core';
 import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration';
 import NodeRange, { isNodeRangeSelection } from '@tiptap/extension-node-range';
 import UniqueID from '@tiptap/extension-unique-id';
@@ -95,6 +95,64 @@ const KeysUseCurrentSelection = Extension.create({
             ).domObserver.onSelectionChange();
             return false;
           },
+        },
+      }),
+    ];
+  },
+});
+
+/**
+ * Enter in an empty block keeps the block's id where it was. UniqueID moves an id to the second
+ * half of a split when the first is empty, so that Enter at the start of a line leaves the
+ * line's id with its text. When the split block was empty, though, both halves are, and the
+ * id would go to the new block, typed into next. Two people pressing Enter at the same empty
+ * line (at the end of a page, say) would then each make a new block with that same id, and
+ * after merging the page has two blocks with one id. So for an empty block, the id goes back.
+ */
+const KeepIdOnEmptySplit = Extension.create({
+  name: 'keepIdOnEmptySplit',
+  addProseMirrorPlugins() {
+    const types = new Set<string>(BLOCK_NODE_TYPES);
+    return [
+      new Plugin({
+        appendTransaction(transactions, oldState, newState) {
+          if (!transactions.some((t) => t.docChanged)) return null;
+          if (transactions.some((t) => isChangeOrigin(t))) return null;
+          const before = new Map<string, number>();
+          oldState.doc.descendants((node, pos) => {
+            const id = node.attrs.id as unknown;
+            if (types.has(node.type.name) && typeof id === 'string') before.set(id, pos);
+          });
+          const { mapping } = combineTransactionSteps(oldState.doc, [...transactions]);
+          const swaps: { from: number; to: number; id: string; other: string }[] = [];
+          newState.doc.descendants((node, pos) => {
+            const id = node.attrs.id as unknown;
+            if (!types.has(node.type.name) || typeof id !== 'string' || node.content.size) return;
+            const was = before.get(id);
+            if (was === undefined) return;
+            const at = mapping.map(was, -1);
+            if (at === pos) return;
+            const first = newState.doc.nodeAt(at);
+            const other = first?.attrs.id as unknown;
+            // The block where this one was: empty too, of the same type, with a new id.
+            if (
+              first &&
+              first.type === node.type &&
+              first.content.size === 0 &&
+              typeof other === 'string' &&
+              !before.has(other) &&
+              at + first.nodeSize === pos
+            ) {
+              swaps.push({ from: at, to: pos, id, other });
+            }
+          });
+          if (!swaps.length) return null;
+          const tr = newState.tr;
+          for (const { from, to, id, other } of swaps) {
+            tr.setNodeAttribute(from, 'id', id);
+            tr.setNodeAttribute(to, 'id', other);
+          }
+          return tr;
         },
       }),
     ];
@@ -242,6 +300,7 @@ export function pageExtensions(
       // Remote changes already carry ids; only assign ids to local edits.
       filterTransaction: (transaction) => !isChangeOrigin(transaction),
     }),
+    KeepIdOnEmptySplit, // after UniqueID
     Collaboration.configure({ document: doc, field: PAGE_CONTENT_FIELD }),
     Comments.configure({ host: comments }),
     BlockRange,
