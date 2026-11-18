@@ -615,6 +615,12 @@ region.ts`): `en-GB` gives 17 Nov 2026 and 15:05, `en-DE` 1.234,5, `en-IN` 12,34
   `quit()` now closes through the same guard, so the next time names the processes still
   running and what they're waiting on. Two full runs since: no hang (one all passed, 158; the
   other had one failure, the mention notification test, below).
+  - **Found (Phase 8 N2):** the guard caught it, and logging each step of quitting showed
+    where it is. The app's own cleanup all finishes, up to Electron's `quit` event; then
+    Chromium doesn't end the process. The window's process has exited and the main process
+    waits. Saving a cover image's position and quitting at once brings it on, in up to half of
+    the runs of that test. A watchdog thread now ends the process 4 s after quitting if it's
+    still running (see [PHASE8.md](PHASE8.md#n2-tabs-embeds-of-any-site-link-mentions)).
 - **The mention notification test** failed once (Bob's inbox never showed Ada's mention in
   20 s) in eleven full runs, and passed 40 times in a row after, on its own and alongside a
   full run. Not understood yet: it now checks the mention is on Ada's page first, so the next

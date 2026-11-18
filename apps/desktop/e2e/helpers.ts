@@ -57,6 +57,9 @@ const START_TIMEOUT_MS = 40_000;
  * Close an app. If that takes over 20 s, note the processes still running (and what they're
  * doing: state and wait channel), end them so the next test starts clean, and return the note.
  */
+/** Each app's last lines of output (for reports of a start or close that hangs). */
+const outputs = new WeakMap<ElectronApplication, string[]>();
+
 async function closeApp(app: ElectronApplication): Promise<string | null> {
   let pid: number | undefined;
   try {
@@ -84,7 +87,8 @@ async function closeApp(app: ElectronApplication): Promise<string | null> {
     }
   }
   await closing;
-  return `Still running ${CLOSE_TIMEOUT_MS / 1000} s after close:\n${tree}`;
+  const said = (outputs.get(app) ?? []).join('\n') || '(nothing)';
+  return `Still running ${CLOSE_TIMEOUT_MS / 1000} s after close:\n${tree}\nMain process output:\n${said}`;
 }
 
 /** The app's process and its descendants: pid, parent, state, wait channel, age, command. */
@@ -162,6 +166,7 @@ export async function launchApp(
   // The main process's last output, for a start that doesn't finish. E2E_MAIN_LOG=1 shows all
   // of it (warnings, errors).
   const output: string[] = [];
+  outputs.set(app, output);
   const keep = (stream: NodeJS.WriteStream) => (d: Buffer) => {
     output.push(...String(d).split('\n').filter(Boolean));
     output.splice(0, Math.max(0, output.length - 40));

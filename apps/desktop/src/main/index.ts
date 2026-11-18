@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import { LINK_SCHEME, parsePageUrl } from '@workspace/core';
 import {
   DocManager,
@@ -368,10 +369,47 @@ app.on('window-all-closed', () => {
   if (!restoring) app.quit();
 });
 
+// In the E2E tests, each step of quitting is logged: a test that finds the app still running
+// after it was closed reports the last ones (the teardown hang, PHASE7.md).
+const quitStep = process.env.WORKSPACE_E2E
+  ? (step: string) => console.log(`[quit] ${step}`)
+  : () => {};
+if (process.env.WORKSPACE_E2E) {
+  for (const event of ['before-quit', 'window-all-closed', 'quit'] as const) {
+    app.on(event as 'quit', () => quitStep(event));
+  }
+}
+
 app.on('will-quit', () => {
+  quitStep('will-quit');
   reminders.stop();
   automations.close();
+  quitStep('automations closed');
   sync.stop();
+  quitStep('sync stopped');
   manager.close();
+  quitStep('docs closed');
   store.close();
+  quitStep('store closed');
+  endIfStuck();
 });
+
+/**
+ * Everything is closed by now. Chromium has been seen not to end the process after this (the
+ * window gone, the main process waiting; in the tests, after a cover image's position was saved
+ * and the app quit at once). A process left like that would keep the app from starting again
+ * (one instance at a time), so a watchdog ends it. It runs on a thread of its own: the main
+ * thread's timers no longer run once quitting has begun. A normal exit takes it along.
+ */
+function endIfStuck(): void {
+  const ms = 4000;
+  const watchdog = new Worker(
+    `const { writeSync } = require('node:fs');
+    setTimeout(() => {
+      writeSync(2, "Workspace didn't exit ${ms / 1000} s after quitting; ending it.\\n");
+      process.kill(process.pid, 'SIGKILL');
+    }, ${ms});`,
+    { eval: true },
+  );
+  watchdog.unref();
+}
