@@ -106,12 +106,20 @@ for (const theme of THEMES) {
     );
     await expect(window.getByTestId('no-access')).toContainText('This page doesn’t exist');
     await expectAccessible(window, s('a page that doesn’t exist'));
+    // Back is the page it was opened over.
     await window.keyboard.press('Alt+ArrowLeft');
+    await expect(window.getByTestId('no-access')).toBeHidden();
     await sidebarButton('Home').click();
     await expect(window.getByTestId('home-recent-page').first()).toBeVisible();
     await expectAccessible(window, s('home'));
     await window.keyboard.press('Alt+ArrowLeft');
     await expect(window.getByTestId('home')).toBeHidden();
+    await checkOpen(window, s('presenting a page'), async () => {
+      await window.getByRole('button', { name: 'Page options' }).click();
+      await window.getByRole('menuitem', { name: 'Present' }).click();
+      await expect(window.getByTestId('slide-count')).toBeVisible();
+    });
+    await expect(window.getByTestId('presentation')).toBeHidden();
     await checkOpen(window, s('templates'), () => sidebarButton('Templates').click());
     await checkOpen(window, s('the trash'), () => sidebarButton('Trash').click());
     await checkOpen(window, s('sync settings'), () => window.getByTestId('sync-indicator').click());

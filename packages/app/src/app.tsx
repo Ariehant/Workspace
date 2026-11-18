@@ -420,9 +420,12 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const blockNonce = useRef(0);
   const go = useCallback(
     (direction: -1 | 1) => {
-      // Back from Home is the page it was opened over.
-      if (home) {
-        if (direction === -1) setHome(false);
+      // Back from Home, or from a page that can't be shown, is the page it was opened over.
+      if (home || missing) {
+        if (direction === -1) {
+          setHome(false);
+          setMissing(null);
+        }
         return;
       }
       const next = stepHistory(history, direction, exists);
@@ -431,7 +434,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       setMissing(null);
       show(next.entries[next.index]!);
     },
-    [home, history, exists, show, setHistory, setMissing],
+    [home, missing, history, exists, show, setHistory, setMissing],
   );
 
   const onboarding = useRef(false);
@@ -807,6 +810,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onSearch={() => setFinding(true)}
             onHome={() => {
               setPeek(null);
+              setMissing(null);
               setHome(true);
             }}
             homeActive={home}

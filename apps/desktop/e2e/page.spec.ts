@@ -259,3 +259,59 @@ test('comments display: on the page, minimized, hidden; kept after a restart', a
     /rgba\(255, 212, 0/,
   );
 });
+
+test('present: a slide per divider, the keys, and back to the page', async ({ launch }) => {
+  const { window } = await launch();
+  await newPage(window, 'Gripper review');
+  await window.keyboard.type('Where we are.');
+  await window.keyboard.press('Enter');
+  await window.keyboard.type('---');
+  await window.keyboard.type('## Results');
+  await window.keyboard.press('Enter');
+  await window.keyboard.type('Holds 2 kg.');
+  await window.keyboard.press('Enter');
+  await window.keyboard.type('---');
+  await window.keyboard.type('Next steps.');
+  await expect(editor(window).locator('hr')).toHaveCount(2);
+
+  await (await openPageMenu(window)).getByRole('menuitem', { name: 'Present' }).click();
+  const deck = window.getByTestId('presentation');
+  await expect(deck).toBeVisible();
+  const slide = deck.getByTestId('slide');
+  const count = deck.getByTestId('slide-count');
+  const shown = (text: string) => slide.getByText(text, { exact: true });
+
+  // The title slide: the title and what comes before the first divider.
+  await expect(count).toHaveText('1 / 3');
+  await expect(slide.getByRole('heading', { level: 1 })).toHaveText('Gripper review');
+  await expect(shown('Where we are.')).toBeVisible();
+  await expect(shown('Holds 2 kg.')).toBeHidden();
+  for (const hr of await slide.locator('hr').all()) await expect(hr).toBeHidden();
+
+  await window.keyboard.press('ArrowRight');
+  await expect(count).toHaveText('2 / 3');
+  await expect(slide.getByRole('heading', { level: 1 })).toHaveCount(0);
+  await expect(slide.getByRole('heading', { name: 'Results' })).toBeVisible();
+  await expect(shown('Holds 2 kg.')).toBeVisible();
+  await expect(shown('Where we are.')).toBeHidden();
+
+  await window.keyboard.press('Space');
+  await expect(count).toHaveText('3 / 3');
+  await expect(shown('Next steps.')).toBeVisible();
+  // Past the last slide stays there; Home and End go to the ends.
+  await window.keyboard.press('ArrowRight');
+  await expect(count).toHaveText('3 / 3');
+  await window.keyboard.press('Home');
+  await expect(count).toHaveText('1 / 3');
+  await deck.getByRole('button', { name: 'Next slide (→)' }).click();
+  await expect(count).toHaveText('2 / 3');
+  await window.keyboard.press('ArrowLeft');
+  await expect(count).toHaveText('1 / 3');
+
+  await window.keyboard.press('Escape');
+  await expect(deck).toBeHidden();
+  await expect(window.getByLabel('Page title')).toHaveValue('Gripper review');
+  // Nothing on the page changed.
+  await expect(editor(window).locator('hr')).toHaveCount(2);
+  await expect(editor(window)).toContainText('Holds 2 kg.');
+});

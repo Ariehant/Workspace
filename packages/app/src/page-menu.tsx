@@ -34,6 +34,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   PenLine,
+  Presentation,
   Plug,
   Trash2,
 } from 'lucide-react';
@@ -69,6 +70,8 @@ export interface PageMenuProps {
   suggest?: { on: boolean; toggle: (() => void) | null };
   /** The page has comments (not a database or its rows): how they show. */
   hasComments?: boolean;
+  /** Present the page as slides (pages, not databases). */
+  onPresent?(): void;
 }
 
 const FONTS: { font: PageFont; label: string; sample: string }[] = [
@@ -121,6 +124,7 @@ export function PageMenu({
   follow,
   views,
   hasComments = false,
+  onPresent,
 }: PageMenuProps) {
   const [following, setFollowing] = useState<boolean | null>(null);
   const [seen, setSeen] = useState<{ views: number; viewers: number } | null>(null);
@@ -292,6 +296,11 @@ export function PageMenu({
           <MenuItem icon={<Link2 size={14} />} onSelect={onCopyLink}>
             Copy link
           </MenuItem>
+          {onPresent && (
+            <MenuItem icon={<Presentation size={14} />} onSelect={onPresent}>
+              Present
+            </MenuItem>
+          )}
           {onExport && (
             <MenuItem icon={<Download size={14} />} onSelect={onExport}>
               Export…

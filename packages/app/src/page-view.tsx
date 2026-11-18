@@ -78,6 +78,7 @@ import { useDoc, useDocVersion } from './hooks';
 import { IconPicker, randomEmoji } from './icon-picker';
 import { useNavigation } from './navigation';
 import { PageMenu } from './page-menu';
+import { Presentation } from './present';
 
 /** Back/forward and sidebar controls shared by every page header. */
 export interface ChromeProps {
@@ -614,6 +615,7 @@ export function PageView({
   const role = pages.role(pageId);
   const comments = usePageComments(isDatabase ? null : pageId, role);
   const [commentsMode] = useCommentsMode(pageId);
+  const [presenting, setPresenting] = useState(false);
   const awareness = usePresence(isDatabase ? null : pageId, pageDoc);
   const people = uniquePeople(usePeers(awareness, user.id));
   const articleRef = useRef<HTMLElement>(null);
@@ -662,10 +664,12 @@ export function PageView({
                 : { on: comments.suggesting, toggle: comments.toggleSuggesting }
             }
             hasComments={!isDatabase && !!comments.doc}
+            onPresent={isDatabase ? undefined : () => setPresenting(true)}
           />
         }
       />
       {model.trashed && <TrashBanner label="This page is in Trash." onRestore={model.restore} />}
+      {presenting && <Presentation pageId={pageId} onClose={() => setPresenting(false)} />}
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto" data-testid="page-scroll" data-scroll-root>
           <HeroCover model={model} editable={editable} />
