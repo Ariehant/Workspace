@@ -82,9 +82,9 @@ export function createWebPlatform(options: {
   async function startExport(request: ExportRequest): Promise<boolean> {
     if (request.format === 'backup') return false;
     if (request.format === 'pdf') {
-      if (!request.pageId) return false;
       // Opened straight away, while the click still counts (browsers block later pop-ups).
-      const params = new URLSearchParams({ print: request.pageId });
+      // Without a page: the whole workspace.
+      const params = new URLSearchParams({ print: request.pageId ?? 'all' });
       if (request.includeSubpages) params.set('subpages', '1');
       if (request.pdf) {
         params.set('size', request.pdf.pageSize);

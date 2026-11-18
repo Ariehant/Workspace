@@ -118,8 +118,7 @@ test('export the whole workspace as HTML, databases as tables and diagrams as SV
   await window.getByRole('button', { name: 'Workspace menu' }).click();
   await window.getByRole('menuitem', { name: 'Export all workspace content…' }).click();
   const dialog = window.getByTestId('export-dialog');
-  // PDF is for single pages.
-  await expect(dialog.getByRole('radio')).toHaveCount(2);
+  await expect(dialog.getByRole('radio')).toHaveCount(3);
   await dialog.getByRole('radio', { name: /^HTML/ }).check();
   await dialog.getByRole('button', { name: 'Export', exact: true }).click();
   await exported(window);
@@ -161,6 +160,39 @@ test('export a page as PDF, and cancel an export', async ({ launch }) => {
   await window.getByTestId('export-status').getByRole('button', { name: 'Cancel' }).click();
   await expect(window.getByTestId('export-status')).toHaveAttribute('data-state', 'cancelled');
   expect(existsSync(cancelled)).toBe(false);
+});
+
+test('the whole workspace as one PDF: contents linking to each page, a sheet each', async ({
+  launch,
+}) => {
+  const { app, window } = await launch();
+  await newPage(window, 'Handbook');
+  await window.keyboard.type('How we build arms.');
+  const handbook = window.getByRole('treeitem').filter({ hasText: 'Handbook' }).first();
+  await handbook.hover();
+  await handbook.getByRole('button', { name: 'Add a page inside' }).click();
+  await window.getByLabel('Page title').fill('Wiring');
+  await window.getByLabel('Page title').press('Enter');
+  await window.keyboard.type('Shielded cable for the encoders.');
+  await settle(window);
+
+  const pdf = join(out, 'workspace.pdf');
+  await stubDialogs(app, pdf);
+  await window.getByRole('button', { name: 'Workspace menu' }).click();
+  await window.getByRole('menuitem', { name: 'Export all workspace content…' }).click();
+  const dialog = window.getByTestId('export-dialog');
+  await expect(dialog).toContainText('Every page as it looks, in one document');
+  await dialog.getByRole('radio', { name: /^PDF/ }).check();
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  await exported(window);
+
+  const text = readFileSync(pdf).toString('latin1');
+  expect(text.startsWith('%PDF-')).toBe(true);
+  // Contents, then Getting started, Handbook and Wiring: a sheet each at least.
+  expect(text.match(/\/Type\s*\/Page\b/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+  // The contents link inside the document.
+  expect(text).toMatch(/\/Subtype\s*\/Link/);
+  expect(text).toMatch(/\/Dest|\/GoTo/);
 });
 
 test('back up the workspace and restore it', async ({ launch }) => {

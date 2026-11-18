@@ -6,15 +6,17 @@ import { useEffect, useState } from 'react';
 import { useApp } from './context';
 import type { ExportFormat, ExportStatus, Platform } from './platform';
 
-const FORMATS: { id: ExportFormat; label: string; hint: string; pageOnly?: boolean }[] = [
+const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
   {
     id: 'markdown',
     label: 'Markdown & CSV',
     hint: 'Pages as .md, databases as .csv, in Notion’s layout (a .zip).',
   },
   { id: 'html', label: 'HTML', hint: 'Pages as standalone web pages with their files (a .zip).' },
-  { id: 'pdf', label: 'PDF', hint: 'The page as it looks, ready to print.', pageOnly: true },
+  { id: 'pdf', label: 'PDF', hint: 'The page as it looks, ready to print.' },
 ];
+/** PDF of the whole workspace: every page, one document. */
+const WORKSPACE_PDF_HINT = 'Every page as it looks, in one document with its contents.';
 
 /** Export a page (with its sub-pages) or the whole workspace. */
 export function ExportDialog({ pageId, onClose }: { pageId: PageId | null; onClose(): void }) {
@@ -47,7 +49,7 @@ export function ExportDialog({ pageId, onClose }: { pageId: PageId | null; onClo
       >
         <div className="flex flex-col gap-4 p-4 pt-2 text-sm">
           <div role="radiogroup" aria-label="Export format" className="flex flex-col gap-1">
-            {FORMATS.filter((f) => pageId || !f.pageOnly).map((f) => (
+            {FORMATS.map((f) => (
               <label
                 key={f.id}
                 className={cn(
@@ -65,7 +67,9 @@ export function ExportDialog({ pageId, onClose }: { pageId: PageId | null; onClo
                 />
                 <span>
                   <span className="block font-medium">{f.label}</span>
-                  <span className="block text-xs text-muted">{f.hint}</span>
+                  <span className="block text-xs text-muted">
+                    {f.id === 'pdf' && !pageId ? WORKSPACE_PDF_HINT : f.hint}
+                  </span>
                 </span>
               </label>
             ))}
