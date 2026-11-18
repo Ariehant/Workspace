@@ -58,6 +58,12 @@ planned is in [PHASE7.md](PHASE7.md).
   cover); font (default, serif, mono), small text, full width, lock, word count.
 - **Every block has a stable id**, for block links, comments, sync and the API.
 
+- **Simple tables:** add and remove rows and columns, header row and column, and colour a
+  row or a column (text or background) from the table's toolbar.
+- **Present** (`···` → Present): the page as slides, full screen, a new slide at each divider
+  (the first with the title). Arrow keys, Space and Page Up/Down move, Home and End go to the
+  ends, Escape ends.
+
 ## Databases
 
 Inline or full page (`/database inline`, `/database full page`, or "Get started with:
@@ -107,6 +113,8 @@ Database" on an empty page).
 
 ## Workspace and navigation
 
+- **Home** (sidebar → Home): the pages you visited last, the reminders coming up (`@remind` in
+  pages and on dates; in the desktop app) and the pages edited last.
 - **Sidebar:** a page tree with drag and drop to reorder or nest, favorites and a resizable
   width. On a server workspace: sections for teamspaces, pages shared with you and your private
   pages.
@@ -154,7 +162,8 @@ Database" on an empty page).
   becomes the page itself, titled from its Title. Equations, comments and text boxes come
   across as text, or are listed in the report.
 - **Export** a page (`···` → Export…) or the whole workspace as Markdown & CSV in Notion's
-  layout, HTML, or PDF.
+  layout, HTML, or PDF. A PDF of a page with its sub-pages, or of the whole workspace, is one
+  document that starts with its contents, linked to each page.
 - **Backups:** the whole workspace to a `.zip`, and restore from one.
 
 ## Sync and the web app
@@ -185,7 +194,8 @@ These need the [self-hosted server](self-hosting.md).
 - **Presence:** avatars in the page header, named cursors in the editor, dots in the sidebar
   and avatars on database rows others have open.
 - **Comments:** on selected text or the whole page, with replies, @-mentions, reactions and
-  resolve. People who may only comment suggest edits, which an editor accepts or rejects.
+  resolve. People who may only comment suggest edits, which an editor accepts or rejects. Each
+  page shows its comments on the page, minimized or hidden (`···` → Show comments).
 - **Inbox:** mentions, comments and replies on pages you follow, reminders, pages shared with
   you and requests for access (with Share and Decline), live, with desktop notifications. Email digests: after a mention, or daily, with
   one-click unsubscribe.

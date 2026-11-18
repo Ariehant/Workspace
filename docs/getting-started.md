@@ -18,6 +18,8 @@ the parts about other people need the [server](self-hosting.md).
   beside another block to make columns.
 - **Linking:** `@` mentions a page, a person or a date. Paste a link and choose **Mention** to
   show it as a chip with the site's title, or **Embed** to show the site in the page.
+- **Present:** `···` → **Present** shows the page as slides, full screen; each divider starts a
+  new slide. Arrow keys move, Escape ends.
 - **Sub-pages:** `/page` adds a page inside this one. The sidebar shows the tree; drag pages
   there to reorder or nest them, and star the ones you use most.
 
@@ -41,6 +43,8 @@ the parts about other people need the [server](self-hosting.md).
 
 ## Finding things
 
+- **Home** (in the sidebar): the pages you visited last, reminders coming up and the pages
+  edited last.
 - **Quick find:** `Ctrl+K`. It searches titles and content. The filters under it narrow it:
   titles only, a section, when it was edited, who created it; and it sorts by best match, last
   edited or created.
@@ -58,7 +62,8 @@ says what came over and anything that didn't. How to export from each app is in 
 [desktop guide](desktop.md#import-from-other-apps).
 
 To take things out: **Export…** in a page's `···` menu (Markdown & CSV, HTML or PDF), **Export
-all workspace content…** in the workspace menu, or a full backup to a `.zip`.
+all workspace content…** in the workspace menu (a PDF of everything starts with its contents),
+or a full backup to a `.zip`.
 
 ## With other people
 

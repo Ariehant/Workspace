@@ -38,9 +38,9 @@ milestones below; the others wait for a decision, by number.
 | 3   | **Tabs block** (`/tabs`, Notion 3.4, March 2026)                                                                                                                              | Put content in clickable tabs on one page (e.g. "Specs / Tests / Notes") instead of making sub-pages.                                                 | M      | ✅ Done (N2) |
 | 4   | **Embed any website** (generic embed) and more providers: GitHub Gist, Google Docs/Sheets/Slides/Drive, Miro, X/Twitter, Spotify, SoundCloud, Typeform, Airtable, Excalidraw… | Paste any link and see it live in the page. Today only YouTube, Vimeo, Loom, Figma, CodePen and Google Maps work; everything else becomes a bookmark. | M      | ✅ Done (N2) |
 | 5   | **Link mentions** (paste a URL → "Mention" chip with the site's icon and title)                                                                                               | A small inline link that shows what it points to (a GitHub PR, a Figma file, a web page), instead of a bare URL.                                      | S–M    | ✅ Done (N2) |
-| 6   | **Presentation mode** (Notion 3.4, beta)                                                                                                                                      | Turn a page into a slideshow (each divider = new slide), full-screen, arrow keys to move. For meetings and demos.                                     | M      | 🤔           |
+| 6   | **Presentation mode** (Notion 3.4, beta)                                                                                                                                      | Turn a page into a slideshow (each divider = new slide), full-screen, arrow keys to move. For meetings and demos.                                     | M      | ✅ Done (N6) |
 | 7   | **Custom emoji** (upload your own, used anywhere `:` works)                                                                                                                   | Team logos, project icons as emoji.                                                                                                                   | M      | 🤔           |
-| 8   | **Simple table colours** (colour a row or a column)                                                                                                                           | Highlight a header row or a total column in a plain table.                                                                                            | S      | 🤔           |
+| 8   | **Simple table colours** (colour a row or a column)                                                                                                                           | Highlight a header row or a total column in a plain table.                                                                                            | S      | ✅ Done (N6) |
 | 9   | **Office file previews** (Word, Excel, PowerPoint shown in the page, Notion 3.6)                                                                                              | See a `.docx` / `.xlsx` attachment without downloading it.                                                                                            | M      | 🤔           |
 | 10  | **Interactive HTML block** (Notion 3.6)                                                                                                                                       | Small custom widgets (a calculator, a chart) written in HTML inside a page. Mostly made by Notion's AI there; a security risk to run arbitrary HTML.  | M      | ❌           |
 
@@ -68,11 +68,11 @@ milestones below; the others wait for a decision, by number.
 | #   | Notion feature                                                                                                                                                                                                                                              | What it's for (how you use it)                                                            | Effort         | Suggest      |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------- | ------------ |
 | 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅ Done (N4) |
-| 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | 🤔           |
+| 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | ✅ Done (N6) |
 | 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | 🤔           |
 | 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | 🤔           |
 | 29  | **Full keyboard shortcut set** (move blocks with `Ctrl+Shift+↑/↓`, `Ctrl+Alt+0–9` turn into, `Ctrl+D` duplicate, `Ctrl+Shift+H` last colour, `Ctrl+Shift+L` dark mode, `Ctrl+[`/`]` back/forward, `Ctrl+Shift+U` go to parent…) and a shortcuts help screen | Faster work for keyboard users; people coming from Notion expect the same keys.           | S              | ✅ Done (N1) |
-| 30  | **Comments display setting** (show comments on the page, minimized, or hidden)                                                                                                                                                                              | Keep busy pages clean.                                                                    | S              | 🤔           |
+| 30  | **Comments display setting** (show comments on the page, minimized, or hidden)                                                                                                                                                                              | Keep busy pages clean.                                                                    | S              | ✅ Done (N6) |
 | 31  | **Move a page to another workspace**                                                                                                                                                                                                                        | Reorganise between personal and team workspaces.                                          | S–M            | 🤔           |
 | 32  | **Other languages** for the interface (Hindi etc.)                                                                                                                                                                                                          | Left for later in Phase 7; listed so it isn't forgotten.                                  | M per language | 🤔           |
 
@@ -94,7 +94,7 @@ milestones below; the others wait for a decision, by number.
 | 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅ Done (N5) |
 | 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | 🤔           |
 | 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌           |
-| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | 🤔           |
+| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | ✅ Done (N6) |
 | 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔           |
 | 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌           |
 
@@ -108,13 +108,14 @@ milestones below; the others wait for a decision, by number.
 
 ## Milestones
 
-| Milestone | Items                                                                      | Estimate  |
-| --------- | -------------------------------------------------------------------------- | --------- |
-| N1        | The slash menu and keyboard (#1, #2, #29)                                  | 1 week    |
-| N2        | Blocks: tabs, embedding any site, link mentions (#3, #4, #5)               | 1.5 weeks |
-| N3        | Databases: layouts, show as, freeze, bulk edit, recurring templates, forms | 3 weeks   |
-| N4        | Quick find filters, request access (#25, #33)                              | 1.5 weeks |
-| N5        | Import from Word and Google Docs (#39)                                     | 1 week    |
+| Milestone | Items                                                                                    | Estimate  |
+| --------- | ---------------------------------------------------------------------------------------- | --------- |
+| N1        | The slash menu and keyboard (#1, #2, #29)                                                | 1 week    |
+| N2        | Blocks: tabs, embedding any site, link mentions (#3, #4, #5)                             | 1.5 weeks |
+| N3        | Databases: layouts, show as, freeze, bulk edit, recurring templates, forms               | 3 weeks   |
+| N4        | Quick find filters, request access (#25, #33)                                            | 1.5 weeks |
+| N5        | Import from Word and Google Docs (#39)                                                   | 1 week    |
+| N6        | Table colours, comments display, Home, workspace PDF, presenting (#8, #30, #26, #42, #6) | 1.5 weeks |
 
 Each milestone is committed and pushed with its tests, after the full checks: formatting, lint,
 types, unit tests, both builds, the desktop E2E suite twice and the web E2E suite.
@@ -580,3 +581,56 @@ an **Install** and a **Use it** section, and Word and Google Docs import. A new
 importing and working with others. The screenshots were taken again from
 `apps/desktop/e2e/readme-shots.spec.ts`, which now also shows quick find's filters, bulk edit, a
 row page's layout, an imported Word document and a tabs block (the last only in the spec).
+
+## N6: Table colours, comments display, Home, workspace PDF, presenting
+
+With N1–N5 done, five of the 🤔 items that need no outside service were picked to finish the
+app's everyday surface: #8, #30, #26, #42 and #6.
+
+**Built:**
+
+- **Simple table colours (#8):** Row color and Column color in a table's toolbar colour every
+  cell of the row or column of the cursor (text or background, the usual palette; a merged cell
+  once). HTML export keeps them.
+- **Comments display (#30):** `···` → Show comments: **On the page**, **Minimized** (page
+  comments fold into one "N comments" line that opens them) or **Hidden** (no page comments and
+  no highlights in the text; the comments button and panel still work, and the thread open in
+  the panel is highlighted). Saved per page, like the backlinks setting, through a shared
+  `usePageSetting` hook.
+- **Home (#26):** Home in the sidebar, under Search: a greeting, the pages visited last as
+  cards, the reminders still to come (`@remind` in pages and on date properties, read from the
+  desktop's reminder index by `SqliteStore.upcomingReminders`) and the pages edited last.
+  Each opens its page (a reminder, at its block); Back from Home is the page it was opened over.
+  The web app shows Home without Upcoming (the server keeps no index of future reminders).
+- **One PDF (#42):** a page with its sub-pages already exported as one PDF; now the whole
+  workspace does too (Export all workspace content → PDF), in the sidebar's order. A PDF of more
+  than one page starts with a **Contents** sheet linking to each page, and each page starts a
+  sheet.
+- **Present (#6):** `···` → Present shows the page full screen as slides, a new one at each
+  divider (the first with the title; slides with nothing in them are left out). Arrow keys,
+  Space, Page Up/Down, Home and End move; Escape, or leaving full screen, ends it. The page is
+  drawn once, read-only, with the other slides' blocks hidden, so every block looks as it does
+  on the page.
+
+**Fixed on the way:**
+
+- **Back from "This page doesn't exist"** returns to the page it was opened over (it stayed put
+  when there was no earlier history).
+- **CI's first runs on `main`** found three things, each reproduced before it was fixed:
+  - The `.docx` size-limit test took 9 s on GitHub's runner (it compressed 200 MB). It now
+    uses a small zip that declares a big part, which is what the guard reads.
+  - The Appearance menu showed 100% for a moment as it opened (it asked for the zoom each
+    time); the sidebar now follows the zoom.
+  - Webhooks to a host name failed on Node 22 ("Invalid IP address: undefined"): delivery's
+    pinned lookup didn't answer Node's request for every address at once. Unit tests used an
+    IP address, which skips the lookup; one now delivers to `localhost`.
+
+**Tests:**
+
+- **Unit:** the row and column colour command on the real schema, HTML export of coloured
+  cells, `upcomingReminders`, Home's greeting and dates, the print order, slide splitting, and
+  delivery to a host name.
+- **Desktop E2E:** colouring a row and a column, kept after a restart (`blocks.spec.ts`); each
+  comments mode, kept after a restart, and presenting a page (`page.spec.ts`); Home
+  (`home.spec.ts`); the workspace as one PDF, its sheets and links (`export.spec.ts`); and axe on
+  Home and on a presentation in both themes (`a11y.spec.ts`).

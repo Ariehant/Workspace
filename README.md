@@ -46,13 +46,14 @@ without the AI.**
 **Editor**
 
 - Slash menu, Markdown shortcuts, drag handles and columns
-- Headings, lists, to-dos, toggles, callouts, quotes, tables
+- Headings, lists, to-dos, toggles, callouts, quotes, tables with coloured rows and columns
 - Code with highlighting for ~190 languages, Mermaid diagrams, KaTeX equations
 - Images, video, audio, PDFs, files, bookmarks and embeds
 - @-mentions of pages, people and dates, reminders, emoji; link mentions with the site's title
 - Tabs, synced blocks, buttons, table of contents, find and replace
 - Embed any website; YouTube, Figma, Google Docs, Miro, GitHub Gists and more
 - `/` commands for everything, and Notion's keyboard shortcuts (`Ctrl+?` lists them)
+- Present a page as slides, full screen
 
 </td>
 <td width="50%" valign="top">
@@ -77,13 +78,14 @@ without the AI.**
 
 **Workspace**
 
+- Home: recent pages, upcoming reminders, recent edits
 - Page tree with drag and drop, favorites, trash
 - Quick find (`Ctrl+K`) with filters: titles only, section, last edited, created by
 - Tabs, several windows, back and forward, `workspace://` links
 - Backlinks, page history with restore, a templates gallery
 - Import from Notion, Word, Google Docs, Evernote, Trello and Confluence, and Markdown, HTML
   and CSV
-- Export Markdown & CSV, HTML, PDF; full backups
+- Export Markdown & CSV, HTML, PDF (a page, or the whole workspace with contents); full backups
 - Light, dark and system themes
 
 </td>
@@ -93,7 +95,7 @@ without the AI.**
 
 - Accounts with passwords or single sign-on (OpenID Connect)
 - Members, guests, groups, teamspaces and per-page sharing, with requests for access
-- Live cursors and presence, comments, suggested edits
+- Live cursors and presence, comments (shown, minimized or hidden per page), suggested edits
 - An inbox for mentions, comments and reminders, with email digests
 - Publish pages to the web, and a web app with the same UI
 - A Notion-compatible REST API with integration tokens and webhooks
