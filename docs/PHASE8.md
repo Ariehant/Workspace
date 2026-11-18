@@ -634,3 +634,20 @@ app's everyday surface: #8, #30, #26, #42 and #6.
   comments mode, kept after a restart, and presenting a page (`page.spec.ts`); Home
   (`home.spec.ts`); the workspace as one PDF, its sheets and links (`export.spec.ts`); and axe on
   Home and on a presentation in both themes (`a11y.spec.ts`).
+
+**Runs:**
+
+- **The full desktop suite, twice:** 177 passed and 3 skipped each time; no app failed to close.
+  (A first pair of runs failed one forms test both times: the test before it left the inbox
+  open, and with Home in the sidebar the inbox now covers the Form tab. The test closes it now.)
+- **The web suite:** 6 passed. Formatting, lint, types, unit tests and the web, server and
+  desktop builds pass.
+- **CI on the pull request:** all five jobs green (lint and unit tests, desktop and web E2E, the
+  Compose stack, packaging, performance budgets). Two more races CI's runner exposed were fixed
+  on the way: a `sync` test comparing 150 KB byte by byte (now checks it gets the same bytes
+  back), and a server access test that expected "live" before the catch-up had ended.
+- **Performance budgets** compare each metric with one run of the base branch; on shared
+  runners whole runs vary by 30–60%, so the job fails on runner speed alone at times. A fix
+  (calibrate by the pure-code benchmarks, best of three for UI cases) is proposed on the pull
+  request rather than made here. Grouping 50,000 rows takes either about 120 ms or about 500 ms
+  on `main` as on this branch: a slow path worth its own look.
