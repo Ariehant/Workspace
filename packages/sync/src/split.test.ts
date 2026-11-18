@@ -36,7 +36,10 @@ const same = (x: Y.Doc, y: Y.Doc) => {
 describe('splitting large updates', () => {
   it('leaves an update within the limit alone', () => {
     const update = Y.encodeStateAsUpdate(sampleDoc());
-    expect(splitUpdate(update, update.byteLength)).toEqual([update]);
+    // The very same bytes (comparing 150 KB element by element took seconds on CI).
+    const parts = splitUpdate(update, update.byteLength);
+    expect(parts).toHaveLength(1);
+    expect(parts![0]).toBe(update);
   });
 
   it('splits a doc into parts under the limit that make the same doc, in order', () => {
