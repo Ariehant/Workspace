@@ -1,6 +1,8 @@
 import {
   createPage,
   getMathMacros,
+  listCustomEmoji,
+  observeCustomEmoji,
   listUsers,
   observeMathMacros,
   setMathMacros,
@@ -98,6 +100,10 @@ export function useEditorServices(
       fileUrl: (id) => platform.fileUrl(id),
       openFile: (id) => platform.openFile(id),
       linkPreview: (url) => platform.linkPreview(url),
+      customEmoji: {
+        list: () => listCustomEmoji(workspaceDataDoc(workspace)),
+        subscribe: (listener) => observeCustomEmoji(workspaceDataDoc(workspace), listener),
+      },
       mathMacros: {
         get: () => getMathMacros(workspaceDataDoc(workspace)),
         set: (macros) => setMathMacros(workspaceDataDoc(workspace), macros),

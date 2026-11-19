@@ -17,6 +17,12 @@ export function inlineMarkdown(inline: readonly Inline[], ctx: RenderContext): s
         const { attrs } = part;
         if (part.node === 'hardBreak') return '<br>';
         if (part.node === 'inlineMath') return `$${String(attrs.latex ?? '')}$`;
+        if (part.node === 'customEmoji') {
+          // Its image, copied next to the page; or the name when it can't be.
+          const name = String(attrs.name ?? '');
+          const href = attrs.fileId ? ctx.fileHref(String(attrs.fileId), `${name}.png`) : null;
+          return href ? `![:${name}:](${encodeHref(href)})` : `:${name}:`;
+        }
         if (attrs.kind === 'date') return `@${formatDateMention(String(attrs.date ?? ''))}`;
         if (attrs.kind === 'link') {
           const url = String(attrs.url ?? '');

@@ -47,6 +47,7 @@ import { DatabaseRegistry } from './database/registry';
 import { useRegistryVersion } from './database/hooks';
 import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
+import { EmojiDialog } from './emoji-settings';
 import { Home } from './home';
 import { PeopleView } from './people-view';
 import { NoAccess } from './no-access';
@@ -583,6 +584,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   // Language and region: the formats change at once (everything re-renders from here).
   const [regionSettings, setRegionSettings] = useState(initial.region);
   const [regionOpen, setRegionOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const updates = useUpdates(platform.about?.updates);
@@ -843,6 +845,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             fileUrl={platform.fileUrl}
             onThemeChange={changeTheme}
             onRegion={() => setRegionOpen(true)}
+            onEmoji={() => setEmojiOpen(true)}
             onAbout={platform.about ? () => setAboutOpen(true) : undefined}
             onShortcuts={() => setShortcutsOpen(true)}
             updateReady={
@@ -891,6 +894,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
         {aboutOpen && platform.about && (
           <AboutDialog about={platform.about} onClose={() => setAboutOpen(false)} />
         )}
+        {emojiOpen && <EmojiDialog onClose={() => setEmojiOpen(false)} />}
         {regionOpen && (
           <RegionDialog
             settings={regionSettings}

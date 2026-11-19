@@ -50,6 +50,26 @@ describe('Markdown export', () => {
     );
   });
 
+  it('writes custom emoji as their image, or their name without one', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el(
+        'paragraph',
+        {},
+        'Go ',
+        el('customEmoji', { name: 'teamlogo', fileId: 'f1' }),
+        ' ',
+        el('customEmoji', { name: 'gone' }),
+      ),
+    );
+    expect(blocksMarkdown(readContent(doc), ctx)).toBe(
+      'Go ![:teamlogo:](Page/teamlogo.png) :gone:',
+    );
+    expect(blocksHtml(readContent(doc), ctx)).toContain(
+      '<img class="emoji" src="Page/teamlogo.png" alt=":teamlogo:" title=":teamlogo:"> :gone:',
+    );
+  });
+
   it('writes person mentions as the person’s name', () => {
     const doc = setContent(
       new Y.Doc(),

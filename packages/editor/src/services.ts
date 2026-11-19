@@ -113,6 +113,11 @@ export interface EditorServices {
     get(id: string): PersonRef | null;
     subscribe(listener: () => void): () => void;
   };
+  /** The workspace's custom emoji (`:name:` → an uploaded image). */
+  customEmoji?: {
+    list(): { name: string; fileId: string }[];
+    subscribe(listener: () => void): () => void;
+  };
   /** The workspace's KaTeX macros (`\R` -> `\mathbb{R}`), shared by every page. */
   mathMacros: {
     get(): Record<string, string>;

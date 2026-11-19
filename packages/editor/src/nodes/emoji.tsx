@@ -10,6 +10,16 @@ import {
 } from '../suggestions/floating';
 import { ItemList } from '../suggestions/item-list';
 
+/** A custom emoji in the menu: `fallbackImage` is its image's address. */
+export type EmojiPick = EmojiItem & { custom?: { name: string; fileId: string } };
+
+let standardNames: Set<string> | null = null;
+/** Is this a built-in emoji's shortcode? (A custom emoji can't take one.) */
+export function isStandardEmoji(name: string): boolean {
+  standardNames ??= new Set(EMOJI.flatMap((e) => e.shortcodes));
+  return standardNames.has(name);
+}
+
 /** Emoji that have a character, minus the bare regional-indicator letters. */
 export const EMOJI: EmojiItem[] = emojis.filter(
   (e) => e.emoji && !e.name.startsWith('regional_indicator'),
@@ -43,10 +53,10 @@ export function searchEmoji(query: string, list: readonly EmojiItem[] = EMOJI): 
     .map((r) => r.e);
 }
 
-const EmojiList = forwardRef<SuggestionListHandle<EmojiItem>, SuggestionListProps<EmojiItem>>(
+const EmojiList = forwardRef<SuggestionListHandle<EmojiPick>, SuggestionListProps<EmojiPick>>(
   function EmojiList({ items, command, loading }, ref) {
     return (
-      <ItemList<EmojiItem>
+      <ItemList<EmojiPick>
         ref={ref}
         items={items}
         loading={loading}
@@ -57,7 +67,11 @@ const EmojiList = forwardRef<SuggestionListHandle<EmojiItem>, SuggestionListProp
         className="w-64"
         renderItem={(e) => (
           <>
-            <span className="w-5 text-center text-base leading-none">{e.emoji}</span>
+            {e.custom ? (
+              <img className="size-5 object-contain" src={e.fallbackImage} alt="" />
+            ) : (
+              <span className="w-5 text-center text-base leading-none">{e.emoji}</span>
+            )}
             <span className="truncate text-muted">:{e.shortcodes[0]}:</span>
           </>
         )}
@@ -67,6 +81,19 @@ const EmojiList = forwardRef<SuggestionListHandle<EmojiItem>, SuggestionListProp
 );
 
 export const emojiKey = new PluginKey('emojiSuggest');
+
+/** The workspace's custom emoji, as menu items. */
+function customPicks(editor: Editor): EmojiPick[] {
+  const services = editor.storage.uiBridge?.ref.current.services;
+  return (services?.customEmoji?.list() ?? []).map((e) => ({
+    name: `custom:${e.name}`,
+    shortcodes: [e.name],
+    tags: ['custom'],
+    group: 'custom',
+    fallbackImage: services!.fileUrl(e.fileId),
+    custom: e,
+  }));
+}
 
 /** Where `/emoji` typed a ":": its menu shows before a letter is typed. */
 const openedAt = new WeakMap<Editor, number>();
@@ -87,12 +114,15 @@ export function openEmojiMenu(editor: Editor): void {
     .run();
 }
 
-/** ":rock" suggests 🚀 and friends; choosing one inserts the plain character, as in Notion. */
+/**
+ * ":rock" suggests 🚀 and friends; choosing one inserts the plain character, as in Notion.
+ * The workspace's custom emoji come first, and go in as a `customEmoji` node.
+ */
 export const EmojiSuggest = Extension.create({
   name: 'emojiSuggest',
   addProseMirrorPlugins() {
     return [
-      Suggestion<EmojiItem, EmojiItem>({
+      Suggestion<EmojiPick, EmojiPick>({
         editor: this.editor,
         pluginKey: emojiKey,
         char: ':',
@@ -101,11 +131,22 @@ export const EmojiSuggest = Extension.create({
         // `allow` instead would dismiss the suggestion for good at the bare ":".)
         shouldShow: ({ editor, range, query }) =>
           query.length >= 1 || openedAt.get(editor) === range.from,
-        items: ({ query }) => (query ? searchEmoji(query) : FIRST),
-        command: ({ editor, range, props }) => {
-          editor.chain().focus().insertContentAt(range, props.emoji!).run();
+        items: ({ editor, query }) => {
+          const custom = customPicks(editor);
+          return query
+            ? [...searchEmoji(query, custom), ...searchEmoji(query)].slice(0, MAX_RESULTS)
+            : [...custom, ...FIRST].slice(0, MAX_RESULTS);
         },
-        render: floatingList<EmojiItem>(EmojiList, {
+        command: ({ editor, range, props }) => {
+          const content = props.custom
+            ? {
+                type: 'customEmoji',
+                attrs: { name: props.custom.name, fileId: props.custom.fileId },
+              }
+            : props.emoji!;
+          editor.chain().focus().insertContentAt(range, content).run();
+        },
+        render: floatingList<EmojiPick>(EmojiList, {
           testId: 'emoji-menu',
           shouldExit: (props) => props.items.length === 0 && props.query.length > 2,
           exit: (props) => exitSuggestion(props.editor.view, emojiKey),

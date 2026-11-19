@@ -102,6 +102,9 @@ export function richTextOut(inline: readonly PMNode[] | undefined, ctx: BlockCon
       pushText(node.text, a, href);
     } else if (node.type === 'hardBreak') {
       pushText('\n', { ...PLAIN }, null);
+    } else if (node.type === 'customEmoji') {
+      // Notion's API has no custom emoji in text: their name, as typed.
+      pushText(`:${String(node.attrs?.name ?? '')}:`, annotationsOf(node.marks).a, null);
     } else if (node.type === 'inlineMath') {
       const latex = String(node.attrs?.latex ?? '');
       out.push({

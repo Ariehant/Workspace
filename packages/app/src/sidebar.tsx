@@ -40,6 +40,7 @@ import {
   Info,
   Keyboard,
   Languages,
+  SmilePlus,
   Compass,
   LayoutTemplate,
   MoreHorizontal,
@@ -110,6 +111,8 @@ export interface SidebarProps {
   onThemeChange(theme: ThemePreference): void;
   /** Settings → Language and region. */
   onRegion?(): void;
+  /** Settings → Emoji (the workspace's custom emoji). */
+  onEmoji?(): void;
   /** About Workspace (versions, updates). */
   onAbout?(): void;
   /** The keyboard shortcuts. */
@@ -227,6 +230,11 @@ export function Sidebar(props: SidebarProps) {
             {props.onRegion && (
               <MenuItem icon={<Languages size={14} />} onSelect={props.onRegion}>
                 Language and region…
+              </MenuItem>
+            )}
+            {props.onEmoji && (
+              <MenuItem icon={<SmilePlus size={14} />} onSelect={props.onEmoji}>
+                Emoji…
               </MenuItem>
             )}
             {props.can.export && (

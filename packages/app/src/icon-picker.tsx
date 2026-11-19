@@ -1,7 +1,10 @@
+import { FILE_ICON_PREFIX } from '@workspace/core';
 import { EMOJI, searchEmoji } from '@workspace/editor';
 import { cn } from '@workspace/ui';
 import { Shuffle } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useApp } from './context';
+import { useWorkspaceEmoji } from './custom-emoji';
 
 const GROUP_LABELS: Record<string, string> = {
   '': 'Smileys',
@@ -37,6 +40,28 @@ export function IconPicker({ hasIcon, onPick, onUpload }: IconPickerProps) {
   const [tab, setTab] = useState<'emoji' | 'upload'>('emoji');
   const [query, setQuery] = useState('');
   const results = useMemo(() => (query ? searchEmoji(query) : null), [query]);
+  const { platform } = useApp();
+  // The workspace's own emoji: the icon is their image.
+  const custom = useWorkspaceEmoji().filter((e) => !query || e.name.includes(query.toLowerCase()));
+  const customGrid = custom.length > 0 && (
+    <section className="mb-2" aria-label="Custom emoji">
+      <h3 className="sticky top-0 bg-menu px-1 py-1 text-xs font-medium text-muted">Custom</h3>
+      <div className="grid grid-cols-10 gap-0.5">
+        {custom.map((e) => (
+          <button
+            key={e.name}
+            type="button"
+            title={`:${e.name}:`}
+            aria-label={e.name.replace(/[_-]/g, ' ')}
+            onClick={() => onPick(`${FILE_ICON_PREFIX}${e.fileId}`)}
+            className="flex aspect-square w-full items-center justify-center rounded hover:bg-hover"
+          >
+            <img src={platform.fileUrl(e.fileId)} alt="" className="size-6 object-contain" />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
   const tabClass = (t: typeof tab) =>
     cn(
       'h-8 border-b-2 px-2 text-sm',
@@ -114,22 +139,19 @@ export function IconPicker({ hasIcon, onPick, onUpload }: IconPickerProps) {
             </button>
           </div>
           <div className="h-72 overflow-x-hidden overflow-y-auto pr-1">
-            {results ? (
-              results.length ? (
-                grid(results)
-              ) : (
-                <p className="p-2 text-muted">No emoji found</p>
-              )
-            ) : (
-              GROUPS.map((g) => (
-                <section key={g.label} className="mb-2">
-                  <h3 className="sticky top-0 bg-menu px-1 py-1 text-xs font-medium text-muted">
-                    {g.label}
-                  </h3>
-                  {grid(g.emoji)}
-                </section>
-              ))
-            )}
+            {customGrid}
+            {results
+              ? results.length
+                ? grid(results)
+                : !customGrid && <p className="p-2 text-muted">No emoji found</p>
+              : GROUPS.map((g) => (
+                  <section key={g.label} className="mb-2">
+                    <h3 className="sticky top-0 bg-menu px-1 py-1 text-xs font-medium text-muted">
+                      {g.label}
+                    </h3>
+                    {grid(g.emoji)}
+                  </section>
+                ))}
           </div>
         </div>
       ) : (

@@ -26,6 +26,13 @@ export function inlineHtml(inline: readonly Inline[], ctx: RenderContext): strin
         if (part.node === 'hardBreak') return '<br>';
         if (part.node === 'inlineMath')
           return `<code class="equation">${escapeHtml(String(attrs.latex ?? ''))}</code>`;
+        if (part.node === 'customEmoji') {
+          const name = escapeHtml(String(attrs.name ?? ''));
+          const href = attrs.fileId ? ctx.fileHref(String(attrs.fileId), `${name}.png`) : null;
+          return href
+            ? `<img class="emoji" src="${escapeHtml(href)}" alt=":${name}:" title=":${name}:">`
+            : `:${name}:`;
+        }
         if (attrs.kind === 'link') {
           const url = String(attrs.url ?? '');
           const text = escapeHtml(String(attrs.title || url));
@@ -274,6 +281,7 @@ figcaption { color: rgba(55, 53, 47, 0.65); font-size: 14px; }
 .bookmark { display: flex; flex-direction: column; border: 1px solid #e9e9e7; border-radius: 4px; padding: 12px 14px; text-decoration: none; }
 .bookmark small { color: rgba(55, 53, 47, 0.65); }
 .page-link a, a.mention { font-weight: 500; }
+img.emoji { height: 1.25em; width: auto; vertical-align: -0.25em; }
 table.database td.title { font-weight: 500; }
 dl.properties { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; margin: 0 0 24px; padding-bottom: 16px; border-bottom: 1px solid #e9e9e7; }
 dl.properties dt { color: rgba(55, 53, 47, 0.65); }

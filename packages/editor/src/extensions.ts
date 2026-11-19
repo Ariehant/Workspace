@@ -16,6 +16,7 @@ import { CodeBlock } from './nodes/code-block';
 import { lineStarts } from './nodes/code-lines';
 import { Column, ColumnList } from './nodes/columns';
 import { BlockColor, TextColor } from './nodes/colors';
+import { CustomEmoji } from './nodes/custom-emoji';
 import { EmojiSuggest } from './nodes/emoji';
 import { MarkdownClipboard } from './nodes/markdown';
 import { mathExtensions } from './nodes/math';
@@ -343,6 +344,7 @@ export function pageExtensions(
     PasteAndDrop,
     MarkdownClipboard,
     Mention,
+    CustomEmoji,
     EmojiSuggest,
     TextColor,
     BlockColor,

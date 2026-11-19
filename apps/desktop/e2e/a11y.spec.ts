@@ -135,6 +135,12 @@ for (const theme of THEMES) {
       await expect(window.getByTestId('region-dialog')).toBeVisible();
     });
 
+    await checkOpen(window, s('emoji settings'), async () => {
+      await window.getByRole('button', { name: /workspace menu/i }).click();
+      await window.getByRole('menuitem', { name: 'Emoji…' }).click();
+      await expect(window.getByTestId('emoji-settings')).toBeVisible();
+    });
+
     await checkOpen(window, s('about'), async () => {
       await window.getByRole('button', { name: /workspace menu/i }).click();
       await window.getByRole('menuitem', { name: 'About Workspace' }).click();

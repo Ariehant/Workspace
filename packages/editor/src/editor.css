@@ -1259,3 +1259,13 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Custom emoji (`:name:`): an image the size of the text around it. */
+.ws-emoji {
+  display: inline-block;
+  height: 1.25em;
+  width: auto;
+  max-width: 2.5em;
+  vertical-align: -0.25em;
+  object-fit: contain;
+}
