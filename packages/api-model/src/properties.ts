@@ -4,7 +4,13 @@
  * edited times and people, unique IDs) come out in Notion's shapes and are refused on
  * write, as Notion does.
  */
-import { newId } from '@workspace/core';
+import {
+  driveOpenUrl,
+  isDriveFileId,
+  linkedFileLocation,
+  linkedFileOf,
+  newId,
+} from '@workspace/core';
 import {
   OPTION_COLORS,
   STATUS_GROUPS,
@@ -424,11 +430,23 @@ function selectValue(p: Property, id: unknown) {
 
 function filesValue(value: unknown, ctx: ValueContext) {
   if (!Array.isArray(value)) return [];
-  return (value as FileValue[]).map((f) =>
-    f.id
-      ? { name: f.name, type: 'file', file: ctx.fileUrl(f.id, f.name) }
-      : { name: f.name, type: 'external', external: { url: f.url ?? '' } },
-  );
+  return (value as FileValue[]).map((f) => {
+    if (f.id) return { name: f.name, type: 'file', file: ctx.fileUrl(f.id, f.name) };
+    // A Google Drive file: a link to it in Drive.
+    if (f.drive && isDriveFileId(f.drive.fileId)) {
+      return { name: f.name, type: 'external', external: { url: driveOpenUrl(f.drive.fileId) } };
+    }
+    // A file on someone's computer: where it is, not a link (Phase 8 N9).
+    if (f.linked) {
+      const ref = linkedFileOf({ ...f.linked, name: f.name });
+      return {
+        name: f.name,
+        type: 'linked',
+        linked: { location: ref ? linkedFileLocation(ref) : '' },
+      };
+    }
+    return { name: f.name, type: 'external', external: { url: f.url ?? '' } };
+  });
 }
 
 /** A computed formula's value, as `{type, <type>: value}`. */

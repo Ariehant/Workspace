@@ -5,7 +5,11 @@
  * current: renamed, trashed, after a restart (by the refresh token), and after disconnecting.
  * Google is a stand-in here (`google.ts`).
  */
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { ElectronApplication, Page } from '@playwright/test';
+import { addProperty, addRow, cell, newDatabase, popover } from './db';
 import { editor, expect, launchApp, quit, test, type Launched } from './helpers';
 import { googleEnv, startFakeGoogle, type FakeGoogle } from './google';
 
@@ -177,5 +181,80 @@ test('google drive: connect, pick with the Picker, kept current, restart, discon
     );
   } finally {
     if (launched) await quit(launched.app);
+  }
+});
+
+test('files property: a file on this computer and a Drive file, opened, kept after a restart', async ({
+  dataDir,
+}) => {
+  test.setTimeout(120_000);
+  const env = googleEnv(google);
+  const local = mkdtempSync(join(tmpdir(), 'workspace-files-'));
+  const drawing = join(local, 'gripper.step');
+  writeFileSync(drawing, 'ISO-10303-21;');
+  let launched: Launched | null = await launchApp(dataDir, env);
+  try {
+    let { app, window } = launched;
+    await browser(app, google.origin);
+    await app.evaluate(({ shell }) => {
+      const seen = globalThis as unknown as { opened: string[] };
+      seen.opened = [];
+      shell.openPath = (async (path: string) => {
+        seen.opened.push(path);
+        return '';
+      }) as never;
+    });
+    const panel = await settings(window);
+    await panel.getByLabel('OAuth client ID').fill(google.clientId);
+    await panel.getByLabel('Client secret').fill(google.clientSecret);
+    await panel.getByLabel('Picker API key').fill('picker-key');
+    await panel.getByRole('button', { name: 'Save' }).click();
+    await panel.getByRole('button', { name: 'Connect Google Drive…' }).click();
+    await expect(panel.getByTestId('google-account')).toBeVisible();
+    await window.keyboard.press('Escape');
+
+    await newDatabase(window, 'Parts');
+    await addProperty(window, 'Files & media', 'Drawings');
+    await addRow(window, 'Gripper');
+    await (await cell(window, 'Gripper', 'Drawings')).click();
+    const filesEditor = popover(window).getByTestId('files-editor');
+    await app.evaluate(
+      ({ dialog }, filePaths) => {
+        dialog.showOpenDialog = (async () => ({ canceled: false, filePaths })) as never;
+      },
+      [drawing],
+    );
+    await filesEditor.getByRole('button', { name: 'Link a file on this computer' }).click();
+    google.picks = [PDF];
+    await filesEditor.getByRole('button', { name: 'From Google Drive' }).click();
+    await expect(filesEditor.getByText('Servo datasheet.pdf')).toBeVisible();
+    await expect(filesEditor.getByText('gripper.step')).toHaveAttribute('title', drawing);
+    await window.keyboard.press('Escape');
+
+    // In the cell: each opens where it is.
+    const drawings = await cell(window, 'Gripper', 'Drawings');
+    await expect(drawings.getByRole('button')).toHaveText(['gripper.step', 'Servo datasheet.pdf']);
+    await drawings.getByRole('button', { name: /gripper\.step/ }).click();
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as unknown as { opened: string[] }).opened))
+      .toEqual([drawing]);
+    await drawings.getByRole('button', { name: /Servo datasheet/ }).click();
+    await expect
+      .poll(async () => (await external(app)).at(-1))
+      .toBe(`https://drive.google.com/open?id=${PDF}`);
+    await quit(app);
+    launched = null;
+
+    // Kept after a restart.
+    launched = await launchApp(dataDir, env);
+    ({ app, window } = launched);
+    await window.getByTestId('sidebar-page-title').filter({ hasText: 'Parts' }).click();
+    await expect((await cell(window, 'Gripper', 'Drawings')).getByRole('button')).toHaveText([
+      'gripper.step',
+      'Servo datasheet.pdf',
+    ]);
+  } finally {
+    if (launched) await quit(launched.app);
+    rmSync(local, { recursive: true, force: true });
   }
 });

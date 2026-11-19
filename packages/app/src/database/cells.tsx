@@ -1,4 +1,12 @@
-import { ME, TODAY, newId } from '@workspace/core';
+import {
+  ME,
+  TODAY,
+  driveOpenUrl,
+  isDriveFileId,
+  linkedFileLocation,
+  linkedFileOf,
+  newId,
+} from '@workspace/core';
 import {
   OPTION_COLORS,
   STATUS_GROUPS,
@@ -45,7 +53,9 @@ import {
   CircleChevronDown,
   CircleDot,
   Clock,
+  FileSymlink,
   Fingerprint,
+  HardDrive,
   Hash,
   Sigma,
   Link,
@@ -72,6 +82,9 @@ import { useApp } from '../context';
 import { useNavigation } from '../navigation';
 import { useCanEditProperties, useDatabase } from './hooks';
 import { runButton } from '../buttons/run-button';
+import { setDrivePickProblem } from '../connections';
+import type { Platform } from '../platform';
+import { openSettings } from '../settings/open';
 
 // --- Icons and pills -------------------------------------------------------------------
 
@@ -351,8 +364,7 @@ export function CellDisplay({
               title={`Open ${file.name}`}
               onClick={(e) => {
                 e.stopPropagation();
-                if (file.id) platform.openFile(file.id);
-                else if (file.url) window.open(file.url, '_blank', 'noopener');
+                openFileValue(platform, file);
               }}
               className="flex max-w-40 shrink-0 items-center gap-1 rounded bg-hover px-1.5 text-sm hover:bg-active"
             >
@@ -363,7 +375,7 @@ export function CellDisplay({
                   className="size-4 rounded-sm object-cover"
                 />
               ) : (
-                <Paperclip size={12} className="shrink-0 text-muted" />
+                <FileValueIcon file={file} size={12} />
               )}
               <span className="truncate">{file.name}</span>
             </button>
@@ -1026,6 +1038,39 @@ function PersonEditor({ handle, row, property, ctx }: CellEditorProps) {
 
 // --- Files -----------------------------------------------------------------------------
 
+/** Open a file of a files property: stored, on the web, on this computer or in Drive. */
+function openFileValue(platform: Platform, file: FileValue) {
+  if (file.id) return platform.openFile(file.id);
+  if (file.drive && isDriveFileId(file.drive.fileId)) {
+    if (platform.google) void platform.google.open(file.drive.fileId);
+    else window.open(driveOpenUrl(file.drive.fileId), '_blank', 'noopener');
+    return;
+  }
+  if (file.linked) {
+    const ref = linkedFileOf({ ...file.linked, name: file.name });
+    if (ref && platform.linkedFiles) void platform.linkedFiles.open(ref);
+    return;
+  }
+  if (file.url) window.open(file.url, '_blank', 'noopener');
+}
+
+/** Where a pointer is ("Projects/arm/v3.step", "Google Drive"), for its tooltip. */
+function fileValueWhere(file: FileValue): string | undefined {
+  if (file.drive) return 'Google Drive';
+  if (!file.linked) return undefined;
+  const ref = linkedFileOf({ ...file.linked, name: file.name });
+  return ref ? linkedFileLocation(ref) : undefined;
+}
+
+function FileValueIcon({ file, size }: { file: FileValue; size: number }) {
+  const className = 'shrink-0 text-muted';
+  if (file.drive) return <HardDrive size={size} className={className} aria-label="Google Drive" />;
+  if (file.linked) {
+    return <FileSymlink size={size} className={className} aria-label="On a computer" />;
+  }
+  return <Paperclip size={size} className={className} />;
+}
+
 function FilesEditor({ handle, row, property }: CellEditorProps) {
   const { user, platform } = useApp();
   const [link, setLink] = useState('');
@@ -1058,8 +1103,10 @@ function FilesEditor({ handle, row, property }: CellEditorProps) {
           key={`${file.id ?? file.url}-${i}`}
           className="flex h-8 items-center gap-2 rounded px-2 hover:bg-hover"
         >
-          <Paperclip size={14} className="shrink-0 text-muted" />
-          <span className="flex-1 truncate">{file.name}</span>
+          <FileValueIcon file={file} size={14} />
+          <span className="flex-1 truncate" title={fileValueWhere(file)}>
+            {file.name}
+          </span>
           <IconButton
             label={`Remove ${file.name}`}
             size="sm"
@@ -1069,6 +1116,62 @@ function FilesEditor({ handle, row, property }: CellEditorProps) {
           </IconButton>
         </div>
       ))}
+      {platform.linkedFiles && (
+        <button
+          type="button"
+          className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-hover"
+          onClick={() =>
+            void platform.linkedFiles!.pick(false).then((refs) => {
+              if (!refs.length) return;
+              const current =
+                (cellValue(handle.row(row.id) ?? row, property) as FileValue[] | null) ?? [];
+              write([
+                ...current,
+                ...refs.map((ref) => ({
+                  name: ref.name,
+                  linked: { folder: ref.folder, path: ref.path },
+                })),
+              ]);
+            })
+          }
+        >
+          <FileSymlink size={14} className="text-muted" />
+          Link a file on this computer
+        </button>
+      )}
+      {platform.google && (
+        <button
+          type="button"
+          className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-hover"
+          onClick={() =>
+            void platform.google!.pick().then((result) => {
+              if ('error' in result) {
+                setDrivePickProblem(
+                  result.error === 'notConnected'
+                    ? 'Connect Google Drive to link its files.'
+                    : result.error,
+                );
+                openSettings('connections');
+                return;
+              }
+              if (!result.ok.length) return;
+              const current =
+                (cellValue(handle.row(row.id) ?? row, property) as FileValue[] | null) ?? [];
+              write([
+                ...current,
+                ...result.ok.map((ref) => ({
+                  name: ref.name,
+                  mime: ref.mimeType,
+                  drive: { fileId: ref.fileId },
+                })),
+              ]);
+            })
+          }
+        >
+          <HardDrive size={14} className="text-muted" />
+          From Google Drive
+        </button>
+      )}
       <label className="flex h-8 cursor-pointer items-center gap-2 rounded px-2 hover:bg-hover">
         <Upload size={14} className="text-muted" />
         {busy ? 'Uploading…' : 'Upload a file'}

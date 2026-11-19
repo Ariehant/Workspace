@@ -922,3 +922,14 @@ suite passes.
 **Tests:** preview kinds (unit); `file-preview.spec.ts` (an attached Word document and
 workbook, sheet tabs, a linked workbook, axe on the previews, kept after a restart);
 `drive.spec.ts` (the sheet's picture through the token; none for a file without one).
+
+**Built: pointers in a database's Files & media.** The files editor has **Link a file on this
+computer** (desktop) and **From Google Drive** (where Drive is connected) beside Upload. The
+value keeps a linked file's folder and path, or a Drive file's id (`FileValue.linked`,
+`FileValue.drive`); nothing is copied. In cells and on the row page they show with their own
+icon and open where they are (the default app, or Drive; on the web a Drive file links to
+Drive). The API gives a Drive file as an external link to it and a linked file as
+`{ type: 'linked', linked: { location } }`; neither can be written through the API.
+
+**Tests:** the API output for both (unit); `drive.spec.ts`: a cell gets a file on the computer
+and a Drive file, each opens where it is, kept after a restart.

@@ -195,10 +195,16 @@ export interface DateValue {
 export type DateReminder =
   'onDay' | '1d' | '2d' | '1w' | 'atTime' | '5m' | '10m' | '15m' | '30m' | '1h' | '2h';
 
-/** A file in the workspace file store (`id`) or a link to one on the web (`url`). */
+/**
+ * A file in the workspace file store (`id`), a link to one on the web (`url`), a file on the
+ * computer (`linked`: a linked folder's name and a path in it, or a full path) or a Google
+ * Drive file (`drive`). The last two are Phase 8 N9's pointers: nothing is copied.
+ */
 export interface FileValue {
   id?: string;
   url?: string;
+  linked?: { folder: string | null; path: string };
+  drive?: { fileId: string };
   name: string;
   mime?: string;
 }

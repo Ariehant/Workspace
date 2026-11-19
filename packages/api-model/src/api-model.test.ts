@@ -171,6 +171,30 @@ describe('property values', () => {
     expect(propertyValue(again, prop(ids.due), links)).toMatchObject({
       date: { start: '2026-10-12T09:30:00.000+00:00' },
     });
+
+    // Pointers (Phase 8 N9): a Drive file links to Drive; a file on a computer says where it is.
+    setCell(
+      doc,
+      row,
+      ids.files,
+      [
+        { name: 'BOM', drive: { fileId: '1Sheet_gripperBOM-abc' } },
+        { name: 'v3.step', linked: { folder: 'Projects', path: 'arm/v3.step' } },
+      ],
+      ADA,
+    );
+    expect(propertyValue(rowOf(doc, row), prop(ids.files), links)).toEqual({
+      id: ids.files,
+      type: 'files',
+      files: [
+        {
+          name: 'BOM',
+          type: 'external',
+          external: { url: 'https://drive.google.com/open?id=1Sheet_gripperBOM-abc' },
+        },
+        { name: 'v3.step', type: 'linked', linked: { location: 'Projects/arm/v3.step' } },
+      ],
+    });
   });
 
   it('a new select name makes an option; status and computed values are checked', () => {

@@ -40,6 +40,9 @@ planned is in [PHASE7.md](PHASE7.md).
   folders ("Projects"), so files in them open on every computer that links a folder under that
   name (one kept in sync with Dropbox, Syncthing or git). A moved file says so and can be
   located again; on the web, a link says it's on a computer.
+- **Files & media pointers:** a database's files property can hold a file on the computer or a
+  Google Drive file as well as uploads and web links: Link a file on this computer, From Google
+  Drive. Each opens where it is.
 - **File previews:** Show preview on an attached or linked Word document (`.docx`) or Excel
   workbook (`.xlsx`) reads it in the page (sheets one at a time); linked PDFs and images show
   too, and Drive files show Drive's picture of them.
