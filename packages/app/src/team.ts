@@ -26,7 +26,7 @@ export interface PendingInvite {
 
 export type InviteRole = Exclude<WorkspaceRole, 'owner'>;
 
-export type ScopeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
+export type ScopeRole = 'full' | 'edit' | 'content' | 'create' | 'comment' | 'view';
 export type ScopeVisibility = 'open' | 'closed' | 'private';
 
 /** Who gets what in a scope: `user:<id>`, `group:<id>` or `workspace` (every member). */
@@ -66,6 +66,7 @@ export const SCOPE_ROLE_LABELS: Record<ScopeRole, string> = {
   full: 'Full access',
   edit: 'Can edit',
   content: 'Can edit content',
+  create: 'Can create pages',
   comment: 'Can comment',
   view: 'Can view',
 };
@@ -74,6 +75,7 @@ export const SCOPE_ROLE_HINTS: Record<ScopeRole, string> = {
   full: 'Edit and share with others',
   edit: 'Edit, but not share',
   content: 'Edit rows, not properties or views',
+  create: 'Add pages, and edit only their own',
   comment: 'View and comment',
   view: 'View only',
 };

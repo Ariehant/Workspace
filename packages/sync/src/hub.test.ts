@@ -237,9 +237,12 @@ describe('SyncHub', () => {
       ],
     });
     await until(() => ofType(a.received, 'revoke').length > 0);
+    // Refused ones are asked once more, after the rest of the push.
     expect(writes).toEqual([
       ['ro', null],
       ['p', 's1'],
+      ['secret', null],
+      ['ro', null],
       ['secret', null],
     ]);
     expect(ofType(a.received, 'ack')[0]!.items).toEqual([
@@ -256,6 +259,33 @@ describe('SyncHub', () => {
     ]);
     expect(a.peer.closed).toBeNull();
     expect((await store.since(WS, 0, 10)).map((r) => r.docId)).toEqual(['ro', 'p']);
+  });
+
+  it('asks a refused doc again after the rest of the push, keeping its updates in order', async () => {
+    const { store, open } = setup();
+    // "page" may be written once "db" has been (as a new row's page, after its row).
+    let dbWritten = false;
+    const policy: DocPolicy = {
+      canRead: () => true,
+      canWrite: (docId) => {
+        if (docId === 'db') dbWritten = true;
+        return docId === 'db' || dbWritten;
+      },
+    };
+    const a = open({ policy, userId: 'u1' });
+    a.hello(0, 'A');
+    a.send({
+      type: 'push',
+      items: [
+        { localId: 1, docId: 'page', update: edit('first') },
+        { localId: 2, docId: 'page', update: edit('second') },
+        { localId: 3, docId: 'db', update: edit('row') },
+      ],
+    });
+    await until(() => ofType(a.received, 'ack').length > 0);
+    expect(ofType(a.received, 'ack')[0]!.items.map((i) => i.denied)).toEqual([false, false, false]);
+    // Stored in an order that keeps each doc's updates in theirs.
+    expect((await store.since(WS, 0, 10)).map((r) => r.docId)).toEqual(['page', 'page', 'db']);
   });
 
   it('sends only readable docs, refuses opening the rest, and starts with the scopes', async () => {

@@ -534,9 +534,9 @@ export class SyncConnection {
         }
         // One at a time: allowing an item can place a new doc, which the next item (of
         // the same doc) relies on.
-        const allowed: boolean[] = [];
+        const allowed: boolean[] = message.items.map(() => false);
         const acceptedByDoc = new Map<string, Uint8Array[]>();
-        for (const item of message.items) {
+        const check = async (item: (typeof message.items)[number]) => {
           const policy = this.access.policy;
           let ok = policy ? await policy.canWrite(item.docId, item.scope ?? null) : true;
           if (ok && policy?.checkUpdate) {
@@ -545,7 +545,22 @@ export class SyncConnection {
           }
           if (ok)
             acceptedByDoc.set(item.docId, [...(acceptedByDoc.get(item.docId) ?? []), item.update]);
-          allowed.push(ok);
+          return ok;
+        };
+        // A doc refused once waits (its later items too, to stay in order) ...
+        const waiting = new Set<string>();
+        for (const [i, item] of message.items.entries()) {
+          if (waiting.has(item.docId)) continue;
+          if (await check(item)) allowed[i] = true;
+          else waiting.add(item.docId);
+        }
+        // ... and is asked again after the rest: what it needed may have come later in the
+        // push (a new row's page, written before the row that makes it one).
+        const refused = new Set<string>();
+        for (const [i, item] of message.items.entries()) {
+          if (allowed[i] || !waiting.has(item.docId) || refused.has(item.docId)) continue;
+          if (await check(item)) allowed[i] = true;
+          else refused.add(item.docId);
         }
         if (this.closed) return;
         const accepted = message.items.filter((_, i) => allowed[i]);

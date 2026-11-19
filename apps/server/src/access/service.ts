@@ -8,7 +8,13 @@
  * (Postgres LISTEN/NOTIFY would be the way to run several).
  */
 import { MEMBERS_DOC_ID, checkCommentsChange, isCommentsDocId, isTreeDocId } from '@workspace/core';
-import { checkRowsOnlyChange, isDatabaseDoc, rowsMap } from '@workspace/database';
+import {
+  RowField,
+  checkOwnRowsChange,
+  checkRowsOnlyChange,
+  isDatabaseDoc,
+  rowsMap,
+} from '@workspace/database';
 import * as Y from 'yjs';
 import type { AccessModel, PgStore, Scope, ScopeRole } from '@workspace/storage-remote';
 import type { AccessScope, DocPolicy } from '@workspace/sync';
@@ -23,7 +29,8 @@ export type AccessEvent =
 
 /**
  * The role needed to write a doc: comments need "comment", everything else "edit". With
- * "content", databases (their rows only, see `checkUpdate`) and their rows' pages too.
+ * "content", databases (their rows only, see `checkUpdate`) and their rows' pages too; with
+ * "create", databases (rows they make) and the pages of rows they made.
  */
 export const roleToWrite = (docId: string): ScopeRole =>
   docId.startsWith('comments:') ? 'comment' : 'edit';
@@ -36,6 +43,8 @@ export class WorkspaceAccess {
   /** Databases, and a row's page -> its database (as seen so far; for "content"). */
   private readonly databases = new Set<string>();
   private readonly rowOf = new Map<string, string>();
+  /** Who made each row seen so far (for "create"). */
+  private readonly creatorOf = new Map<string, string | null>();
 
   constructor(
     readonly workspaceId: string,
@@ -133,7 +142,12 @@ export class WorkspaceAccess {
    * May someone with `roles` write this doc? A doc not placed yet goes to `hint` (a
    * scope of this workspace), else the workspace's default scope, if they may write there.
    */
-  async canWrite(roles: Roles, docId: string, hint: string | null): Promise<boolean> {
+  async canWrite(
+    roles: Roles,
+    docId: string,
+    hint: string | null,
+    userId: string | null = null,
+  ): Promise<boolean> {
     if (docId === MEMBERS_DOC_ID) return false;
     const needed = roleToWrite(docId);
     let scope = this.placements.get(docId);
@@ -141,9 +155,11 @@ export class WorkspaceAccess {
       const target = hint && this.scope(hint) ? hint : this.model.defaultScopeId;
       if (!target) return false;
       const role = roles.get(target);
-      // A new row's page, in a database they may add rows to.
+      // A new row's page, in a database they may add rows to (with "create", their row).
       const allowed =
-        atLeast(role, needed) || (role === 'content' && (await this.isRowIn(target, docId)));
+        atLeast(role, needed) ||
+        (role === 'content' && (await this.isRowIn(target, docId))) ||
+        (role === 'create' && (await this.isOwnRowIn(target, docId, userId)));
       if (!allowed) return false;
       scope = await this.store.scopes.place(this.workspaceId, docId, target);
       this.setPlacement(docId, scope);
@@ -151,6 +167,9 @@ export class WorkspaceAccess {
     }
     const role = roles.get(scope);
     if (atLeast(role, needed)) return true;
+    if (role === 'create') {
+      return (await this.isDatabase(docId)) || (await this.isOwnRowIn(scope, docId, userId));
+    }
     if (role !== 'content') return false;
     return (await this.isDatabase(docId)) || (await this.isRowIn(scope, docId));
   }
@@ -176,7 +195,7 @@ export class WorkspaceAccess {
   policy(roles: Roles, userId: string): DocPolicy {
     return {
       canRead: (docId) => this.canRead(roles, docId),
-      canWrite: (docId, hint) => this.canWrite(roles, docId, hint),
+      canWrite: (docId, hint) => this.canWrite(roles, docId, hint, userId),
       checkUpdate: (docId, update, earlier) =>
         this.checkUpdate(roles, userId, docId, update, earlier),
     };
@@ -186,7 +205,8 @@ export class WorkspaceAccess {
    * What an update contains, where the role allows only some changes: a comments doc
    * takes the sender's own threads, comments, reactions and decisions (see
    * `checkCommentsChange`); a database written with "content" takes changes to its rows
-   * only (see `checkRowsOnlyChange`). Other docs aren't looked into.
+   * only (see `checkRowsOnlyChange`), and with "create" to the sender's own rows (see
+   * `checkOwnRowsChange`). Other docs aren't looked into.
    */
   async checkUpdate(
     roles: Roles,
@@ -198,7 +218,8 @@ export class WorkspaceAccess {
     const scope = this.placements.get(docId) ?? '';
     const role = roles.get(scope);
     const comments = isCommentsDocId(docId);
-    if (!comments && (role !== 'content' || (await this.isRowIn(scope, docId)))) return true;
+    const rowsRole = role === 'content' || role === 'create';
+    if (!comments && (!rowsRole || (await this.isRowIn(scope, docId)))) return true;
     const before = await this.stateOf(docId, earlier);
     try {
       if (comments) {
@@ -209,10 +230,15 @@ export class WorkspaceAccess {
         });
         return problem === null;
       }
-      if (!isDatabaseDoc(before) || checkRowsOnlyChange(before, update) !== null) return false;
+      if (!isDatabaseDoc(before)) return false;
+      const problem =
+        role === 'create'
+          ? checkOwnRowsChange(before, update, userId)
+          : checkRowsOnlyChange(before, update);
+      if (problem !== null) return false;
       // Its new rows' pages may be written next (in this push, before it's stored).
       Y.applyUpdate(before, update);
-      for (const rowId of rowsMap(before).keys()) this.rowOf.set(rowId, docId);
+      this.learnRows(docId, before);
       return true;
     } finally {
       before.destroy();
@@ -234,11 +260,30 @@ export class WorkspaceAccess {
     try {
       if (!isDatabaseDoc(doc)) return false;
       this.databases.add(docId);
-      for (const rowId of rowsMap(doc).keys()) this.rowOf.set(rowId, docId);
+      this.learnRows(docId, doc);
       return true;
     } finally {
       doc.destroy();
     }
+  }
+
+  /** Note a database's rows: which database each is in, and who made it. */
+  private learnRows(databaseId: string, doc: Y.Doc): void {
+    for (const [rowId, row] of rowsMap(doc)) {
+      this.rowOf.set(rowId, databaseId);
+      const by = row.get(RowField.createdBy);
+      this.creatorOf.set(rowId, typeof by === 'string' ? by : null);
+    }
+  }
+
+  /** Is `docId` the page of a row `userId` made, in a database in `scopeId`? */
+  private async isOwnRowIn(
+    scopeId: string,
+    docId: string,
+    userId: string | null,
+  ): Promise<boolean> {
+    if (!userId || !(await this.isRowIn(scopeId, docId))) return false;
+    return this.creatorOf.get(docId) === userId;
   }
 
   /**

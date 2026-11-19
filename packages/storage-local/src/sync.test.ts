@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { addRow, initDatabase } from '@workspace/database';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -426,6 +427,20 @@ describe('page trees of several scopes', () => {
     expect(sync.scopeOf('tree:S2')).toBe('S2');
     expect(sync.scopeOf('unknown')).toBe(null);
 
+    // A new row's page, before the index has the row: its open database's scope.
+    remote(manager, 'tree:S2', (t) =>
+      createPage(t, { id: 'tasks', title: 'Tasks', kind: 'database' }),
+    );
+    manager.open('tasks');
+    remote(manager, 'tasks', (doc) => {
+      initDatabase(doc, { databaseId: 'tasks' });
+      addRow(doc, { id: 'r9', actor: null, title: 'Fresh' });
+    });
+    expect(store.locatePage('r9')).toBeNull();
+    expect(sync.scopeOf('r9')).toBe('S2');
+    expect(sync.scopeOf('comments:r9')).toBe('S2');
+    manager.release('tasks');
+
     // The trees are there again after a restart.
     manager.close();
     const again = new DocManager(store, { indexDelayMs: 0 });
@@ -433,7 +448,7 @@ describe('page trees of several scopes', () => {
       listPages(again.forest)
         .map((p) => p.title)
         .sort(),
-    ).toEqual(['Diary', 'Gear plan']);
+    ).toEqual(['Diary', 'Gear plan', 'Tasks']);
     again.close();
     store.close();
   });

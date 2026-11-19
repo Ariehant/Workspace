@@ -202,9 +202,11 @@ export function PageHeader({
           <Eye size={12} />{' '}
           {access === 'content'
             ? 'Can edit content'
-            : access === 'comment'
-              ? 'Can comment'
-              : 'View only'}
+            : access === 'create'
+              ? 'Can create pages'
+              : access === 'comment'
+                ? 'Can comment'
+                : 'View only'}
         </span>
       )}
       {people.length > 0 && (

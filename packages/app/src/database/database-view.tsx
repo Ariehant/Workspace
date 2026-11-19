@@ -208,6 +208,8 @@ export function DatabaseView({
   // "can edit", and is shown as if locked otherwise.
   const role = pages.role(databaseId);
   const editable = allowed && roleAllows(role, 'content');
+  // "Can create pages": new rows (edited on their own pages), not the others in the views.
+  const canAddRows = allowed && roleAllows(role, 'create');
   const structureEditable = allowed && roleAllows(role, 'edit');
   const stored = loaded?.snapshot;
   const snapshot = useMemo(
@@ -538,13 +540,14 @@ export function DatabaseView({
             onEditDescription={() => setEditingDescription(true)}
           />
         )}
-        {editable && !isForm && (
+        {canAddRows && !isForm && (
           <NewButton
             handle={handle}
             snapshot={snapshot}
             view={view}
             databaseTitle={databaseTitle}
             onOpenRow={open}
+            manage={editable}
           />
         )}
       </div>

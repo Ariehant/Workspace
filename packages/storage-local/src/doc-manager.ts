@@ -235,6 +235,17 @@ export class DocManager {
     return this.docs.get(docId)?.doc ?? null;
   }
 
+  /**
+   * The open database a row is in (rows are indexed a moment after they're added, so a
+   * new row's page may be pushed before the index knows it), or null.
+   */
+  databaseOfRow(rowId: string): string | null {
+    for (const [id, { doc }] of this.docs) {
+      if (id !== rowId && isDatabaseDoc(doc) && hasRow(doc, rowId)) return id;
+    }
+    return null;
+  }
+
   /** Load (or reuse) a document and return its full state. Pair with `release`. */
   open(docId: string): Uint8Array {
     if (isTreeDocId(docId)) this.addTree(docId);

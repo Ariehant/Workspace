@@ -580,6 +580,16 @@ export const MIGRATIONS: string[] = [
     CHECK (kind IN ('mention', 'comment', 'reply', 'reminder', 'access', 'form', 'automation',
       'request'));
   `,
+  // 16: Phase 8 N8. The "create" role (a database's "can create pages": add rows, and edit
+  // only the ones you made).
+  `
+  ALTER TABLE scope_access DROP CONSTRAINT scope_access_role_check;
+  ALTER TABLE scope_access ADD CONSTRAINT scope_access_role_check
+    CHECK (role IN ('full', 'edit', 'content', 'create', 'comment', 'view'));
+  ALTER TABLE scopes DROP CONSTRAINT scopes_join_role_check;
+  ALTER TABLE scopes ADD CONSTRAINT scopes_join_role_check
+    CHECK (join_role IN ('full', 'edit', 'content', 'create', 'comment', 'view'));
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

@@ -31,7 +31,7 @@ const REQUEST_VERBS: Record<RequestedRole, string> = {
   edit: 'edit',
 };
 /** A database also offers "can edit content" (its rows, not its properties or views). */
-const DATABASE_ROLES: ScopeRole[] = ['full', 'edit', 'content', 'comment', 'view'];
+const DATABASE_ROLES: ScopeRole[] = ['full', 'edit', 'content', 'create', 'comment', 'view'];
 
 export function ShareDialog({
   team,

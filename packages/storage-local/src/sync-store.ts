@@ -89,7 +89,8 @@ export class LocalSyncStore implements ClientStore {
     if (isTreeDocId(docId)) return scopeOfTree(docId);
     const pageId = docId.startsWith('comments:') ? docId.slice('comments:'.length) : docId;
     const { forest } = this.manager;
-    const databaseId = this.store.locatePage(pageId)?.databaseId;
+    const databaseId =
+      this.store.locatePage(pageId)?.databaseId ?? this.manager.databaseOfRow(pageId);
     const tree = forest.treeOf(pageId) ?? (databaseId ? forest.treeOf(databaseId) : undefined);
     return tree ? scopeOfTree(tree.info.id) : null;
   }
