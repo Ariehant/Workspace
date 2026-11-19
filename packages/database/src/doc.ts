@@ -739,7 +739,25 @@ function viewTypeDefaults(doc: Y.Doc, type: ViewType): Partial<ViewConfig> {
   if (type === 'calendar' || type === 'timeline') return { dateProperty: defaultDateProperty(doc) };
   if (type === 'chart') return { chart: { ...DEFAULT_VIEW_CONFIG.chart, x: defaultChartX(doc) } };
   if (type === 'form') return { form: defaultForm(readProperties(doc)) };
+  if (type === 'feed') return { loadLimit: FEED_LOAD_LIMIT, properties: feedProperties(doc) };
   return {};
+}
+
+/** Rows a feed shows at first: each is a whole page. */
+export const FEED_LOAD_LIMIT = 10;
+
+/** Property types a feed shows under each title from the start (the first of each). */
+const FEED_TYPES: readonly PropertyType[] = ['status', 'select', 'person', 'date'];
+
+/** A new feed shows the title, and the first status, select, person and date property. */
+function feedProperties(doc: Y.Doc): ViewConfig['properties'] {
+  const properties = readProperties(doc);
+  const shown = new Set([TITLE_PROPERTY_ID]);
+  for (const type of FEED_TYPES) {
+    const property = properties.find((p) => p.type === type);
+    if (property) shown.add(property.id);
+  }
+  return properties.map((p) => ({ id: p.id, visible: shown.has(p.id) }));
 }
 
 /** What a new chart's X axis groups by: a select-like property, a date by month, or the title. */
@@ -801,6 +819,8 @@ export function setViewType(doc: Y.Doc, id: string, type: ViewType): void {
     if (type === 'gallery' && view.cardPreview.kind === 'none') {
       map.set('cardPreview', { kind: 'content' });
     }
+    // A feed of every row at once would load every page: start with a load limit.
+    if (type === 'feed' && view.loadLimit === null) map.set('loadLimit', FEED_LOAD_LIMIT);
   });
 }
 

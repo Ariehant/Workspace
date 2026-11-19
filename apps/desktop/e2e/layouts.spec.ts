@@ -185,3 +185,57 @@ test('list and gallery: compact rows, cards with covers, layout and card setting
   await window.keyboard.press('Escape');
   await expect(gallery.getByTestId('group-label')).toHaveText(['No Stage2', 'Doing1', 'Done1']);
 });
+
+test('feed: whole pages in a stream, their properties, search, open, load more', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await seed(window);
+  // Alpha's page has something to read.
+  await (await cell(window, 'Alpha', 'Name')).hover();
+  await window.getByTestId('table-view').getByRole('button', { name: 'Open', exact: true }).click();
+  const peek = window.getByTestId('row-peek');
+  await peek.getByLabel('Page title').press('Enter');
+  await expect(peek.getByTestId('page-editor')).toBeFocused();
+  await window.keyboard.type('Torque the bolts to 12 Nm.');
+  await peek.getByRole('button', { name: 'Close' }).click();
+  await expect(peek).toHaveCount(0);
+
+  await addView(window, 'Feed');
+  const feed = db(window).getByTestId('feed-view');
+  const items = feed.getByTestId('feed-item');
+  await expect(feed.getByTestId('feed-title')).toHaveText(['Alpha', 'Beta', 'Gamma']);
+  // The first select shows under each title; empty ones don't.
+  await expect(items.first().getByTestId('feed-property')).toContainText('Stage');
+  await expect(items.first().getByTestId('feed-property')).toContainText('Doing');
+  await expect(items.nth(2).getByTestId('feed-property')).toHaveCount(0);
+  // The page itself, read-only; an empty page shows nothing.
+  const content = items.first().getByTestId('feed-content');
+  await expect(content).toContainText('Torque the bolts to 12 Nm.');
+  await expect(content.getByTestId('page-editor')).toHaveAttribute('contenteditable', 'false');
+  await expect(items.nth(1).getByTestId('feed-content')).toHaveCount(0);
+
+  // Search narrows it, like any view.
+  await db(window).getByRole('button', { name: 'Search', exact: true }).click();
+  await db(window).getByLabel('Search in view').fill('gam');
+  await expect(feed.getByTestId('feed-title')).toHaveText(['Gamma']);
+  await db(window).getByLabel('Search in view').fill('');
+  await db(window).getByLabel('Search in view').press('Escape');
+  await expect(feed.getByTestId('feed-title')).toHaveCount(3);
+
+  // The title opens the row.
+  await feed.getByTestId('feed-title').filter({ hasText: 'Beta' }).click();
+  await expect(peek.getByLabel('Page title')).toHaveValue('Beta');
+  await peek.getByRole('button', { name: 'Close' }).click();
+
+  // Ten at first, then more.
+  await window.getByRole('tab', { name: 'Table' }).click();
+  await window.keyboard.press('Escape');
+  for (let i = 1; i <= 8; i++) await addRow(window, `Part ${i}`);
+  await db(window).getByRole('tab', { name: 'Feed' }).click();
+  await window.keyboard.press('Escape');
+  await expect(feed.getByTestId('load-more')).toContainText('Load 1 more');
+  await feed.getByTestId('load-more').click();
+  await expect(feed.getByTestId('load-more')).toHaveCount(0);
+  await expect(feed.getByTestId('feed-title').last()).toHaveText('Part 8');
+});

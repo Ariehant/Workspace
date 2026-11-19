@@ -204,13 +204,14 @@ export interface FileValue {
 }
 
 export type ViewType =
-  'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'chart' | 'form';
+  'table' | 'board' | 'list' | 'gallery' | 'feed' | 'calendar' | 'timeline' | 'chart' | 'form';
 
 export const VIEW_TYPES: { type: ViewType; label: string }[] = [
   { type: 'table', label: 'Table' },
   { type: 'board', label: 'Board' },
   { type: 'list', label: 'List' },
   { type: 'gallery', label: 'Gallery' },
+  { type: 'feed', label: 'Feed' },
   { type: 'calendar', label: 'Calendar' },
   { type: 'timeline', label: 'Timeline' },
   { type: 'chart', label: 'Chart' },

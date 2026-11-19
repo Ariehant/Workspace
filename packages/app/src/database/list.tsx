@@ -103,13 +103,16 @@ export function Lines<T>({
   estimate,
   render,
   className,
+  virtualizeFrom = 100,
 }: {
   lines: Line<T>[];
   estimate(line: Line<T>): number;
   render(line: Line<T>): ReactNode;
   className?: string;
+  /** How many lines there must be before only those in view are rendered. */
+  virtualizeFrom?: number;
 }) {
-  const virtual = lines.length >= 100;
+  const virtual = lines.length >= virtualizeFrom;
   const { bodyRef, virtualizer } = usePageVirtualizer({
     count: lines.length,
     enabled: virtual,

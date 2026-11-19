@@ -76,6 +76,7 @@ import {
   SquareKanban,
   List as ListIcon,
   LayoutGrid,
+  Newspaper,
   Image as ImageIcon,
   Maximize,
   Palette,
@@ -115,6 +116,7 @@ import { useDatabase, useDisplayContext } from './hooks';
 import { BoardView } from './board';
 import { GalleryView } from './gallery';
 import { ListView } from './list';
+import { FeedView } from './feed';
 import { CalendarView, dateProperties } from './calendar';
 import { TimelineView } from './timeline';
 import { NewButton } from './templates-menu';
@@ -129,6 +131,7 @@ const VIEW_ICONS: Record<ViewType, LucideIcon> = {
   board: SquareKanban,
   list: ListIcon,
   gallery: LayoutGrid,
+  feed: Newspaper,
   calendar: CalendarDays,
   timeline: GanttChart,
   chart: BarChart3,
@@ -671,6 +674,7 @@ export function DatabaseView({
             );
           }
           if (view.type === 'list') return <ListView {...props} />;
+          if (view.type === 'feed') return <FeedView {...props} />;
           if (view.type === 'calendar') return <CalendarView {...props} />;
           if (view.type === 'timeline') return <TimelineView {...props} />;
           if (view.type === 'chart') {
@@ -1086,7 +1090,7 @@ function ViewMenu({
             {view.wrap ? 'On' : 'Off'}
           </span>
         </MenuItem>
-        {['table', 'list', 'gallery'].includes(view.type) && (
+        {['table', 'list', 'gallery', 'feed'].includes(view.type) && (
           <MenuSub>
             <MenuSubTrigger icon={<ListEnd size={14} />}>
               <span className="flex-1">Load limit</span>

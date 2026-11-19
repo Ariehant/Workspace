@@ -198,7 +198,16 @@ for (const theme of THEMES) {
     await window.keyboard.press('Escape');
     const database = window.getByTestId('database-view');
     await expectAccessible(window, s('a table'));
-    for (const layout of ['Board', 'List', 'Gallery', 'Calendar', 'Timeline', 'Chart', 'Form']) {
+    for (const layout of [
+      'Board',
+      'List',
+      'Gallery',
+      'Feed',
+      'Calendar',
+      'Timeline',
+      'Chart',
+      'Form',
+    ]) {
       await database.getByRole('button', { name: 'Add a view' }).click();
       await window.getByTestId('add-view-menu').getByRole('menuitem', { name: layout }).click();
       await expect(database.getByRole('tab', { name: layout, selected: true })).toBeVisible();

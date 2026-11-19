@@ -1151,6 +1151,12 @@
   padding: 0;
   min-height: 1.5em;
 }
+/* A database feed's pages: read-only, so no room below to click into, nor a drag gutter. */
+.ws-feed-content .ws-prose {
+  padding: 0;
+  margin-left: 0;
+  min-height: 0;
+}
 
 .ws-button:not([data-color='default']) {
   border-color: transparent;
