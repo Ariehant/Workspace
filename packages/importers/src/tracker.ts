@@ -1,5 +1,5 @@
 /**
- * What the task-tracker importers (Asana, Jira) share: their CSV as a table read by column
+ * What the task-tracker importers (Asana, Jira, monday) share: their export as a table read by column
  * name, the columns nobody mapped (kept as text), and parent tasks as a relation.
  */
 import { enableSubItems, readDatabase, setRelation, type DocResolver } from '@workspace/database';
@@ -11,10 +11,11 @@ export class CsvTable {
   readonly header: string[];
   readonly rows: string[][];
 
-  constructor(text: string) {
-    const [header = [], ...rows] = parseCsv(text);
+  /** CSV text, or rows already read (a spreadsheet's), the first being the header. */
+  constructor(source: string | readonly (readonly string[])[]) {
+    const [header = [], ...rows] = typeof source === 'string' ? parseCsv(source) : source;
     this.header = header.map((h) => h.trim());
-    this.rows = rows.filter((r) => r.some((c) => c.trim()));
+    this.rows = rows.filter((r) => r.some((c) => c.trim())).map((r) => [...r]);
   }
 
   has(name: string): boolean {

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { md5Hex } from './md5';
 import { dateMs, isoDay, jiraDate } from './dates';
+import { writeXlsx } from './xlsx-fixture';
 import { importFiles, type ImportTarget } from './import';
 import { enmlToHtml, parseEnex } from './evernote';
 import type { ArchiveFile } from './paths';
@@ -425,5 +426,77 @@ describe('Jira', () => {
     expect(report).toMatchObject({ databases: 1, rows: 1 });
     const db = readDatabase(docs.get(page('Parts').id)!);
     expect(db.properties.map((p) => p.name)).toEqual(['Name', 'Summary', 'Count']);
+  });
+});
+
+describe('monday.com', () => {
+  it('imports a board export as a database by status, with groups and sub-items', () => {
+    const { t, docs, page } = target();
+    const report = importFiles(fixture('monday'), t, { title: 'monday' });
+    expect(report).toMatchObject({ databases: 1, rows: 6, warnings: [] });
+
+    const doc = docs.get(page('Arm build').id)!;
+    const db = readDatabase(doc);
+    const prop = (name: string) => db.properties.find((p) => p.name === name)!;
+    expect(db.properties.map((p) => [p.name, p.type])).toEqual([
+      ['Name', 'title'],
+      ['Group', 'select'],
+      ['Status', 'select'],
+      ['Priority', 'select'],
+      ['Timeline', 'date'],
+      ['Date', 'date'],
+      ['Person', 'text'],
+      ['Budget', 'text'],
+      ['Owner', 'text'],
+      ['Parent item', 'relation'],
+      ['Sub-items', 'relation'],
+    ]);
+    expect(prop('Group').config.options!.map((o) => o.name)).toEqual(['Hardware', 'Software']);
+    expect(prop('Status').config.options!.map((o) => [o.name, o.color])).toEqual([
+      ['Working on it', 'orange'],
+      ['Done', 'green'],
+      ['Stuck', 'red'],
+    ]);
+    expect(db.rows.map((r) => r.title)).toEqual([
+      'Mount the base',
+      'Drill holes',
+      'Level the plate',
+      'Order servos',
+      'Write the joint driver',
+      'Tune the PID',
+    ]);
+    const [mount, drill, level, servos, driver] = db.rows;
+    expect(cellText(mount!, prop('Group'), display)).toBe('Hardware');
+    expect(cellText(driver!, prop('Group'), display)).toBe('Software');
+    expect(cellText(mount!, prop('Person'), display)).toBe('Asha Rao');
+    expect(cellText(mount!, prop('Budget'), display)).toBe('120');
+    expect(mount!.values[prop('Timeline').id]).toEqual({ start: '2026-11-02', end: '2026-11-20' });
+    expect(servos!.values[prop('Date').id]).toEqual({ start: '2026-11-10' });
+    // Subitems: under their item, with their own columns.
+    expect(cellText(drill!, prop('Owner'), display)).toBe('Lee Chen');
+    expect(cellText(drill!, prop('Group'), display)).toBe('Hardware');
+    expect(relationIds(drill!.values[prop('Parent item').id])).toEqual([mount!.id]);
+    expect(relationIds(mount!.values[prop('Sub-items').id]).sort()).toEqual(
+      [drill!.id, level!.id].sort(),
+    );
+    expect(readViews(doc)[0]).toMatchObject({
+      type: 'board',
+      groupBy: { propertyId: prop('Status').id },
+    });
+    expect(readViews(doc)[1]).toMatchObject({ name: 'All items', type: 'table' });
+  });
+
+  it('other workbooks, and ones that can’t be read, are reported', () => {
+    const { t } = target();
+    const files = [
+      { path: 'Parts.xlsx', data: writeXlsx([{ name: 'S', rows: [['Part', 'Count']] }]) },
+      { path: 'Broken.xlsx', data: new TextEncoder().encode('not a zip') },
+    ];
+    const report = importFiles(files, t, { title: 'Sheets' });
+    expect(report).toMatchObject({ databases: 0, rows: 0 });
+    expect(report.warnings).toEqual([
+      "“Parts” isn't a monday.com board export (other spreadsheets aren't imported yet)",
+      '“Broken” couldn’t be read as an Excel workbook',
+    ]);
   });
 });

@@ -72,7 +72,8 @@ export class DatabaseBuilder {
 
   /**
    * A row. Values by column name: text for text-like columns, option names for selects,
-   * `YYYY-MM-DD[THH:mm]` for dates, booleans for checkboxes, numbers for numbers.
+   * `YYYY-MM-DD[THH:mm]` (or `{ start, end }`) for dates, booleans for checkboxes, numbers for
+   * numbers.
    */
   row(row: {
     id?: string;
@@ -95,8 +96,10 @@ export class DatabaseBuilder {
           return id ? [id] : [];
         });
         if (list.length) values[property.id] = list;
-      } else if (property.type === 'date') values[property.id] = { start: String(raw) };
-      else values[property.id] = raw;
+      } else if (property.type === 'date') {
+        values[property.id] =
+          typeof raw === 'object' && 'start' in raw ? raw : { start: String(raw) };
+      } else values[property.id] = raw;
     }
     const id = addRow(this.doc, {
       actor: null,

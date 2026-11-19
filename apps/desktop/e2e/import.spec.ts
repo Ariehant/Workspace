@@ -332,3 +332,30 @@ test('import Asana and Jira CSV exports: a board, sub-tasks, and the page', asyn
   await expect(await column('In Progress')).toContainText('Gripper slips on wet parts');
   await expect(await column('Done')).toContainText('Calibrate the wrist');
 });
+
+test('import a monday.com board (Excel): grouped by status, with sub-items', async ({ launch }) => {
+  const { app, window } = await launch();
+  const report = await importFile(
+    app,
+    window,
+    join(fixtures, 'monday', 'Arm_build.xlsx'),
+    '0 pages, 1 database with 6 rows, and 0 files.',
+  );
+  await expect(report).toContainText('Everything came over.');
+  await report.getByRole('button', { name: 'Done' }).click();
+  await find(window, 'Arm build');
+  const column = async (name: string) => {
+    const key = await window
+      .getByTestId('board-column')
+      .filter({ hasText: name })
+      .getAttribute('data-group-key');
+    return window.locator(`[data-testid="board-cell"][data-group-key="${key}"]`);
+  };
+  await expect(await column('Working on it')).toContainText('Mount the base');
+  await expect(await column('Stuck')).toContainText('Write the joint driver');
+  // A subitem opens with its parent item.
+  await window.getByTestId('card').filter({ hasText: 'Drill holes' }).click();
+  const peek = window.getByTestId('row-peek');
+  await expect(peek.getByLabel('Page title')).toHaveValue('Drill holes');
+  await expect(peek).toContainText('Mount the base');
+});
