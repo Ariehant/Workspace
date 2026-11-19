@@ -770,6 +770,14 @@ you like": #40 (Monday), #7, #27, #22 and #34. Each was committed and pushed wit
   update that needed one later in the push (a row's page before its row) goes in.
 - **Share links found a new page** in its scope's page tree when the search index hadn't taken
   it in yet ("No such page" in the first web test run).
+- **"Link role" took the invite form's label.** The share dialog's link section labelled its
+  role "Link role", so `getByLabel('Role')` matched two controls and CI's `collab-exit` test
+  failed. It's now "Anyone with the link can"; the web test checks "Role" is one control.
+- **A compaction could leave a connection one row behind.** Compacting a doc writes to the
+  store outside the sync hub's ring of recent rows, which then said it reached the end of the
+  log one row short; a connection catching up from it stopped there (the convergence test
+  timed out on CI, seed 11). The hub now reads the log after a compaction. A hub test fails
+  without the fix.
 
 **Tests:**
 
@@ -796,5 +804,11 @@ you like": #40 (Monday), #7, #27, #22 and #34. Each was committed and pushed wit
 **Runs:**
 
 - Formatting, lint, types, unit tests and both builds pass; each part's own E2E tests passed
-  when it was pushed. The full desktop suite (twice) and the web suite are running; their
-  results go here.
+  when it was pushed.
+- Desktop E2E, the full suite twice: 188 passed, 3 skipped, each time.
+- Web E2E: 7 passed.
+- The sync convergence tests with `SYNC_FUZZ_SEEDS=100`: passed.
+- CI's performance budgets went over on two N8 pushes (`sync.first`, then a broad slowdown
+  with `database.group` at 1215 ms). Run locally, the same budgets on the commit before and
+  after the change gave the same numbers (`database.group` 527–606 ms against 544–585 ms), so
+  it was the runner, as in N7; the budgets are unchanged.
