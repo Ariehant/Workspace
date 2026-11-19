@@ -617,19 +617,15 @@ app's everyday surface: #8, #30, #26, #42 and #6.
 - **Back from "This page doesn't exist"** returns to the page it was opened over (it stayed put
   when there was no earlier history).
 - **A keyboard selection survives a change from elsewhere.** ProseMirror reads a selection the
-  browser moved (Shift+Home, say) from a later `selectionchange`; a change that changed the page
-  or its decorations in between (on CI, a timer's) made it write its old selection back, and the
-  selection was lost (the toggles test's toolbar never showed). Such a change now reads the page's
-  selection first and keeps it. A test makes it happen on purpose; it failed before. Remote edits
-  through the sync plugin restore the selection their own way, and aren't covered by this.
-- **CI's first runs on `main`** found three things, each reproduced before it was fixed:
-  - The `.docx` size-limit test took 9 s on GitHub's runner (it compressed 200 MB). It now
-    uses a small zip that declares a big part, which is what the guard reads.
-  - The Appearance menu showed 100% for a moment as it opened (it asked for the zoom each
-    time); the sidebar now follows the zoom.
-  - Webhooks to a host name failed on Node 22 ("Invalid IP address: undefined"): delivery's
-    pinned lookup didn't answer Node's request for every address at once. Unit tests used an
-    IP address, which skips the lookup; one now delivers to `localhost`.
+  browser moved (Shift+Home, say) from a later `selectionchange`; a change to the page or its
+  decorations in between made it write its old selection back, and the move was lost. Now, after
+  a key, such a change reads the page's selection first and keeps it. A test makes it happen on
+  purpose; it failed before. (Remote edits through the sync plugin restore the selection their own
+  way, and aren't covered.) This was the first guess for the toggles test's failure on CI (the
+  toolbar never showed after Shift+Home), but CI failed the same way with it, so that cause is
+  still open: the test now says, when it fails, whether the window had focus and what the page and
+  the editor had selected. CI's traces can't be read from here (the session's network policy
+  blocks GitHub's artifact storage).
 
 **Tests:**
 

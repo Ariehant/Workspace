@@ -15,6 +15,22 @@ async function slash(window: Page, query: string) {
   await window.keyboard.press('Enter');
 }
 
+/** The window's focus and selection, the page's and the editor's (for a failure's message). */
+async function selectionState(window: Page): Promise<string> {
+  return window.evaluate(() => {
+    const el = document.querySelector('[data-testid="page-editor"]') as
+      (Element & { editor?: { state: { selection: { from: number; to: number } } } }) | null;
+    const pm = el?.editor?.state.selection;
+    return JSON.stringify({
+      windowFocused: document.hasFocus(),
+      active:
+        document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName,
+      page: getSelection()?.toString(),
+      editor: pm ? [pm.from, pm.to] : null,
+    });
+  });
+}
+
 const blocks = (window: Page) => editor(window).locator(':scope > *');
 
 test('to-do list: shortcut, checking items, and persistence', async ({ launch }) => {
@@ -62,6 +78,12 @@ test('toggles: "> " shortcut, collapsing, toggle headings and turn into', async 
   await expect(blocks(window).last()).toHaveText('Section title');
   await window.keyboard.press('Shift+Home');
   const toolbar = window.getByTestId('selection-toolbar');
+  // (CI's runner has, now and then, never shown the toolbar here; if so, say what the window had.)
+  await expect(toolbar)
+    .toBeVisible({ timeout: 10_000 })
+    .catch(async (error: Error) => {
+      throw new Error(`${error.message}\nState: ${await selectionState(window)}`);
+    });
   await toolbar.getByRole('button', { name: 'Turn into' }).click();
   await toolbar.getByRole('menuitem', { name: 'Toggle heading 2' }).click();
   await expect(editor(window).locator('summary[data-level="2"]')).toHaveText('Section title');
