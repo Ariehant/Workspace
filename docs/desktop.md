@@ -85,6 +85,8 @@ named after the file (**Import**, for several files), and a report lists what ca
 | Notion      | Settings → Export all workspace content, Markdown & CSV or HTML    | the `.zip`        |
 | Evernote    | Select notes or a notebook → Export → ENEX (one file per notebook) | the `.enex` files |
 | Trello      | Board menu → Print, export and share → Export as JSON              | the `.json`       |
+| Asana       | The project's menu → Export/Print → CSV                            | the `.csv`        |
+| Jira        | Filters → the issues to move → Export → Export CSV (all fields)    | the `.csv`        |
 | Confluence  | Space settings → Export space → HTML                               | the `.zip`        |
 | Word        | Save as Word Document (`.docx`)                                    | the `.docx` files |
 | Google Docs | File → Download → Microsoft Word (`.docx`)                         | the `.docx` files |
@@ -93,7 +95,10 @@ named after the file (**Import**, for several files), and a report lists what ca
 Each Evernote notebook becomes a database of its notes (tags, created and updated dates and
 the source address as columns). A Trello board becomes a database shown as a board grouped by
 list; its attachments come across as links (the files stay on Trello) and archived cards are
-left out. A Confluence space becomes its page tree. Encrypted text in Evernote notes can't come
+left out. An Asana project or a Jira export becomes a database shown as a board (by section, or
+by status) and a table; sub-tasks become sub-items of their parent, and columns the importer
+doesn't know (custom fields) come across as text. Jira's wiki formatting in descriptions stays
+as plain text. A Confluence space becomes its page tree. Encrypted text in Evernote notes can't come
 across. A single Word document becomes the page itself, titled from its Title (or its file
 name); its pictures are stored with it. Older `.doc` files need saving as `.docx` first.
 

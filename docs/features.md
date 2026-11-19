@@ -56,6 +56,9 @@ planned is in [PHASE7.md](PHASE7.md).
 - **Page settings:** emoji or image icons; covers (gradients, colors or images,
   repositionable, and photos from Unsplash on a server with an Unsplash key, credited on the
   cover); font (default, serif, mono), small text, full width, lock, word count.
+- **Verified pages** (`···` → Verify): for a week, 30 or 90 days, or indefinitely. A badge
+  under the title says who verified the page and until when, or that the verification has
+  expired. Copies of a page aren't verified.
 - **Every block has a stable id**, for block links, comments, sync and the API.
 
 - **Simple tables:** add and remove rows and columns, header row and column, and colour a
@@ -77,15 +80,17 @@ Database" on an empty page).
   colour, the value that fills it ("Divide by", 100 by default) and the number beside it or
   not; a status as a checkbox, ticked when it's in the Complete group (ticking sets the first
   Complete option, unticking the first To-do one).
-- **Views:** table, board, list, gallery, calendar, timeline, chart (bar, line, pie, donut) and
-  form. Each view has its own filters (simple chips or nested AND/OR), sorts, grouping and
+- **Views:** table, board, list, gallery, feed, calendar, timeline, chart (bar, line, pie,
+  donut) and form. Each view has its own filters (simple chips or nested AND/OR), sorts, grouping and
   sub-grouping, column calculations, visible properties, card preview and size, and a search.
 - **Table:** edit cells in place, keyboard navigation, copy and paste, undo; rename, retype,
   hide, resize, reorder, duplicate and delete columns; drag rows to reorder. "Freeze up to this
   column" keeps the first columns in place when the table scrolls sideways. Large tables only
   render the rows in view.
-- **Load limit:** a table, list or gallery can show 10, 25, 50, 100 or 500 pages (per group
-  when grouped), then "Load more".
+- **Feed:** rows as a stream of whole pages: each with its title, the properties picked for
+  the view and its content, read-only. A feed loads 10 rows at first.
+- **Load limit:** a table, list, gallery or feed can show 10, 25, 50, 100 or 500 pages (per
+  group when grouped), then "Load more".
 - **Bulk edit:** tick rows in a table (Shift+click for a range, Ctrl+A for all, Escape to let
   go), then set a property for all of them at once (one undo step), duplicate them, copy their
   links or delete them.
@@ -115,6 +120,8 @@ Database" on an empty page).
 
 - **Home** (sidebar → Home): the pages you visited last, the reminders coming up (`@remind` in
   pages and on dates; in the desktop app) and the pages edited last.
+- **People** (sidebar → People): everyone in the workspace, with email and role on a server
+  (guests see names only) and its groups. Select someone to see the pages they made.
 - **Sidebar:** a page tree with drag and drop to reorder or nest, favorites and a resizable
   width. On a server workspace: sections for teamspaces, pages shared with you and your private
   pages.
@@ -149,10 +156,12 @@ Database" on an empty page).
 - **Import** (sidebar → Import): a Notion export zip (Markdown & CSV, or HTML), and Markdown,
   HTML, CSV and text files. Pages, databases with inferred types and relations, links and
   attachments come across.
-- **Import from Evernote, Trello and Confluence:** an Evernote notebook (`.enex`) as a database
-  of notes with tags, dates, checklists and attachments; a Trello board (its JSON export) as a
-  database with a board view by list, cards with labels, due dates, checklists and comments;
-  and a Confluence space (its HTML export zip) as the page tree, with panels, code, tasks,
+- **Import from Evernote, Trello, Asana, Jira and Confluence:** an Evernote notebook (`.enex`)
+  as a database of notes with tags, dates, checklists and attachments; a Trello board (its
+  JSON export) as a database with a board view by list, cards with labels, due dates,
+  checklists and comments; an Asana project or Jira issues (their CSV export) as a database
+  with a board by section or status, sub-tasks as sub-items, and notes, descriptions and
+  comments in the pages; and a Confluence space (its HTML export zip) as the page tree, with panels, code, tasks,
   attachments and links between pages. See the
   [desktop guide](desktop.md#import-from-other-apps) for how to export from each.
 - **Import Word and Google Docs** (`.docx`; Google Docs: File → Download → Microsoft Word):

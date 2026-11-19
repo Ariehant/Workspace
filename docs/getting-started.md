@@ -20,6 +20,8 @@ the parts about other people need the [server](self-hosting.md).
   show it as a chip with the site's title, or **Embed** to show the site in the page.
 - **Present:** `···` → **Present** shows the page as slides, full screen; each divider starts a
   new slide. Arrow keys move, Escape ends.
+- **Verify:** `···` → **Verify** marks a page as checked, for a while or for good; a badge under
+  the title says who did and until when.
 - **Sub-pages:** `/page` adds a page inside this one. The sidebar shows the tree; drag pages
   there to reorder or nest them, and star the ones you use most.
 
@@ -30,7 +32,7 @@ the parts about other people need the [server](self-hosting.md).
 - **Properties:** text, numbers (shown as a number, a bar or a ring), selects, status, dates,
   people, files, checkboxes, links, relations, rollups, formulas (Notion's Formula 2.0) and
   more. Add one from the column header's **+**, or with `/` on a row's page (`/relation`).
-- **Views:** table, board, list, gallery, calendar, timeline, chart and form, each with its own
+- **Views:** table, board, list, gallery, feed, calendar, timeline, chart and form, each with its own
   filters, sorts and groups. **Add a view** next to the view tabs.
 - **Rows are pages:** open one to write in it, as a side peek, centred, or full page. **Customize
   layout** on a row page pins the important properties under the title, folds the rest away, or
@@ -45,6 +47,7 @@ the parts about other people need the [server](self-hosting.md).
 
 - **Home** (in the sidebar): the pages you visited last, reminders coming up and the pages
   edited last.
+- **People** (in the sidebar): everyone in the workspace, and the pages each one made.
 - **Quick find:** `Ctrl+K`. It searches titles and content. The filters under it narrow it:
   titles only, a section, when it was edited, who created it; and it sorts by best match, last
   edited or created.
@@ -57,7 +60,8 @@ the parts about other people need the [server](self-hosting.md).
 ## Bringing your documents in
 
 **Import** in the sidebar takes a Notion export, Word and Google Docs files (`.docx`), Evernote
-notebooks, Trello boards, Confluence spaces, and Markdown, HTML, CSV and text files. A report
+notebooks, Trello boards, Asana and Jira CSV exports, Confluence spaces, and Markdown, HTML,
+CSV and text files. A report
 says what came over and anything that didn't. How to export from each app is in the
 [desktop guide](desktop.md#import-from-other-apps).
 

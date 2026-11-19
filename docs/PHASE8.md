@@ -55,13 +55,13 @@ milestones below; the others wait for a decision, by number.
 | 15  | **Recurring templates** (a template that creates a page every day/week/month)                                                                                               | "Weekly review" or "Daily standup" pages appear by themselves on schedule.                                                                                       | M      | ✅ Done (N3) |
 | 16  | **Form conditional logic** (show a question only if an earlier answer was X) and **file upload questions**                                                                  | Smarter forms: "If bug → ask for steps"; let people attach a screenshot.                                                                                         | M      | ✅ Done (N3) |
 | 17  | **Map view + Place property** (Notion 3.0/3.1)                                                                                                                              | Store addresses/places; see rows as pins on a map. For travel, field work, sites, customers. Needs a map tile source (OpenStreetMap).                            | L      | 🤔           |
-| 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | 🤔           |
+| 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | ✅ Done (N7) |
 | 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | 🤔           |
 | 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌           |
 | 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | 🤔           |
 | 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | 🤔           |
 | 23  | **Synced databases from GitHub/Jira/external APIs**                                                                                                                         | Issues from GitHub or Jira show up as a live database. Needs each service's API and accounts.                                                                    | L      | ❌           |
-| 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | 🤔           |
+| 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | ✅ Done (N7) |
 
 ### C. Navigation and workspace
 
@@ -70,7 +70,7 @@ milestones below; the others wait for a decision, by number.
 | 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅ Done (N4) |
 | 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | ✅ Done (N6) |
 | 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | 🤔           |
-| 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | 🤔           |
+| 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | ✅ Done (N7) |
 | 29  | **Full keyboard shortcut set** (move blocks with `Ctrl+Shift+↑/↓`, `Ctrl+Alt+0–9` turn into, `Ctrl+D` duplicate, `Ctrl+Shift+H` last colour, `Ctrl+Shift+L` dark mode, `Ctrl+[`/`]` back/forward, `Ctrl+Shift+U` go to parent…) and a shortcuts help screen | Faster work for keyboard users; people coming from Notion expect the same keys.           | S              | ✅ Done (N1) |
 | 30  | **Comments display setting** (show comments on the page, minimized, or hidden)                                                                                                                                                                              | Keep busy pages clean.                                                                    | S              | ✅ Done (N6) |
 | 31  | **Move a page to another workspace**                                                                                                                                                                                                                        | Reorganise between personal and team workspaces.                                          | S–M            | 🤔           |
@@ -89,14 +89,14 @@ milestones below; the others wait for a decision, by number.
 
 ### E. Import, export, developer platform
 
-| #   | Notion feature                                                                                 | What it's for (how you use it)                                               | Effort | Suggest      |
-| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ | ------------ |
-| 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅ Done (N5) |
-| 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | 🤔           |
-| 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌           |
-| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | ✅ Done (N6) |
-| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔           |
-| 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌           |
+| #   | Notion feature                                                                                 | What it's for (how you use it)                                               | Effort | Suggest                        |
+| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ | ------------------------------ |
+| 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅ Done (N5)                   |
+| 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | ✅ Asana, Jira (N7); Monday 🤔 |
+| 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌                             |
+| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | ✅ Done (N6)                   |
+| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔                             |
+| 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌                             |
 
 ### F. Platforms and apps
 
@@ -116,6 +116,7 @@ milestones below; the others wait for a decision, by number.
 | N4        | Quick find filters, request access (#25, #33)                                            | 1.5 weeks |
 | N5        | Import from Word and Google Docs (#39)                                                   | 1 week    |
 | N6        | Table colours, comments display, Home, workspace PDF, presenting (#8, #30, #26, #42, #6) | 1.5 weeks |
+| N7        | Feed view, verified pages, People, Asana and Jira import (#18, #24, #28, #40)            | 1.5 weeks |
 
 Each milestone is committed and pushed with its tests, after the full checks: formatting, lint,
 types, unit tests, both builds, the desktop E2E suite twice and the web E2E suite.
@@ -653,3 +654,57 @@ app's everyday surface: #8, #30, #26, #42 and #6.
   (calibrate by the pure-code benchmarks, best of three for UI cases) is proposed on the pull
   request rather than made here. Grouping 50,000 rows takes either about 120 ms or about 500 ms
   on `main` as on this branch: a slow path worth its own look.
+
+## N7: Feed view, verified pages, People, Asana and Jira import
+
+Four more 🤔 items that need no outside service: #18, #24, #28 and #40 (Asana and Jira; Monday
+exports Excel workbooks, which need a reader of their own, so it waits).
+
+**Built:**
+
+- **Feed view (#18):** a database layout showing rows as a stream of whole pages: each row's
+  icon, title (which opens it), the properties picked for the view, and its content, read-only.
+  A new feed shows the title and the first status, select, person and date properties, and
+  loads 10 rows at first (each one is a whole page); only the rows in view are drawn, and their
+  pages loaded. Filters, sorts, groups and Load more work as in the other layouts.
+- **Verified pages (#24):** `···` → Verify: for 1 week, 30 days, 90 days or indefinitely, or
+  remove it. A badge under the title says who verified the page and until when ("Verified by
+  Ada · until Dec 19"), or, once that's past, "Verification expired …" in the warning colour.
+  Workspace pages only (database rows have their own properties for that); copies of a page
+  aren't verified.
+- **People (#28):** People in the sidebar, under Home: everyone in the workspace with their
+  picture, and, on a server workspace, their email and role, and the groups. Guests, who may
+  not see the members list, get the names only. Selecting a person lists the pages they made,
+  newest first, each opening its page. (Pages made before Phase 8 N4 don't record who made them.)
+- **Asana and Jira import (#40):** an Asana project's CSV, or Jira issues exported as CSV, through
+  the same Import button. Each becomes a database shown as a board (by section, or by status)
+  and a table: Asana's section, assignee, start and due dates, done, tags and notes; Jira's key,
+  type, status, priority (coloured), assignee, reporter, due date, labels (its repeated columns
+  joined), description and comments. Parent tasks become sub-items. Columns not mapped (custom
+  fields, mostly) come over as text. The fixtures follow the columns these exports are
+  documented to have, written from memory: no real export could be fetched from here.
+
+**Fixed on the way:**
+
+- **The desktop build of the import worker.** electron-vite puts its CommonJS shim after the
+  last thing its regex takes for an `import` statement; comments reading "the import's page …"
+  matched it, and once the new importers changed the bundle, the shim landed inside `parseCsv`
+  and the build failed. The comments are reworded, and a unit test runs the same regex over the
+  importers' sources.
+
+**Tests:**
+
+- **Unit:** feed defaults and switching a view to a feed; verification stored, its state before
+  and after it ends, kept out of copies, a malformed value; the Asana and Jira importers (columns,
+  options, dates, sub-items, content, warnings, a plain CSV still a table); the date formats;
+  the bundler check.
+- **Desktop E2E:** the feed (content, search, opening a row, Load more) in `layouts.spec.ts`;
+  verifying, expiry, a restart and removing it in `page.spec.ts`; People in `home.spec.ts`, and
+  on a server (the owner sees roles and emails, a guest only names) in `scopes.spec.ts`; both
+  imports through the Import button in `import.spec.ts`; and axe on Feed and People in both
+  themes.
+
+**Runs:**
+
+- Formatting, lint, types, unit tests and the desktop and web builds pass. The desktop E2E
+  suite (twice) and the web suite are running; their results go here.
