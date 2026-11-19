@@ -47,7 +47,8 @@ planned is in [PHASE7.md](PHASE7.md).
 - **Inline formatting:** a toolbar on selected text for bold, italic, underline, strikethrough,
   code, links, colors, equations and turn into. Ctrl+click opens a link.
 - **Mentions:** `@` for pages (live titles), people, and dates ("next fri", "in 2 weeks");
-  `@remind tomorrow` sets a reminder for 9:00. `:` suggests emoji. A pasted link can become a
+  `@remind tomorrow` sets a reminder for 9:00. `:` suggests emoji, the workspace's own first
+  (Settings → Emoji: an image under a name, also offered as a page icon). A pasted link can become a
   link mention: the site's icon and the page's title, as a link.
 - **Find and replace** in a page (`Ctrl+F`).
 - **Synced blocks:** the same content in several places, edited anywhere.
@@ -140,6 +141,9 @@ Database" on an empty page).
 - **Trash:** restore or delete permanently; pages are deleted after 30 days.
 - **Templates gallery:** built-in templates for personal use, projects, engineering and a
   robotics lab, with previews. "Save as template" adds your own.
+- **Settings** (`Ctrl+,`, or the workspace menu): one window with a section each for your
+  account, appearance, language and region, notifications, emoji, members, teamspaces, sync,
+  keyboard shortcuts and about. The menu items for each open it at their section.
 - **Themes:** light, dark and system.
 - **Zoom** from 50% to 300% (`Ctrl+=`, `Ctrl+-`, `Ctrl+0` or `Ctrl` + wheel) in the desktop app,
   for every window, remembered.
@@ -156,12 +160,13 @@ Database" on an empty page).
 - **Import** (sidebar → Import): a Notion export zip (Markdown & CSV, or HTML), and Markdown,
   HTML, CSV and text files. Pages, databases with inferred types and relations, links and
   attachments come across.
-- **Import from Evernote, Trello, Asana, Jira and Confluence:** an Evernote notebook (`.enex`)
+- **Import from Evernote, Trello, Asana, Jira, monday.com and Confluence:** an Evernote notebook (`.enex`)
   as a database of notes with tags, dates, checklists and attachments; a Trello board (its
   JSON export) as a database with a board view by list, cards with labels, due dates,
   checklists and comments; an Asana project or Jira issues (their CSV export) as a database
   with a board by section or status, sub-tasks as sub-items, and notes, descriptions and
-  comments in the pages; and a Confluence space (its HTML export zip) as the page tree, with panels, code, tasks,
+  comments in the pages; a monday.com board (its Excel export) as a database by status, with
+  groups, a timeline as a date range and subitems as sub-items; and a Confluence space (its HTML export zip) as the page tree, with panels, code, tasks,
   attachments and links between pages. See the
   [desktop guide](desktop.md#import-from-other-apps) for how to export from each.
 - **Import Word and Google Docs** (`.docx`; Google Docs: File → Download → Microsoft Word):
@@ -193,8 +198,12 @@ These need the [self-hosted server](self-hosting.md).
 - **Members:** invite people by email (a link to send, or an email when the server has SMTP) as
   admins, members or guests; groups; names and pictures.
 - **Sharing:** teamspaces and per-page sharing with full access, can edit, can edit content
-  (database rows only), can comment and can view, inherited down the page tree. The server
-  enforces it on every write.
+  (database rows only), can create pages (a database: add pages and edit only one's own), can
+  comment and can view, inherited down the page tree. The server enforces it on every write.
+- **Share links:** Share → Share link: a link for one page, to view, comment or edit, ending
+  never or in 1, 7 or 30 days. Whoever opens it signs in or creates an account (even on an
+  invite-only server) and joins as a guest with that role on that page alone. A new link ends
+  the old one; turning it off ends it.
 - **Request access:** a link or mention of a page you can't open shows "You don't have access
   to this page" (nothing else about it), where you ask to view, comment or edit, with a
   message. The people with full access to it get the request in their inbox and in its share

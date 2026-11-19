@@ -39,7 +39,7 @@ milestones below; the others wait for a decision, by number.
 | 4   | **Embed any website** (generic embed) and more providers: GitHub Gist, Google Docs/Sheets/Slides/Drive, Miro, X/Twitter, Spotify, SoundCloud, Typeform, Airtable, Excalidraw… | Paste any link and see it live in the page. Today only YouTube, Vimeo, Loom, Figma, CodePen and Google Maps work; everything else becomes a bookmark. | M      | ✅ Done (N2) |
 | 5   | **Link mentions** (paste a URL → "Mention" chip with the site's icon and title)                                                                                               | A small inline link that shows what it points to (a GitHub PR, a Figma file, a web page), instead of a bare URL.                                      | S–M    | ✅ Done (N2) |
 | 6   | **Presentation mode** (Notion 3.4, beta)                                                                                                                                      | Turn a page into a slideshow (each divider = new slide), full-screen, arrow keys to move. For meetings and demos.                                     | M      | ✅ Done (N6) |
-| 7   | **Custom emoji** (upload your own, used anywhere `:` works)                                                                                                                   | Team logos, project icons as emoji.                                                                                                                   | M      | 🤔           |
+| 7   | **Custom emoji** (upload your own, used anywhere `:` works)                                                                                                                   | Team logos, project icons as emoji.                                                                                                                   | M      | ✅ Done (N8) |
 | 8   | **Simple table colours** (colour a row or a column)                                                                                                                           | Highlight a header row or a total column in a plain table.                                                                                            | S      | ✅ Done (N6) |
 | 9   | **Office file previews** (Word, Excel, PowerPoint shown in the page, Notion 3.6)                                                                                              | See a `.docx` / `.xlsx` attachment without downloading it.                                                                                            | M      | 🤔           |
 | 10  | **Interactive HTML block** (Notion 3.6)                                                                                                                                       | Small custom widgets (a calculator, a chart) written in HTML inside a page. Mostly made by Notion's AI there; a security risk to run arbitrary HTML.  | M      | ❌           |
@@ -59,7 +59,7 @@ milestones below; the others wait for a decision, by number.
 | 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | 🤔           |
 | 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌           |
 | 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | 🤔           |
-| 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | 🤔           |
+| 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | ✅ Done (N8) |
 | 23  | **Synced databases from GitHub/Jira/external APIs**                                                                                                                         | Issues from GitHub or Jira show up as a live database. Needs each service's API and accounts.                                                                    | L      | ❌           |
 | 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | ✅ Done (N7) |
 
@@ -69,7 +69,7 @@ milestones below; the others wait for a decision, by number.
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------- | ------------ |
 | 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅ Done (N4) |
 | 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | ✅ Done (N6) |
-| 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | 🤔           |
+| 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | ✅ Done (N8) |
 | 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | ✅ Done (N7) |
 | 29  | **Full keyboard shortcut set** (move blocks with `Ctrl+Shift+↑/↓`, `Ctrl+Alt+0–9` turn into, `Ctrl+D` duplicate, `Ctrl+Shift+H` last colour, `Ctrl+Shift+L` dark mode, `Ctrl+[`/`]` back/forward, `Ctrl+Shift+U` go to parent…) and a shortcuts help screen | Faster work for keyboard users; people coming from Notion expect the same keys.           | S              | ✅ Done (N1) |
 | 30  | **Comments display setting** (show comments on the page, minimized, or hidden)                                                                                                                                                                              | Keep busy pages clean.                                                                    | S              | ✅ Done (N6) |
@@ -81,7 +81,7 @@ milestones below; the others wait for a decision, by number.
 | #   | Notion feature                                                                                          | What it's for (how you use it)                                                            | Effort                     | Suggest                        |
 | --- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------- | ------------------------------ |
 | 33  | **Request access** (someone without access clicks "Request", the owner gets it in the inbox, approves)  | Today they just see "no access" and must ask the owner outside the app.                   | S–M                        | ✅ Done (N4)                   |
-| 34  | **Share link for anyone with the link** (view/comment/edit, optionally with expiry), without publishing | Send a page to a client without making it public on the web.                              | M                          | 🤔                             |
+| 34  | **Share link for anyone with the link** (view/comment/edit, optionally with expiry), without publishing | Send a page to a client without making it public on the web.                              | M                          | ✅ Done (N8)                   |
 | 35  | **Published sites: custom domain**, site theme/nav bar, "Allow duplicate as template"                   | `notes.yourcompany.com` instead of the server address; let visitors copy a template page. | L (domain) / S (duplicate) | 🤔                             |
 | 36  | **Admin tools**: audit log, admin content search, disable export/download, SAML SSO, SCIM user sync     | Company security and compliance. We already have OIDC single sign-on.                     | M–L each                   | ❌ (unless a company needs it) |
 | 37  | **Slack notifications** (and Slack link previews)                                                       | Mentions and updates go to Slack. Needs a Slack app per server.                           | M                          | ❌                             |
@@ -89,14 +89,14 @@ milestones below; the others wait for a decision, by number.
 
 ### E. Import, export, developer platform
 
-| #   | Notion feature                                                                                 | What it's for (how you use it)                                               | Effort | Suggest                        |
-| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ | ------------------------------ |
-| 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅ Done (N5)                   |
-| 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | ✅ Asana, Jira (N7); Monday 🤔 |
-| 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌                             |
-| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | ✅ Done (N6)                   |
-| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔                             |
-| 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌                             |
+| #   | Notion feature                                                                                 | What it's for (how you use it)                                               | Effort | Suggest                             |
+| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ | ----------------------------------- |
+| 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅ Done (N5)                        |
+| 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | ✅ Done (Asana, Jira N7; Monday N8) |
+| 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌                                  |
+| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | ✅ Done (N6)                        |
+| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔                                  |
+| 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌                                  |
 
 ### F. Platforms and apps
 
@@ -108,15 +108,16 @@ milestones below; the others wait for a decision, by number.
 
 ## Milestones
 
-| Milestone | Items                                                                                    | Estimate  |
-| --------- | ---------------------------------------------------------------------------------------- | --------- |
-| N1        | The slash menu and keyboard (#1, #2, #29)                                                | 1 week    |
-| N2        | Blocks: tabs, embedding any site, link mentions (#3, #4, #5)                             | 1.5 weeks |
-| N3        | Databases: layouts, show as, freeze, bulk edit, recurring templates, forms               | 3 weeks   |
-| N4        | Quick find filters, request access (#25, #33)                                            | 1.5 weeks |
-| N5        | Import from Word and Google Docs (#39)                                                   | 1 week    |
-| N6        | Table colours, comments display, Home, workspace PDF, presenting (#8, #30, #26, #42, #6) | 1.5 weeks |
-| N7        | Feed view, verified pages, People, Asana and Jira import (#18, #24, #28, #40)            | 1.5 weeks |
+| Milestone | Items                                                                                                      | Estimate  |
+| --------- | ---------------------------------------------------------------------------------------------------------- | --------- |
+| N1        | The slash menu and keyboard (#1, #2, #29)                                                                  | 1 week    |
+| N2        | Blocks: tabs, embedding any site, link mentions (#3, #4, #5)                                               | 1.5 weeks |
+| N3        | Databases: layouts, show as, freeze, bulk edit, recurring templates, forms                                 | 3 weeks   |
+| N4        | Quick find filters, request access (#25, #33)                                                              | 1.5 weeks |
+| N5        | Import from Word and Google Docs (#39)                                                                     | 1 week    |
+| N6        | Table colours, comments display, Home, workspace PDF, presenting (#8, #30, #26, #42, #6)                   | 1.5 weeks |
+| N7        | Feed view, verified pages, People, Asana and Jira import (#18, #24, #28, #40)                              | 1.5 weeks |
+| N8        | Monday import, custom emoji, one Settings window, "can create pages", share links (#40, #7, #27, #22, #34) | 2 weeks   |
 
 Each milestone is committed and pushed with its tests, after the full checks: formatting, lint,
 types, unit tests, both builds, the desktop E2E suite twice and the web E2E suite.
@@ -715,3 +716,85 @@ exports Excel workbooks, which need a reader of their own, so it waits).
   three on the previous one give the same spread, 16.8 to 50 ms: the metric moves in whole
   dropped frames, so a single base run can't settle it. The numbers are on the pull request;
   the gate's change is the owner's call, as before.
+
+## N8: Monday import, custom emoji, one Settings window, "can create pages", share links
+
+The owner chose the rest of the 🤔 items that need no outside service, "in sequence however
+you like": #40 (Monday), #7, #27, #22 and #34. Each was committed and pushed with its tests.
+
+**Built:**
+
+- **Monday import (#40):** a monday.com board's Excel export (`.xlsx`) through the Import button.
+  A small `.xlsx` reader (shared and inline strings, numbers, booleans, dates by their number
+  format, every sheet, the same size guard as `.docx`) feeds the tracker helpers from N7. The
+  board becomes a database shown as a board by status (by group without one) and a table:
+  groups as a select, status and priority coloured, a timeline as a date range, subitems as
+  sub-items, other columns as text. Other workbooks are reported, not imported (yet). The
+  export's layout is written from memory, like N7's fixtures; the fixture is generated by
+  `mondayBoard()` in `src/xlsx-fixture.ts`, and a test checks the two match.
+- **Custom emoji (#7):** Settings → Emoji adds an image under a name (suggested from the file;
+  built-in names can't be taken) or removes one. They're kept in the workspace's own data (the
+  owner's choice), so they work in local workspaces and offline. Typing `:name:` offers them
+  first and inserts an inline image; the icon picker lists them (a page icon is the image
+  itself, so it stays if the emoji is removed). A removed emoji shows its `:name:` in pages.
+  Markdown and HTML export write the image; the API gives the name as text. Reactions on
+  comments stay the standard set.
+- **One Settings window (#27):** Ctrl+, or Settings… in the workspace menu: Account,
+  Appearance (theme, and zoom on the desktop), Language and region, Notifications (the
+  desktop's system notifications and the email digest), Emoji, Members, Teamspaces, Sync,
+  Keyboard shortcuts and About, as the host and workspace have them. The menu items, the sync
+  indicator and Ctrl+? open it at their section. Each old dialog's body is now a section
+  (`SettingsShell`), with the same titles and test ids, so the many tests that sign in through
+  Sync didn't change. Creating a teamspace and a teamspace's settings stay dialogs of their own.
+- **"Can create pages" (#22):** a database role between "can comment" and "can edit content".
+  People with it add pages with New (from a template too) and edit the pages they made, on the
+  page itself; the views and other people's pages are read-only for them, and templates can't
+  be changed. The server holds them to it: a database update may change only rows, only rows
+  whose creator is the sender (who can't change it), and a row's page only if it's theirs.
+  Sync protocol 6 carries the role; a migration allows it.
+- **Share links (#34):** Share → Share link makes a link for the page: can view, comment or
+  edit, ending never or in 1, 7 or 30 days. Whoever opens it on the web app sees what it opens,
+  signs in or creates an account (the link counts as an invite on an invite-only server), and
+  joins the workspace as a guest with that role on that page alone, never less than they had.
+  A new link ends the old one, and turning it off ends it; people who joined keep their access,
+  as with invites. Opening a page without an account (the owner chose sign-in for every link)
+  would need an anonymous identity through sync; it's left out.
+
+**Fixed on the way:**
+
+- **A new row's page could land in the wrong scope.** The desktop tells the server where a new
+  doc belongs from its page index, which takes in new rows a moment later; a row's page written
+  in that moment went without a hint, to the workspace's default scope (with "can edit content"
+  too). It now finds the row in its open database. A unit test fails without the fix.
+- **The sync hub asks a refused doc again** after the rest of the same push, in order, so an
+  update that needed one later in the push (a row's page before its row) goes in.
+- **Share links found a new page** in its scope's page tree when the search index hadn't taken
+  it in yet ("No such page" in the first web test run).
+
+**Tests:**
+
+- **Unit:**
+  - the `.xlsx` reader (cells, dates, prefixes, the size guard, the committed fixture) and
+    the monday importer;
+  - the emoji store, the emoji names and suggestions, and their export;
+  - `checkOwnRowsChange`;
+  - the "create" role through the real sync hub (`create-role.test.ts`);
+  - the hub's second look;
+  - the scope of a new row's page;
+  - share links end to end on the server (`share-links.test.ts`), with sign-up on an
+    invite-only server.
+- **Desktop E2E:**
+  - the monday import (`import.spec.ts`);
+  - custom emoji: added, typed, a page icon, kept after a restart, removed (`inline.spec.ts`);
+  - the Settings window by keyboard and from each entry point (`settings.spec.ts`);
+  - "can create pages" with two desktops and a server (`create-role.spec.ts`);
+  - axe on the Emoji, Appearance and Notifications sections in both themes, and on the share
+    dialog with its link section.
+- **Web E2E:** a share link, used by someone signing up from it on an invite-only server
+  (`share-link.spec.ts`).
+
+**Runs:**
+
+- Formatting, lint, types, unit tests and both builds pass; each part's own E2E tests passed
+  when it was pushed. The full desktop suite (twice) and the web suite are running; their
+  results go here.

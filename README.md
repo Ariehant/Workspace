@@ -32,8 +32,8 @@ without the AI.**
   offline merge cleanly when you reconnect, because every page is a CRDT (Yjs).
 - **Notion-compatible.** Import a Notion export, and point existing Notion integrations at your
   server: the official `@notionhq/client` SDK works against it unchanged.
-- **Bring everything in.** Word and Google Docs files, Evernote, Trello, Asana, Jira and
-  Confluence exports, Markdown, HTML and CSV come in with their structure.
+- **Bring everything in.** Word and Google Docs files, Evernote, Trello, Asana, Jira,
+  monday.com and Confluence exports, Markdown, HTML and CSV come in with their structure.
 - **No AI, no lock-in.** Export everything as Markdown, CSV, HTML or PDF, or back up the whole
   workspace to a `.zip`.
 
@@ -85,8 +85,9 @@ without the AI.**
 - Quick find (`Ctrl+K`) with filters: titles only, section, last edited, created by
 - Tabs, several windows, back and forward, `workspace://` links
 - Backlinks, page history with restore, a templates gallery
-- Import from Notion, Word, Google Docs, Evernote, Trello, Asana, Jira and Confluence, and
-  Markdown, HTML and CSV
+- Import from Notion, Word, Google Docs, Evernote, Trello, Asana, Jira, monday.com and
+  Confluence, and Markdown, HTML and CSV
+- One Settings window (`Ctrl+,`); custom emoji for the whole workspace
 - Export Markdown & CSV, HTML, PDF (a page, or the whole workspace with contents); full backups
 - Light, dark and system themes
 
@@ -97,6 +98,7 @@ without the AI.**
 
 - Accounts with passwords or single sign-on (OpenID Connect)
 - Members, guests, groups, teamspaces and per-page sharing, with requests for access
+- Share links for people outside the workspace, and "can create pages" for request trackers
 - Live cursors and presence, comments (shown, minimized or hidden per page), suggested edits
 - An inbox for mentions, comments and reminders, with email digests
 - Publish pages to the web, and a web app with the same UI

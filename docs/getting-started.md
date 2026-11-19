@@ -60,8 +60,8 @@ the parts about other people need the [server](self-hosting.md).
 ## Bringing your documents in
 
 **Import** in the sidebar takes a Notion export, Word and Google Docs files (`.docx`), Evernote
-notebooks, Trello boards, Asana and Jira CSV exports, Confluence spaces, and Markdown, HTML,
-CSV and text files. A report
+notebooks, Trello boards, Asana and Jira CSV exports, monday.com boards (Excel), Confluence
+spaces, and Markdown, HTML, CSV and text files. A report
 says what came over and anything that didn't. How to export from each app is in the
 [desktop guide](desktop.md#import-from-other-apps).
 
@@ -80,7 +80,9 @@ These need a Workspace server: yours, or one someone runs for you
    this computer.
 2. **Invite:** **Members…** in the workspace menu: people by email, as members or guests, and
    groups. Teamspaces give each team its own section of the sidebar.
-3. **Share a page:** **Share** at the top of a page, with full access, edit, comment or view.
+3. **Share a page:** **Share** at the top of a page, with full access, edit, comment or view;
+   or make a **Share link** for someone outside the workspace (they sign in to use it). A
+   database can also be shared as **Can create pages**, for request trackers.
    Someone who opens a link to a page they can't see can **Request access**; you get it in your
    inbox and share it in one click.
 4. **Work together:** see who's on a page and where their cursor is, comment on text or the whole

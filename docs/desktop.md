@@ -87,6 +87,7 @@ named after the file (**Import**, for several files), and a report lists what ca
 | Trello      | Board menu → Print, export and share → Export as JSON              | the `.json`       |
 | Asana       | The project's menu → Export/Print → CSV                            | the `.csv`        |
 | Jira        | Filters → the issues to move → Export → Export CSV (all fields)    | the `.csv`        |
+| monday.com  | The board's menu → Export board to Excel                           | the `.xlsx`       |
 | Confluence  | Space settings → Export space → HTML                               | the `.zip`        |
 | Word        | Save as Word Document (`.docx`)                                    | the `.docx` files |
 | Google Docs | File → Download → Microsoft Word (`.docx`)                         | the `.docx` files |
@@ -97,7 +98,9 @@ the source address as columns). A Trello board becomes a database shown as a boa
 list; its attachments come across as links (the files stay on Trello) and archived cards are
 left out. An Asana project or a Jira export becomes a database shown as a board (by section, or
 by status) and a table; sub-tasks become sub-items of their parent, and columns the importer
-doesn't know (custom fields) come across as text. Jira's wiki formatting in descriptions stays
+doesn't know (custom fields) come across as text. A monday.com board becomes a database by
+status with its groups, its timeline as a date range and subitems as sub-items; other Excel
+workbooks aren't imported yet. Jira's wiki formatting in descriptions stays
 as plain text. A Confluence space becomes its page tree. Encrypted text in Evernote notes can't come
 across. A single Word document becomes the page itself, titled from its Title (or its file
 name); its pictures are stored with it. Older `.doc` files need saving as `.docx` first.
@@ -165,7 +168,7 @@ menu bar).
 
 ## Language and region
 
-**Workspace menu → Language and region…** sets how dates, times and numbers look: pick your
+**Settings → Language and region** (`Ctrl+,`, or the workspace menu) sets how dates, times and numbers look: pick your
 region (it starts as your system's), or set the date format, the 12- or 24-hour clock and the
 first day of the week on their own. The app's text is in English for now. A database property
 with its own date or number format keeps it.
