@@ -191,6 +191,47 @@ test('a selection made with the keyboard survives a transaction from elsewhere',
   await expect(blocks(window).first()).toHaveText('Elsewhere');
 });
 
+test('a selection made with the keyboard survives a redraw that is not a transaction', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newPage(window, 'Redraw');
+  await window.keyboard.type('Keep this selected');
+  // A plugin registered in that same moment (collaborators' cursors arriving, say) redraws the
+  // page without a transaction; ProseMirror then wrote its old caret back (CI's toggles test:
+  // the editor's selection and the page's both collapsed, the toolbar never shown). Here the
+  // plugin's node view for paragraphs forces the redraw, first in line for the selectionchange.
+  await editor(window).evaluate((el) => {
+    type Editor = {
+      registerPlugin(plugin: unknown): void;
+      view: { state: { plugins: { constructor: new (spec: object) => unknown }[] } };
+    };
+    const ed = (el as unknown as { editor: Editor }).editor;
+    const Plugin = ed.view.state.plugins[0]!.constructor;
+    document.addEventListener(
+      'selectionchange',
+      () => {
+        ed.registerPlugin(
+          new Plugin({
+            props: {
+              nodeViews: {
+                paragraph: () => {
+                  const dom = document.createElement('p');
+                  return { dom, contentDOM: dom };
+                },
+              },
+            },
+          }),
+        );
+      },
+      { capture: true, once: true },
+    );
+  });
+  await window.keyboard.press('Shift+Home');
+  await expect(window.getByTestId('selection-toolbar')).toBeVisible();
+  expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
+});
+
 test('table: insert, add rows and columns, header row, row and column colours', async ({
   launch,
 }) => {

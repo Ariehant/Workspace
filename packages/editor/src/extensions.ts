@@ -120,6 +120,54 @@ function withUnreadSelection(view: EditorView, tr: Transaction): Transaction {
 /** Views where a key was pressed whose move of the selection ProseMirror hasn't read yet. */
 const keyMoving = new WeakSet<EditorView>();
 
+/** Views reading an unread selection right now (the read dispatches, and updates the view). */
+const reading = new WeakSet<EditorView>();
+
+/**
+ * Read a key's move of the selection that ProseMirror hasn't read yet, before an update of
+ * the view that isn't a transaction (a plugin registered or removed, props set): such an
+ * update redraws the page with ProseMirror's selection, writing the old caret back over the
+ * move. True if it read one.
+ */
+function readUnreadSelection(view: EditorView): boolean {
+  if (!keyMoving.has(view) || reading.has(view)) return false;
+  if (view.isDestroyed || view.composing || !view.hasFocus()) return false;
+  const observer = (view as unknown as { domObserver: DomObserver }).domObserver;
+  const dom = (view.root as Document).getSelection?.() ?? document.getSelection();
+  if (!dom?.focusNode || observer.currentSelection.eq(dom)) return false;
+  // Unread typing too: left to ProseMirror (reading it here would change the document).
+  if (observer.pendingRecords().length > 0) return false;
+  reading.add(view);
+  try {
+    observer.forceFlush();
+    observer.onSelectionChange();
+  } finally {
+    reading.delete(view);
+  }
+  return true;
+}
+
+/**
+ * Have `updateState` and `setProps` read an unread key move first. A new state made from the
+ * old one (the same document and selection, other plugins) keeps the move.
+ */
+function readBeforeViewUpdates(view: EditorView): void {
+  const updateState = view.updateState.bind(view);
+  const setProps = view.setProps.bind(view);
+  view.updateState = (state) => {
+    const before = view.state;
+    const keepsSelection = state.doc === before.doc && state.selection.eq(before.selection);
+    if (!keepsSelection || !readUnreadSelection(view)) return updateState(state);
+    const read = view.state.selection;
+    if (view.state.doc !== state.doc || read.eq(state.selection)) return updateState(state);
+    updateState(state.apply(state.tr.setSelection(read)));
+  };
+  view.setProps = (props) => {
+    readUnreadSelection(view);
+    setProps(props);
+  };
+}
+
 const KeysUseCurrentSelection = Extension.create({
   name: 'keysUseCurrentSelection',
   // Before every keymap.
@@ -146,6 +194,7 @@ const KeysUseCurrentSelection = Extension.create({
           },
         },
         view(view) {
+          readBeforeViewUpdates(view);
           // Registered after ProseMirror's own listener: by now it has read the move.
           const read = () => keyMoving.delete(view);
           const doc = view.dom.ownerDocument;
