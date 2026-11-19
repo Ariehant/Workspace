@@ -933,3 +933,6 @@ Drive). The API gives a Drive file as an external link to it and a linked file a
 
 **Tests:** the API output for both (unit); `drive.spec.ts`: a cell gets a file on the computer
 and a Drive file, each opens where it is, kept after a restart.
+
+**Runs (N9c):** formatting, lint, types, unit tests and both builds pass; the full desktop E2E
+suite with all of N9: 193 passed, 3 skipped.
