@@ -92,6 +92,8 @@ export interface Platform {
     pick(): Promise<{ ok: DriveFileRef[] } | { error: string }>;
     status(fileId: string): Promise<DriveFileStatus>;
     open(fileId: string): Promise<boolean>;
+    /** Where Drive's picture of a file shows from. */
+    thumbnailUrl?(fileId: string): string;
   };
   /**
    * Linked files (Phase 8 N9): pointers to files on this computer, and where the

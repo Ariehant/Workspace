@@ -40,6 +40,9 @@ planned is in [PHASE7.md](PHASE7.md).
   folders ("Projects"), so files in them open on every computer that links a folder under that
   name (one kept in sync with Dropbox, Syncthing or git). A moved file says so and can be
   located again; on the web, a link says it's on a computer.
+- **File previews:** Show preview on an attached or linked Word document (`.docx`) or Excel
+  workbook (`.xlsx`) reads it in the page (sheets one at a time); linked PDFs and images show
+  too, and Drive files show Drive's picture of them.
 - **Google Drive files** (desktop): `/google drive` picks files with Google's Picker; each is a
   card (name, kind, size, date) kept current while Drive is connected, opening in Drive. Only
   the files picked are visible to the app (`drive.file`). Settings → Connections holds your

@@ -31,18 +31,18 @@ milestones below; the others wait for a decision, by number.
 
 ### A. Pages and blocks
 
-| #   | Notion feature                                                                                                                                                                | What it's for (how you use it)                                                                                                                        | Effort | Suggest      |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ |
-| 1   | **Property commands in `/`** (`/relation`, `/rollup`, `/date`, `/select`, `/formula`…)                                                                                        | On a database row's page, type `/relation` to add that kind of property to the database without going to the table header. Faster setup of databases. | S      | ✅ Done (N1) |
-| 2   | **Other quick `/` commands**: `/red`, `/blue background` (colour the block), `/comment`, `/date` or `/today`, `/mention`, `/emoji`, `/duplicate`, `/delete`, `/turn into`     | Do the block menu's actions from the keyboard without the mouse.                                                                                      | S      | ✅ Done (N1) |
-| 3   | **Tabs block** (`/tabs`, Notion 3.4, March 2026)                                                                                                                              | Put content in clickable tabs on one page (e.g. "Specs / Tests / Notes") instead of making sub-pages.                                                 | M      | ✅ Done (N2) |
-| 4   | **Embed any website** (generic embed) and more providers: GitHub Gist, Google Docs/Sheets/Slides/Drive, Miro, X/Twitter, Spotify, SoundCloud, Typeform, Airtable, Excalidraw… | Paste any link and see it live in the page. Today only YouTube, Vimeo, Loom, Figma, CodePen and Google Maps work; everything else becomes a bookmark. | M      | ✅ Done (N2) |
-| 5   | **Link mentions** (paste a URL → "Mention" chip with the site's icon and title)                                                                                               | A small inline link that shows what it points to (a GitHub PR, a Figma file, a web page), instead of a bare URL.                                      | S–M    | ✅ Done (N2) |
-| 6   | **Presentation mode** (Notion 3.4, beta)                                                                                                                                      | Turn a page into a slideshow (each divider = new slide), full-screen, arrow keys to move. For meetings and demos.                                     | M      | ✅ Done (N6) |
-| 7   | **Custom emoji** (upload your own, used anywhere `:` works)                                                                                                                   | Team logos, project icons as emoji.                                                                                                                   | M      | ✅ Done (N8) |
-| 8   | **Simple table colours** (colour a row or a column)                                                                                                                           | Highlight a header row or a total column in a plain table.                                                                                            | S      | ✅ Done (N6) |
-| 9   | **Office file previews** (Word, Excel, PowerPoint shown in the page, Notion 3.6)                                                                                              | See a `.docx` / `.xlsx` attachment without downloading it.                                                                                            | M      | 🤔           |
-| 10  | **Interactive HTML block** (Notion 3.6)                                                                                                                                       | Small custom widgets (a calculator, a chart) written in HTML inside a page. Mostly made by Notion's AI there; a security risk to run arbitrary HTML.  | M      | ❌           |
+| #   | Notion feature                                                                                                                                                                | What it's for (how you use it)                                                                                                                        | Effort | Suggest                        |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------ |
+| 1   | **Property commands in `/`** (`/relation`, `/rollup`, `/date`, `/select`, `/formula`…)                                                                                        | On a database row's page, type `/relation` to add that kind of property to the database without going to the table header. Faster setup of databases. | S      | ✅ Done (N1)                   |
+| 2   | **Other quick `/` commands**: `/red`, `/blue background` (colour the block), `/comment`, `/date` or `/today`, `/mention`, `/emoji`, `/duplicate`, `/delete`, `/turn into`     | Do the block menu's actions from the keyboard without the mouse.                                                                                      | S      | ✅ Done (N1)                   |
+| 3   | **Tabs block** (`/tabs`, Notion 3.4, March 2026)                                                                                                                              | Put content in clickable tabs on one page (e.g. "Specs / Tests / Notes") instead of making sub-pages.                                                 | M      | ✅ Done (N2)                   |
+| 4   | **Embed any website** (generic embed) and more providers: GitHub Gist, Google Docs/Sheets/Slides/Drive, Miro, X/Twitter, Spotify, SoundCloud, Typeform, Airtable, Excalidraw… | Paste any link and see it live in the page. Today only YouTube, Vimeo, Loom, Figma, CodePen and Google Maps work; everything else becomes a bookmark. | M      | ✅ Done (N2)                   |
+| 5   | **Link mentions** (paste a URL → "Mention" chip with the site's icon and title)                                                                                               | A small inline link that shows what it points to (a GitHub PR, a Figma file, a web page), instead of a bare URL.                                      | S–M    | ✅ Done (N2)                   |
+| 6   | **Presentation mode** (Notion 3.4, beta)                                                                                                                                      | Turn a page into a slideshow (each divider = new slide), full-screen, arrow keys to move. For meetings and demos.                                     | M      | ✅ Done (N6)                   |
+| 7   | **Custom emoji** (upload your own, used anywhere `:` works)                                                                                                                   | Team logos, project icons as emoji.                                                                                                                   | M      | ✅ Done (N8)                   |
+| 8   | **Simple table colours** (colour a row or a column)                                                                                                                           | Highlight a header row or a total column in a plain table.                                                                                            | S      | ✅ Done (N6)                   |
+| 9   | **Office file previews** (Word, Excel, PowerPoint shown in the page, Notion 3.6)                                                                                              | See a `.docx` / `.xlsx` attachment without downloading it.                                                                                            | M      | ✅ Done (N9: Word, Excel, PDF) |
+| 10  | **Interactive HTML block** (Notion 3.6)                                                                                                                                       | Small custom widgets (a calculator, a chart) written in HTML inside a page. Mostly made by Notion's AI there; a security risk to run arbitrary HTML.  | M      | ❌                             |
 
 ### B. Databases
 
@@ -892,3 +892,33 @@ owner's to try.
 **Runs (N9):** formatting, lint, types, unit tests and both builds pass. The full desktop E2E
 suite: 190 passed, 3 skipped (with both N9 parts); `drive.spec.ts` and `linked-files.spec.ts`
 again on the final build: passed.
+
+## N9c: the toggles failure found, file previews, and linked files in databases
+
+**Fixed: the keyboard selection lost on CI (toggles test).** The diagnostics added earlier
+caught the failure: the editor's selection and the page's both collapsed at the caret after
+Shift+Home. A view update that isn't a transaction (a plugin registered, props set) landing
+after the browser moved the selection but before ProseMirror read it redraws the page with the
+old selection. The guard for transactions didn't see it. `updateState` and `setProps` now read
+an unread key move first. A test forcing the ordering (a plugin with a paragraph node view,
+registered first in line for the `selectionchange`) failed 3 of 3 before the fix with CI's exact
+state; after it, it and the toggles test passed 45 of 45 under CPU load, and the full desktop
+suite passes.
+
+**Built: previews (#9).**
+
+- A Word document (`.docx`) or Excel workbook (`.xlsx`) attached to a page, or linked on the
+  computer, has **Show preview**: the document's headings, text, lists, tables and code (from
+  the importer's own reader, shown from its blocks, never as HTML from the file; pictures as
+  placeholders), or the workbook's sheets one at a time (the first 200 rows and 50 columns).
+  A linked PDF shows in the viewer, a linked image as before. PowerPoint isn't previewed yet.
+- Opening a preview is kept in the page where it can be edited (everyone sees it open), or
+  for the reader alone. The readers load only when a preview opens (their own chunk).
+- A Google Drive file Drive has a picture of (a Doc, a Sheet, a PDF, an image) shows it under
+  its card: Drive's `thumbnailLink`, fetched by the main process with the account's token
+  (`ws-file://drive/<id>`), and only from Google's hosts.
+- Previews are read up to 50 MB; larger files open in their own app.
+
+**Tests:** preview kinds (unit); `file-preview.spec.ts` (an attached Word document and
+workbook, sheet tabs, a linked workbook, axe on the previews, kept after a restart);
+`drive.spec.ts` (the sheet's picture through the token; none for a file without one).

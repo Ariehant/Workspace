@@ -19,7 +19,8 @@ export interface DriveFileRef {
 
 /** What a Drive file is now. */
 export type DriveFileStatus =
-  | { state: 'found'; file: DriveFileRef }
+  /** `thumbnail`: Drive has a picture of it (a page, a slide, the image). */
+  | { state: 'found'; file: DriveFileRef; thumbnail: boolean }
   /** Deleted or in the trash. */
   | { state: 'gone' }
   /** The account connected here can't see it (someone else's, not shared). */
@@ -99,9 +100,11 @@ export function driveFileOf(attrs: Record<string, unknown> | undefined): DriveFi
 }
 
 /** A file as Drive's API describes it (`files.get` with these fields), or null. */
-export const DRIVE_FIELDS = 'id,name,mimeType,modifiedTime,size,trashed';
+export const DRIVE_FIELDS = 'id,name,mimeType,modifiedTime,size,trashed,thumbnailLink';
 
-export function driveFileFromApi(raw: unknown): (DriveFileRef & { trashed: boolean }) | null {
+export function driveFileFromApi(
+  raw: unknown,
+): (DriveFileRef & { trashed: boolean; thumbnailLink: string | null }) | null {
   if (!raw || typeof raw !== 'object') return null;
   const f = raw as Record<string, unknown>;
   if (!isDriveFileId(f.id) || typeof f.name !== 'string') return null;
@@ -114,6 +117,7 @@ export function driveFileFromApi(raw: unknown): (DriveFileRef & { trashed: boole
     modifiedAt: Number.isFinite(modified) ? modified : null,
     size: Number.isFinite(size) ? size : null,
     trashed: f.trashed === true,
+    thumbnailLink: typeof f.thumbnailLink === 'string' ? f.thumbnailLink : null,
   };
 }
 

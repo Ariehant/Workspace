@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url';
 import {
   LINKED_FOLDER_NAME,
   linkedFileOf,
+  previewKindOf,
   pathInFolder,
   relativeParts,
   type LinkedFileRef,
@@ -25,7 +26,10 @@ import { IPC, type LinkedFileStatus } from '../shared/ipc';
 /** This computer's folders, by name. Not readable or writable through the settings IPC. */
 export const LINKED_FOLDERS_SETTING = 'linkedFolders';
 
-/** `ws-file://linked/?ref=…` serves a linked image to the page (images alone). */
+/**
+ * `ws-file://linked/?ref=…` serves a linked file the page can preview (images, PDFs, Word
+ * documents and Excel workbooks); nothing else.
+ */
 export const LINKED_PREVIEW_HOST = 'linked';
 const PREVIEW_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -35,6 +39,9 @@ const PREVIEW_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.avif': 'image/avif',
   '.bmp': 'image/bmp',
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 const MAX_PREVIEW_BYTES = 50 * 1024 * 1024;
 
@@ -131,7 +138,7 @@ async function statOf(path: string): Promise<Stats | null> {
   }
 }
 
-/** Serve a linked image to the page (`ws-file://linked/?ref=…`); other files aren't. */
+/** Serve a linked file the page previews (`ws-file://linked/?ref=…`); other files aren't. */
 export async function linkedPreview(store: SqliteStore, url: URL): Promise<Response> {
   let ref: LinkedFileRef | null;
   try {
@@ -192,7 +199,7 @@ export function registerLinkedFiles(store: SqliteStore): void {
       size: info.isFile() ? info.size : null,
       modifiedAt: Math.round(info.mtimeMs),
       folder: info.isDirectory(),
-      preview: info.isFile() && !!PREVIEW_TYPES[extname(where.path).toLowerCase()],
+      preview: info.isFile() && info.size <= MAX_PREVIEW_BYTES ? previewKindOf(where.path) : null,
     };
   });
 

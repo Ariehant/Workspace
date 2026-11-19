@@ -1317,3 +1317,63 @@
 .ws-prose .ProseMirror-selectednode:has(.ws-linked-file) {
   background: none;
 }
+
+/* File previews (Phase 8 N9): a document's text, a workbook's cells. */
+.ws-file-preview {
+  max-height: 480px;
+  overflow: auto;
+  padding: 12px 16px;
+  border: 1px solid var(--ws-border);
+  border-radius: 4px;
+  font-size: 14px;
+  user-select: text;
+}
+.ws-file-preview-doc h1 {
+  font-size: 1.4em;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+.ws-file-preview-doc h2 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em;
+}
+.ws-file-preview-doc h3 {
+  font-weight: 600;
+  margin: 0.4em 0 0.2em;
+}
+.ws-file-preview-doc p {
+  margin: 0.3em 0;
+}
+.ws-file-preview-doc ul,
+.ws-file-preview-doc ol {
+  padding-left: 1.5em;
+}
+.ws-file-preview-doc ul {
+  list-style: disc;
+}
+.ws-file-preview-doc ol {
+  list-style: decimal;
+}
+.ws-file-preview-doc pre {
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--ws-hover);
+  white-space: pre-wrap;
+}
+.ws-file-preview-sheet {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ws-file-preview-sheet td,
+.ws-file-preview-sheet th {
+  padding: 2px 8px;
+  border: 1px solid var(--ws-border);
+  white-space: nowrap;
+  text-align: left;
+}
+.ws-file-preview-image {
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: 4px;
+}

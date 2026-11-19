@@ -1,4 +1,5 @@
 import type * as Y from 'yjs';
+import type { PreviewKind } from './previews';
 
 /**
  * Linked files (Phase 8 N9): a page points at a file on the computer instead of holding a
@@ -31,8 +32,8 @@ export type LinkedFileStatus =
       modifiedAt: number;
       /** It's a folder. */
       folder: boolean;
-      /** An image the page can show. */
-      preview: boolean;
+      /** What the page can show of it (an image, a PDF, a document), or null. */
+      preview: PreviewKind | null;
     }
   | { state: 'missing' }
   /** Its linked folder isn't linked on this computer. */

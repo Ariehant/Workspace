@@ -12,7 +12,7 @@ import {
 } from '@workspace/core';
 import { fillFromTable, tableCells } from '@workspace/database';
 import type { EditorServices } from '@workspace/editor';
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { useApp } from './context';
 import { InlineDatabase } from './database/database-view';
 import { createDatabase } from './database/registry';
@@ -22,6 +22,9 @@ import { editButton } from './buttons/button-dialog';
 import { runButton } from './buttons/run-button';
 import { setDrivePickProblem } from './connections';
 import { openSettings } from './settings/open';
+
+/** Loaded when a preview is first opened (it brings the document readers). */
+const FilePreview = lazy(() => import('./file-preview'));
 
 /** What the editor of page (or row) `pageId` needs from the app. */
 export function useEditorServices(
@@ -119,7 +122,13 @@ export function useEditorServices(
         open: (fileId) => platform.google!.open(fileId),
         setUp: () => openSettings('connections'),
         subscribe: (listener) => platform.google!.onChange(listener),
+        thumbnailUrl: platform.google.thumbnailUrl,
       },
+      renderFilePreview: (source) => (
+        <Suspense fallback={<p className="text-sm text-muted">Opening the preview…</p>}>
+          <FilePreview {...source} />
+        </Suspense>
+      ),
       linkedFiles: platform.linkedFiles && {
         pick: () => platform.linkedFiles!.pick(false),
         locate: async () => (await platform.linkedFiles!.pick(true))[0] ?? null,

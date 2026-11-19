@@ -12,6 +12,7 @@ export * from './synced';
 export * from './emoji';
 export * from './linked-files';
 export * from './drive';
+export * from './previews';
 export * from './math';
 export * from './members';
 export * from './scope-moves';

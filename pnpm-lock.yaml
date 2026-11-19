@@ -298,6 +298,9 @@ importers:
       '@workspace/editor':
         specifier: workspace:*
         version: link:../editor
+      '@workspace/importers':
+        specifier: workspace:*
+        version: link:../importers
       '@workspace/ui':
         specifier: workspace:*
         version: link:../ui

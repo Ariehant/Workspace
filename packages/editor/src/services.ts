@@ -4,6 +4,7 @@ import type {
   DriveFileStatus,
   LinkedFileRef,
   LinkedFileStatus,
+  PreviewKind,
 } from '@workspace/core';
 import type { LucideIcon } from 'lucide-react';
 import type * as Y from 'yjs';
@@ -100,6 +101,11 @@ export interface EditorServices {
   fileUrl(id: string): string;
   /** Open a stored file with the system's default app. */
   openFile(id: string): void;
+  /**
+   * A file's preview in the page (a Word document, an Excel workbook, a PDF), from a URL the
+   * renderer can load. Where the app provides one.
+   */
+  renderFilePreview?(source: { url: string; name: string; kind: PreviewKind }): ReactNode;
   linkPreview(url: string): Promise<LinkPreview | null>;
   /**
    * Linked files (Phase 8 N9): pointers to files on this computer instead of copies. Only
@@ -132,6 +138,8 @@ export interface EditorServices {
     setUp(): void;
     /** The connection changed (connected, disconnected). */
     subscribe(listener: () => void): () => void;
+    /** Where Drive's picture of a file shows from (when its status says it has one). */
+    thumbnailUrl?(fileId: string): string;
   };
   /**
    * On a database row's page, for someone who may change the database's properties: the

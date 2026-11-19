@@ -13,7 +13,7 @@ import { FileSymlink, FolderOpen, FolderSymlink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useEditorServices } from '../services';
 import { atomBlock, dataAttr } from './atom';
-import { formatBytes } from './media';
+import { FilePreviewToggle, formatBytes } from './media';
 
 /**
  * A linked file (Phase 8 N9): a pointer to a file on the computer, not a copy. It opens with
@@ -169,7 +169,27 @@ function LinkedFileView({ node, updateAttributes, editor, selected }: ReactNodeV
           )}
         </div>
       )}
-      {found?.preview && linked && (
+      {found &&
+        linked &&
+        services.renderFilePreview &&
+        found.preview &&
+        found.preview !== 'image' && (
+          <FilePreviewToggle
+            preview={node.attrs.preview === true}
+            editable={editor.isEditable}
+            onChange={(preview) => updateAttributes({ preview: preview || null })}
+            render={() =>
+              services.renderFilePreview!({
+                url: linked.previewUrl(ref),
+                name: ref.name,
+                kind: found.preview!,
+              })
+            }
+          >
+            {null}
+          </FilePreviewToggle>
+        )}
+      {found?.preview === 'image' && linked && (
         <img
           src={linked.previewUrl(ref)}
           alt={ref.name}
@@ -188,4 +208,5 @@ export const LinkedFileBlock = atomBlock(LINKED_FILE, LinkedFileView, {
   name: dataAttr('name'),
   size: dataAttr('size'),
   modifiedAt: dataAttr('modifiedAt'),
+  preview: { default: null },
 });

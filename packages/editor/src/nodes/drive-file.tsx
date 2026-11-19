@@ -14,7 +14,7 @@ import { File, FileImage, FileSpreadsheet, FileText, Folder, Presentation } from
 import { useEffect, useState } from 'react';
 import { useEditorServices } from '../services';
 import { atomBlock, dataAttr } from './atom';
-import { formatBytes } from './media';
+import { FilePreviewToggle, formatBytes } from './media';
 
 /**
  * A Google Drive file (Phase 8 N9): a pointer picked with Google's Picker. It keeps what Drive
@@ -181,6 +181,25 @@ function DriveFileView({ node, updateAttributes, editor, selected }: ReactNodeVi
           )}
         </div>
       )}
+      {status?.state === 'found' && status.thumbnail && drive?.thumbnailUrl && (
+        <FilePreviewToggle
+          preview={node.attrs.preview === true}
+          editable={editor.isEditable}
+          onChange={(preview) => updateAttributes({ preview: preview || null })}
+          render={() => (
+            <img
+              src={drive.thumbnailUrl!(ref.fileId)}
+              alt={`Preview of ${shown.name}`}
+              className="ws-linked-file-preview"
+              draggable={false}
+              data-testid="drive-file-thumbnail"
+              onError={(e) => (e.currentTarget.style.display = 'none')}
+            />
+          )}
+        >
+          {null}
+        </FilePreviewToggle>
+      )}
     </NodeViewWrapper>
   );
 }
@@ -191,4 +210,5 @@ export const DriveFileBlock = atomBlock(DRIVE_FILE, DriveFileView, {
   mimeType: dataAttr('mimeType'),
   modifiedAt: dataAttr('modifiedAt'),
   size: dataAttr('size'),
+  preview: { default: null },
 });

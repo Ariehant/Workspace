@@ -6,6 +6,7 @@ import {
   driveOpenUrl,
   emailFromIdToken,
   googleAuthUrl,
+  previewKindOf,
 } from './index';
 
 const ID = '1AbC_def-GHIjkl23';
@@ -51,6 +52,7 @@ describe('Drive files', () => {
       modifiedAt: Date.UTC(2026, 10, 18, 10),
       size: 2048,
       trashed: false,
+      thumbnailLink: null,
     });
     // A Google Doc has no size.
     expect(driveFileFromApi({ id: ID, name: 'Notes', trashed: true })).toMatchObject({
@@ -95,5 +97,19 @@ describe('signing in to Google', () => {
     expect(emailFromIdToken(token)).toBe('ada@lab.io');
     expect(emailFromIdToken('not.a-token')).toBeNull();
     expect(emailFromIdToken(undefined)).toBeNull();
+  });
+});
+
+describe('previews', () => {
+  it('by name, then by type; SVGs and others have none', () => {
+    expect(previewKindOf('Arm.PNG')).toBe('image');
+    expect(previewKindOf('spec.pdf')).toBe('pdf');
+    expect(previewKindOf('BOM.xlsx')).toBe('xlsx');
+    expect(previewKindOf('Report.docx')).toBe('docx');
+    expect(previewKindOf('scan', 'application/pdf')).toBe('pdf');
+    expect(previewKindOf('photo', 'image/jpeg')).toBe('image');
+    expect(previewKindOf('logo.svg', 'image/svg+xml')).toBeNull();
+    expect(previewKindOf('model.step')).toBeNull();
+    expect(previewKindOf('old.doc')).toBeNull();
   });
 });

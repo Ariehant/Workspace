@@ -328,6 +328,48 @@ export class GoogleDrive {
 
   // --- Drive -----------------------------------------------------------------------------
 
+  /** Where Drive last said each file's picture is (fetched with the token, by the id). */
+  private readonly thumbnails = new Map<string, string>();
+
+  /** A URL of Google's (or of the API this build talks to): never one from a page. */
+  private isGoogles(link: string): boolean {
+    try {
+      const url = new URL(link);
+      if (url.origin === new URL(ENDPOINTS.api).origin) return true;
+      return (
+        url.protocol === 'https:' &&
+        /(^|\.)(googleusercontent\.com|google\.com|googleapis\.com)$/.test(url.hostname)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /** A Drive file's picture, for `ws-file://drive/<id>`. */
+  async thumbnail(fileId: string): Promise<Response> {
+    const missing = () => new Response('Not found', { status: 404 });
+    if (!isDriveFileId(fileId)) return missing();
+    if (!this.thumbnails.has(fileId)) await this.get(fileId);
+    const link = this.thumbnails.get(fileId);
+    if (!link) return missing();
+    try {
+      const response = await net.fetch(link, {
+        headers: { authorization: `Bearer ${await this.accessToken()}` },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      const type = response.headers.get('content-type') ?? '';
+      if (!response.ok || !type.startsWith('image/')) {
+        await response.body?.cancel().catch(() => {});
+        return missing();
+      }
+      return new Response(response.body, {
+        headers: { 'content-type': type, 'access-control-allow-origin': '*' },
+      });
+    } catch {
+      return missing();
+    }
+  }
+
   private async get(fileId: string, retry = true): Promise<DriveFileStatus> {
     let token: string;
     try {
@@ -357,8 +399,11 @@ export class GoogleDrive {
     const file = driveFileFromApi(await response.json().catch(() => null));
     if (!file) return { state: 'offline' };
     if (file.trashed) return { state: 'gone' };
-    const { trashed: _trashed, ...ref } = file;
-    return { state: 'found', file: ref };
+    const { trashed: _trashed, thumbnailLink, ...ref } = file;
+    const thumbnail = thumbnailLink && this.isGoogles(thumbnailLink) ? thumbnailLink : null;
+    if (thumbnail) this.thumbnails.set(fileId, thumbnail);
+    else this.thumbnails.delete(fileId);
+    return { state: 'found', file: ref, thumbnail: !!thumbnail };
   }
 
   status(fileId: unknown): Promise<DriveFileStatus> {
@@ -492,8 +537,15 @@ document.head.append(script);
 }
 
 /** Handle the Google IPC. Call after ready. */
+let current: GoogleDrive | null = null;
+
+/** A Drive file's picture (`ws-file://drive/<id>`), once Google is set up here. */
+export const driveThumbnail = (fileId: string): Promise<Response> =>
+  current ? current.thumbnail(fileId) : Promise.resolve(new Response('Not found', { status: 404 }));
+
 export function registerGoogle(store: SqliteStore): GoogleDrive {
   const google = new GoogleDrive(store);
+  current = google;
   const changed = () => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(IPC.googleChanged);

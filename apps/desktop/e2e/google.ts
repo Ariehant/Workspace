@@ -14,6 +14,8 @@ export interface FakeFile {
   modifiedTime: string;
   size?: string;
   trashed?: boolean;
+  /** Drive has a picture of it (served at `/thumb/<id>`, with the token). */
+  thumbnail?: boolean;
 }
 
 export interface FakeGoogle {
@@ -38,6 +40,12 @@ const read = async (req: IncomingMessage) => {
 };
 
 const b64url = (value: string | Buffer) => Buffer.from(value).toString('base64url');
+
+/** A 4×3 PNG: Drive's picture of a file. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEklEQVR4nGP4z8AARwzEcQwDAH2gC/UmQhvLAAAAAElFTkSuQmCC',
+  'base64',
+);
 
 const PICKER_JS = (origin: string) => `
 window.gapi = { load: (name, options) => setTimeout(options.callback) };
@@ -162,7 +170,19 @@ export async function startFakeGoogle(): Promise<FakeGoogle> {
         if (!access.has(token)) return json(401, { error: { code: 401 } });
         const found = fake.files.get(file[1]!);
         if (!found) return json(404, { error: { code: 404 } });
-        return json(200, { id: file[1], ...found });
+        const { thumbnail, ...rest } = found;
+        const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        return json(200, {
+          id: file[1],
+          ...rest,
+          ...(thumbnail && { thumbnailLink: `${origin}/thumb/${file[1]}` }),
+        });
+      }
+      if (url.pathname.startsWith('/thumb/')) {
+        const token = (req.headers.authorization ?? '').replace(/^Bearer /, '');
+        if (!access.has(token)) return json(401, { error: { code: 401 } });
+        res.writeHead(200, { 'content-type': 'image/png' });
+        return res.end(PNG);
       }
       if (url.pathname === '/picker.js') {
         res.writeHead(200, { 'content-type': 'text/javascript' });

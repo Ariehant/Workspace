@@ -69,7 +69,11 @@ const platform: Platform = {
   fileUrl: (id) => `ws-file://${id}`,
   openFile: (id) => void api.files.open(id),
   linkPreview: (url) => api.linkPreview(url),
-  google: api.google,
+  google: {
+    ...api.google,
+    // Fetched by the main process with the account's token.
+    thumbnailUrl: (fileId) => `ws-file://drive/${encodeURIComponent(fileId)}`,
+  },
   linkedFiles: {
     ...api.linkedFiles,
     // Served by the main process from this computer's linked folders (images only).

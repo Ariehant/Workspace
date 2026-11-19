@@ -19,6 +19,7 @@ test.beforeEach(async () => {
     name: 'Gripper BOM',
     mimeType: 'application/vnd.google-apps.spreadsheet',
     modifiedTime: '2026-11-18T10:00:00.000Z',
+    thumbnail: true,
   });
   google.files.set(PDF, {
     name: 'Servo datasheet.pdf',
@@ -123,6 +124,14 @@ test('google drive: connect, pick with the Picker, kept current, restart, discon
     await expect
       .poll(async () => (await external(app)).at(-1))
       .toBe(`https://drive.google.com/open?id=${SHEET}`);
+
+    // Drive's picture of the sheet, fetched by the app with the token; the PDF has none.
+    await cards.nth(0).locator('..').getByRole('button', { name: 'Show preview' }).click();
+    const thumbnail = window.getByTestId('drive-file-thumbnail');
+    await expect
+      .poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.naturalWidth))
+      .toBe(4);
+    await expect(window.getByRole('button', { name: 'Show preview' })).toHaveCount(0);
 
     // Renamed in Drive: the page follows. Trashed: it says so.
     google.files.get(SHEET)!.name = 'Gripper BOM v2';

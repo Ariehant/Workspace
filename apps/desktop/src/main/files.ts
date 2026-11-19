@@ -8,6 +8,7 @@ import {
 } from '@workspace/storage-local';
 import { ipcMain, net, protocol, shell } from 'electron';
 import { IPC } from '../shared/ipc';
+import { driveThumbnail } from './google';
 import { LINKED_PREVIEW_HOST, linkedPreview } from './linked-files';
 
 /** `ws-file://<id>` serves attachments to the sandboxed renderer. */
@@ -78,6 +79,7 @@ export function registerFiles(
   protocol.handle(FILE_SCHEME, async (request) => {
     const url = new URL(request.url);
     if (url.hostname === LINKED_PREVIEW_HOST) return linkedPreview(store, url);
+    if (url.hostname === 'drive') return driveThumbnail(url.pathname.slice(1));
     const id = url.hostname;
     let path = files.resolve(id);
     if (!path && isFileId(id) && (await sync.fetchMissing(id))) path = files.resolve(id);

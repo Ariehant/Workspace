@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./docx": "./src/docx.ts",
+    "./xlsx": "./src/xlsx.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
