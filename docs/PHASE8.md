@@ -706,5 +706,12 @@ exports Excel workbooks, which need a reader of their own, so it waits).
 
 **Runs:**
 
-- Formatting, lint, types, unit tests and the desktop and web builds pass. The desktop E2E
-  suite (twice) and the web suite are running; their results go here.
+- **The full desktop suite, twice:** 183 passed and 3 skipped each time.
+- **The web suite:** 6 passed. Formatting, lint, types, unit tests and the desktop and web
+  builds pass.
+- **CI on the pull request:** lint and unit tests, the Electron E2E suite, the Compose stack and
+  packaging are green. Performance budgets failed on `scroll.frame.max` alone (the Table view's
+  worst frame, 66.6 ms against 16.8 ms on the base branch). Three local runs on this head and
+  three on the previous one give the same spread, 16.8 to 50 ms: the metric moves in whole
+  dropped frames, so a single base run can't settle it. The numbers are on the pull request;
+  the gate's change is the owner's call, as before.
