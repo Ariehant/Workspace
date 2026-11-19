@@ -60,3 +60,37 @@ test('home: recently visited, upcoming reminders, recently edited', async ({ lau
   await expect(window.getByLabel('Page title')).toHaveValue('Gripper');
   await expect(editor(window).getByTestId('mention')).toHaveText('@Tomorrow');
 });
+
+test('people: you, the pages you made, and opening one', async ({ launch }) => {
+  const { window } = await launch();
+  await newPage(window, 'Wrist joint');
+  await newPage(window, 'Gripper');
+
+  const peopleButton = window.getByRole('navigation', { name: 'Sidebar' }).getByRole('button', {
+    name: 'People',
+  });
+  await peopleButton.click();
+  const people = window.getByTestId('people');
+  await expect(people).toBeVisible();
+  await expect(peopleButton).toHaveAttribute('aria-current', 'page');
+  const person = people.getByTestId('person');
+  await expect(person).toHaveCount(1);
+  await expect(person).toContainText('(you)');
+  await expect(person).toHaveAttribute('aria-pressed', 'true');
+  // A local workspace has no roles or emails.
+  await expect(people.getByTestId('person-role')).toHaveCount(0);
+
+  // Newest first.
+  const pages = people.getByTestId('person-page');
+  await expect(pages).toHaveText([/Gripper/, /Wrist joint/]);
+  await pages.filter({ hasText: 'Wrist joint' }).click();
+  await expect(people).toBeHidden();
+  await expect(window.getByLabel('Page title')).toHaveValue('Wrist joint');
+  await expect(peopleButton).not.toHaveAttribute('aria-current', 'page');
+
+  // People again: Back is the page it was opened over.
+  await peopleButton.click();
+  await window.getByRole('button', { name: 'Go back (Alt+←)' }).click();
+  await expect(people).toBeHidden();
+  await expect(window.getByLabel('Page title')).toHaveValue('Wrist joint');
+});

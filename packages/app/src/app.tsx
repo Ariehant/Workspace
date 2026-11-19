@@ -48,6 +48,7 @@ import { useRegistryVersion } from './database/hooks';
 import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
 import { Home } from './home';
+import { PeopleView } from './people-view';
 import { NoAccess } from './no-access';
 import { PageDirectory } from './pages';
 import { useForest } from './forest';
@@ -294,8 +295,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(initial.sidebarOpen);
   const [sidebarWidth, setSidebarWidth] = useState(initial.sidebarWidth);
   const [finding, setFinding] = useState(false);
-  // Home is shown over the tab's page (it isn't a page in the history).
-  const [home, setHome] = useState(false);
+  // Home and People are shown over the tab's page (they aren't pages in the history).
+  const [screen, setScreen] = useState<'home' | 'people' | null>(null);
   const [templates, setTemplates] = useState(false);
   // The export dialog: for a page, or (null) the whole workspace.
   const [exporting, setExporting] = useState<PageId | null | undefined>(undefined);
@@ -372,7 +373,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       }
       setPeek(null);
       setMissing(null);
-      setHome(false);
+      setScreen(null);
       show(id);
     },
     [show, newTabIntent, scroll, setMissing],
@@ -390,7 +391,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     (update: (prev: TabsState) => TabsState) => {
       scroll.save();
       setPeek(null);
-      setHome(false);
+      setScreen(null);
       setTabs(update);
     },
     [scroll],
@@ -420,10 +421,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const blockNonce = useRef(0);
   const go = useCallback(
     (direction: -1 | 1) => {
-      // Back from Home, or from a page that can't be shown, is the page it was opened over.
-      if (home || missing) {
+      // Back from Home or People, or from a page that can't be shown, is the page it was
+      // opened over.
+      if (screen || missing) {
         if (direction === -1) {
-          setHome(false);
+          setScreen(null);
           setMissing(null);
         }
         return;
@@ -434,7 +436,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       setMissing(null);
       show(next.entries[next.index]!);
     },
-    [home, missing, history, exists, show, setHistory, setMissing],
+    [screen, missing, history, exists, show, setHistory, setMissing],
   );
 
   const onboarding = useRef(false);
@@ -740,49 +742,49 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     onGo: go,
   };
 
-  const content = home ? (
-    <Home
-      chrome={{ ...chrome, canGoBack: currentPageId !== null, canGoForward: false }}
-      recent={recent}
-      onOpen={showPage}
-    />
-  ) : missing ? (
-    <NoAccess
-      key={`${missing}:${missingPage?.n}`}
-      pageId={missing}
-      version={version}
-      onFound={() => showPage(missing, null)}
-    />
-  ) : !currentPageId ? (
-    <EmptyState onCreate={() => create(null)} />
-  ) : getPage(workspace, currentPageId) ? (
-    <PageView
-      pageId={currentPageId}
-      chrome={chrome}
-      blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
-      onDuplicate={duplicate}
-      onSaveAsTemplate={saveTemplate}
-      onExport={can(platform, 'export') ? setExporting : undefined}
-      onMove={setMoving}
-      onTrash={trash}
-      onShare={team && scoped ? setSharing : undefined}
-      follow={followApi}
-      analytics={analyticsApi}
-      isFavorite={favorites.includes(currentPageId)}
-      onToggleFavorite={() => toggleFavorite(currentPageId)}
-    />
-  ) : pages.databaseOf(currentPageId) ? (
-    <RowPageView
-      key={currentPageId}
-      rowId={currentPageId}
-      databaseId={pages.databaseOf(currentPageId)!}
-      chrome={chrome}
-      blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
-    />
-  ) : (
-    // Still looking up a row.
-    <main className="flex-1 bg-surface" aria-busy="true" />
-  );
+  const screenChrome = { ...chrome, canGoBack: currentPageId !== null, canGoForward: false };
+  const content =
+    screen === 'home' ? (
+      <Home chrome={screenChrome} recent={recent} onOpen={showPage} />
+    ) : screen === 'people' ? (
+      <PeopleView chrome={screenChrome} onOpen={(id) => showPage(id, null)} />
+    ) : missing ? (
+      <NoAccess
+        key={`${missing}:${missingPage?.n}`}
+        pageId={missing}
+        version={version}
+        onFound={() => showPage(missing, null)}
+      />
+    ) : !currentPageId ? (
+      <EmptyState onCreate={() => create(null)} />
+    ) : getPage(workspace, currentPageId) ? (
+      <PageView
+        pageId={currentPageId}
+        chrome={chrome}
+        blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
+        onDuplicate={duplicate}
+        onSaveAsTemplate={saveTemplate}
+        onExport={can(platform, 'export') ? setExporting : undefined}
+        onMove={setMoving}
+        onTrash={trash}
+        onShare={team && scoped ? setSharing : undefined}
+        follow={followApi}
+        analytics={analyticsApi}
+        isFavorite={favorites.includes(currentPageId)}
+        onToggleFavorite={() => toggleFavorite(currentPageId)}
+      />
+    ) : pages.databaseOf(currentPageId) ? (
+      <RowPageView
+        key={currentPageId}
+        rowId={currentPageId}
+        databaseId={pages.databaseOf(currentPageId)!}
+        chrome={chrome}
+        blockTarget={blockTarget?.pageId === currentPageId ? blockTarget : null}
+      />
+    ) : (
+      // Still looking up a row.
+      <main className="flex-1 bg-surface" aria-busy="true" />
+    );
 
   return (
     <NavigationContext.Provider value={navigation}>
@@ -796,7 +798,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             icons={teamspaceIcons}
             favorites={favorites}
             width={sidebarWidth}
-            currentPageId={home ? null : currentPageId}
+            currentPageId={screen ? null : currentPageId}
             expanded={expanded}
             theme={theme}
             onSelect={navigate}
@@ -811,9 +813,15 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onHome={() => {
               setPeek(null);
               setMissing(null);
-              setHome(true);
+              setScreen('home');
             }}
-            homeActive={home}
+            homeActive={screen === 'home'}
+            onPeople={() => {
+              setPeek(null);
+              setMissing(null);
+              setScreen('people');
+            }}
+            peopleActive={screen === 'people'}
             onTemplates={() => setTemplates(true)}
             onImport={() =>
               void platform

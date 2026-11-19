@@ -36,6 +36,7 @@ import {
   Download,
   FileInput,
   House,
+  Contact,
   Info,
   Keyboard,
   Languages,
@@ -145,6 +146,10 @@ export interface SidebarProps {
   onHome?(): void;
   /** Home is shown. */
   homeActive?: boolean;
+  /** Show People (everyone in the workspace, and their pages). */
+  onPeople?(): void;
+  /** People is shown. */
+  peopleActive?: boolean;
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -276,6 +281,17 @@ export function Sidebar(props: SidebarProps) {
         >
           <House size={16} />
           Home
+        </button>
+      )}
+      {props.onPeople && (
+        <button
+          type="button"
+          onClick={props.onPeople}
+          aria-current={props.peopleActive ? 'page' : undefined}
+          className={cn(navButton, props.peopleActive && 'bg-active text-fg')}
+        >
+          <Contact size={16} />
+          People
         </button>
       )}
       {props.inbox?.(navButton)}

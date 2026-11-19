@@ -274,3 +274,31 @@ test('taking the guest’s access away removes the page from their desktop', asy
   await expect(sidebarTitles(G)).toHaveCount(0, { timeout: 15_000 });
   await expect(section(G, 'Shared')).toHaveCount(0);
 });
+
+test('people: the owner sees everyone with their roles; a guest sees names only', async () => {
+  const A = ada.window;
+  await A.getByRole('navigation', { name: 'Sidebar' })
+    .getByRole('button', { name: 'People' })
+    .click();
+  const people = A.getByTestId('people');
+  const person = (name: string) => people.getByTestId('person').filter({ hasText: name });
+  await expect(person('Ada')).toContainText('(you)');
+  await expect(person('Ada').getByTestId('person-role')).toHaveText('Owner', { timeout: 10_000 });
+  await expect(person('Bob').getByTestId('person-role')).toHaveText('Member');
+  await expect(person('Gus').getByTestId('person-role')).toHaveText('Guest');
+  await expect(person('Bob')).toContainText('bob@lab.io');
+  // Her pages (the teamspace's and her private ones).
+  await expect(people.getByTestId('person-page')).toHaveText([/Gear plan/, /Specs/, /Diary/]);
+  await person('Bob').click();
+  await expect(people.getByTestId('person-page')).toHaveCount(0);
+  await shot(A, 'scopes-5-ada-people');
+
+  const G = gus.window;
+  await G.getByRole('navigation', { name: 'Sidebar' })
+    .getByRole('button', { name: 'People' })
+    .click();
+  const theirs = G.getByTestId('people');
+  await expect(theirs.getByTestId('person').filter({ hasText: 'Ada' })).toHaveCount(1);
+  await expect(theirs.getByTestId('person-role')).toHaveCount(0);
+  await expect(theirs).not.toContainText('@lab.io');
+});

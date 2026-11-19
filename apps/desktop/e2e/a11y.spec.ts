@@ -114,6 +114,11 @@ for (const theme of THEMES) {
     await expectAccessible(window, s('home'));
     await window.keyboard.press('Alt+ArrowLeft');
     await expect(window.getByTestId('home')).toBeHidden();
+    await sidebarButton('People').click();
+    await expect(window.getByTestId('person-pages')).toBeVisible();
+    await expectAccessible(window, s('people'));
+    await window.keyboard.press('Alt+ArrowLeft');
+    await expect(window.getByTestId('people')).toBeHidden();
     await checkOpen(window, s('presenting a page'), async () => {
       await window.getByRole('button', { name: 'Page options' }).click();
       await window.getByRole('menuitem', { name: 'Present' }).click();
