@@ -40,7 +40,10 @@ test('a share link: sign up from it, and get that page alone, to comment on', as
   await ada.getByRole('button', { name: 'Share', exact: true }).click();
   const share = ada.getByTestId('share-dialog');
   const section = share.getByTestId('share-link');
-  await section.getByLabel('Link role').selectOption('comment');
+  // Its controls don't take the invite form's labels ("Role" is one control).
+  await expect(section).toBeVisible();
+  await expect(share.getByLabel('Role')).toHaveCount(1);
+  await section.getByLabel('Anyone with the link can').selectOption('comment');
   await section.getByLabel('Link ends').selectOption({ label: 'Ends in 7 days' });
   await section.getByRole('button', { name: 'Make a link' }).click();
   const address = section.getByLabel('Share link address');

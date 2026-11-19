@@ -89,7 +89,7 @@ export function ShareLinkSection({
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <select
-          aria-label="Link role"
+          aria-label="Anyone with the link can"
           className={select}
           value={role}
           onChange={(e) => setRole(e.target.value as ShareLinkRole)}
