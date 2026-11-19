@@ -25,6 +25,7 @@ import { pageRoutes } from './publish/routes';
 import { Site, siteRoutes } from './publish/site';
 import { notificationRoutes } from './notify/routes';
 import { accessRequestRoutes } from './access-requests/routes';
+import { shareLinkRoutes } from './share-links/routes';
 import { Indexer } from './search/indexer';
 import { JobRunner, type JobRunnerOptions } from './jobs/runner';
 import { Automations, type AutomationOptions } from './automations/runner';
@@ -279,6 +280,7 @@ export function buildServer({
     scopeRoutes(scope, ctx);
     notificationRoutes(scope, ctx);
     accessRequestRoutes(scope, ctx);
+    shareLinkRoutes(scope, ctx);
     pageRoutes(scope, ctx, site, history);
     siteRoutes(scope, ctx, site);
     formRoutes(scope, ctx);

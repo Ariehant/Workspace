@@ -80,6 +80,17 @@ export const SCOPE_ROLE_HINTS: Record<ScopeRole, string> = {
   view: 'View only',
 };
 
+export type ShareLinkRole = 'view' | 'comment' | 'edit';
+
+/** A page's share link, as its sharers see it. */
+export interface ShareLinkInfo {
+  url: string;
+  role: ShareLinkRole;
+  /** When it stops working (ms), or null. */
+  expiresAt: number | null;
+  createdAt: number;
+}
+
 export interface CreatedInvite {
   id: string;
   email: string;
@@ -200,6 +211,11 @@ export function teamApi(team: TeamPlatform) {
     /** Emails about unread notifications (Phase 6 M7), and whether the server sends any. */
     emailSettings: () => r<EmailSettings>('GET', 'me/email'),
     setEmailDigest: (digest: EmailDigest) => r<EmailSettings>('PUT', 'me/email', { digest }),
+    // Share links (Phase 8 N8): open to whoever signs in with the link.
+    shareLink: (pageId: string) => r<{ link: ShareLinkInfo | null }>('GET', `pages/${pageId}/link`),
+    makeShareLink: (pageId: string, role: ShareLinkRole, days: number | null) =>
+      r<{ link: ShareLinkInfo }>('PUT', `pages/${pageId}/link`, { role, days }),
+    removeShareLink: (pageId: string) => r<{ ok: true }>('DELETE', `pages/${pageId}/link`),
     // Publishing (Phase 5 M7).
     published: (pageId: string) =>
       r<{ published: PublishedPage | null; suggestedSlug: string }>(

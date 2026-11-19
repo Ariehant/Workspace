@@ -7,13 +7,22 @@ import { createRoot } from 'react-dom/client';
 import { ApiError, api, me, type InviteInfo, type Me, type RemoteWorkspace } from './api';
 import { OfflineStore } from './offline';
 import { createWebPlatform } from './platform';
-import { Card, InviteScreen, SignIn, WorkspacePicker } from './shell';
+import {
+  Card,
+  InviteScreen,
+  ShareLinkScreen,
+  SignIn,
+  WorkspacePicker,
+  type ShareLinkInfo,
+} from './shell';
 import './web.css';
 
 const LAST_WORKSPACE = 'workspace.last';
 
 /** `/w/<id>` → the workspace id. */
 const workspaceFromPath = () => /^\/w\/([0-9a-f-]{36})\/?$/i.exec(location.pathname)?.[1] ?? null;
+/** `/s/<token>` → a page's share link token. */
+const shareLinkFromPath = () => /^\/s\/([\w-]{10,64})\/?$/.exec(location.pathname)?.[1] ?? null;
 /** `/invite/<token>` → the invite token. */
 const inviteFromPath = () => /^\/invite\/([\w-]{1,200})\/?$/.exec(location.pathname)?.[1] ?? null;
 
@@ -74,6 +83,13 @@ type State =
   | { screen: 'loading' }
   | { screen: 'sign-in' }
   | { screen: 'invite'; token: string; invite: InviteInfo | null; user: Me | null }
+  | {
+      screen: 'link';
+      token: string;
+      link: ShareLinkInfo | null;
+      problem: string | null;
+      user: Me | null;
+    }
   | { screen: 'pick'; user: Me }
   | {
       screen: 'app';
@@ -88,6 +104,22 @@ type State =
 async function resolveState(): Promise<State> {
   try {
     const user = await me();
+    const linkToken = shareLinkFromPath();
+    if (linkToken) {
+      const found = await api<ShareLinkInfo>(
+        'GET',
+        `/api/links/${encodeURIComponent(linkToken)}`,
+      ).then(
+        (link) => ({ link, problem: null }),
+        (error: unknown) => {
+          if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
+            return { link: null, problem: error.message };
+          }
+          throw error;
+        },
+      );
+      return { screen: 'link', token: linkToken, user, ...found };
+    }
     const token = inviteFromPath();
     if (token) {
       const invite = await api<{ invite: InviteInfo }>(
@@ -177,6 +209,15 @@ function Root() {
               .catch(() => {})
               .then(() => resolveState().then(setState));
           }}
+        />
+      );
+    case 'link':
+      return (
+        <ShareLinkScreen
+          token={state.token}
+          link={state.link}
+          problem={state.problem}
+          user={state.user}
         />
       );
     case 'pick':

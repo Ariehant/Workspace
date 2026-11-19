@@ -401,3 +401,85 @@ export function InviteScreen({
     </Card>
   );
 }
+
+/** What a share link opens, as the server tells it before signing in. */
+export interface ShareLinkInfo {
+  workspace: { name: string };
+  page: { title: string };
+  role: 'view' | 'comment' | 'edit';
+}
+
+const LINK_ROLES = { view: 'view it', comment: 'comment on it', edit: 'edit it' } as const;
+
+/**
+ * A share link (`/s/<token>`, Phase 8 N8): a page opened to anyone with the link who signs
+ * in. Signed out, you sign in or create an account; then you open it (joining its workspace
+ * as a guest, with the link's role on that page).
+ */
+export function ShareLinkScreen({
+  token,
+  link,
+  problem,
+  user,
+}: {
+  token: string;
+  link: ShareLinkInfo | null;
+  /** Why the link can't be used (not found, expired). */
+  problem: string | null;
+  user: Me | null;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!link) {
+    return (
+      <Card title="Link not found">
+        <p className="text-sm text-muted" data-testid="share-link-problem">
+          {problem ?? 'This link isn’t valid.'} Ask whoever sent it for a new one.
+        </p>
+      </Card>
+    );
+  }
+  const title = `Open “${link.page.title || 'Untitled'}”`;
+  const intro = (
+    <p className="text-sm text-muted" data-testid="share-link-intro">
+      Someone in <strong className="text-fg">{link.workspace.name}</strong> shared{' '}
+      <strong className="text-fg">{link.page.title || 'Untitled'}</strong> with anyone who has the
+      link. Sign in to {LINK_ROLES[link.role]}.
+    </p>
+  );
+  const open = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { workspaceId, pageId } = await api<{ workspaceId: string; pageId: string }>(
+        'POST',
+        `/api/links/${encodeURIComponent(token)}/accept`,
+        {},
+      );
+      location.assign(`/w/${workspaceId}#page=${encodeURIComponent(pageId)}`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+  if (!user) {
+    return <SignIn onSignedIn={() => void open()} invited={{ token, email: '', title, intro }} />;
+  }
+  return (
+    <Card title={title}>
+      <div className="flex flex-col gap-3">
+        {intro}
+        <p className="text-sm text-muted">Signed in as {user.email}.</p>
+        <Button
+          variant="primary"
+          className="h-9 justify-center"
+          disabled={busy}
+          onClick={() => void open()}
+        >
+          Open page
+        </Button>
+        {error && <ErrorText error={error} />}
+      </div>
+    </Card>
+  );
+}

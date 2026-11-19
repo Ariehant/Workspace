@@ -3,6 +3,7 @@ import pg from 'pg';
 import * as Y from 'yjs';
 import { Accounts } from './accounts';
 import { AutomationSecrets, FormLinks } from './forms';
+import { ShareLinks } from './share-links';
 import { Integrations } from './integrations';
 import { IntegrationWebhooks } from './webhooks';
 import { Jobs } from './jobs';
@@ -69,6 +70,7 @@ export class PgStore {
   readonly pages: Pages;
   readonly jobs: Jobs;
   readonly formLinks: FormLinks;
+  readonly shareLinks: ShareLinks;
   readonly automationSecrets: AutomationSecrets;
   readonly integrations: Integrations;
   readonly integrationWebhooks: IntegrationWebhooks;
@@ -86,6 +88,7 @@ export class PgStore {
     this.pages = new Pages(this.pool);
     this.jobs = new Jobs(this.pool);
     this.formLinks = new FormLinks(this.pool);
+    this.shareLinks = new ShareLinks(this.pool);
     this.automationSecrets = new AutomationSecrets(this.pool);
     this.integrations = new Integrations(this.pool);
     this.integrationWebhooks = new IntegrationWebhooks(this.pool);

@@ -590,6 +590,22 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE scopes ADD CONSTRAINT scopes_join_role_check
     CHECK (join_role IN ('full', 'edit', 'content', 'create', 'comment', 'view'));
   `,
+  // 17: Phase 8 N8. Share links: a page opened to anyone with the link who signs in (they
+  // join as a guest with the link's role on it). One link per page; turning it off ends it.
+  `
+  CREATE TABLE share_links (
+    id uuid PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    page_id text NOT NULL,
+    token text NOT NULL UNIQUE,
+    role text NOT NULL CHECK (role IN ('view', 'comment', 'edit')),
+    title text NOT NULL DEFAULT '',
+    expires_at timestamptz,
+    created_by uuid REFERENCES users ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE UNIQUE INDEX share_links_page ON share_links (workspace_id, page_id);
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

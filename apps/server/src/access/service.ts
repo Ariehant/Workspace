@@ -75,6 +75,11 @@ export class WorkspaceAccess {
     return this.model.scopes.map((s) => s.treeDoc);
   }
 
+  /** The scope whose page tree is `treeDoc`. */
+  scopeOfTree(treeDoc: string): string | undefined {
+    return this.model.scopes.find((s) => s.treeDoc === treeDoc)?.id;
+  }
+
   get defaultScopeId(): string | null {
     return this.model.defaultScopeId;
   }
