@@ -1,0 +1,7 @@
+Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes,Projects,Parent task,Budget
+1208000000000001,2026-11-01,,2026-11-03,Mount the base,Doing,Asha Rao,asha@example.org,2026-11-02,2026-11-20,"Hardware, Urgent","Bolt the base to the bench.
+
+Use the M8 bolts.",Arm build,,120
+1208000000000002,2026-11-01,2026-11-04,2026-11-04,Drill holes,Doing,Lee Chen,lee@example.org,,2026-11-05,Hardware,,Arm build,Mount the base,
+1208000000000003,2026-11-02,,2026-11-02,Write the joint driver,To do,,,,,Software,,Arm build,,
+1208000000000004,2026-11-03,,2026-11-03,Order servos,Done,Asha Rao,asha@example.org,,2026-11-10,,,Arm build,Missing parent,40

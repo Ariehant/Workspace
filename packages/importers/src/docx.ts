@@ -728,7 +728,7 @@ const baseName = (path: string) =>
     .trim();
 
 /**
- * Import Word documents: one becomes the import's page itself; several, a page each under
+ * Import Word documents: one becomes the page made for the import; several, a page each under
  * it. A file that isn't a readable document is said in the warnings.
  */
 export function importDocx(

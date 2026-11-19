@@ -1,0 +1,6 @@
+Summary,Issue key,Issue id,Issue Type,Status,Project key,Project name,Priority,Assignee,Reporter,Created,Updated,Due date,Labels,Labels,Description,Comment,Comment,Parent,Sub-tasks,Custom field (Story Points)
+Gripper slips on wet parts,ARM-1,10001,Bug,In Progress,ARM,Arm build,High,Asha Rao,Lee Chen,02/Nov/26 9:15 AM,04/Nov/26 3:04 PM,20/Nov/26 12:00 AM,hardware,gripper,"Seen with the 2 kg test part.
+Happens after about 10 picks.","03/Nov/26 10:30 AM;5b10ac8d82e05b22cc7d4ef5;Tried a softer pad.","04/Nov/26 3:04 PM;5b10a2844c20165700ede21g;Better, still slips.",,10002,3
+Swap the finger pads,ARM-2,10002,Sub-task,To Do,ARM,Arm build,Medium,Lee Chen,Asha Rao,03/Nov/26 11:00 AM,03/Nov/26 11:00 AM,,,,,,,10001,,
+Calibrate the wrist,ARM-3,10003,Task,Done,ARM,Arm build,Lowest,,Asha Rao,01/Nov/26 8:00 PM,05/Nov/26 9:00 AM,,software,,"h3. Steps
+Run the {{calibrate}} script.",,,,,

@@ -27,10 +27,12 @@ import {
 } from '@workspace/database';
 import { appendContent, type JSONContent } from '@workspace/editor';
 import type * as Y from 'yjs';
+import { importAsana, isAsanaCsv } from './asana';
 import { importConfluence, isConfluenceExport } from './confluence';
 import { parseCsv } from './csv';
 import { importDocx } from './docx';
 import { importEvernote } from './evernote';
+import { importJira, isJiraCsv } from './jira';
 import { notionHtmlPage, type HtmlColumn } from './html';
 import { inferType, parseNumber, splitList } from './infer';
 import { notionMarkdownPage, type ConvertContext, type LinkTarget } from './markdown';
@@ -44,6 +46,7 @@ import {
   resolvePath,
   type ArchiveFile,
 } from './paths';
+import { csvHeader } from './tracker';
 import { importTrello, isTrelloBoard } from './trello';
 
 /** Where an import writes: the workspace and new docs for the pages it creates. */
@@ -108,8 +111,9 @@ function relationTokens(text: string): { title: string; path: string | null }[] 
 
 /**
  * Import files under a new page, by what they are: Evernote notebooks (`.enex`), Trello
- * boards (their JSON export), Word documents (`.docx`), a Confluence space (its HTML export),
- * or else a Notion export or plain Markdown / HTML / CSV / text files.
+ * boards (their JSON export), Asana and Jira CSV exports, Word documents (`.docx`), a
+ * Confluence space (its HTML export), or else a Notion export or plain Markdown / HTML /
+ * CSV / text files.
  */
 export function importFiles(
   input: readonly ArchiveFile[],
@@ -136,6 +140,20 @@ export function importFiles(
     }
   });
   if (boards.length && boards.length === files.length) return importTrello(boards, target, options);
+  // Asana or Jira CSV exports, when that's all there is (other CSV is a plain table).
+  const csv = files.filter((f) => /\.csv$/i.test(f.path));
+  if (csv.length && csv.length === files.length) {
+    const texts = csv.map((f) => ({
+      name: f.path
+        .split('/')
+        .pop()!
+        .replace(/\.csv$/i, ''),
+      text: decoder.decode(f.data),
+    }));
+    const headers = texts.map((t) => csvHeader(t.text));
+    if (headers.every(isAsanaCsv)) return importAsana(texts, target, options);
+    if (headers.every(isJiraCsv)) return importJira(texts, target, options);
+  }
   // Word documents (and Google Docs, downloaded as Word), when that's all there is.
   const docx = files.filter((f) => /\.docx$/i.test(f.path));
   if (docx.length && docx.length === files.length) return importDocx(docx, target, options);
@@ -309,7 +327,7 @@ function importNotion(
     }
   });
 
-  // The import's page links to what it holds.
+  // The page made for the import links to what it holds.
   const topLevel = ordered.filter(
     (item) => item.kind !== 'row' && (!item.parentKey || !items.has(item.parentKey)),
   );

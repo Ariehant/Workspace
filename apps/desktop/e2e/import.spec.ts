@@ -280,3 +280,55 @@ test('import a Trello board, an Evernote notebook and a Confluence space', async
   await editor(window).first().getByTestId('mention').filter({ hasText: 'Controllers' }).click();
   await expect(window.getByLabel('Page title')).toHaveValue('Controllers');
 });
+
+test('import Asana and Jira CSV exports: a board, sub-tasks, and the page', async ({ launch }) => {
+  const { app, window } = await launch();
+  const peek = window.getByTestId('row-peek');
+  const column = async (name: string) => {
+    const key = await window
+      .getByTestId('board-column')
+      .filter({ hasText: name })
+      .getAttribute('data-group-key');
+    return window.locator(`[data-testid="board-cell"][data-group-key="${key}"]`);
+  };
+
+  // Asana: a board grouped by section; sub-tasks under their parent.
+  let report = await importFile(
+    app,
+    window,
+    join(fixtures, 'asana', 'Arm_build.csv'),
+    '0 pages, 1 database with 4 rows, and 0 files.',
+  );
+  await expect(report.getByTestId('import-warnings')).toHaveText(
+    '1 Asana sub-task’s parent was not in the export',
+  );
+  await report.getByRole('button', { name: 'Done' }).click();
+  await find(window, 'Arm build');
+  await expect(await column('Doing')).toContainText('Mount the base');
+  await expect(await column('To do')).toContainText('Write the joint driver');
+  await window.getByTestId('card').filter({ hasText: 'Mount the base' }).click();
+  await expect(peek.getByLabel('Page title')).toHaveValue('Mount the base');
+  await expect(peek.getByTestId('page-editor')).toContainText('Use the M8 bolts.');
+  await expect(peek).toContainText('Drill holes');
+  await peek.getByRole('button', { name: 'Close' }).click();
+
+  // Jira: grouped by status, with the description and comments in the page.
+  report = await importFile(
+    app,
+    window,
+    join(fixtures, 'jira', 'Jira.csv'),
+    '0 pages, 1 database with 3 rows, and 0 files.',
+  );
+  await report.getByRole('button', { name: 'Done' }).click();
+  await find(window, 'Gripper slips on wet parts');
+  await expect(editor(window).first()).toContainText('Tried a softer pad.');
+  // Back is the import's page; it links to the database.
+  await window.keyboard.press('Alt+ArrowLeft');
+  await expect(window.getByLabel('Page title')).toHaveValue('Jira');
+  await editor(window).getByRole('button', { name: 'Arm build' }).click();
+  await expect(window.getByTestId('board-column').filter({ hasText: 'In Progress' })).toHaveCount(
+    1,
+  );
+  await expect(await column('In Progress')).toContainText('Gripper slips on wet parts');
+  await expect(await column('Done')).toContainText('Calibrate the wrist');
+});

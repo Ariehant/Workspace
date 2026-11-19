@@ -146,13 +146,13 @@ export class ImportBuilder {
     this.warnings.add(message);
   }
 
-  /** The import's own page, for content of its own (one document imported): counted as one. */
+  /** The page made for the import, for content of its own (one document imported): counted as one. */
   usePage(): string {
     this.pages++;
     return this.rootId;
   }
 
-  /** A new page (under the import's page by default). */
+  /** A new page (under the page made for the import, by default). */
   page(title: string, parentId: string | null = null, id = newId()): string {
     createPage(this.target.workspace, {
       id,
@@ -203,7 +203,7 @@ export class ImportBuilder {
     return { kind: 'file', fileId, name, media: mediaType(name) };
   }
 
-  /** Finish: the import's page lists what it holds; the report. */
+  /** Finish: the page made for the import lists what it holds; the report. */
   done(): ImportReport {
     this.content(
       this.rootId,
