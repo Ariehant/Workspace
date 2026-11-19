@@ -8,6 +8,7 @@ import {
 } from '@workspace/storage-local';
 import { ipcMain, net, protocol, shell } from 'electron';
 import { IPC } from '../shared/ipc';
+import { LINKED_PREVIEW_HOST, linkedPreview } from './linked-files';
 
 /** `ws-file://<id>` serves attachments to the sandboxed renderer. */
 export const FILE_SCHEME = 'ws-file';
@@ -75,7 +76,9 @@ export function registerFiles(
   },
 ): void {
   protocol.handle(FILE_SCHEME, async (request) => {
-    const id = new URL(request.url).hostname;
+    const url = new URL(request.url);
+    if (url.hostname === LINKED_PREVIEW_HOST) return linkedPreview(store, url);
+    const id = url.hostname;
     let path = files.resolve(id);
     if (!path && isFileId(id) && (await sync.fetchMissing(id))) path = files.resolve(id);
     if (!path) return new Response('Not found', { status: 404 });

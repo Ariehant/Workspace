@@ -33,6 +33,13 @@ planned is in [PHASE7.md](PHASE7.md).
   Tab/Shift+Tab on selected lines.
 - **Diagrams and math:** Mermaid diagrams (code, preview or split) and KaTeX equations, with
   workspace macros and live errors.
+- **Linked files** (desktop): `/linked file` points at files on the computer instead of
+  copying them in: CAD files, recordings, datasets. A card shows the name, where it is, its
+  size and date; it opens in its default app (a program or script only once confirmed), shows
+  in the file manager, and an image shows in the page. Settings → Linked folders names
+  folders ("Projects"), so files in them open on every computer that links a folder under that
+  name (one kept in sync with Dropbox, Syncthing or git). A moved file says so and can be
+  located again; on the web, a link says it's on a computer.
 - **Media:** images (upload, paste or drop; resize; crop and rotate, the file kept as it is;
   captions), video, audio, PDFs viewed in the page, any file (opens in its default app), web
   bookmarks with previews, and embeds: any https website (in a sandboxed frame, with its site

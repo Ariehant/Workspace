@@ -48,6 +48,8 @@ import { useRegistryVersion } from './database/hooks';
 import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
 import { EmojiDialog } from './emoji-settings';
+import { LinkedFoldersPanel } from './linked-folders';
+import { onOpenSettings } from './settings/open';
 import {
   AppearancePanel,
   NotificationsPanel,
@@ -87,6 +89,7 @@ import {
   Palette,
   RefreshCw,
   SmilePlus,
+  FolderSymlink,
   UserRound,
   Users,
 } from 'lucide-react';
@@ -599,6 +602,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   }, [local, workspace, user]);
   // The Settings window, at a section (null: closed).
   const [settings, setSettings] = useState<SettingsSection | null>(null);
+  // A block asking for a section (a linked file's folder, say).
+  useEffect(() => onOpenSettings(setSettings), []);
 
   // Language and region: the formats change at once (everything re-renders from here).
   const [regionSettings, setRegionSettings] = useState(initial.region);
@@ -811,6 +816,16 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       icon: <SmilePlus size={15} />,
       content: <EmojiDialog onClose={closeSettings} />,
     },
+    ...(platform.linkedFiles
+      ? [
+          {
+            id: 'linkedFolders' as const,
+            label: 'Linked folders',
+            icon: <FolderSymlink size={15} />,
+            content: <LinkedFoldersPanel linked={platform.linkedFiles} />,
+          },
+        ]
+      : []),
     ...(team
       ? [
           {

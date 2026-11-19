@@ -1,5 +1,7 @@
 import type {
   DocTransport,
+  LinkedFileRef,
+  LinkedFileStatus,
   NotificationData,
   NotificationKind,
   SearchOptions,
@@ -71,6 +73,26 @@ export interface Platform {
   openFile(id: string): void;
   /** Title, description and image for a web bookmark. */
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /**
+   * Linked files (Phase 8 N9): pointers to files on this computer, and where the
+   * workspace's linked folders are on it. Hosts with files of their own (the desktop).
+   */
+  linkedFiles?: {
+    /** Pick files to link (`one`: a file to locate a moved one). */
+    pick(one: boolean): Promise<LinkedFileRef[]>;
+    status(ref: LinkedFileRef): Promise<LinkedFileStatus>;
+    /** Open with the default app; false if it couldn't (or wasn't confirmed). */
+    open(ref: LinkedFileRef): Promise<boolean>;
+    /** Show it in the file manager. */
+    reveal(ref: LinkedFileRef): Promise<boolean>;
+    /** A URL the UI can show a linked image from. */
+    previewUrl(ref: LinkedFileRef): string;
+    /** Where each linked folder is on this computer. */
+    folders(): Promise<Record<string, string>>;
+    /** Ask where folder `name` is here; resolves its path, or null if cancelled. */
+    chooseFolder(name: string): Promise<string | null>;
+    forgetFolder(name: string): Promise<void>;
+  };
   /** Pages and rows that link to a page (mentions, links, link-to-page, relations). */
   backlinks(pageId: string): Promise<Backlink[]>;
   /** How many pages show a synced block. */

@@ -198,6 +198,23 @@ describe('blocks', () => {
     { type: 'button', attrs: { id: 'bt', label: 'Go' } },
   ];
 
+  it('give a linked file as its name and where it is', () => {
+    const [out] = blocksOut(
+      [
+        {
+          type: 'linkedFile',
+          attrs: { id: 'lf', folder: 'Projects', path: 'arm/v3.step', name: 'v3.step' },
+        },
+      ],
+      ctx,
+    );
+    expect(out).toMatchObject({
+      id: 'lf',
+      type: 'paragraph',
+      value: { rich_text: [{ plain_text: '📎 v3.step (Projects/arm/v3.step)' }] },
+    });
+  });
+
   it('come out as Notion blocks, lists taken apart', () => {
     const out = blocksOut(doc, ctx);
     expect(out.map((b) => b.type)).toEqual([

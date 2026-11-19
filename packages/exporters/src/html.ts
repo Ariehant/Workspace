@@ -1,4 +1,12 @@
-import { FULL_CROP, cssText, imageViewStyles, parseCrop, parseRotation } from '@workspace/core';
+import {
+  FULL_CROP,
+  cssText,
+  imageViewStyles,
+  linkedFileLocation,
+  linkedFileOf,
+  parseCrop,
+  parseRotation,
+} from '@workspace/core';
 import { flag, inlineText, type ContentNode, type Inline } from './content';
 import { formatDateMention, type RenderContext } from './context';
 
@@ -219,6 +227,13 @@ export function blockHtml(node: ContentNode, ctx: RenderContext): string {
     case 'bookmark':
     case 'embed':
       return mediaHtml(node, ctx);
+    case 'linkedFile': {
+      // A file on someone's computer (Phase 8 N9): its name and where it is, not a link.
+      const ref = linkedFileOf(attrs);
+      return ref
+        ? `<p class="linked-file">📎 ${escapeHtml(ref.name)} <code>${escapeHtml(linkedFileLocation(ref))}</code></p>`
+        : '';
+    }
     case 'button':
     case 'breadcrumb':
     case 'tableOfContents':

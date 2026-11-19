@@ -1,3 +1,4 @@
+import { linkedFileLocation, linkedFileOf } from '@workspace/core';
 import { flag, inlineText, type ContentNode, type Inline } from './content';
 import { formatDateMention, type RenderContext } from './context';
 
@@ -186,6 +187,13 @@ export function blockMarkdown(node: ContentNode, ctx: RenderContext): string {
     case 'bookmark':
     case 'embed':
       return mediaMarkdown(node, ctx);
+    case 'linkedFile': {
+      // A file on someone's computer (Phase 8 N9): its name and where it is, not a link.
+      const ref = linkedFileOf(attrs);
+      return ref
+        ? `📎 ${escapeText(ref.name)} (\`${linkedFileLocation(ref).replace(/`/g, "'")}\`)`
+        : '';
+    }
     case 'button':
     case 'breadcrumb':
     case 'tableOfContents':

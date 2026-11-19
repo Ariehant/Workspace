@@ -37,6 +37,13 @@ export const IPC = {
   fileImport: 'file:import',
   fileOpen: 'file:open',
   linkPreview: 'link:preview',
+  linkedPick: 'linked:pick',
+  linkedStatus: 'linked:status',
+  linkedOpen: 'linked:open',
+  linkedReveal: 'linked:reveal',
+  linkedFolders: 'linked:folders',
+  linkedFolderChoose: 'linked:folder-choose',
+  linkedFolderForget: 'linked:folder-forget',
   backlinks: 'links:backlinks',
   remindersUpcoming: 'reminders:upcoming',
   syncedPlaces: 'links:synced',
@@ -193,6 +200,8 @@ export interface UpdateState {
 }
 
 /** An attachment stored in the workspace (see FileStore). */
+export type { LinkedFileStatus } from '@workspace/core';
+
 export interface FileRef {
   id: string;
   name: string;

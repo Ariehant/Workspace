@@ -222,6 +222,26 @@ describe('Markdown export', () => {
   });
 });
 
+describe('linked files', () => {
+  it('come out as their name and where they are, in Markdown and HTML', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el('linkedFile', { folder: 'Projects', path: 'arm/v3_*.step', name: 'v3_*.step', size: 9 }),
+      el('linkedFile', { folder: null, path: '/data/<run>.bag', name: '<run>.bag' }),
+      // A pointer climbing out of its folder isn't one.
+      el('linkedFile', { folder: 'Projects', path: '../x', name: 'x' }),
+    );
+    const content = readContent(doc);
+    expect(blocksMarkdown(content, ctx)).toBe(
+      '📎 v3\\_\\*.step (`Projects/arm/v3_*.step`)\n\n📎 <run>.bag (`/data/<run>.bag`)',
+    );
+    expect(blocksHtml(content, ctx).trimEnd()).toBe(
+      '<p class="linked-file">📎 v3_*.step <code>Projects/arm/v3_*.step</code></p>\n' +
+        '<p class="linked-file">📎 &lt;run&gt;.bag <code>/data/&lt;run&gt;.bag</code></p>',
+    );
+  });
+});
+
 describe('HTML export', () => {
   it('escapes text, keeps marks and colors, and embeds Mermaid diagrams', () => {
     const doc = setContent(

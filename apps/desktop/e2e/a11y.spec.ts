@@ -4,7 +4,7 @@
  * server workspace adds: sharing, members, the inbox and comments.
  */
 import AxeBuilder from '@axe-core/playwright';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
@@ -75,7 +75,7 @@ async function checkOpen(
 for (const theme of THEMES) {
   test(`the main screens and dialogs, ${theme.toLowerCase()} theme`, async ({ launch }) => {
     test.setTimeout(180_000);
-    const { window } = await launch();
+    const { app, window } = await launch();
     await setTheme(window, theme);
     const s = (name: string) => `${name} (${theme})`;
     const sidebarButton = (name: string) => window.getByRole('button', { name, exact: true });
@@ -152,6 +152,12 @@ for (const theme of THEMES) {
       await expect(window.getByTestId('emoji-settings')).toBeVisible();
     });
 
+    await checkOpen(window, s('linked folders settings'), async () => {
+      await window.keyboard.press('Control+,');
+      await window.getByRole('tab', { name: 'Linked folders' }).click();
+      await expect(window.getByTestId('linked-folders')).toBeVisible();
+    });
+
     await checkOpen(window, s('about'), async () => {
       await window.getByRole('button', { name: /workspace menu/i }).click();
       await window.getByRole('menuitem', { name: 'About Workspace' }).click();
@@ -192,6 +198,29 @@ for (const theme of THEMES) {
     await window.getByTestId('slash-menu').getByRole('option', { name: /^Tabs/ }).click();
     await window.keyboard.type('In the first tab');
     await expectAccessible(window, s('a tabs block'));
+
+    // Linked files: one found, one that has moved (its problem and Locate…).
+    const files = mkdtempSync(join(tmpdir(), 'workspace-a11y-linked-'));
+    writeFileSync(join(files, 'gripper.step'), 'ISO-10303-21;');
+    writeFileSync(join(files, 'old.step'), 'ISO-10303-21;');
+    await app.evaluate(
+      ({ dialog }, filePaths) => {
+        dialog.showOpenDialog = (async () => ({ canceled: false, filePaths })) as never;
+      },
+      [join(files, 'gripper.step'), join(files, 'old.step')],
+    );
+    await editor(window).first().locator(':scope > p').last().click();
+    await window.keyboard.type('/linked file');
+    await window
+      .getByTestId('slash-menu')
+      .getByRole('option', { name: /^Linked file/ })
+      .click();
+    await expect(window.getByTestId('linked-file')).toHaveCount(2);
+    rmSync(join(files, 'old.step'));
+    await window.evaluate(() => globalThis.dispatchEvent(new Event('focus')));
+    await expect(window.getByRole('button', { name: 'Locate…' })).toBeVisible();
+    await expectAccessible(window, s('linked files'));
+    rmSync(files, { recursive: true, force: true });
 
     // An image and its crop dialog, on the line after the tabs.
     await editor(window).first().locator(':scope > p').last().click();

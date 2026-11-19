@@ -36,6 +36,8 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
+import type { LinkedFileRef } from '@workspace/core';
+import { replaceWithLinkedFiles } from '../nodes/linked-file';
 import { insertBlockEquation, insertInlineEquation } from '../nodes/math';
 import type { ToggleLevel } from '../nodes/toggle';
 import { actionBlocks } from './actions';
@@ -603,8 +605,30 @@ export function propertyBlocks(editor: Editor): BlockDefinition[] {
  * acting on the block (found by searching). `query` is what's typed after the `/`.
  */
 export function slashBlocks(editor: Editor, query = ''): BlockDefinition[] {
-  return [...BLOCKS, ...propertyBlocks(editor), ...actionBlocks(editor, query, CONVERTIBLE_BLOCKS)];
+  const linked = editor.storage.uiBridge.ref.current.services?.linkedFiles ? [LINKED_FILE] : [];
+  return [
+    ...BLOCKS,
+    ...linked,
+    ...propertyBlocks(editor),
+    ...actionBlocks(editor, query, CONVERTIBLE_BLOCKS),
+  ];
 }
+
+/** A pointer to a file on this computer (Phase 8 N9): where the host has files of its own. */
+const LINKED_FILE: BlockDefinition = {
+  id: 'linkedFile',
+  title: 'Linked file',
+  description: 'Link to a file on this computer, without a copy.',
+  keywords: ['pointer', 'shortcut', 'local', 'path', 'link file', 'reference'],
+  icon: FileSymlink,
+  group: 'media',
+  prepare: async (editor) => {
+    const refs = await editor.storage.uiBridge.ref.current.services?.linkedFiles?.pick();
+    return refs?.length ? { refs } : null;
+  },
+  apply: (chain, { refs }) => chain.command(replaceWithLinkedFiles(refs as LinkedFileRef[])),
+  ...insertOnly,
+};
 
 /** Blocks the "Turn into" menus offer. */
 export const CONVERTIBLE_BLOCKS = BLOCKS.filter((block) => block.convertible);

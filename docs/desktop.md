@@ -105,6 +105,22 @@ as plain text. A Confluence space becomes its page tree. Encrypted text in Evern
 across. A single Word document becomes the page itself, titled from its Title (or its file
 name); its pictures are stored with it. Older `.doc` files need saving as `.docx` first.
 
+## Linked files
+
+`/linked file` in a page links files on this computer without copying them into the
+workspace, for files too big or too often changed to import (CAD models, rosbags, datasets).
+The page keeps a pointer: the file's name, size and date, and where it is.
+
+- **Linked folders** (Settings → Linked folders): give a folder a name, such as "Projects", and
+  choose where it is on this computer. Files linked from inside it are kept as "Projects/…",
+  so they open on any computer that links a "Projects" folder too: the same folder kept in
+  sync by Dropbox, Syncthing or git, or a copy. Each computer chooses its own place for it.
+- **Other files** are kept by their full path, and open on the computer they were linked on.
+- **Safety:** pages are shared, so nothing opens by itself. A file opens when you click it;
+  a program or script (an executable, `.sh`, `.AppImage`, `.desktop`…) asks first. The page
+  can't change where a linked folder is: only Settings can.
+- **Moved or missing:** the link says so; **Locate…** points it at the new place.
+
 ## Several workspaces
 
 Set `WORKSPACE_DATA_DIR` to keep a workspace somewhere else, for example one per project:

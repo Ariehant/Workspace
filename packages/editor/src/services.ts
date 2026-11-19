@@ -1,4 +1,4 @@
-import type { ButtonConfig } from '@workspace/core';
+import type { ButtonConfig, LinkedFileRef, LinkedFileStatus } from '@workspace/core';
 import type { LucideIcon } from 'lucide-react';
 import type * as Y from 'yjs';
 import { Extension } from '@tiptap/core';
@@ -95,6 +95,24 @@ export interface EditorServices {
   /** Open a stored file with the system's default app. */
   openFile(id: string): void;
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /**
+   * Linked files (Phase 8 N9): pointers to files on this computer instead of copies. Only
+   * where the host has files of its own (the desktop); elsewhere a link says where it is.
+   */
+  linkedFiles?: {
+    /** Pick files to link (none when cancelled). */
+    pick(): Promise<LinkedFileRef[]>;
+    /** Pick where a moved file is now. */
+    locate(): Promise<LinkedFileRef | null>;
+    status(ref: LinkedFileRef): Promise<LinkedFileStatus>;
+    open(ref: LinkedFileRef): Promise<boolean>;
+    /** Show it in the file manager. */
+    reveal(ref: LinkedFileRef): Promise<boolean>;
+    /** A URL a linked image shows from. */
+    previewUrl(ref: LinkedFileRef): string;
+    /** Open Settings at Linked folders. */
+    setUpFolders(): void;
+  };
   /**
    * On a database row's page, for someone who may change the database's properties: the
    * property types `/relation`, `/select`… add to the database (`types` is empty when

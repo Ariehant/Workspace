@@ -20,6 +20,7 @@ import { useNavigation } from './navigation';
 import { observePeople, readPeople } from './people';
 import { editButton } from './buttons/button-dialog';
 import { runButton } from './buttons/run-button';
+import { openSettings } from './settings/open';
 
 /** What the editor of page (or row) `pageId` needs from the app. */
 export function useEditorServices(
@@ -100,6 +101,15 @@ export function useEditorServices(
       fileUrl: (id) => platform.fileUrl(id),
       openFile: (id) => platform.openFile(id),
       linkPreview: (url) => platform.linkPreview(url),
+      linkedFiles: platform.linkedFiles && {
+        pick: () => platform.linkedFiles!.pick(false),
+        locate: async () => (await platform.linkedFiles!.pick(true))[0] ?? null,
+        status: (ref) => platform.linkedFiles!.status(ref),
+        open: (ref) => platform.linkedFiles!.open(ref),
+        reveal: (ref) => platform.linkedFiles!.reveal(ref),
+        previewUrl: (ref) => platform.linkedFiles!.previewUrl(ref),
+        setUpFolders: () => openSettings('linkedFolders'),
+      },
       customEmoji: {
         list: () => listCustomEmoji(workspaceDataDoc(workspace)),
         subscribe: (listener) => observeCustomEmoji(workspaceDataDoc(workspace), listener),

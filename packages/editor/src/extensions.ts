@@ -22,6 +22,7 @@ import { MarkdownClipboard } from './nodes/markdown';
 import { mathExtensions } from './nodes/math';
 import { Mention } from './nodes/mention';
 import { MediaBlocks } from './nodes/media';
+import { LinkedFileBlock } from './nodes/linked-file';
 import { PasteAndDrop } from './nodes/paste-drop';
 import { Breadcrumb, PageLink, TableOfContents } from './nodes/page-blocks';
 import { DatabaseBlock, LinkedDatabaseBlock } from './nodes/database';
@@ -341,6 +342,7 @@ export function pageExtensions(
     Breadcrumb,
     TableOfContents,
     ...MediaBlocks,
+    LinkedFileBlock,
     PasteAndDrop,
     MarkdownClipboard,
     Mention,

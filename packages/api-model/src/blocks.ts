@@ -13,6 +13,7 @@
  * Block ids are the editor's (`id` on every block node). Rows of a table have none, so
  * theirs are made from the table's id and their place.
  */
+import { linkedFileLocation, linkedFileOf } from '@workspace/core';
 import { invalid } from './errors';
 import { parseId } from './ids';
 import { MAX_TEXT, type Annotations } from './rich-text';
@@ -397,6 +398,17 @@ export function blocksOut(nodes: readonly PMNode[], ctx: BlockContext): ApiBlock
           }),
         );
         break;
+      case 'linkedFile': {
+        // A file on someone's computer (Phase 8 N9): its name and where it is, as text.
+        const ref = linkedFileOf(node.attrs);
+        if (ref) {
+          const text = `📎 ${ref.name} (${linkedFileLocation(ref)})`;
+          out.push(
+            block(id, 'paragraph', { rich_text: [textItem(text, PLAIN, null)], color: 'default' }),
+          );
+        }
+        break;
+      }
       case 'heading': {
         const level = Math.min(3, Math.max(1, Number(node.attrs?.level) || 1));
         out.push(

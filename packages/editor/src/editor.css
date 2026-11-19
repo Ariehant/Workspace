@@ -1269,3 +1269,51 @@
   vertical-align: -0.25em;
   object-fit: contain;
 }
+
+/* Linked files (Phase 8 N9): a pointer to a file on the computer. */
+.ws-linked-file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 2px 4px;
+  border: 1px solid var(--ws-border);
+  border-radius: 4px;
+  user-select: none;
+}
+.ws-linked-file + .ws-linked-file-problem,
+.ws-linked-file:last-child {
+  margin-bottom: 6px;
+}
+.ws-linked-file.is-selected {
+  outline: 3px solid var(--ws-selection);
+  outline-offset: 0;
+}
+.ws-linked-file.is-missing {
+  border-style: dashed;
+}
+.ws-linked-file-problem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px 0;
+  font-size: 13px;
+  color: var(--ws-muted);
+  user-select: none;
+}
+.ws-linked-file-problem button {
+  color: var(--ws-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ws-linked-file-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  margin: 6px 0;
+  border-radius: 4px;
+}
+.ws-prose .ProseMirror-selectednode:has(.ws-linked-file) {
+  background: none;
+}

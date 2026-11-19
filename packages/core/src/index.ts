@@ -10,6 +10,7 @@ export * from './tree';
 export * from './workspace';
 export * from './synced';
 export * from './emoji';
+export * from './linked-files';
 export * from './math';
 export * from './members';
 export * from './scope-moves';

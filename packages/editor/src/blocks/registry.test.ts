@@ -108,6 +108,24 @@ function fakeEditor({
   } as unknown as Editor;
 }
 
+describe('linked files', () => {
+  const linkedEditor = (linkedFiles: unknown) =>
+    ({
+      storage: { uiBridge: { ref: { current: { services: { linkedFiles } } } } },
+      state: { selection: { $from: { parent: { textContent: '' } } } },
+      extensionManager: { extensions: [] },
+    }) as unknown as Editor;
+
+  it('are offered only where the host has files of its own (the desktop)', () => {
+    const ids = (editor: Editor, query: string) =>
+      searchBlocks(query, slashBlocks(editor, query)).map((b) => b.id);
+    expect(ids(linkedEditor(undefined), 'linked')).not.toContain('linkedFile');
+    expect(ids(linkedEditor({ pick: async () => [] }), 'linked')).toContain('linkedFile');
+    expect(ids(linkedEditor({ pick: async () => [] }), 'linked file')[0]).toBe('linkedFile');
+    expect(ids(linkedEditor({ pick: async () => [] }), 'pointer')[0]).toBe('linkedFile');
+  });
+});
+
 describe('commands on the block', () => {
   const search = (query: string, editor = fakeEditor({ text: `/${query}` })) =>
     searchBlocks(query, slashBlocks(editor, query)).map((b) => b.id);

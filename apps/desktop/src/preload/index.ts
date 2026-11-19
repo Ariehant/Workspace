@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { SearchOptions } from '@workspace/core';
+import type { LinkedFileRef, LinkedFileStatus, SearchOptions } from '@workspace/core';
 import {
   IPC,
   type ExportRequest,
@@ -78,6 +78,17 @@ const api = {
   },
   linkPreview: (url: string): Promise<LinkPreview | null> =>
     ipcRenderer.invoke(IPC.linkPreview, url),
+  linkedFiles: {
+    pick: (one: boolean): Promise<LinkedFileRef[]> => ipcRenderer.invoke(IPC.linkedPick, one),
+    status: (ref: LinkedFileRef): Promise<LinkedFileStatus> =>
+      ipcRenderer.invoke(IPC.linkedStatus, ref),
+    open: (ref: LinkedFileRef): Promise<boolean> => ipcRenderer.invoke(IPC.linkedOpen, ref),
+    reveal: (ref: LinkedFileRef): Promise<boolean> => ipcRenderer.invoke(IPC.linkedReveal, ref),
+    folders: (): Promise<Record<string, string>> => ipcRenderer.invoke(IPC.linkedFolders),
+    chooseFolder: (name: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.linkedFolderChoose, name),
+    forgetFolder: (name: string): Promise<void> => ipcRenderer.invoke(IPC.linkedFolderForget, name),
+  },
   links: {
     backlinks: (
       pageId: string,

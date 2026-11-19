@@ -118,6 +118,7 @@ milestones below; the others wait for a decision, by number.
 | N6        | Table colours, comments display, Home, workspace PDF, presenting (#8, #30, #26, #42, #6)                   | 1.5 weeks |
 | N7        | Feed view, verified pages, People, Asana and Jira import (#18, #24, #28, #40)                              | 1.5 weeks |
 | N8        | Monday import, custom emoji, one Settings window, "can create pages", share links (#40, #7, #27, #22, #34) | 2 weeks   |
+| N9        | Linked files (pointers to files on the computer), then a Google Drive connector                            | 2 weeks   |
 
 Each milestone is committed and pushed with its tests, after the full checks: formatting, lint,
 types, unit tests, both builds, the desktop E2E suite twice and the web E2E suite.
@@ -812,3 +813,40 @@ you like": #40 (Monday), #7, #27, #22 and #34. Each was committed and pushed wit
   with `database.group` at 1215 ms). Run locally, the same budgets on the commit before and
   after the change gave the same numbers (`database.group` 527–606 ms against 544–585 ms), so
   it was the runner, as in N7; the budgets are unchanged.
+
+## N9: linked files, then Google Drive
+
+The owner asked for files linked rather than imported, "like pointers", from the computer and
+from Google Drive, as Claude's own interface does. Local files come first (no outside
+service); the Drive connector follows.
+
+**N9a, linked files (built):**
+
+- **A `linkedFile` block** (`/linked file`, desktop): a pointer, not a copy. It keeps a linked
+  folder's name and a path inside it, or a full path, with the file's name, size and date. The
+  card opens the file in its default app, shows it in the file manager, and shows an image in
+  the page; a moved file says "Not found on this computer" and offers Locate…; a folder that
+  isn't linked on this computer says which and offers Link it… (Settings). The web app and
+  other computers show the card and where it is.
+- **Linked folders:** their names are the workspace's (its data doc, beside custom emoji);
+  where each is on a computer is that computer's own setting, kept by the main process.
+- **Safety:** pointers come from pages others can edit, so the main process does the work:
+  - it resolves a folder pointer inside its folder only (`..` and absolute parts refused, the
+    result checked to stay inside);
+  - it opens files only when clicked, and asks before running a program or script (by
+    extension, or executable on Linux), naming the real file, not the page's name for it;
+  - the page can't read or set where folders are through the settings IPC;
+  - previews are served for images only (up to 50 MB).
+- **Exports and the API** give a linked file as its name and where it is (text, not a link).
+
+**Tests:**
+
+- **Unit:** folder names and paths (`relativeParts`, `pathInFolder` on Linux and Windows,
+  `linkedFileOf`), the slash menu offering it only on the desktop, Markdown and HTML export,
+  and the API.
+- **Desktop E2E** (`linked-files.spec.ts`): a linked folder; two files in it and a script by
+  full path; opening, showing in the folder, the script's confirmation (cancelled, then run);
+  the image preview; a moved file located again; the folder unlinked and linked again; kept
+  after a restart; and the page failing to move the folder through the settings IPC (that
+  check fails with the guard removed). axe on the Linked folders section and the cards, in
+  both themes.

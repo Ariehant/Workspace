@@ -69,6 +69,11 @@ const platform: Platform = {
   fileUrl: (id) => `ws-file://${id}`,
   openFile: (id) => void api.files.open(id),
   linkPreview: (url) => api.linkPreview(url),
+  linkedFiles: {
+    ...api.linkedFiles,
+    // Served by the main process from this computer's linked folders (images only).
+    previewUrl: (ref) => `ws-file://linked/?ref=${encodeURIComponent(JSON.stringify(ref))}`,
+  },
   backlinks: (id) => api.links.backlinks(id),
   upcoming: () => api.links.upcoming(),
   syncedPlaces: (id) => api.links.syncedPlaces(id),

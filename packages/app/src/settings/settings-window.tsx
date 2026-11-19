@@ -18,6 +18,7 @@ export type SettingsSection =
   | 'region'
   | 'notifications'
   | 'emoji'
+  | 'linkedFolders'
   | 'members'
   | 'teamspaces'
   | 'sync'

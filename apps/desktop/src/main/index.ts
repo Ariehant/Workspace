@@ -16,6 +16,7 @@ import type { ThemeSource } from '../shared/ipc';
 import { createAutomations } from './automations';
 import { asideDir, registerExport } from './export';
 import { registerFileScheme, registerFiles } from './files';
+import { registerLinkedFiles } from './linked-files';
 import { registerImport } from './import';
 import { registerIpc } from './ipc';
 import { registerNotifications } from './notifications';
@@ -343,6 +344,7 @@ app.whenReady().then(() => {
     fetchMissing: (id) => sync.fetchFile(id),
     onImported: () => sync.fileAdded(),
   });
+  registerLinkedFiles(store);
   sync.start();
   // Back from sleep: reconnect now rather than at the next backoff step.
   powerMonitor.on('resume', () => sync.retryNow());
