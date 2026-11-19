@@ -888,3 +888,8 @@ owner's to try.
   the token, key and app id) with Drive's names and details; opening one; renamed and trashed
   in Drive; after a restart (by the refresh token); disconnecting (revoked, the cards keeping
   what they knew); and picking while disconnected sending you to connect. axe on Connections.
+
+**Runs (N9):** formatting, lint, types, unit tests and both builds pass. The full desktop E2E
+suite: 190 passed, 3 skipped (with both N9 parts); `drive.spec.ts` and `linked-files.spec.ts`
+again on the final build: passed.
+
