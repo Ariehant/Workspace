@@ -1,6 +1,6 @@
 import { formatDay } from '@workspace/core';
 import type { WorkspaceRole } from '@workspace/core';
-import { Avatar, Button, Dialog, DialogContent, IconButton, cn } from '@workspace/ui';
+import { Avatar, Button, IconButton, cn } from '@workspace/ui';
 import { Check, Copy, Loader2, Mail, Trash2, UserMinus, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -19,6 +19,7 @@ import {
   type TeamApi,
 } from './team';
 import { IntegrationsPanel } from './integrations-settings';
+import { SettingsShell } from './settings/shell';
 
 type Tab = 'members' | 'guests' | 'groups' | 'invites' | 'integrations';
 
@@ -118,72 +119,71 @@ export function MembersDialog({
   ];
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        title="Members"
-        className="top-[10vh] w-[min(680px,calc(100vw-32px))]"
-        data-testid="members-dialog"
-      >
-        <div className="flex max-h-[75vh] flex-col gap-3 p-4 pt-2">
-          {manager && <InviteForm team={team} onInvited={() => void reload()} />}
-          <div role="tablist" aria-label="Members" className="flex gap-1 border-b border-line">
-            {tabs.map(([id, label, count]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={tab === id}
-                onClick={() => setTab(id)}
-                className={cn(
-                  '-mb-px border-b-2 px-2 pb-1.5 text-sm',
-                  tab === id
-                    ? 'border-fg font-medium text-fg'
-                    : 'border-transparent text-muted hover:text-fg',
-                )}
-              >
-                {label}
-                {count !== null && count > 0 && <span className="ml-1 text-faint">{count}</span>}
-              </button>
-            ))}
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-danger" data-testid="members-error">
-              {error}
-            </p>
-          )}
-          <div className="min-h-40 overflow-y-auto">
-            {members === null && !error && <Loader2 className="m-4 animate-spin text-muted" />}
-            {members !== null && (tab === 'members' || tab === 'guests') && (
-              <PeopleList
-                people={people}
-                me={me}
-                myRole={role}
-                empty={tab === 'guests' ? 'No guests.' : 'No members.'}
-                onRole={(id, next) => void act(() => team.setRole(id, next))}
-                onRemove={(person) => {
-                  const self = person.id === me;
-                  const question = self
-                    ? 'Leave this workspace? You’ll need a new invite to come back.'
-                    : `Remove ${person.name} from this workspace?`;
-                  if (!window.confirm(question)) return;
-                  void act(async () => {
-                    await team.remove(person.id);
-                    if (self) onLeft();
-                  });
-                }}
-              />
-            )}
-            {members !== null && tab === 'groups' && (
-              <Groups groups={groups} members={members} manager={manager} act={act} team={team} />
-            )}
-            {tab === 'integrations' && manager && <IntegrationsPanel team={team} />}
-            {tab === 'invites' && manager && (
-              <Invites invites={invites} onRevoke={(id) => void act(() => team.revokeInvite(id))} />
-            )}
-          </div>
+    <SettingsShell
+      onClose={onClose}
+      title="Members"
+      className="top-[10vh] w-[min(680px,calc(100vw-32px))]"
+      data-testid="members-dialog"
+    >
+      <div className="flex max-h-[75vh] flex-col gap-3 p-4 pt-2">
+        {manager && <InviteForm team={team} onInvited={() => void reload()} />}
+        <div role="tablist" aria-label="Members" className="flex gap-1 border-b border-line">
+          {tabs.map(([id, label, count]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={cn(
+                '-mb-px border-b-2 px-2 pb-1.5 text-sm',
+                tab === id
+                  ? 'border-fg font-medium text-fg'
+                  : 'border-transparent text-muted hover:text-fg',
+              )}
+            >
+              {label}
+              {count !== null && count > 0 && <span className="ml-1 text-faint">{count}</span>}
+            </button>
+          ))}
         </div>
-      </DialogContent>
-    </Dialog>
+        {error && (
+          <p role="alert" className="text-sm text-danger" data-testid="members-error">
+            {error}
+          </p>
+        )}
+        <div className="min-h-40 overflow-y-auto">
+          {members === null && !error && <Loader2 className="m-4 animate-spin text-muted" />}
+          {members !== null && (tab === 'members' || tab === 'guests') && (
+            <PeopleList
+              people={people}
+              me={me}
+              myRole={role}
+              empty={tab === 'guests' ? 'No guests.' : 'No members.'}
+              onRole={(id, next) => void act(() => team.setRole(id, next))}
+              onRemove={(person) => {
+                const self = person.id === me;
+                const question = self
+                  ? 'Leave this workspace? You’ll need a new invite to come back.'
+                  : `Remove ${person.name} from this workspace?`;
+                if (!window.confirm(question)) return;
+                void act(async () => {
+                  await team.remove(person.id);
+                  if (self) onLeft();
+                });
+              }}
+            />
+          )}
+          {members !== null && tab === 'groups' && (
+            <Groups groups={groups} members={members} manager={manager} act={act} team={team} />
+          )}
+          {tab === 'integrations' && manager && <IntegrationsPanel team={team} />}
+          {tab === 'invites' && manager && (
+            <Invites invites={invites} onRevoke={(id) => void act(() => team.revokeInvite(id))} />
+          )}
+        </div>
+      </div>
+    </SettingsShell>
   );
 }
 
@@ -577,7 +577,7 @@ const DIGESTS: [EmailDigest, string][] = [
 ];
 
 /** When the server emails you about unread notifications (Phase 6 M7). */
-function EmailSetting({ team }: { team: TeamApi }) {
+export function EmailSetting({ team }: { team: TeamApi }) {
   const [settings, setSettings] = useState<EmailSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -659,94 +659,92 @@ export function ProfileDialog({ team, onClose }: { team: TeamApi; onClose(): voi
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        title="Your profile"
-        className="w-[min(440px,calc(100vw-32px))]"
-        data-testid="profile-dialog"
-      >
-        <div className="flex flex-col gap-4 p-4 pt-3">
-          {!profile && !error && <Loader2 className="animate-spin text-muted" />}
-          {profile && (
-            <>
-              <div className="flex items-center gap-4">
-                <Avatar name={profile.name} src={profile.avatar} id={profile.id} size={64} />
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex gap-2">
-                    <Button className="h-7" disabled={busy} onClick={() => file.current?.click()}>
-                      Upload picture
+    <SettingsShell
+      onClose={onClose}
+      title="Your profile"
+      className="w-[min(440px,calc(100vw-32px))]"
+      data-testid="profile-dialog"
+    >
+      <div className="flex flex-col gap-4 p-4 pt-3">
+        {!profile && !error && <Loader2 className="animate-spin text-muted" />}
+        {profile && (
+          <>
+            <div className="flex items-center gap-4">
+              <Avatar name={profile.name} src={profile.avatar} id={profile.id} size={64} />
+              <div className="flex flex-col gap-1.5">
+                <div className="flex gap-2">
+                  <Button className="h-7" disabled={busy} onClick={() => file.current?.click()}>
+                    Upload picture
+                  </Button>
+                  {profile.avatar && (
+                    <Button
+                      className="h-7"
+                      disabled={busy}
+                      onClick={() => void save({ avatar: null })}
+                    >
+                      Remove
                     </Button>
-                    {profile.avatar && (
-                      <Button
-                        className="h-7"
-                        disabled={busy}
-                        onClick={() => void save({ avatar: null })}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted">{profile.email}</span>
+                  )}
                 </div>
+                <span className="text-xs text-muted">{profile.email}</span>
+              </div>
+              <input
+                ref={file}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                aria-label="Profile picture"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!picked) return;
+                  void avatarFromFile(picked).then(
+                    (avatar) => save({ avatar }),
+                    () => setError('That picture couldn’t be read.'),
+                  );
+                }}
+              />
+            </div>
+            <form
+              className="flex items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (name.trim() && name.trim() !== profile.name) void save({ name: name.trim() });
+              }}
+            >
+              <label className="flex flex-1 flex-col gap-1">
+                <span className="text-xs font-medium text-muted">Name</span>
                 <input
-                  ref={file}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  className="hidden"
-                  aria-label="Profile picture"
+                  className={input}
+                  value={name}
+                  aria-label="Name"
                   onChange={(e) => {
-                    const picked = e.target.files?.[0];
-                    e.target.value = '';
-                    if (!picked) return;
-                    void avatarFromFile(picked).then(
-                      (avatar) => save({ avatar }),
-                      () => setError('That picture couldn’t be read.'),
-                    );
+                    setName(e.target.value);
+                    setSaved(false);
                   }}
                 />
-              </div>
-              <form
-                className="flex items-end gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (name.trim() && name.trim() !== profile.name) void save({ name: name.trim() });
-                }}
+              </label>
+              <Button
+                variant="primary"
+                type="submit"
+                className="h-8"
+                disabled={busy || !name.trim() || name.trim() === profile.name}
               >
-                <label className="flex flex-1 flex-col gap-1">
-                  <span className="text-xs font-medium text-muted">Name</span>
-                  <input
-                    className={input}
-                    value={name}
-                    aria-label="Name"
-                    onChange={(e) => {
-                      setName(e.target.value);
-                      setSaved(false);
-                    }}
-                  />
-                </label>
-                <Button
-                  variant="primary"
-                  type="submit"
-                  className="h-8"
-                  disabled={busy || !name.trim() || name.trim() === profile.name}
-                >
-                  Save
-                </Button>
-              </form>
-              <p className="text-xs text-faint">
-                Your name and picture show to everyone in the workspaces you’re in.
-              </p>
-              <EmailSetting team={team} />
-            </>
-          )}
-          {saved && <p className="text-sm text-success">Saved.</p>}
-          {error && (
-            <p role="alert" className="text-sm text-danger">
-              {error}
+                Save
+              </Button>
+            </form>
+            <p className="text-xs text-faint">
+              Your name and picture show to everyone in the workspaces you’re in.
             </p>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          </>
+        )}
+        {saved && <p className="text-sm text-success">Saved.</p>}
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+    </SettingsShell>
   );
 }

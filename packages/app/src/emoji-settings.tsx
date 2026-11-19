@@ -9,12 +9,13 @@ import {
   workspaceDataDoc,
 } from '@workspace/core';
 import { isStandardEmoji } from '@workspace/editor';
-import { Button, Dialog, DialogContent } from '@workspace/ui';
+import { Button } from '@workspace/ui';
 import { ImagePlus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from './context';
 import { useWorkspaceEmoji } from './custom-emoji';
 import { usePeople } from './people';
+import { SettingsShell } from './settings/shell';
 
 /** The name suggested from an image's file name: "Team Logo.png" → "team_logo". */
 export function emojiNameFrom(fileName: string): string {
@@ -139,10 +140,8 @@ export function EmojiPanel() {
 /** The Emoji settings on their own (until there's one Settings window). */
 export function EmojiDialog({ onClose }: { onClose(): void }) {
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title="Emoji" className="w-[min(560px,calc(100vw-2rem))]">
-        <EmojiPanel />
-      </DialogContent>
-    </Dialog>
+    <SettingsShell onClose={onClose} title="Emoji" className="w-[min(560px,calc(100vw-2rem))]">
+      <EmojiPanel />
+    </SettingsShell>
   );
 }

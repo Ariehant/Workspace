@@ -109,6 +109,8 @@ export interface SidebarProps {
   onResize(width: number): void;
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
+  /** Open Settings (Ctrl+,). */
+  onSettings?(): void;
   /** Settings → Language and region. */
   onRegion?(): void;
   /** Settings → Emoji (the workspace's custom emoji). */
@@ -226,6 +228,12 @@ export function Sidebar(props: SidebarProps) {
                 </MenuItem>
                 <MenuSeparator />
               </>
+            )}
+            {props.onSettings && (
+              <MenuItem icon={<Settings size={14} />} onSelect={props.onSettings}>
+                <span className="flex-1">Settings…</span>
+                <span className="pl-4 text-xs text-muted">Ctrl+,</span>
+              </MenuItem>
             )}
             {props.onRegion && (
               <MenuItem icon={<Languages size={14} />} onSelect={props.onRegion}>
@@ -450,7 +458,7 @@ export function Sidebar(props: SidebarProps) {
  * The app's zoom, followed while the sidebar is shown (null until known). Kept here rather
  * than in the Appearance menu, which would show 100% for a moment each time it opens.
  */
-function useZoomFactor(zoom: ZoomPlatform | undefined): number | null {
+export function useZoomFactor(zoom: ZoomPlatform | undefined): number | null {
   const [factor, setFactor] = useState<number | null>(null);
   useEffect(() => {
     if (!zoom) return;

@@ -48,6 +48,13 @@ import { useRegistryVersion } from './database/hooks';
 import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
 import { EmojiDialog } from './emoji-settings';
+import {
+  AppearancePanel,
+  NotificationsPanel,
+  SettingsWindow,
+  type SettingsPanel,
+  type SettingsSection,
+} from './settings/settings-window';
 import { Home } from './home';
 import { PeopleView } from './people-view';
 import { NoAccess } from './no-access';
@@ -71,7 +78,19 @@ import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
 import { MoveDialog } from './move-dialog';
 import { duplicatePage } from './page-actions';
 import { SyncDialog, useSyncInfo } from './sync-settings';
-import { MembersDialog, ProfileDialog } from './members-dialog';
+import {
+  Bell,
+  Info,
+  Keyboard,
+  Languages,
+  LayoutGrid,
+  Palette,
+  RefreshCw,
+  SmilePlus,
+  UserRound,
+  Users,
+} from 'lucide-react';
+import { EmailSetting, MembersDialog, ProfileDialog } from './members-dialog';
 import { useTeam } from './team';
 import { InboxButton, useInbox } from './inbox';
 import { requestThread } from './comments';
@@ -571,7 +590,6 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     // Again after a teamspace dialog closes (its icon may have changed).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [team, teamspaceKey, teamspaceDialog === null]);
-  const [syncOpen, setSyncOpen] = useState(false);
   // Keep the user's name current in a local workspace (created by / person values show
   // it). A server workspace has its members doc for names, and its page tree may not be
   // the user's to change (the server would refuse it, and send its copy back).
@@ -579,14 +597,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   useEffect(() => {
     if (local) upsertUser(workspaceDataDoc(workspace), user);
   }, [local, workspace, user]);
-  const [peopleOpen, setPeopleOpen] = useState<'members' | 'profile' | null>(null);
+  // The Settings window, at a section (null: closed).
+  const [settings, setSettings] = useState<SettingsSection | null>(null);
 
   // Language and region: the formats change at once (everything re-renders from here).
   const [regionSettings, setRegionSettings] = useState(initial.region);
-  const [regionOpen, setRegionOpen] = useState(false);
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const updates = useUpdates(platform.about?.updates);
   const changeRegion = useCallback(
     (next: RegionSettings) => {
@@ -628,7 +643,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       else if (command === 'close-tab') changeTabs((prev) => closeTab(prev, prev.active));
       else if (command === 'next-tab') changeTabs((prev) => cycleTab(prev, 1));
       else if (command === 'prev-tab') changeTabs((prev) => cycleTab(prev, -1));
-      else if (command === 'sync-settings') setSyncOpen(true);
+      else if (command === 'sync-settings') setSettings('sync');
       else go(command === 'go-back' ? -1 : 1);
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -652,8 +667,13 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
         if (key === 'u') keys.current.toParent();
         else if (key === 'l') keys.current.toggleTheme();
         // Ctrl+? (Ctrl+Shift+/ on most keyboards).
-        else if (key === '?' || event.code === 'Slash') setShortcutsOpen(true);
+        else if (key === '?' || event.code === 'Slash') setSettings('shortcuts');
         else return;
+        event.preventDefault();
+        return;
+      }
+      if (key === ',') {
+        setSettings((open) => open ?? 'appearance');
         event.preventDefault();
         return;
       }
@@ -743,6 +763,117 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
     canGoForward: stepHistory(history, 1, exists) !== null,
     onGo: go,
   };
+
+  const backup = () =>
+    void platform
+      .startExport({ format: 'backup' })
+      .catch((error: unknown) => console.error('Backup failed', error));
+  const closeSettings = () => setSettings(null);
+  const settingsPanels: SettingsPanel[] = [
+    ...(team
+      ? [
+          {
+            id: 'account' as const,
+            label: 'Account',
+            icon: <UserRound size={15} />,
+            content: <ProfileDialog team={team} onClose={closeSettings} />,
+          },
+        ]
+      : []),
+    {
+      id: 'appearance',
+      label: 'Appearance',
+      icon: <Palette size={15} />,
+      content: <AppearancePanel theme={theme} onTheme={changeTheme} zoom={platform.zoom} />,
+    },
+    {
+      id: 'region',
+      label: 'Language and region',
+      icon: <Languages size={15} />,
+      content: (
+        <RegionDialog settings={regionSettings} onChange={changeRegion} onClose={closeSettings} />
+      ),
+    },
+    {
+      id: 'notifications',
+      label: 'Notifications',
+      icon: <Bell size={15} />,
+      content: (
+        <NotificationsPanel
+          notifications={platform.notifications}
+          email={team ? <EmailSetting team={team} /> : undefined}
+        />
+      ),
+    },
+    {
+      id: 'emoji',
+      label: 'Emoji',
+      icon: <SmilePlus size={15} />,
+      content: <EmojiDialog onClose={closeSettings} />,
+    },
+    ...(team
+      ? [
+          {
+            id: 'members' as const,
+            label: 'Members',
+            icon: <Users size={15} />,
+            content: (
+              <MembersDialog
+                team={team}
+                onClose={closeSettings}
+                onLeft={() => {
+                  closeSettings();
+                  platform.account?.switchWorkspace();
+                }}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(team && scoped
+      ? [
+          {
+            id: 'teamspaces' as const,
+            label: 'Teamspaces',
+            icon: <LayoutGrid size={15} />,
+            content: <BrowseTeamspacesDialog team={team} onClose={closeSettings} />,
+          },
+        ]
+      : []),
+    ...(platform.sync && syncInfo
+      ? [
+          {
+            id: 'sync' as const,
+            label: 'Sync',
+            icon: <RefreshCw size={15} />,
+            content: (
+              <SyncDialog
+                sync={platform.sync}
+                info={syncInfo}
+                onClose={closeSettings}
+                onBackup={backup}
+              />
+            ),
+          },
+        ]
+      : []),
+    {
+      id: 'shortcuts',
+      label: 'Keyboard shortcuts',
+      icon: <Keyboard size={15} />,
+      content: <ShortcutsDialog onClose={closeSettings} />,
+    },
+    ...(platform.about
+      ? [
+          {
+            id: 'about' as const,
+            label: 'About',
+            icon: <Info size={15} />,
+            content: <AboutDialog about={platform.about} onClose={closeSettings} />,
+          },
+        ]
+      : []),
+  ];
 
   const screenChrome = { ...chrome, canGoBack: currentPageId !== null, canGoForward: false };
   const content =
@@ -844,10 +975,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onResize={setSidebarWidth}
             fileUrl={platform.fileUrl}
             onThemeChange={changeTheme}
-            onRegion={() => setRegionOpen(true)}
-            onEmoji={() => setEmojiOpen(true)}
-            onAbout={platform.about ? () => setAboutOpen(true) : undefined}
-            onShortcuts={() => setShortcutsOpen(true)}
+            onSettings={() => setSettings('appearance')}
+            onRegion={() => setSettings('region')}
+            onEmoji={() => setSettings('emoji')}
+            onAbout={platform.about ? () => setSettings('about') : undefined}
+            onShortcuts={() => setSettings('shortcuts')}
             updateReady={
               updates?.status === 'ready' && updates.version
                 ? { version: updates.version, onRestart: () => platform.about?.updates?.install() }
@@ -856,7 +988,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             zoom={platform.zoom}
             onCollapse={() => setSidebarOpen(false)}
             sync={syncInfo}
-            onSync={() => setSyncOpen(true)}
+            onSync={() => setSettings('sync')}
             can={{
               export: can(platform, 'export'),
               import: can(platform, 'import'),
@@ -873,8 +1005,8 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             team={
               team
                 ? {
-                    onMembers: () => setPeopleOpen('members'),
-                    onProfile: () => setPeopleOpen('profile'),
+                    onMembers: () => setSettings('members'),
+                    onProfile: () => setSettings('account'),
                   }
                 : undefined
             }
@@ -882,7 +1014,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
               team && scoped
                 ? {
                     onNew: () => setTeamspaceDialog({ kind: 'new' }),
-                    onBrowse: () => setTeamspaceDialog({ kind: 'browse' }),
+                    onBrowse: () => setSettings('teamspaces'),
                     onSettings: (scopeId) => setTeamspaceDialog({ kind: 'settings', scopeId }),
                     onLeave: leaveTeamspace,
                   }
@@ -890,16 +1022,12 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             }
           />
         )}
-        {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
-        {aboutOpen && platform.about && (
-          <AboutDialog about={platform.about} onClose={() => setAboutOpen(false)} />
-        )}
-        {emojiOpen && <EmojiDialog onClose={() => setEmojiOpen(false)} />}
-        {regionOpen && (
-          <RegionDialog
-            settings={regionSettings}
-            onChange={changeRegion}
-            onClose={() => setRegionOpen(false)}
+        {settings && (
+          <SettingsWindow
+            panels={settingsPanels}
+            section={settings}
+            onSection={setSettings}
+            onClose={() => setSettings(null)}
           />
         )}
         {team && sharing && (
@@ -917,39 +1045,11 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onCreated={() => {}}
           />
         )}
-        {team && teamspaceDialog?.kind === 'browse' && (
-          <BrowseTeamspacesDialog team={team} onClose={() => setTeamspaceDialog(null)} />
-        )}
         {team && teamspaceDialog?.kind === 'settings' && (
           <TeamspaceSettingsDialog
             team={team}
             scopeId={teamspaceDialog.scopeId}
             onClose={() => setTeamspaceDialog(null)}
-          />
-        )}
-        {team && peopleOpen === 'members' && (
-          <MembersDialog
-            team={team}
-            onClose={() => setPeopleOpen(null)}
-            onLeft={() => {
-              setPeopleOpen(null);
-              platform.account?.switchWorkspace();
-            }}
-          />
-        )}
-        {team && peopleOpen === 'profile' && (
-          <ProfileDialog team={team} onClose={() => setPeopleOpen(null)} />
-        )}
-        {syncOpen && platform.sync && syncInfo && (
-          <SyncDialog
-            sync={platform.sync}
-            info={syncInfo}
-            onClose={() => setSyncOpen(false)}
-            onBackup={() =>
-              void platform
-                .startExport({ format: 'backup' })
-                .catch((error: unknown) => console.error('Backup failed', error))
-            }
           />
         )}
         <div className="flex min-w-0 flex-1 flex-col">

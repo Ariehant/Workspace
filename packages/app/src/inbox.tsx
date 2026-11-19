@@ -44,7 +44,7 @@ const FILTERS: { id: InboxFilter; label: string }[] = [
   { id: 'archived', label: 'Archived' },
 ];
 
-const KIND_LABELS: Record<NotificationKind, string> = {
+export const KIND_LABELS: Record<NotificationKind, string> = {
   mention: 'Mentions',
   comment: 'Comments on pages you follow',
   reply: 'Replies',

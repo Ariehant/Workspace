@@ -135,6 +135,17 @@ for (const theme of THEMES) {
       await expect(window.getByTestId('region-dialog')).toBeVisible();
     });
 
+    await checkOpen(window, s('settings, appearance'), async () => {
+      await window.keyboard.press('Control+,');
+      await expect(window.getByTestId('appearance-settings')).toBeVisible();
+    });
+
+    await checkOpen(window, s('settings, notifications'), async () => {
+      await window.keyboard.press('Control+,');
+      await window.getByRole('tab', { name: 'Notifications' }).click();
+      await expect(window.getByTestId('notification-settings')).toBeVisible();
+    });
+
     await checkOpen(window, s('emoji settings'), async () => {
       await window.getByRole('button', { name: /workspace menu/i }).click();
       await window.getByRole('menuitem', { name: 'Emoji…' }).click();

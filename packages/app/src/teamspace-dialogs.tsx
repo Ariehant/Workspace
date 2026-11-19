@@ -16,6 +16,7 @@ import {
   type TeamApi,
   type TeamspaceListing,
 } from './team';
+import { SettingsShell } from './settings/shell';
 
 const input =
   'h-8 rounded-md border border-line bg-transparent px-2 text-sm text-fg outline-none placeholder:text-faint focus:border-accent';
@@ -438,48 +439,44 @@ export function BrowseTeamspacesDialog({ team, onClose }: { team: TeamApi; onClo
   useEffect(() => void reload(), [reload]);
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title="Teamspaces" data-testid="browse-teamspaces">
-        <div className="flex max-h-[70vh] flex-col gap-1 overflow-y-auto p-4 pt-3">
-          {!list && <p className="text-sm text-muted">{error ?? 'Loading…'}</p>}
-          {list?.length === 0 && <p className="text-sm text-muted">No teamspaces yet.</p>}
-          {list?.map((t) => (
-            <div
-              key={t.id}
-              data-testid="teamspace-listing"
-              className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-hover"
-            >
-              <span className="flex size-7 shrink-0 items-center justify-center rounded bg-active text-sm">
-                {t.icon ?? t.name.slice(0, 1).toUpperCase()}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{t.name}</div>
-                <div className="truncate text-xs text-muted">
-                  {t.description ||
-                    (t.everyone ? 'Everyone in the workspace' : `${t.members} members`)}
-                </div>
+    <SettingsShell onClose={onClose} title="Teamspaces" data-testid="browse-teamspaces">
+      <div className="flex max-h-[70vh] flex-col gap-1 overflow-y-auto p-4 pt-3">
+        {!list && <p className="text-sm text-muted">{error ?? 'Loading…'}</p>}
+        {list?.length === 0 && <p className="text-sm text-muted">No teamspaces yet.</p>}
+        {list?.map((t) => (
+          <div
+            key={t.id}
+            data-testid="teamspace-listing"
+            className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-hover"
+          >
+            <span className="flex size-7 shrink-0 items-center justify-center rounded bg-active text-sm">
+              {t.icon ?? t.name.slice(0, 1).toUpperCase()}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">{t.name}</div>
+              <div className="truncate text-xs text-muted">
+                {t.description ||
+                  (t.everyone ? 'Everyone in the workspace' : `${t.members} members`)}
               </div>
-              {t.role ? (
-                <span className="text-xs text-muted">Joined</span>
-              ) : t.visibility === 'open' ? (
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    void team
-                      .joinTeamspace(t.id)
-                      .then(reload, (e: unknown) => setError(errorText(e)))
-                  }
-                >
-                  Join
-                </Button>
-              ) : (
-                <span className="text-xs text-muted">Ask to be added</span>
-              )}
             </div>
-          ))}
-          {list && error && <p className="text-sm text-red-600">{error}</p>}
-        </div>
-      </DialogContent>
-    </Dialog>
+            {t.role ? (
+              <span className="text-xs text-muted">Joined</span>
+            ) : t.visibility === 'open' ? (
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  void team.joinTeamspace(t.id).then(reload, (e: unknown) => setError(errorText(e)))
+                }
+              >
+                Join
+              </Button>
+            ) : (
+              <span className="text-xs text-muted">Ask to be added</span>
+            )}
+          </div>
+        ))}
+        {list && error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+    </SettingsShell>
   );
 }
