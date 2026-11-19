@@ -1,6 +1,8 @@
 import {
   FULL_CROP,
   cssText,
+  driveFileOf,
+  driveOpenUrl,
   imageViewStyles,
   linkedFileLocation,
   linkedFileOf,
@@ -227,6 +229,13 @@ export function blockHtml(node: ContentNode, ctx: RenderContext): string {
     case 'bookmark':
     case 'embed':
       return mediaHtml(node, ctx);
+    case 'driveFile': {
+      // A Google Drive file (Phase 8 N9): a link to it in Drive.
+      const ref = driveFileOf(attrs);
+      return ref
+        ? `<p class="drive-file">📎 <a href="${escapeHtml(driveOpenUrl(ref.fileId))}">${escapeHtml(ref.name)}</a></p>`
+        : '';
+    }
     case 'linkedFile': {
       // A file on someone's computer (Phase 8 N9): its name and where it is, not a link.
       const ref = linkedFileOf(attrs);

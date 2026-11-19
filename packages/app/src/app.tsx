@@ -48,6 +48,7 @@ import { useRegistryVersion } from './database/hooks';
 import { RowPageView, RowPeek } from './database/row-page';
 import { NavigationContext, type Navigation } from './navigation';
 import { EmojiDialog } from './emoji-settings';
+import { ConnectionsPanel } from './connections';
 import { LinkedFoldersPanel } from './linked-folders';
 import { onOpenSettings } from './settings/open';
 import {
@@ -90,6 +91,7 @@ import {
   RefreshCw,
   SmilePlus,
   FolderSymlink,
+  Plug,
   UserRound,
   Users,
 } from 'lucide-react';
@@ -823,6 +825,16 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             label: 'Linked folders',
             icon: <FolderSymlink size={15} />,
             content: <LinkedFoldersPanel linked={platform.linkedFiles} />,
+          },
+        ]
+      : []),
+    ...(platform.google
+      ? [
+          {
+            id: 'connections' as const,
+            label: 'Connections',
+            icon: <Plug size={15} />,
+            content: <ConnectionsPanel google={platform.google} />,
           },
         ]
       : []),

@@ -198,6 +198,21 @@ describe('blocks', () => {
     { type: 'button', attrs: { id: 'bt', label: 'Go' } },
   ];
 
+  it('give a Drive file as its name, linked to Drive', () => {
+    const [out] = blocksOut(
+      [{ type: 'driveFile', attrs: { id: 'df', fileId: '1AbC_def-GHIjkl23', name: 'BOM' } }],
+      ctx,
+    );
+    expect(out).toMatchObject({
+      type: 'paragraph',
+      value: {
+        rich_text: [
+          { plain_text: 'BOM', href: 'https://drive.google.com/open?id=1AbC_def-GHIjkl23' },
+        ],
+      },
+    });
+  });
+
   it('give a linked file as its name and where it is', () => {
     const [out] = blocksOut(
       [

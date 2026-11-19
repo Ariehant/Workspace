@@ -13,7 +13,7 @@
  * Block ids are the editor's (`id` on every block node). Rows of a table have none, so
  * theirs are made from the table's id and their place.
  */
-import { linkedFileLocation, linkedFileOf } from '@workspace/core';
+import { driveFileOf, driveOpenUrl, linkedFileLocation, linkedFileOf } from '@workspace/core';
 import { invalid } from './errors';
 import { parseId } from './ids';
 import { MAX_TEXT, type Annotations } from './rich-text';
@@ -398,6 +398,15 @@ export function blocksOut(nodes: readonly PMNode[], ctx: BlockContext): ApiBlock
           }),
         );
         break;
+      case 'driveFile': {
+        // A Google Drive file (Phase 8 N9): its name, linked to it in Drive.
+        const ref = driveFileOf(node.attrs);
+        if (ref) {
+          const item = textItem(ref.name, PLAIN, driveOpenUrl(ref.fileId));
+          out.push(block(id, 'paragraph', { rich_text: [item], color: 'default' }));
+        }
+        break;
+      }
       case 'linkedFile': {
         // A file on someone's computer (Phase 8 N9): its name and where it is, as text.
         const ref = linkedFileOf(node.attrs);

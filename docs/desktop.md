@@ -121,6 +121,35 @@ The page keeps a pointer: the file's name, size and date, and where it is.
   can't change where a linked folder is: only Settings can.
 - **Moved or missing:** the link says so; **Locate…** points it at the new place.
 
+## Google Drive
+
+`/google drive` links files from Google Drive into a page, picked with Google's own Picker.
+Each becomes a card with its name, kind, size and date, kept current while Drive is connected
+(renamed, changed, deleted); it opens in Drive. Workspace asks Google only for `drive.file`:
+it can see the files you pick and nothing else in your Drive. The sign-in stays on this
+computer (encrypted by the system keyring where there is one).
+
+It needs your own Google Cloud project, once:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project (or use
+   one) and note its **project number** (Dashboard → Project info).
+2. **APIs & Services → Library:** enable the **Google Drive API** and the **Google Picker
+   API**.
+3. **OAuth consent screen:** user type External (or Internal in a Google Workspace
+   organisation), the app's name and your email; under scopes add `.../auth/drive.file`. While
+   the app is "Testing", add yourself as a test user; publish it (no review is needed for
+   `drive.file`) so the sign-in doesn't lapse after 7 days.
+4. **Credentials → Create credentials → OAuth client ID**, type **Desktop app**: note the
+   client ID and client secret (for a desktop app it isn't kept secret).
+5. **Credentials → Create credentials → API key**, restricted to the Google Picker API.
+6. In Workspace: **Settings → Connections**, enter the four, **Save**, then **Connect Google
+   Drive…** and allow it in the browser.
+
+A build can bring the client instead (`WORKSPACE_GOOGLE_CLIENT_ID`,
+`WORKSPACE_GOOGLE_CLIENT_SECRET`, `WORKSPACE_GOOGLE_API_KEY`, `WORKSPACE_GOOGLE_APP_ID`).
+**Disconnect** in Settings signs out and tells Google; the cards keep what they last knew.
+On the web app and on computers not connected, a card shows that and links to Drive.
+
 ## Several workspaces
 
 Set `WORKSPACE_DATA_DIR` to keep a workspace somewhere else, for example one per project:

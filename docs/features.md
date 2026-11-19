@@ -40,6 +40,10 @@ planned is in [PHASE7.md](PHASE7.md).
   folders ("Projects"), so files in them open on every computer that links a folder under that
   name (one kept in sync with Dropbox, Syncthing or git). A moved file says so and can be
   located again; on the web, a link says it's on a computer.
+- **Google Drive files** (desktop): `/google drive` picks files with Google's Picker; each is a
+  card (name, kind, size, date) kept current while Drive is connected, opening in Drive. Only
+  the files picked are visible to the app (`drive.file`). Settings → Connections holds your
+  Google Cloud client and the sign-in.
 - **Media:** images (upload, paste or drop; resize; crop and rotate, the file kept as it is;
   captions), video, audio, PDFs viewed in the page, any file (opens in its default app), web
   bookmarks with previews, and embeds: any https website (in a sandboxed frame, with its site

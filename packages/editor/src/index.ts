@@ -16,6 +16,7 @@ export {
 } from './content';
 export { renderMermaid, svgWidth } from './nodes/mermaid';
 export { LINKED_FILE, linkedFileNode } from './nodes/linked-file';
+export { DRIVE_FILE, driveFileNode } from './nodes/drive-file';
 export type { JSONContent } from '@tiptap/core';
 export * from './comments';
 export {

@@ -242,6 +242,23 @@ describe('linked files', () => {
   });
 });
 
+describe('Google Drive files', () => {
+  it('come out as links to them in Drive', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el('driveFile', { fileId: '1AbC_def-GHIjkl23', name: 'BOM [v2]', mimeType: 'x' }),
+      el('driveFile', { fileId: 'bad id', name: 'x' }),
+    );
+    const content = readContent(doc);
+    expect(blocksMarkdown(content, ctx)).toBe(
+      '📎 [BOM \\[v2\\]](https://drive.google.com/open?id=1AbC_def-GHIjkl23)',
+    );
+    expect(blocksHtml(content, ctx).trimEnd()).toBe(
+      '<p class="drive-file">📎 <a href="https://drive.google.com/open?id=1AbC_def-GHIjkl23">BOM [v2]</a></p>',
+    );
+  });
+});
+
 describe('HTML export', () => {
   it('escapes text, keeps marks and colors, and embeds Mermaid diagrams', () => {
     const doc = setContent(

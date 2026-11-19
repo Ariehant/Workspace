@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { LinkedFileRef, LinkedFileStatus, SearchOptions } from '@workspace/core';
+import type {
+  DriveFileRef,
+  DriveFileStatus,
+  GoogleClientConfig,
+  GoogleState,
+  LinkedFileRef,
+  LinkedFileStatus,
+  SearchOptions,
+} from '@workspace/core';
 import {
   IPC,
   type ExportRequest,
@@ -78,6 +86,18 @@ const api = {
   },
   linkPreview: (url: string): Promise<LinkPreview | null> =>
     ipcRenderer.invoke(IPC.linkPreview, url),
+  google: {
+    state: (): Promise<GoogleState> => ipcRenderer.invoke(IPC.googleState),
+    configure: (config: GoogleClientConfig): Promise<Result> =>
+      ipcRenderer.invoke(IPC.googleConfigure, config),
+    connect: (): Promise<Result<{ email: string | null }>> => ipcRenderer.invoke(IPC.googleConnect),
+    disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.googleDisconnect),
+    onChange: (listener: () => void): Unsubscribe => on(IPC.googleChanged, listener),
+    pick: (): Promise<Result<DriveFileRef[]>> => ipcRenderer.invoke(IPC.drivePick),
+    status: (fileId: string): Promise<DriveFileStatus> =>
+      ipcRenderer.invoke(IPC.driveStatus, fileId),
+    open: (fileId: string): Promise<boolean> => ipcRenderer.invoke(IPC.driveOpen, fileId),
+  },
   linkedFiles: {
     pick: (one: boolean): Promise<LinkedFileRef[]> => ipcRenderer.invoke(IPC.linkedPick, one),
     status: (ref: LinkedFileRef): Promise<LinkedFileStatus> =>

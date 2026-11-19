@@ -1,4 +1,4 @@
-import { linkedFileLocation, linkedFileOf } from '@workspace/core';
+import { driveFileOf, driveOpenUrl, linkedFileLocation, linkedFileOf } from '@workspace/core';
 import { flag, inlineText, type ContentNode, type Inline } from './content';
 import { formatDateMention, type RenderContext } from './context';
 
@@ -187,6 +187,11 @@ export function blockMarkdown(node: ContentNode, ctx: RenderContext): string {
     case 'bookmark':
     case 'embed':
       return mediaMarkdown(node, ctx);
+    case 'driveFile': {
+      // A Google Drive file (Phase 8 N9): a link to it in Drive.
+      const ref = driveFileOf(attrs);
+      return ref ? `📎 [${escapeText(ref.name)}](${encodeHref(driveOpenUrl(ref.fileId))})` : '';
+    }
     case 'linkedFile': {
       // A file on someone's computer (Phase 8 N9): its name and where it is, not a link.
       const ref = linkedFileOf(attrs);

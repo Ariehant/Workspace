@@ -850,3 +850,41 @@ service); the Drive connector follows.
   after a restart; and the page failing to move the folder through the settings IPC (that
   check fails with the guard removed). axe on the Linked folders section and the cards, in
   both themes.
+
+**N9b, Google Drive (built):** the owner chose Google's Picker (`drive.file` only) and the
+sign-in on the desktop.
+
+- **Signing in** is an installed app's: the system browser, authorization code with PKCE, the
+  answer to a server on 127.0.0.1 for that moment. The refresh token is kept by the main
+  process (encrypted by the OS keyring where there is one), out of the settings IPC; access
+  tokens stay in memory. A revoked token reads as not connected.
+- **The Picker** is Google's script, so it runs in a window of its own (no preload, its own
+  session), on a page served from 127.0.0.1 for one pick; the page posts the ids back, and
+  the app asks Drive for each (Drive's word, not the Picker's).
+- **A `driveFile` block:** the file's id and what Drive last said (name, kind, size, date). It
+  asks Drive when shown, when the window comes back and when the connection changes, and
+  keeps the page current (renamed, changed). Deleted, no access, offline and not connected
+  each say so. It opens in Drive by its id (`drive.google.com/open?id=…`), never by a URL from
+  the page. Icons are the app's own (no images from elsewhere).
+- **Settings → Connections:** the owner's Google Cloud client (OAuth client ID and secret, the
+  Picker's API key, the project number), or one a build brings by environment; Connect and
+  Disconnect (Google is told). The steps are in `desktop.md`.
+- **Exports and the API** give a Drive file as a link to it in Drive.
+
+**Not done:** previews (Docs and Sheets need the browser's Google session; thumbnails could
+come through the main process), Drive files in a database's files property, and other
+services (Dropbox, OneDrive) the same way. The real Google wasn't reachable from here: the
+tests run against a stand-in that checks the same things (PKCE, the client, refresh tokens,
+revocation, `files.get`, the Picker's settings), and the first sign-in against Google is the
+owner's to try.
+
+**Tests (N9b):**
+
+- **Unit:** Drive pointers and Drive's file descriptions, kinds, the open URL, the sign-in URL
+  (scopes, PKCE, offline), the email from an ID token, the slash menu offering it only where
+  Drive connects, and Markdown, HTML and API output.
+- **Desktop E2E** (`drive.spec.ts`, against `google.ts`): the client set in Settings; connecting
+  through the "browser"; the tokens refused to the page; two files from the Picker (which got
+  the token, key and app id) with Drive's names and details; opening one; renamed and trashed
+  in Drive; after a restart (by the refresh token); disconnecting (revoked, the cards keeping
+  what they knew); and picking while disconnected sending you to connect. axe on Connections.

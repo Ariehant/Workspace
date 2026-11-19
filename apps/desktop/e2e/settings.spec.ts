@@ -21,6 +21,7 @@ test('settings: one window, its sections by keyboard, and the old menu items ope
     'Notifications',
     'Emoji',
     'Linked folders',
+    'Connections',
     'Sync',
     'Keyboard shortcuts',
     'About',

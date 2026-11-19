@@ -20,6 +20,7 @@ import { useNavigation } from './navigation';
 import { observePeople, readPeople } from './people';
 import { editButton } from './buttons/button-dialog';
 import { runButton } from './buttons/run-button';
+import { setDrivePickProblem } from './connections';
 import { openSettings } from './settings/open';
 
 /** What the editor of page (or row) `pageId` needs from the app. */
@@ -101,6 +102,24 @@ export function useEditorServices(
       fileUrl: (id) => platform.fileUrl(id),
       openFile: (id) => platform.openFile(id),
       linkPreview: (url) => platform.linkPreview(url),
+      drive: platform.google && {
+        pick: async () => {
+          const result = await platform.google!.pick();
+          if ('ok' in result) return result.ok;
+          // Not connected (or no Picker key): Settings says what's missing.
+          setDrivePickProblem(
+            result.error === 'notConnected'
+              ? 'Connect Google Drive to link its files.'
+              : result.error,
+          );
+          openSettings('connections');
+          return [];
+        },
+        status: (fileId) => platform.google!.status(fileId),
+        open: (fileId) => platform.google!.open(fileId),
+        setUp: () => openSettings('connections'),
+        subscribe: (listener) => platform.google!.onChange(listener),
+      },
       linkedFiles: platform.linkedFiles && {
         pick: () => platform.linkedFiles!.pick(false),
         locate: async () => (await platform.linkedFiles!.pick(true))[0] ?? null,

@@ -1,4 +1,10 @@
-import type { ButtonConfig, LinkedFileRef, LinkedFileStatus } from '@workspace/core';
+import type {
+  ButtonConfig,
+  DriveFileRef,
+  DriveFileStatus,
+  LinkedFileRef,
+  LinkedFileStatus,
+} from '@workspace/core';
 import type { LucideIcon } from 'lucide-react';
 import type * as Y from 'yjs';
 import { Extension } from '@tiptap/core';
@@ -112,6 +118,20 @@ export interface EditorServices {
     previewUrl(ref: LinkedFileRef): string;
     /** Open Settings at Linked folders. */
     setUpFolders(): void;
+  };
+  /**
+   * Google Drive (Phase 8 N9): files picked with Google's Picker, where the host connects to
+   * Drive (the desktop). Elsewhere a Drive block shows what it last knew and links to Drive.
+   */
+  drive?: {
+    /** Pick files (none if cancelled; not connected opens Settings). */
+    pick(): Promise<DriveFileRef[]>;
+    status(fileId: string): Promise<DriveFileStatus>;
+    open(fileId: string): Promise<boolean>;
+    /** Open Settings at Connections. */
+    setUp(): void;
+    /** The connection changed (connected, disconnected). */
+    subscribe(listener: () => void): () => void;
   };
   /**
    * On a database row's page, for someone who may change the database's properties: the

@@ -1,5 +1,9 @@
 import type {
   DocTransport,
+  DriveFileRef,
+  DriveFileStatus,
+  GoogleClientConfig,
+  GoogleState,
   LinkedFileRef,
   LinkedFileStatus,
   NotificationData,
@@ -73,6 +77,22 @@ export interface Platform {
   openFile(id: string): void;
   /** Title, description and image for a web bookmark. */
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /**
+   * Google Drive (Phase 8 N9): this computer's connection to Google, and files picked with
+   * Google's Picker. Hosts that sign in to Google themselves (the desktop).
+   */
+  google?: {
+    state(): Promise<GoogleState>;
+    configure(config: GoogleClientConfig): Promise<{ ok: true } | { error: string }>;
+    /** Sign in through the browser. */
+    connect(): Promise<{ ok: { email: string | null } } | { error: string }>;
+    disconnect(): Promise<void>;
+    onChange(listener: () => void): () => void;
+    /** `error` 'notConnected' when no account is connected. */
+    pick(): Promise<{ ok: DriveFileRef[] } | { error: string }>;
+    status(fileId: string): Promise<DriveFileStatus>;
+    open(fileId: string): Promise<boolean>;
+  };
   /**
    * Linked files (Phase 8 N9): pointers to files on this computer, and where the
    * workspace's linked folders are on it. Hosts with files of their own (the desktop).

@@ -158,6 +158,12 @@ for (const theme of THEMES) {
       await expect(window.getByTestId('linked-folders')).toBeVisible();
     });
 
+    await checkOpen(window, s('connections settings'), async () => {
+      await window.keyboard.press('Control+,');
+      await window.getByRole('tab', { name: 'Connections' }).click();
+      await expect(window.getByLabel('OAuth client ID')).toBeVisible();
+    });
+
     await checkOpen(window, s('about'), async () => {
       await window.getByRole('button', { name: /workspace menu/i }).click();
       await window.getByRole('menuitem', { name: 'About Workspace' }).click();
