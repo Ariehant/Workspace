@@ -97,6 +97,9 @@ interface DomObserver {
  * selection themselves, and moments with unread typing (read together with it), pass unchanged.
  */
 function withUnreadSelection(view: EditorView, tr: Transaction): Transaction {
+  // Only a key's move: other changes of the page's selection (the browser's caret as the editor
+  // takes focus back from a field, before ProseMirror puts its own back) aren't the person's.
+  if (!keyMoving.has(view)) return tr;
   if (tr.selectionSet || view.isDestroyed || view.composing || !view.hasFocus()) return tr;
   const observer = (view as unknown as { domObserver: DomObserver }).domObserver;
   const dom = (view.root as Document).getSelection?.() ?? document.getSelection();
@@ -111,11 +114,16 @@ function withUnreadSelection(view: EditorView, tr: Transaction): Transaction {
   return tr.setSelection(read.selection.map(tr.doc, tr.mapping));
 }
 
+/** Views where a key was pressed whose move of the selection ProseMirror hasn't read yet. */
+const keyMoving = new WeakSet<EditorView>();
+
 const KeysUseCurrentSelection = Extension.create({
   name: 'keysUseCurrentSelection',
   // Before every keymap.
   priority: 10_000,
   dispatchTransaction({ transaction, next }) {
+    // Before the editor is mounted there's no page to read (and `view` throws).
+    if (!this.editor.isInitialized || this.editor.isDestroyed) return next(transaction);
     next(withUnreadSelection(this.editor.view, transaction));
   },
   addProseMirrorPlugins() {
@@ -129,8 +137,17 @@ const KeysUseCurrentSelection = Extension.create({
             (
               view as unknown as { domObserver: { onSelectionChange(): void } }
             ).domObserver.onSelectionChange();
+            // The browser may now move the selection itself, read on the next selectionchange.
+            keyMoving.add(view);
             return false;
           },
+        },
+        view(view) {
+          // Registered after ProseMirror's own listener: by now it has read the move.
+          const read = () => keyMoving.delete(view);
+          const doc = view.dom.ownerDocument;
+          doc.addEventListener('selectionchange', read);
+          return { destroy: () => doc.removeEventListener('selectionchange', read) };
         },
       }),
     ];
