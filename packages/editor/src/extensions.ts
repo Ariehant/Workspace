@@ -4,7 +4,8 @@ import NodeRange, { isNodeRangeSelection } from '@tiptap/extension-node-range';
 import UniqueID from '@tiptap/extension-unique-id';
 import { Placeholder } from '@tiptap/extensions';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
-import { Plugin, TextSelection } from '@tiptap/pm/state';
+import { Plugin, TextSelection, type Transaction } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import { search } from 'prosemirror-search';
 import StarterKit from '@tiptap/starter-kit';
 import { PAGE_CONTENT_FIELD } from '@workspace/core';
@@ -77,11 +78,46 @@ export const BLOCK_NODE_TYPES = [
  * event that comes later. A key pressed before that event (typing fast, or on a busy
  * machine, where input runs first) would act on the old cursor: Enter splitting the line
  * the caret just left. So the selection is read from the page before any key is handled.
+ *
+ * The same goes for a change that arrives in that moment from elsewhere (a decoration redrawn,
+ * a timer's update): ProseMirror would write its old selection back into the page, and the
+ * move (Shift+Home's selection, say) would be lost. So such a change reads it first too.
  */
+/** What these helpers use of ProseMirror's (internal) DOM observer. */
+interface DomObserver {
+  currentSelection: { eq(range: object): boolean };
+  pendingRecords(): readonly unknown[];
+  forceFlush(): void;
+  onSelectionChange(): void;
+}
+
+/**
+ * `tr`, made without a selection the page holds that ProseMirror hasn't read yet: the page's is
+ * read first, and the transaction keeps it (mapped through its changes). Transactions that set a
+ * selection themselves, and moments with unread typing (read together with it), pass unchanged.
+ */
+function withUnreadSelection(view: EditorView, tr: Transaction): Transaction {
+  if (tr.selectionSet || view.isDestroyed || view.composing || !view.hasFocus()) return tr;
+  const observer = (view as unknown as { domObserver: DomObserver }).domObserver;
+  const dom = (view.root as Document).getSelection?.() ?? document.getSelection();
+  if (!dom?.focusNode || observer.currentSelection.eq(dom)) return tr;
+  if (observer.pendingRecords().length > 0) return tr;
+  const before = view.state;
+  observer.forceFlush();
+  observer.onSelectionChange();
+  const read = view.state;
+  // Read only a selection (the document is the one `tr` starts from), and something changed.
+  if (read.doc !== tr.before || read.selection.eq(before.selection)) return tr;
+  return tr.setSelection(read.selection.map(tr.doc, tr.mapping));
+}
+
 const KeysUseCurrentSelection = Extension.create({
   name: 'keysUseCurrentSelection',
   // Before every keymap.
   priority: 10_000,
+  dispatchTransaction({ transaction, next }) {
+    next(withUnreadSelection(this.editor.view, transaction));
+  },
   addProseMirrorPlugins() {
     return [
       new Plugin({

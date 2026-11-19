@@ -127,6 +127,48 @@ test('equations: block via "$$ ", inline via $…$, and editing', async ({ launc
   await expect(inline).toHaveAttribute('data-latex', '2\\pi r');
 });
 
+test('a selection made with the keyboard survives a transaction from elsewhere', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newPage(window, 'Selection');
+  await window.keyboard.type('Keep this selected');
+  // Something else (a collaborator's cursor moving, a synced change) dispatches a transaction
+  // after a key moved the selection but before the editor read the move (CI's runner ordered
+  // them so, and the toolbar never showed). Here it's made to happen: first in line for the
+  // selectionchange the key causes, ahead of the editor's own listener.
+  await editor(window).evaluate((el) => {
+    type Tr = { insert(pos: number, node: unknown): Tr };
+    type View = {
+      dispatch(tr: Tr): void;
+      state: {
+        tr: Tr;
+        schema: {
+          nodes: { paragraph: { create(a: null, c: unknown): unknown } };
+          text(t: string): unknown;
+        };
+      };
+    };
+    const view = (el as unknown as { editor: { view: View } }).editor.view;
+    document.addEventListener(
+      'selectionchange',
+      () => {
+        // Someone else adds a paragraph at the top of the page.
+        const { schema } = view.state;
+        view.dispatch(
+          view.state.tr.insert(0, schema.nodes.paragraph.create(null, schema.text('Elsewhere'))),
+        );
+      },
+      { capture: true, once: true },
+    );
+  });
+  await window.keyboard.press('Shift+Home');
+  await expect(window.getByTestId('selection-toolbar')).toBeVisible();
+  expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
+  // And the other change went in.
+  await expect(blocks(window).first()).toHaveText('Elsewhere');
+});
+
 test('table: insert, add rows and columns, header row, row and column colours', async ({
   launch,
 }) => {

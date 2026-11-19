@@ -616,6 +616,12 @@ app's everyday surface: #8, #30, #26, #42 and #6.
 
 - **Back from "This page doesn't exist"** returns to the page it was opened over (it stayed put
   when there was no earlier history).
+- **A keyboard selection survives a change from elsewhere.** ProseMirror reads a selection the
+  browser moved (Shift+Home, say) from a later `selectionchange`; a change that changed the page
+  or its decorations in between (on CI, a timer's) made it write its old selection back, and the
+  selection was lost (the toggles test's toolbar never showed). Such a change now reads the page's
+  selection first and keeps it. A test makes it happen on purpose; it failed before. Remote edits
+  through the sync plugin restore the selection their own way, and aren't covered by this.
 - **CI's first runs on `main`** found three things, each reproduced before it was fixed:
   - The `.docx` size-limit test took 9 s on GitHub's runner (it compressed 200 MB). It now
     uses a small zip that declares a big part, which is what the guard reads.
