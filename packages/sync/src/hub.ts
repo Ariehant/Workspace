@@ -199,7 +199,12 @@ export class SyncHub {
    * new rows to the workspace's connections.
    */
   notify(workspaceId: string): void {
-    for (const c of this.workspaces.get(workspaceId)?.connections ?? []) c.poke();
+    const workspace = this.workspaces.get(workspaceId);
+    if (!workspace) return;
+    // The recent rows no longer reach the end of the log: a connection reading them would
+    // stop short of the new rows. Read the log until appends here fill them again.
+    workspace.recent = [];
+    for (const c of workspace.connections) c.poke();
   }
 
   /**
