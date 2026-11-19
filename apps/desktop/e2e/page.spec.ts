@@ -315,3 +315,52 @@ test('present: a slide per divider, the keys, and back to the page', async ({ la
   await expect(editor(window).locator('hr')).toHaveCount(2);
   await expect(editor(window)).toContainText('Holds 2 kg.');
 });
+
+test('verified pages: verify for 30 days, expired, kept after a restart, remove', async ({
+  launch,
+}) => {
+  const launched = await launch();
+  let { window } = launched;
+  const badge = () => window.getByTestId('page-verified');
+  const verify = async (choice: string) => {
+    await (await openPageMenu(window)).getByRole('menuitem', { name: /^Verif/ }).click();
+    // (Keys: the pointer crossing to the submenu would close it.)
+    await window.getByRole('menuitem', { name: choice }).press('Enter');
+    await expect(window.getByTestId('page-menu')).toBeHidden();
+  };
+
+  await newPage(window, 'Handbook');
+  await expect(badge()).toHaveCount(0);
+  await verify('For 30 days');
+  await expect(badge()).toHaveText(/^Verified by .+ · until \w{3} \d{1,2}/);
+  await expect(badge()).toHaveAttribute('data-state', 'valid');
+
+  // A page verified 40 days ago, for 30 days, has expired.
+  await newPage(window, 'Old runbook');
+  // (The renderer's clock, moved back while verifying.)
+  await window.evaluate(() => {
+    const w = window as unknown as { realNow: () => number };
+    w.realNow = Date.now;
+    Date.now = () => w.realNow() - 40 * 86_400_000;
+  });
+  await verify('For 30 days');
+  await expect(badge()).toHaveAttribute('data-state', 'valid');
+  await window.evaluate(() => {
+    Date.now = (window as unknown as { realNow: () => number }).realNow;
+  });
+
+  await waitForIndexed(window, 'Old runbook');
+  await quit(launched.app);
+  ({ window } = await launch());
+  await expect(window.getByLabel('Page title')).toHaveValue('Old runbook');
+  await expect(badge()).toHaveText(/^Verification expired \w{3} \d{1,2}/);
+  await expect(badge()).toHaveAttribute('data-state', 'expired');
+
+  await window.getByRole('treeitem').filter({ hasText: 'Handbook' }).click();
+  await expect(badge()).toHaveText(/^Verified by .+ · until /);
+  // Verified again, indefinitely, and then not at all.
+  await verify('Indefinitely');
+  await expect(badge()).toHaveText(/^Verified by [^·]+$/);
+  await verify('Remove verification');
+  await expect(badge()).toHaveCount(0);
+});

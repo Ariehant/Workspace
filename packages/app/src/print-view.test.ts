@@ -17,6 +17,7 @@ const page = (id: string, parentId: string | null, sortKey: string): PageMeta =>
   smallText: false,
   font: 'default',
   locked: false,
+  verified: null,
 });
 
 // Handbook ─ Setup ─ Wiring; Handbook ─ Safety; Notes. ("Lost" has a parent that isn't printed.)

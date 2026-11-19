@@ -112,6 +112,8 @@ function rowPageModel(
     smallText: row.smallText,
     font: row.font,
     locked: row.locked,
+    // Rows aren't verified (a wiki's pages are).
+    verified: null,
   };
   return {
     id: row.id,
