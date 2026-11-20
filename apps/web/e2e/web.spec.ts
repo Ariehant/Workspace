@@ -276,7 +276,13 @@ test('offline: keeps editing, reopens without the server, and sends the edits wh
 
   // The server is back: the kept edits go to it, and a fresh browser sees them.
   await server.resume();
-  await page.getByTestId('offline-banner').getByRole('button', { name: 'Retry' }).click();
+  // Retry hurries it, if the banner still offers it: the client also reconnects on its own
+  // (its backoff), and then the banner, Retry with it, is already gone.
+  await page
+    .getByTestId('offline-banner')
+    .getByRole('button', { name: 'Retry' })
+    .click({ timeout: 2_000 })
+    .catch(() => {});
   await expect(page.getByTestId('offline-banner')).toHaveCount(0, { timeout: 20_000 });
   const fresh = await browser.newContext();
   const other = await fresh.newPage();
