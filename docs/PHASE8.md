@@ -1149,6 +1149,25 @@ test happens to scroll, and from a gate that a single dropped frame fails. The s
 worth fixing (a table of 50,000 rows freezing for a quarter second on its first scroll after a
 pause); it's on the list, not done here.
 
+**The stall, fixed.** It failed CI again on 3c2d4b1 (183 ms), so it was taken up. A timeline
+trace of the frame, recorded around the first scroll after the 8 s pause (281 ms), corrects the
+reading above: it isn't layout (style and layout took under 5 ms) but garbage collection. During
+the pause V8 starts marking the heap (large, with 50,000 rows); TanStack Virtual's scroll
+listener then re-rendered the whole table synchronously, every row and cell in view, and while
+marking is on, each bit of memory that allocates makes V8 mark some more: 30 steps of about 5 ms
+in that one listener (174 ms), then 52 ms to finish the collection, around 40 ms of the app's
+own script.
+
+Scrolling now draws only what comes into view. The virtualizer moved out of the table into its
+own small component, so a scroll re-renders only that, and a line still in view keeps the
+element it was drawn with (`useReusedLines`: kept while the component's props are the same
+object, which they are when only its own scroll state changed; anything else draws afresh). The
+board's columns and the list, gallery and feed views (`Lines`) use it too. The first scroll after
+the pause went from 266 ms to 16.8 ms (one frame) in each run, with no garbage collection in it;
+three perf runs gave the Table 16.8 ms each. Frames that still drop one or two now and then
+(the board's columns mounting and measuring cards as they come in) are the single dropped frames
+main shows as well, which the gate, at one frame on the base branch, still fails.
+
 ## Dashboard view (#19)
 
 **Built.** "Dashboard" is a view type of its own (Add a view, or Layout in the view's menu): one

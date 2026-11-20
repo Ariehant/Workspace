@@ -102,8 +102,10 @@ import {
   type DragEvent,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { useApp } from '../context';
+import { useReusedLines } from './virtual';
 import {
   detachRelation,
   duplicateRowWithContent,
@@ -609,30 +611,16 @@ export function TableView({
     observer.observe(root.firstElementChild ?? root);
     return () => observer.disconnect();
   }, [virtual]);
-  // The table isn't memoized by the compiler anyway; the virtualizer re-renders it.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const virtualizer = useVirtualizer({
-    count: virtual ? items.length : 0,
-    getScrollElement: () => scrollRoot,
-    estimateSize: (i) => (items[i]?.kind === 'group' ? GROUP_HEIGHT : ROW_HEIGHT),
-    overscan: 12,
-    scrollMargin,
-    getItemKey: (i) => items[i]?.key ?? i,
-  });
-  const visibleItems = virtual
-    ? virtualizer.getVirtualItems().map((v) => ({ item: items[v.index]!, virtual: v }))
-    : items.map((item) => ({ item, virtual: null }));
 
-  // Keep the selected (or edited, e.g. a new row's title) cell in view.
+  // Keep the selected (or edited, e.g. a new row's title) cell in view (its line is brought
+  // into the virtual window first, by the body).
   const focusCell = editing ?? selected;
   useEffect(() => {
     if (!focusCell) return;
-    const index = items.findIndex((i) => i.key === focusCell.key);
-    if (virtual && index >= 0) virtualizer.scrollToIndex(index);
     gridRef.current
       ?.querySelector(`[data-cell="${CSS.escape(`${focusCell.key}:${focusCell.propertyId}`)}"]`)
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [focusCell, items, virtual, virtualizer, scrollRoot, scrollMargin]);
+  }, [focusCell, items, virtual, scrollRoot, scrollMargin]);
 
   // --- Row drag and drop -----------------------------------------------------------------
 
@@ -1012,30 +1000,23 @@ export function TableView({
           </div>
 
           {/* Body */}
-          <div
-            ref={bodyRef}
-            role="rowgroup"
-            className="relative"
-            style={virtual ? { height: virtualizer.getTotalSize() } : undefined}
-          >
-            {visibleItems.map(({ item, virtual: v }) => (
-              <div
-                key={item.key}
-                data-index={v?.index}
-                ref={
-                  v && (view.wrap || item.kind === 'group') ? virtualizer.measureElement : undefined
-                }
-                className={v ? 'absolute top-0 left-0 w-full' : undefined}
-                style={
-                  v
-                    ? { transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }
-                    : undefined
-                }
-              >
-                {renderItem(item)}
-              </div>
-            ))}
-          </div>
+          {virtual ? (
+            <VirtualBody
+              bodyRef={bodyRef}
+              items={items}
+              scrollRoot={scrollRoot}
+              scrollMargin={scrollMargin}
+              measure={view.wrap}
+              focusKey={focusCell?.key ?? null}
+              renderItem={renderItem}
+            />
+          ) : (
+            <div ref={bodyRef} role="rowgroup" className="relative">
+              {items.map((item) => (
+                <div key={item.key}>{renderItem(item)}</div>
+              ))}
+            </div>
+          )}
         </div>
         {setup?.kind === 'relation' && (
           <RelationSetup
@@ -1074,6 +1055,66 @@ export function TableView({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * The table's lines in a virtual window over the page's scroll. Scrolling re-renders only
+ * this, and a line that stays in the window keeps its element (`useReusedLines`); the table
+ * rendering again draws them afresh (a new `renderItem`).
+ */
+function VirtualBody(body: {
+  bodyRef: RefObject<HTMLDivElement | null>;
+  items: readonly Item[];
+  scrollRoot: HTMLElement | null;
+  scrollMargin: number;
+  /** Measure every line (wrapped text), not only group headers. */
+  measure: boolean;
+  /** The line of the selected or edited cell, brought into the window. */
+  focusKey: string | null;
+  renderItem(item: Item): ReactNode;
+}) {
+  const { bodyRef, items, scrollRoot, scrollMargin, measure, focusKey, renderItem } = body;
+  const reuse = useReusedLines<Item>(body);
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRoot,
+    estimateSize: (i) => (items[i]?.kind === 'group' ? GROUP_HEIGHT : ROW_HEIGHT),
+    overscan: 12,
+    scrollMargin,
+    getItemKey: (i) => items[i]?.key ?? i,
+  });
+  useEffect(() => {
+    if (focusKey === null) return;
+    const index = items.findIndex((i) => i.key === focusKey);
+    if (index >= 0) virtualizer.scrollToIndex(index);
+  }, [focusKey, items, virtualizer, scrollRoot, scrollMargin]);
+
+  const shown = virtualizer.getVirtualItems().map((v) => {
+    const item = items[v.index]!;
+    return { item, v, element: reuse(item, () => renderItem(item)) };
+  });
+
+  return (
+    <div
+      ref={bodyRef}
+      role="rowgroup"
+      className="relative"
+      style={{ height: virtualizer.getTotalSize() }}
+    >
+      {shown.map(({ item, v, element }) => (
+        <div
+          key={item.key}
+          data-index={v.index}
+          ref={measure || item.kind === 'group' ? virtualizer.measureElement : undefined}
+          className="absolute top-0 left-0 w-full"
+          style={{ transform: `translateY(${v.start - scrollMargin}px)` }}
+        >
+          {element}
+        </div>
+      ))}
+    </div>
   );
 }
 

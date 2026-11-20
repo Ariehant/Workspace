@@ -21,7 +21,7 @@ import {
   toggleGroupKey,
   type LayoutViewProps,
 } from './cards';
-import { usePageVirtualizer } from './virtual';
+import { usePageVirtualizer, useReusedLines } from './virtual';
 
 /** A line of a list or gallery: a group header, content, or "+ New" for a group. */
 export type Line<T> =
@@ -98,13 +98,7 @@ export function buildLines<T>(
 }
 
 /** Renders lines, virtualized for long views. */
-export function Lines<T>({
-  lines,
-  estimate,
-  render,
-  className,
-  virtualizeFrom = 100,
-}: {
+export function Lines<T>(props: {
   lines: Line<T>[];
   estimate(line: Line<T>): number;
   render(line: Line<T>): ReactNode;
@@ -112,6 +106,8 @@ export function Lines<T>({
   /** How many lines there must be before only those in view are rendered. */
   virtualizeFrom?: number;
 }) {
+  const { lines, estimate, render, className, virtualizeFrom = 100 } = props;
+  const reuse = useReusedLines<Line<T>>(props);
   const virtual = lines.length >= virtualizeFrom;
   const { bodyRef, virtualizer } = usePageVirtualizer({
     count: lines.length,
@@ -142,7 +138,7 @@ export function Lines<T>({
           className="absolute top-0 left-0 w-full"
           style={{ transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
         >
-          {render(lines[v.index]!)}
+          {reuse(lines[v.index]!, () => render(lines[v.index]!))}
         </div>
       ))}
     </div>
