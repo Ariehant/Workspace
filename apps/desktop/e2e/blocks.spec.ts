@@ -78,8 +78,8 @@ async function recordSelection(window: Page): Promise<void> {
         true,
       );
     }
-    window.addEventListener('blur', () => at('window blur'));
-    window.addEventListener('focus', () => at('window focus'));
+    globalThis.addEventListener('blur', () => at('window blur'));
+    globalThis.addEventListener('focus', () => at('window focus'));
     (window as unknown as { __selectionLog: string[] }).__selectionLog = log;
   });
 }
