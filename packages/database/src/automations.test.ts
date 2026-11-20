@@ -5,6 +5,7 @@ import {
   addOption,
   addProperty,
   addRow,
+  createRelation,
   deleteAutomation,
   initDatabase,
   isValidSchedule,
@@ -12,9 +13,11 @@ import {
   planActions,
   readAutomations,
   readDatabase,
+  relatedDatabasesOf,
   scheduleKey,
   setAutomation,
   setCell,
+  setRelation,
   trashRow,
   triggeredBy,
   type Automation,
@@ -245,5 +248,146 @@ describe('automations', () => {
     expect(planActions(a, null, [], { databaseId: 'db', actorId: null, now: 0 })).toEqual([
       { kind: 'add', title: '', values: {}, templateId: 'tpl' },
     ]);
+  });
+
+  it('a button pressed starts "button pressed" (each press; other edits don\'t)', () => {
+    const { doc, points } = setup();
+    const ship = addProperty(doc, { name: 'Ship it', type: 'button' });
+    addRow(doc, { id: 'r1', actor: 'u-ada', title: 'Gear' });
+    const a = automation({ trigger: { kind: 'buttonPressed', propertyId: ship } });
+    const pressed = diff(doc, () => setCell(doc, 'r1', ship, { at: 10, by: 'u-ada' }, 'u-ada'));
+    expect(triggeredBy([a], pressed.before, pressed.after, pressed.properties, ctx)).toEqual([
+      { automation: a, rowId: 'r1' },
+    ]);
+    const again = diff(doc, () => setCell(doc, 'r1', ship, { at: 11, by: 'u-ada' }, 'u-ada'));
+    expect(triggeredBy([a], again.before, again.after, again.properties, ctx)).toHaveLength(1);
+    const edited = diff(doc, () => setCell(doc, 'r1', points, 3, 'u-ada'));
+    expect(triggeredBy([a], edited.before, edited.after, edited.properties, ctx)).toEqual([]);
+    // A page added with a press already in it isn't a press.
+    const added = diff(doc, () =>
+      addRow(doc, { actor: 'u-ada', title: 'Bolt', values: { [ship]: { at: 12, by: 'u-ada' } } }),
+    );
+    expect(triggeredBy([a], added.before, added.after, added.properties, ctx)).toEqual([]);
+  });
+
+  it("formula values: the page's properties, written as the property's type", () => {
+    const { doc, status, completed, points } = setup();
+    const note = addProperty(doc, { name: 'Note', type: 'text' });
+    const done = addProperty(doc, { name: 'Big', type: 'checkbox' });
+    addRow(doc, { id: 'r1', actor: 'u-ada', title: 'Gear', values: { [points]: 4 } });
+    const snapshot = readDatabase(doc);
+    const row = snapshot.rows.find((r) => r.id === 'r1')!;
+    const a = automation({
+      actions: [
+        {
+          kind: 'setProperties',
+          values: {
+            [points]: { kind: 'formula', expression: 'prop("Points") * 2' },
+            [note]: { kind: 'formula', expression: 'prop("Name") + " ×" + prop("Points")' },
+            [done]: { kind: 'formula', expression: 'prop("Points") > 3' },
+            [status]: { kind: 'formula', expression: 'if(prop("Points") > 3, "Done", "To do")' },
+            [completed]: { kind: 'formula', expression: 'dateAdd(now(), 1, "days")' },
+            [TITLE_PROPERTY_ID]: { kind: 'formula', expression: 'upper(prop("Name"))' },
+          },
+        },
+      ],
+    });
+    const now = Date.parse('2026-11-20T12:00:00Z');
+    const [effect] = planActions(
+      a,
+      row,
+      snapshot.properties,
+      { databaseId: 'db', actorId: 'u-ada', now },
+      { snapshot, ctx },
+    );
+    expect(effect).toEqual({
+      kind: 'edit',
+      rowId: 'r1',
+      title: 'GEAR',
+      values: {
+        [points]: 8,
+        [note]: 'Gear ×4',
+        [done]: true,
+        [status]: 'done',
+        [completed]: { start: expect.stringMatching(/^2026-11-2[01]/) as unknown },
+      },
+    });
+    // A broken formula, or an option the property doesn't have, writes nothing there.
+    const bad = automation({
+      actions: [
+        {
+          kind: 'setProperties',
+          values: {
+            [points]: { kind: 'formula', expression: 'prop("Nope") +' },
+            [status]: { kind: 'formula', expression: '"Blocked"' },
+          },
+        },
+      ],
+    });
+    expect(
+      planActions(
+        bad,
+        row,
+        snapshot.properties,
+        { databaseId: 'db', actorId: null, now },
+        { snapshot, ctx },
+      ),
+    ).toEqual([{ kind: 'edit', rowId: 'r1', values: { [points]: null, [status]: null } }]);
+  });
+
+  it('edits the pages linked in a relation, in the related database', () => {
+    const tasks = new Y.Doc();
+    initDatabase(tasks, { databaseId: 'tasks' });
+    const projects = new Y.Doc();
+    initDatabase(projects, { databaseId: 'projects' });
+    const docs = new Map([
+      ['tasks', tasks],
+      ['projects', projects],
+    ]);
+    const resolve = (id: string) => docs.get(id);
+    const state = addProperty(projects, { name: 'State', type: 'select' });
+    addOption(projects, state, { id: 'active', name: 'Active', color: 'blue' });
+    const touched = addProperty(projects, { name: 'Last task', type: 'text' });
+    const p1 = addRow(projects, { actor: 'u-ada', title: 'Arm' });
+    const p2 = addRow(projects, { actor: 'u-ada', title: 'Base' });
+    const { propertyId: project } = createRelation(resolve, {
+      databaseId: 'tasks',
+      name: 'Project',
+      targetId: 'projects',
+    });
+    const t1 = addRow(tasks, { actor: 'u-ada', title: 'Wire the servo' });
+    setRelation(resolve, 'tasks', t1, project, [p1, p2], 'u-ada');
+    const snapshot = readDatabase(tasks);
+    const row = snapshot.rows.find((r) => r.id === t1)!;
+    const a = automation({
+      actions: [
+        {
+          kind: 'editRelated',
+          relationId: project,
+          values: {
+            [state]: { kind: 'fixed', value: 'active' },
+            [touched]: { kind: 'copy', propertyId: TITLE_PROPERTY_ID },
+          },
+        },
+      ],
+    });
+    const run = { databaseId: 'tasks', actorId: 'u-ada', now: 0 };
+    const propertiesOf = (id: string) =>
+      docs.has(id) ? readDatabase(docs.get(id)!).properties : null;
+    expect(planActions(a, row, snapshot.properties, run, { snapshot, ctx, propertiesOf })).toEqual([
+      {
+        kind: 'editRelated',
+        databaseId: 'projects',
+        rowIds: [p1, p2],
+        values: { [state]: 'active', [touched]: 'Wire the servo' },
+      },
+    ]);
+    expect(relatedDatabasesOf(a, snapshot.properties)).toEqual(['projects']);
+    // The related database not there (or nothing linked): nothing to do.
+    expect(planActions(a, row, snapshot.properties, run, { snapshot, ctx })).toEqual([]);
+    const lone = readDatabase(tasks).rows.find((r) => r.id === t1)!;
+    expect(
+      planActions(a, { ...lone, values: {} }, snapshot.properties, run, { propertiesOf }),
+    ).toEqual([]);
   });
 });

@@ -46,22 +46,22 @@ milestones below; the others wait for a decision, by number.
 
 ### B. Databases
 
-| #   | Notion feature                                                                                                                                                              | What it's for (how you use it)                                                                                                                                   | Effort | Suggest      |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ |
-| 11  | **Row page layouts** ("Customize layout": pinned properties under the title, property sections, a tabbed layout; relations shown **as a page section**)                     | Make every row page of a database look the same and tidy: the 3 important properties at the top, the rest folded, related tasks shown as a list inside the page. | M–L    | ✅ Done (N3) |
-| 12  | **Number shown as a bar or ring** (progress), checkbox / status **"show as"** options                                                                                       | A "% done" column drawn as a progress bar; ratings as stars-like bars.                                                                                           | S      | ✅ Done (N3) |
-| 13  | **Freeze columns, row height, load limit** per view                                                                                                                         | Keep the title column visible while scrolling sideways; compact or tall rows; show 25/50/100 rows then "Load more" in big tables.                                | S      | ✅ Done (N3) |
-| 14  | **Bulk edit** (select many rows → set a property, duplicate, delete, move)                                                                                                  | Change the status of 30 tasks at once. (Needs checking: our table has row selection for copy/delete, not "edit property for all".)                               | M      | ✅ Done (N3) |
-| 15  | **Recurring templates** (a template that creates a page every day/week/month)                                                                                               | "Weekly review" or "Daily standup" pages appear by themselves on schedule.                                                                                       | M      | ✅ Done (N3) |
-| 16  | **Form conditional logic** (show a question only if an earlier answer was X) and **file upload questions**                                                                  | Smarter forms: "If bug → ask for steps"; let people attach a screenshot.                                                                                         | M      | ✅ Done (N3) |
-| 17  | **Map view + Place property** (Notion 3.0/3.1)                                                                                                                              | Store addresses/places; see rows as pins on a map. For travel, field work, sites, customers. Needs a map tile source (OpenStreetMap).                            | L      | 🤔           |
-| 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | ✅ Done (N7) |
-| 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | 🤔           |
-| 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌           |
-| 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | 🤔           |
-| 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | ✅ Done (N8) |
-| 23  | **Synced databases from GitHub/Jira/external APIs**                                                                                                                         | Issues from GitHub or Jira show up as a live database. Needs each service's API and accounts.                                                                    | L      | ❌           |
-| 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | ✅ Done (N7) |
+| #   | Notion feature                                                                                                                                                              | What it's for (how you use it)                                                                                                                                   | Effort | Suggest                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------- |
+| 11  | **Row page layouts** ("Customize layout": pinned properties under the title, property sections, a tabbed layout; relations shown **as a page section**)                     | Make every row page of a database look the same and tidy: the 3 important properties at the top, the rest folded, related tasks shown as a list inside the page. | M–L    | ✅ Done (N3)                 |
+| 12  | **Number shown as a bar or ring** (progress), checkbox / status **"show as"** options                                                                                       | A "% done" column drawn as a progress bar; ratings as stars-like bars.                                                                                           | S      | ✅ Done (N3)                 |
+| 13  | **Freeze columns, row height, load limit** per view                                                                                                                         | Keep the title column visible while scrolling sideways; compact or tall rows; show 25/50/100 rows then "Load more" in big tables.                                | S      | ✅ Done (N3)                 |
+| 14  | **Bulk edit** (select many rows → set a property, duplicate, delete, move)                                                                                                  | Change the status of 30 tasks at once. (Needs checking: our table has row selection for copy/delete, not "edit property for all".)                               | M      | ✅ Done (N3)                 |
+| 15  | **Recurring templates** (a template that creates a page every day/week/month)                                                                                               | "Weekly review" or "Daily standup" pages appear by themselves on schedule.                                                                                       | M      | ✅ Done (N3)                 |
+| 16  | **Form conditional logic** (show a question only if an earlier answer was X) and **file upload questions**                                                                  | Smarter forms: "If bug → ask for steps"; let people attach a screenshot.                                                                                         | M      | ✅ Done (N3)                 |
+| 17  | **Map view + Place property** (Notion 3.0/3.1)                                                                                                                              | Store addresses/places; see rows as pins on a map. For travel, field work, sites, customers. Needs a map tile source (OpenStreetMap).                            | L      | 🤔                           |
+| 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | ✅ Done (N7)                 |
+| 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | 🤔                           |
+| 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌                           |
+| 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | ✅ Done (not email or Slack) |
+| 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | ✅ Done (N8)                 |
+| 23  | **Synced databases from GitHub/Jira/external APIs**                                                                                                                         | Issues from GitHub or Jira show up as a live database. Needs each service's API and accounts.                                                                    | L      | ❌                           |
+| 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | ✅ Done (N7)                 |
 
 ### C. Navigation and workspace
 
@@ -970,3 +970,42 @@ Typing on the 10,000-block page stays at 55–75 ms at p95 (target 16): the time
 y-tiptap's sync of the changed block (`updateYFragment`) and Blink's style and layout of
 a 10,000-node document. That needs the page's blocks rendered only near the screen, a larger
 change to the editor than this step.
+
+## More automations (#21)
+
+**Built.** Three additions to database automations, run the same way on the server and on a
+desktop that isn't synced:
+
+- **"When a button is pressed"** as a trigger, for a button property. Pressing it notes the
+  press (when, by whom) in its cell, only when an automation starts on it; the change syncs like
+  any edit, so the runner sees it where automations run. A button can have steps of its own as
+  well; a declined confirmation step stops both.
+- **"Edit pages in a related database"** as an action: the pages linked in one of the page's
+  relations get the values set, by the related database's properties (trashed pages and
+  templates are left alone). It runs with its maker's access: on the server, if they can't edit
+  that database, the run fails with "Not allowed to edit".
+- **A formula for a value** (the Σ button by a value): a formula over the page that started it
+  (`prop("Name") + " ×" + prop("Qty")`), checked as it's typed, and written as the property's
+  type: numbers, checkboxes and dates as they are; anything else read as text would be (an
+  option by its name; an option the property doesn't have isn't added). People, relations and
+  files can't come from a formula. Formulas read stored values and other formulas, not rollups.
+
+Sending email and posting to Slack (also in #21) need those services; not done.
+
+**Fixed: "page added" could see a page before its title.** Running the desktop E2E right after
+the unit tests, `phase6-exit.spec.ts` failed twice: Bob's new order reached the automation's
+webhook with an empty title. The server read a workspace's new changes 3 s after the _first_
+one, so a page added was seen as it was then; a title arriving later (typed slowly, or sent
+late by a busy server) was missed. The desktop's runner already waited for changes to pause.
+The server now does too: 3 s after the last change, and at most 15 s after the first (a
+workspace that never pauses is still read). A server test typing a title a letter at a time,
+for twice the wait, sent "Gri" before the fix and the whole title after it; the wait and its cap
+have unit tests of their own.
+
+**Tests:** `automations.test.ts` (unit): a press starts it once per press, nothing else does;
+formula values of each type, a broken formula and an unknown option write nothing; a related
+edit by the related database's properties, nothing when that database or the link is missing.
+`automations.test.ts` (server): Bob presses the button on his device, and the linked project in
+another database is edited by the bot, with a formula value. `local-automations.spec.ts`: the
+same from the editor on the desktop, a formula's error shown as it's typed, and only the linked
+page changed.

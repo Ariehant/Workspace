@@ -1,5 +1,12 @@
 import { listUsers, type ButtonConfig, workspaceDataDoc } from '@workspace/core';
-import { pageJson, readDatabase, runDatabaseStep } from '@workspace/database';
+import {
+  pageJson,
+  readAutomations,
+  readDatabase,
+  runDatabaseStep,
+  setCell,
+  type ButtonPress,
+} from '@workspace/database';
 import type { AppContextValue } from '../context';
 
 export interface ButtonEnv {
@@ -10,8 +17,8 @@ export interface ButtonEnv {
   openRow(rowId: string, databaseId: string): void;
   /** Button blocks: put the template blocks in the page. */
   insertBlocks?: (placement: 'above' | 'below') => Promise<void>;
-  /** Database button property: the row it was clicked in. */
-  row?: { databaseId: string; rowId: string };
+  /** Database button property: the row it was clicked in (and the property). */
+  row?: { databaseId: string; rowId: string; propertyId?: string };
   /** Ask the person (defaults to the browser's confirm dialog). */
   confirm?: (message: string) => boolean | Promise<boolean>;
 }
@@ -50,7 +57,27 @@ async function pageData(env: ButtonEnv): Promise<unknown> {
   return { id: env.pageId, title: app.pages.get(env.pageId)?.title ?? '' };
 }
 
-/** Run a button's steps in order; a declined confirmation stops the rest. */
+/**
+ * A button property pressed: noted in its cell (when, by whom) if an automation starts on
+ * it (otherwise pressing a button doesn't change the page).
+ */
+async function notePress(env: ButtonEnv): Promise<void> {
+  const { row, app } = env;
+  if (!row?.propertyId || !app.databases.exists(row.databaseId)) return;
+  const handle = await app.databases.load(row.databaseId);
+  const starts = readAutomations(handle.doc).some(
+    (a) =>
+      a.enabled && a.trigger.kind === 'buttonPressed' && a.trigger.propertyId === row.propertyId,
+  );
+  if (!starts) return;
+  const press: ButtonPress = { at: Date.now(), by: app.user.id };
+  setCell(handle.doc, row.rowId, row.propertyId, press, app.user.id);
+}
+
+/**
+ * Run a button's steps in order; a declined confirmation stops the rest (and a button
+ * property's automations don't start).
+ */
 export async function runButton(config: ButtonConfig, env: ButtonEnv): Promise<void> {
   const { app } = env;
   const users = new Map(listUsers(workspaceDataDoc(app.workspace)).map((u) => [u.id, u.name]));
@@ -132,4 +159,5 @@ export async function runButton(config: ButtonConfig, env: ButtonEnv): Promise<v
       }
     }
   }
+  await notePress(env);
 }

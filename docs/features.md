@@ -239,9 +239,10 @@ These need the [self-hosted server](self-hosting.md).
 
 ## Automations and forms
 
-- **Automations** on a database: when a page is added, a property changes, or on a schedule,
-  set properties, add pages, notify people or call a webhook (signed with
-  `X-Notion-Signature`). On a server they run on the server, with the access of the person who
+- **Automations** on a database: when a page is added, a property changes, a button property
+  is pressed, or on a schedule, set properties (fixed values, or a formula over the page), edit
+  the pages linked in a relation (in the related database), add pages, notify people or call a
+  webhook (signed with `X-Notion-Signature`). On a server they run on the server, with the access of the person who
   made them; on a desktop that isn't synced, the app runs them (catching up on missed
   schedules).
 - **Forms:** a database's form view, filled in from the app, or shared by link and filled in

@@ -1393,7 +1393,7 @@ function ButtonCell({ row, property }: { row: Row; property: Property }) {
           app,
           navigate,
           openRow: (rowId, db) => openRow(rowId, db, 'sidePeek'),
-          row: { databaseId, rowId: row.id },
+          row: { databaseId, rowId: row.id, propertyId: property.id },
         }).finally(() => setRunning(false));
       }}
       className="ws-button inline-flex h-6 max-w-full items-center truncate rounded border border-line px-2 text-xs font-medium hover:bg-hover disabled:opacity-60"

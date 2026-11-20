@@ -23,15 +23,19 @@ import {
   addRowFromTemplate,
   isDatabaseDoc,
   nextRun,
+  applyRelatedEdit,
   planActions,
+  relatedDatabasesOf,
   readAutomations,
   readDatabase,
+  readProperties,
   scheduleKey,
   setCell,
   setRowTitle,
   triggeredBy,
   type Automation,
   type Effect,
+  type Property,
   type WebhookBody,
 } from '@workspace/database';
 import type { Job, LoggedUpdate, NewJob } from '@workspace/storage-remote';
@@ -53,7 +57,10 @@ export function automationsBotId(workspaceId: string): string {
 }
 
 export interface AutomationOptions {
-  /** Wait this long after a change before looking at it (edits in a burst are one). */
+  /**
+   * Look at changes once they've paused this long (edits in a burst are one: a page added
+   * is seen with the title typed into it), and at most 5 times this long after the first.
+   */
   delayMs?: number;
   now?: () => number;
   onError?: (error: unknown, workspaceId: string | null) => void;
@@ -101,6 +108,8 @@ type Ctx = Pick<
 
 export class Automations {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** When each waiting workspace's first unread change arrived. */
+  private readonly waitingSince = new Map<string, number>();
   private readonly running = new Map<string, Promise<void>>();
   private readonly again = new Set<string>();
   private closed = false;
@@ -125,15 +134,24 @@ export class Automations {
     }
   }
 
-  /** A workspace's log grew. */
+  /**
+   * A workspace's log grew: read it once its changes pause for `delayMs`, or 5 times that
+   * after the first change still waiting (a workspace that never pauses is read anyway).
+   */
   schedule(workspaceId: string, delayMs = this.delayMs): void {
-    if (this.closed || this.timers.has(workspaceId)) return;
+    if (this.closed) return;
+    const now = Date.now();
+    const since = this.waitingSince.get(workspaceId) ?? now;
+    const wait = Math.max(0, Math.min(delayMs, since + 5 * this.delayMs - now));
+    clearTimeout(this.timers.get(workspaceId));
     const timer = setTimeout(() => {
       this.timers.delete(workspaceId);
+      this.waitingSince.delete(workspaceId);
       void this.follow(workspaceId);
-    }, delayMs);
+    }, wait);
     timer.unref?.();
     this.timers.set(workspaceId, timer);
+    this.waitingSince.set(workspaceId, since);
   }
 
   /** Read a workspace's log to the end now (one pass at a time per workspace). */
@@ -163,6 +181,7 @@ export class Automations {
     this.closed = true;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
+    this.waitingSince.clear();
     await Promise.all(this.running.values());
   }
 
@@ -295,6 +314,23 @@ export class Automations {
     }
   }
 
+  /** The properties of other databases a run edits (by relation); absent ones are left out. */
+  private async relatedProperties(workspaceId: string, ids: readonly string[]) {
+    const found = new Map<string, Property[]>();
+    for (const id of ids) {
+      const state = await this.ctx.store.docState(workspaceId, id);
+      if (!state) continue;
+      const doc = new Y.Doc();
+      try {
+        Y.applyUpdate(doc, state);
+        if (isDatabaseDoc(doc)) found.set(id, readProperties(doc));
+      } finally {
+        doc.destroy();
+      }
+    }
+    return found;
+  }
+
   /** May the maker still edit the database? If not, they're told (once), and it doesn't run. */
   private async makerMayEdit(workspaceId: string, databaseId: string, a: Automation) {
     const access = await this.ctx.access.workspace(workspaceId);
@@ -326,11 +362,17 @@ export class Automations {
       ? (snapshot.rows.find((r) => r.id === p.rowId && r.trashedAt === null) ?? null)
       : null;
     if (p.rowId && !row) return { skipped: 'page gone' };
-    const effects = planActions(automation, row, snapshot.properties, {
-      databaseId: p.databaseId,
-      actorId: p.actorId,
-      now: this.now(),
-    });
+    const related = await this.relatedProperties(
+      workspaceId,
+      relatedDatabasesOf(automation, snapshot.properties).filter((id) => id !== p.databaseId),
+    );
+    const effects = planActions(
+      automation,
+      row,
+      snapshot.properties,
+      { databaseId: p.databaseId, actorId: p.actorId, now: this.now() },
+      { snapshot, propertiesOf: (id) => related.get(id) ?? null },
+    );
     await this.ensureBot(workspaceId);
     try {
       for (const effect of effects) await this.apply(workspaceId, p.databaseId, automation, effect);
@@ -352,6 +394,12 @@ export class Automations {
             setCell(doc, effect.rowId, propertyId, value, bot);
           }
           if (effect.title !== undefined) setRowTitle(doc, effect.rowId, effect.title, bot);
+        });
+        return;
+      case 'editRelated':
+        // As its maker: only if they may edit that database too.
+        await this.ctx.docs.edit(workspaceId, effect.databaseId, as, (doc) => {
+          applyRelatedEdit(doc, effect, bot, this.now());
         });
         return;
       case 'add': {

@@ -7,6 +7,7 @@
 import { formatDateTime, newId } from '@workspace/core';
 import {
   AUTOMATIONS_MAP,
+  checkFormula,
   deleteAutomation,
   optionsOf,
   propertyKind,
@@ -22,12 +23,12 @@ import {
   weekdaysOf,
 } from '@workspace/database';
 import { Button, Dialog, DialogContent, IconButton, cn } from '@workspace/ui';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Sigma, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../context';
 import type { AutomationRun, Platform } from '../platform';
 import type { TeamApi } from '../team';
-import { useDisplayContext } from './hooks';
+import { useDatabase, useDisplayContext } from './hooks';
 
 const field =
   'rounded-md border border-line bg-surface px-2 py-1 text-sm outline-none focus:border-accent';
@@ -59,6 +60,10 @@ function useAutomations(handle: DatabaseHandle): Automation[] {
 /** What starts it, in words. */
 export function triggerText(trigger: AutomationTrigger, properties: readonly Property[]): string {
   if (trigger.kind === 'pageAdded') return 'When a page is added';
+  if (trigger.kind === 'buttonPressed') {
+    const name = properties.find((x) => x.id === trigger.propertyId)?.name ?? 'a button';
+    return `When ${name} is pressed`;
+  }
   if (trigger.kind === 'propertyEdited') {
     const p = properties.find((x) => x.id === trigger.propertyId);
     const name = p?.name ?? 'a property';
@@ -226,10 +231,14 @@ function AutomationEditor({
   const people = useDisplayContext();
   const personIds = people.people ?? [...people.users.keys()];
   const scheduled = a.trigger.kind === 'schedule';
+  const buttons = properties.filter((p) => p.type === 'button');
+  const relations = properties.filter((p) => p.type === 'relation' && p.config.databaseId);
 
   const setTrigger = (kind: AutomationTrigger['kind']) => {
     if (kind === 'pageAdded') set({ trigger: { kind } });
-    else if (kind === 'propertyEdited') {
+    else if (kind === 'buttonPressed') {
+      set({ trigger: { kind, propertyId: buttons[0]?.id ?? '' } });
+    } else if (kind === 'propertyEdited') {
       set({ trigger: { kind, propertyId: properties[0]?.id ?? '' } });
     } else {
       const schedule: Schedule = {
@@ -248,9 +257,11 @@ function AutomationEditor({
         ? { kind, values: {} }
         : kind === 'addPage'
           ? { kind, title: 'New page', values: {} }
-          : kind === 'notify'
-            ? { kind, people: [], peopleProperty: null, message: '' }
-            : { kind, url: 'https://', headers: {} };
+          : kind === 'editRelated'
+            ? { kind, relationId: relations[0]?.id ?? '', values: {} }
+            : kind === 'notify'
+              ? { kind, people: [], peopleProperty: null, message: '' }
+              : { kind, url: 'https://', headers: {} };
     set({ actions: [...a.actions, action] });
   };
 
@@ -273,8 +284,27 @@ function AutomationEditor({
         >
           <option value="pageAdded">When a page is added</option>
           <option value="propertyEdited">When a property is edited</option>
+          {(buttons.length > 0 || a.trigger.kind === 'buttonPressed') && (
+            <option value="buttonPressed">When a button is pressed</option>
+          )}
           <option value="schedule">On a schedule</option>
         </select>
+        {a.trigger.kind === 'buttonPressed' && (
+          <select
+            aria-label="Button"
+            value={a.trigger.propertyId}
+            onChange={(e) =>
+              set({ trigger: { kind: 'buttonPressed', propertyId: e.target.value } })
+            }
+            className={cn(field, 'self-start')}
+          >
+            {buttons.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
         {a.trigger.kind === 'propertyEdited' && (
           <PropertyTrigger
             trigger={a.trigger}
@@ -302,6 +332,8 @@ function AutomationEditor({
               <ActionEditor
                 action={action}
                 properties={writable}
+                source={properties}
+                relations={relations}
                 personIds={personIds}
                 names={people.users}
                 scheduled={scheduled}
@@ -326,6 +358,9 @@ function AutomationEditor({
         >
           <option value="">Add an action…</option>
           {!scheduled && <option value="setProperties">Edit property</option>}
+          {!scheduled && relations.length > 0 && (
+            <option value="editRelated">Edit pages in a related database</option>
+          )}
           <option value="addPage">Add a page</option>
           <option value="notify">Send notification</option>
           <option value="webhook">Send webhook</option>
@@ -488,6 +523,8 @@ export function ScheduleEditor({
 function ActionEditor({
   action,
   properties,
+  source,
+  relations,
   personIds,
   names,
   scheduled,
@@ -496,6 +533,9 @@ function ActionEditor({
 }: {
   action: AutomationAction;
   properties: readonly Property[];
+  /** The database's properties (formulas read them). */
+  source: readonly Property[];
+  relations: readonly Property[];
   personIds: readonly string[];
   names: ReadonlyMap<string, string>;
   scheduled: boolean;
@@ -524,10 +564,21 @@ function ActionEditor({
             properties={properties.filter(
               (p) => p.type !== 'title' || action.kind === 'setProperties',
             )}
+            source={source}
             scheduled={scheduled}
             onChange={(values) => onChange({ ...action, values })}
           />
         </div>
+      );
+    case 'editRelated':
+      return (
+        <RelatedEditor
+          action={action}
+          source={source}
+          relations={relations}
+          scheduled={scheduled}
+          onChange={onChange}
+        />
       );
     case 'notify':
       return (
@@ -597,15 +648,66 @@ function ActionEditor({
   }
 }
 
-/** Values to set, property by property. */
+/** Edit the pages linked in a relation: which relation, and what to set on them. */
+function RelatedEditor({
+  action,
+  source,
+  relations,
+  scheduled,
+  onChange,
+}: {
+  action: Extract<AutomationAction, { kind: 'editRelated' }>;
+  source: readonly Property[];
+  relations: readonly Property[];
+  scheduled: boolean;
+  onChange(a: AutomationAction): void;
+}) {
+  const relation = relations.find((p) => p.id === action.relationId);
+  const target = useDatabase(relation?.config.databaseId ?? '');
+  const targets = (target?.snapshot.properties ?? []).filter(
+    (p) => !COMPUTED.has(p.type) && p.type !== 'relation',
+  );
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="font-medium">Edit pages in a related database</span>
+      <select
+        aria-label="Pages in"
+        value={action.relationId}
+        // Another database's properties: what was set doesn't carry over.
+        onChange={(e) => onChange({ ...action, relationId: e.target.value, values: {} })}
+        className={cn(field, 'self-start')}
+      >
+        {relations.map((p) => (
+          <option key={p.id} value={p.id}>
+            the pages in {p.name}
+          </option>
+        ))}
+      </select>
+      {relation && target && (
+        <ValuesEditor
+          values={action.values}
+          properties={targets}
+          source={source}
+          scheduled={scheduled}
+          onChange={(values) => onChange({ ...action, values })}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Values to set, property by property (a value of its own, or a formula over the page). */
 function ValuesEditor({
   values,
   properties,
+  source,
   scheduled,
   onChange,
 }: {
   values: Record<string, ActionValue>;
   properties: readonly Property[];
+  /** The properties of the page that starts it (formulas read them). */
+  source: readonly Property[];
   scheduled: boolean;
   onChange(v: Record<string, ActionValue>): void;
 }) {
@@ -619,13 +721,49 @@ function ValuesEditor({
         return (
           <div key={id} className="flex items-center gap-2">
             <span className="w-28 truncate text-muted">{property.name}</span>
-            <ValueInput
-              property={property}
-              value={value}
-              scheduled={scheduled}
-              ctxParse={(text) => propertyKind(property.type).parse(text, property, ctx).value}
-              onChange={(v) => onChange({ ...values, [id]: v })}
-            />
+            {value.kind === 'formula' ? (
+              <FormulaValue
+                property={property}
+                expression={value.expression}
+                source={source}
+                onChange={(expression) =>
+                  onChange({ ...values, [id]: { kind: 'formula', expression } })
+                }
+              />
+            ) : (
+              <ValueInput
+                property={property}
+                value={value}
+                scheduled={scheduled}
+                ctxParse={(text) => propertyKind(property.type).parse(text, property, ctx).value}
+                onChange={(v) => onChange({ ...values, [id]: v })}
+              />
+            )}
+            {!scheduled && (
+              <IconButton
+                label={
+                  value.kind === 'formula'
+                    ? `Set ${property.name} to a value`
+                    : `Set ${property.name} with a formula`
+                }
+                size="sm"
+                aria-pressed={value.kind === 'formula'}
+                className={cn(value.kind === 'formula' && 'bg-active text-fg')}
+                onClick={() =>
+                  onChange({
+                    ...values,
+                    [id]:
+                      value.kind === 'formula'
+                        ? property.type === 'date'
+                          ? { kind: 'now' }
+                          : { kind: 'fixed', value: null }
+                        : { kind: 'formula', expression: '' },
+                  })
+                }
+              >
+                <Sigma size={12} />
+              </IconButton>
+            )}
             <IconButton
               label={`Don’t set ${property.name}`}
               size="sm"
@@ -752,6 +890,40 @@ function ValueInput({
       initial={fixed === null || fixed === undefined ? '' : String(fixed)}
       onChange={(text) => onChange({ kind: 'fixed', value: text === '' ? null : ctxParse(text) })}
     />
+  );
+}
+
+/** A formula for a value, checked against the page's properties as it's typed. */
+function FormulaValue({
+  property,
+  expression,
+  source,
+  onChange,
+}: {
+  property: Property;
+  expression: string;
+  source: readonly Property[];
+  onChange(expression: string): void;
+}) {
+  const [text, setText] = useState(expression);
+  const checked = text.trim() ? checkFormula(text, source) : null;
+  return (
+    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <input
+        aria-label={`${property.name} formula`}
+        placeholder='prop("Points") * 2'
+        value={text}
+        spellCheck={false}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => onChange(text)}
+        className={cn(field, 'min-w-0 font-mono text-xs')}
+      />
+      {checked?.error && (
+        <span className="text-xs text-danger" role="alert">
+          {checked.error.message}
+        </span>
+      )}
+    </span>
   );
 }
 

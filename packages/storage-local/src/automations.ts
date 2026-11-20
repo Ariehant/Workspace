@@ -23,7 +23,10 @@ import {
   addRowFromTemplate,
   isDatabaseDoc,
   nextRun,
+  applyRelatedEdit,
   planActions,
+  readProperties,
+  relatedDatabasesOf,
   readAutomations,
   readDatabase,
   scheduleKey,
@@ -32,6 +35,7 @@ import {
   triggeredBy,
   type Automation,
   type Effect,
+  type Property,
 } from '@workspace/database';
 import * as Y from 'yjs';
 import type { DocManager } from './doc-manager';
@@ -424,11 +428,23 @@ export class LocalAutomations {
         finish('done', { skipped: 'page gone' });
         return;
       }
-      effects = planActions(automation, row, snapshot.properties, {
-        databaseId: run.databaseId,
-        actorId,
-        now: this.now(),
-      });
+      const related = new Map<string, Property[]>();
+      for (const id of relatedDatabasesOf(automation, snapshot.properties)) {
+        if (id === run.databaseId) continue;
+        const other = this.current(id);
+        try {
+          if (other && isDatabaseDoc(other)) related.set(id, readProperties(other));
+        } finally {
+          other?.destroy();
+        }
+      }
+      effects = planActions(
+        automation,
+        row,
+        snapshot.properties,
+        { databaseId: run.databaseId, actorId, now: this.now() },
+        { snapshot, propertiesOf: (id) => related.get(id) ?? null },
+      );
     } finally {
       doc?.destroy();
     }
@@ -452,6 +468,11 @@ export class LocalAutomations {
           if (effect.title !== undefined) {
             setRowTitle(doc, effect.rowId, effect.title, actor, this.now());
           }
+        });
+        return;
+      case 'editRelated':
+        this.edit(effect.databaseId, (doc) => {
+          applyRelatedEdit(doc, effect, actor, this.now());
         });
         return;
       case 'add': {
