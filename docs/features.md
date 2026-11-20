@@ -262,8 +262,9 @@ These need the [self-hosted server](self-hosting.md).
 ## API and integrations
 
 - **A REST API in Notion's shape** at `/v1`: pages, blocks, databases, data sources, comments,
-  search and users, in API versions `2022-06-28` and `2025-09-03`. The official SDK works
-  unchanged.
+  search, users and file uploads, in API versions `2022-06-28` and `2025-09-03`. The official
+  SDK works unchanged. Beyond Notion's: pages read and written as Markdown, and a database's
+  views listed and queried as they show their rows.
 - **Integrations** with tokens and capabilities, connected to pages like people are.
 - **Webhooks** for page, database and comment events, verified and signed as Notion's are.
 

@@ -73,11 +73,34 @@ The `Notion-Version` header is required, as with Notion:
 | Blocks       | `GET /v1/blocks/:id`, `PATCH /v1/blocks/:id`, `DELETE /v1/blocks/:id`, `GET` and `PATCH /v1/blocks/:id/children` |
 | Comments     | `GET /v1/comments?block_id=`, `POST /v1/comments`                                                                |
 | Search       | `POST /v1/search`                                                                                                |
+| File uploads | `POST /v1/file_uploads`, `POST /v1/file_uploads/:id/send`, `GET /v1/file_uploads/:id`                            |
+| Markdown     | `GET /v1/pages/:id/markdown`, `PATCH /v1/pages/:id/markdown` (Workspace's own)                                   |
+| Views        | `GET /v1/databases/:id/views`, `POST /v1/databases/:id/views/:view/query` (Workspace's own)                      |
 
 Pages can be made in a page or a database, with properties, content (`children`), an emoji icon
 and a cover; changed; and trashed. Database queries take Notion's filter and sort JSON
 (compound `and`/`or`, nested two deep). Blocks are appended with `after`, changed and deleted
 by id, while people edit the same page live.
+
+**File uploads**, as Notion's: create one (`{ "filename", "content_type"? }`, single part
+only), send the file to its `upload_url` as `multipart/form-data` (the part `file`, up to
+20 MB) within an hour, then attach it by id where a file goes:
+`{ "type": "file_upload", "file_upload": { "id": "…" } }` in image, video, audio, PDF and file
+blocks, and in a files property's values. It's stored as the workspace's attachment, read back
+as a signed link. An integration sees only its own uploads.
+
+**Pages as Markdown** (not in Notion's API): `GET /v1/pages/:id/markdown` answers
+`{ "object": "page_markdown", "id", "markdown" }`, the page's content as the exporter writes it
+(links to pages and files as URLs). `PATCH` with `{ "markdown", "mode"? }` appends it
+(`"append"`, the default) or puts it in place of the content (`"replace"`, which also needs
+the update-content capability), and answers with the new Markdown. Pages and database rows; up
+to 200,000 characters.
+
+**Views** (not in Notion's API): `GET /v1/databases/:id/views` lists a database's own views
+(`{ "object": "view", "id", "name", "type", "sorts", "has_filter", "group_by",
+"visible_properties" }`), and `POST /v1/databases/:id/views/:view/query` answers with the rows
+that view shows, in its order (its filter and sorts, as in the app), with paging and an extra
+Notion `filter` if sent.
 
 ## Conventions and limits
 
@@ -137,7 +160,8 @@ Webhooks only go to public `https://` addresses unless the server allows otherwi
 - **Table rows are read-only** through the API.
 - **Paragraphs can't hold blocks:** children sent under a paragraph come after it.
 - **Blocks have no author:** their `created_by` and `last_edited_by` have a null id.
-- **Uploads aren't supported:** files go in as external URLs.
+- **Uploads are single part** (up to 20 MB); multi-part and importing from a URL aren't
+  supported. Covers and icons can't be set from an upload yet.
 - **Titles hold plain text:** formatting inside a page's title isn't kept. Text properties keep
   bold, italic, strikethrough, underline, code, colours and links, as page content does;
   mentions and equations in a text property come in as their text.

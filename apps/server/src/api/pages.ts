@@ -82,7 +82,7 @@ function readRowChanges(api: ApiView, properties: readonly Property[], raw: unkn
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw invalid('body.properties should be an object.');
   }
-  const ctx = { isUser: (id: string) => api.access.isMember(id) };
+  const ctx = api.writeContext;
   for (const [key, input] of Object.entries(raw as Body)) {
     const p = findProperty(properties, key);
     if (!p) throw invalid(`${key} is not a property that exists.`);
@@ -144,9 +144,7 @@ function readPageTitle(raw: unknown): string | undefined {
 
 /** The new page's content (checked before anything is made). */
 const childrenOf = (api: ApiView, body: Body) =>
-  body.children === undefined
-    ? []
-    : blocksIn(body.children, 'body.children', { isUser: (u) => api.access.isMember(u) });
+  body.children === undefined ? [] : blocksIn(body.children, 'body.children', api.writeContext);
 
 async function createRow(api: ApiView, database: DatabaseLocated, body: Body) {
   const properties = readDatabase(database.db).properties;

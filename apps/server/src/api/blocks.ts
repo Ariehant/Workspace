@@ -134,9 +134,7 @@ export function blockRoutes(app: FastifyInstance) {
     api.need('insertContent');
     const id = pathId(request.params.id);
     const body = asBody(request.body);
-    const nodes = blocksIn(body.children, 'body.children', {
-      isUser: (u) => api.access.isMember(u),
-    });
+    const nodes = blocksIn(body.children, 'body.children', api.writeContext);
     const after = body.after === undefined ? null : parseId(body.after);
     if (body.after !== undefined && !after) throw invalid('body.after should be a valid uuid.');
     const page = await api.find(id);
@@ -182,7 +180,7 @@ export function blockRoutes(app: FastifyInstance) {
       await deleteBlock(api, found.page, id);
       return blockJson(found.page, found.block, found.parent, true);
     }
-    const change = blockChangeIn(found.block.type, body, { isUser: (u) => api.access.isMember(u) });
+    const change = blockChangeIn(found.block.type, body, api.writeContext);
     if (!change.inline && !change.attrs) {
       throw invalid(
         `body.${found.block.type} should have what to change (it's a ${found.block.type} block).`,

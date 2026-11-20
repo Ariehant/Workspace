@@ -95,7 +95,7 @@ milestones below; the others wait for a decision, by number.
 | 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | ✅ Done (Asana, Jira N7; Monday N8) |
 | 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌                                  |
 | 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | ✅ Done (N6)                        |
-| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔                                  |
+| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | ✅ Done (step 4)                    |
 | 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌                                  |
 
 ### F. Platforms and apps
@@ -1036,3 +1036,33 @@ unknown page are refused; ids are found in encoded docs whatever follows them.
 `move-workspace.spec.ts`: Ada moves a page and its sub-page from the Move dialog; it shows in
 the trash in Lab, and her desktop on Home has it, its text, and a sub-page link that opens the
 copy.
+
+## API additions (#43)
+
+**Built,** all in `docs/api.md`:
+
+- **File uploads**, as Notion's: `POST /v1/file_uploads` (single part), the file sent to its
+  `upload_url` as multipart (up to 20 MB), then attached by id in media and file blocks and in
+  files property values. The bytes are stored as the workspace's attachment (by hash), so an
+  upload only names one; a new table (`api_file_uploads`, schema version 18) keeps who made it
+  and when it was sent. Before a route reads its body, the uploads it names (of that
+  integration, sent) are loaded, so the block and property readers stay synchronous.
+- **Pages as Markdown** (Workspace's own): read with the exporter's Markdown, written with the
+  editor's reader, appended or in place of the content (one change, so collaborators see one
+  edit).
+- **Views** (Workspace's own): a database's views listed, and queried as the app runs them
+  (`runView`: its filter, then its sorts), with paging and an extra filter.
+
+**Tests:** `api.test.ts`: Markdown read, appended (blocks and the desktop see it), replaced, on a
+row, and refused for a database, a page not shared, bad bodies and view-only access; views
+listed with their sorts and grouping, and queried in order, narrowed and paged; an upload made,
+refused before it's sent, sent once, attached to a block (served by its signed link, on the
+desktop) and to a files property, invisible to another integration, and bad requests refused.
+Unit tests for the upload in blocks and files values.
+
+**Seen once, not reproduced:** in the first full server run after these changes, besides the
+schema-version tests (updated), three tests failed: two in `sync.test.ts` (text frames and
+oversized messages; telling devices to come back at shutdown) and one in `automations.test.ts`
+(pausing when the maker can no longer edit). None touches the API. They passed in three more
+full runs, alone, and four times under full CPU load; with no output kept from that run, the
+cause isn't known. Watching CI for them.

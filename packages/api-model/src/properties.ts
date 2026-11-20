@@ -36,6 +36,7 @@ import {
   type Row,
   type SelectOption,
 } from '@workspace/database';
+import { uploadIn, type UploadedFile } from './blocks';
 import { invalid } from './errors';
 import { parseId } from './ids';
 import { readRichSpans, readRichText, richText, richTextFromSpans } from './rich-text';
@@ -559,6 +560,8 @@ export interface ParsedValue {
 export interface ParseContext {
   /** Is this someone (a person property's values)? */
   isUser(id: string): boolean;
+  /** A sent file upload of the integration's, by id (files properties). */
+  fileUpload?(id: string): UploadedFile | null;
 }
 
 function readOption(
@@ -661,9 +664,16 @@ export function parseValue(p: Property, input: unknown, ctx: ParseContext): Pars
       if (!Array.isArray(raw)) throw invalid(`${at} should be an array.`);
       const files = raw.map((x, i): FileValue => {
         const f = asObject(x, `${at}[${i}]`);
+        if (f.type === 'file_upload' || f.file_upload !== undefined) {
+          const upload = uploadIn(f, `${at}[${i}]`, ctx);
+          const name = typeof f.name === 'string' && f.name ? f.name : upload.name;
+          return { id: upload.fileId, name: name.slice(0, 200) };
+        }
         const url = (f.external as { url?: unknown } | undefined)?.url;
         if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
-          throw invalid(`${at}[${i}] should be an external file with an http(s) URL.`);
+          throw invalid(
+            `${at}[${i}] should be an external file with an http(s) URL, or a sent file upload.`,
+          );
         }
         const name = typeof f.name === 'string' && f.name ? f.name : url;
         return { url, name: name.slice(0, 200) };

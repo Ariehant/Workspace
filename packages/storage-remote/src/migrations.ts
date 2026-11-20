@@ -606,6 +606,21 @@ export const MIGRATIONS: string[] = [
   );
   CREATE UNIQUE INDEX share_links_page ON share_links (workspace_id, page_id);
   `,
+  // 18: files sent through the API (Phase 8 #43).
+  `
+  CREATE TABLE api_file_uploads (
+    id uuid PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    integration_id uuid NOT NULL REFERENCES integrations ON DELETE CASCADE,
+    filename text NOT NULL,
+    content_type text,
+    file_id text,
+    size bigint,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    uploaded_at timestamptz
+  );
+  CREATE INDEX api_file_uploads_integration ON api_file_uploads (integration_id, created_at);
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

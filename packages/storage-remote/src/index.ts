@@ -11,4 +11,5 @@ export * from './jobs';
 export * from './forms';
 export * from './share-links';
 export * from './integrations';
+export * from './file-uploads';
 export * from './webhooks';

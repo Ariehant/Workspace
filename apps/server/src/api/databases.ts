@@ -8,6 +8,7 @@
  *   database's own id; another can't be added.
  */
 import {
+  ApiError,
   compileFilter,
   compileSorts,
   findProperty,
@@ -42,9 +43,11 @@ import {
   initDatabase,
   readDatabase,
   renameProperty,
+  runView,
   setMeta,
   setPropertyConfig,
   type Property,
+  type View,
 } from '@workspace/database';
 import type { FastifyInstance } from 'fastify';
 import type * as Y from 'yjs';
@@ -349,6 +352,68 @@ async function query(api: ApiView, found: DatabaseLocated, body: Body, filterPro
   );
 }
 
+/** A database's own views (not linked views elsewhere), in their order. */
+function ownViews(found: DatabaseLocated): View[] {
+  return readDatabase(found.db)
+    .views.filter((v) => v.viewSet === found.id)
+    .sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
+}
+
+/** A view as the API shows it: what it is, and how it sorts and groups (by property name). */
+function viewObject(found: DatabaseLocated, view: View, properties: readonly Property[]) {
+  const name = (id: string) => properties.find((p) => p.id === id)?.name ?? null;
+  const shown = view.properties.length
+    ? view.properties.filter((c) => c.visible).map((c) => name(c.id))
+    : properties.map((p) => p.name);
+  return {
+    object: 'view',
+    id: view.id,
+    name: view.name,
+    type: view.type,
+    database_id: found.id,
+    sorts: view.sorts.flatMap((s) => {
+      const property = name(s.propertyId);
+      return property
+        ? [{ property, direction: s.direction === 'asc' ? 'ascending' : 'descending' }]
+        : [];
+    }),
+    has_filter: (view.filter?.filters.length ?? 0) > 0,
+    group_by: view.groupBy ? name(view.groupBy.propertyId) : null,
+    visible_properties: shown.filter((n): n is string => n !== null),
+  };
+}
+
+/** The rows a view shows (its filter, then its sorts), with an extra filter if given. */
+async function queryView(api: ApiView, found: DatabaseLocated, view: View, body: Body) {
+  const snapshot = await api.snapshot(found);
+  const test = compileFilter(body.filter, snapshot.properties);
+  const rows = runView(snapshot, view, await api.displayContext()).rows.filter((r) => test(r));
+  const links = api.links;
+  return listObject(
+    rows,
+    (row) => row.id,
+    parsePaging(body),
+    api.version === '2025-09-03' ? 'page_or_data_source' : 'page_or_database',
+    (row) =>
+      pageObject(
+        {
+          id: row.id,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          createdBy: row.createdBy,
+          updatedBy: row.updatedBy,
+          icon: row.icon,
+          cover: row.cover,
+          trashed: false,
+          parent: { kind: 'database', id: found.id },
+        },
+        propertiesObject(row, snapshot.properties, links),
+        api.version,
+        links,
+      ),
+  );
+}
+
 const listParam = (raw: unknown): string[] =>
   raw === undefined ? [] : (Array.isArray(raw) ? raw : [raw]).map(String);
 
@@ -387,6 +452,34 @@ export function databaseRoutes(app: FastifyInstance) {
       api.need('readContent');
       const found = await api.database(pathId(request.params.id, 'database_id'));
       return query(api, found, asBody(request.body), listParam(request.query['filter_properties']));
+    },
+  );
+
+  // --- Views (Phase 8 #43, a Workspace addition) --------------------------------------
+
+  app.get<{ Params: { id: string } }>('/databases/:id/views', async (request) => {
+    const api = viewOf(request);
+    api.need('readContent');
+    const found = await api.database(pathId(request.params.id, 'database_id'));
+    const { properties } = readDatabase(found.db);
+    const views = ownViews(found).map((v) => viewObject(found, v, properties));
+    return { object: 'list', results: views, next_cursor: null, has_more: false, type: 'view' };
+  });
+
+  app.post<{ Params: { id: string; viewId: string }; Body: unknown }>(
+    '/databases/:id/views/:viewId/query',
+    async (request) => {
+      const api = viewOf(request);
+      api.need('readContent');
+      const found = await api.database(pathId(request.params.id, 'database_id'));
+      const view = ownViews(found).find((v) => v.id === request.params.viewId);
+      if (!view) {
+        throw new ApiError(
+          'object_not_found',
+          `Could not find view with ID: ${request.params.viewId} in database ${found.id}.`,
+        );
+      }
+      return queryView(api, found, view, asBody(request.body));
     },
   );
 

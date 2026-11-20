@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import { Accounts } from './accounts';
 import { AutomationSecrets, FormLinks } from './forms';
 import { ShareLinks } from './share-links';
+import { FileUploads } from './file-uploads';
 import { Integrations } from './integrations';
 import { IntegrationWebhooks } from './webhooks';
 import { Jobs } from './jobs';
@@ -73,6 +74,7 @@ export class PgStore {
   readonly shareLinks: ShareLinks;
   readonly automationSecrets: AutomationSecrets;
   readonly integrations: Integrations;
+  readonly fileUploads: FileUploads;
   readonly integrationWebhooks: IntegrationWebhooks;
 
   constructor(connectionString: string, options: { max?: number } = {}) {
@@ -91,6 +93,7 @@ export class PgStore {
     this.shareLinks = new ShareLinks(this.pool);
     this.automationSecrets = new AutomationSecrets(this.pool);
     this.integrations = new Integrations(this.pool);
+    this.fileUploads = new FileUploads(this.pool);
     this.integrationWebhooks = new IntegrationWebhooks(this.pool);
   }
 
