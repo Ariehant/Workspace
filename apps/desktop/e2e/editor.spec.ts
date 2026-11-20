@@ -183,3 +183,37 @@ test('block ids are stable across restarts', async ({ launch }) => {
   await expect(blocks(window).first()).toHaveText('Keep my id');
   expect(await blocks(window).first().getAttribute('data-id')).toBe(before);
 });
+
+test('leaving a long page leaves its blocks alone (no redraw on the way out)', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newPage(window, 'Other page');
+  await newPage(window, 'Long notes');
+  // 400 paragraphs, put in at once.
+  await editor(window).evaluate((el) => {
+    const ed = (el as unknown as { editor: { commands: { insertContent(c: unknown): void } } })
+      .editor;
+    ed.commands.insertContent(
+      Array.from({ length: 400 }, (_, i) => ({
+        type: 'paragraph',
+        content: [{ type: 'text', text: `Line ${i + 1}` }],
+      })),
+    );
+  });
+  await expect(blocks(window)).toHaveCount(400);
+  // Watch the page's blocks while another page opens. Redrawing them (TipTap resets its node
+  // views as the editor unmounts) replaced every one: a second for 10,000 blocks.
+  await editor(window).evaluate((el) => {
+    const w = globalThis as unknown as { __changes: number };
+    w.__changes = 0;
+    new MutationObserver((records) => {
+      for (const r of records) w.__changes += r.addedNodes.length + r.removedNodes.length;
+    }).observe(el, { childList: true, subtree: true });
+  });
+  await window.getByTestId('sidebar-page-title').filter({ hasText: 'Other page' }).click();
+  await expect(window.getByLabel('Page title')).toHaveValue('Other page');
+  expect(
+    await window.evaluate(() => (globalThis as unknown as { __changes: number }).__changes),
+  ).toBeLessThan(20);
+});

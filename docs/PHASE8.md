@@ -946,3 +946,27 @@ The timer now watches from before the action and notes the end in the renderer, 
 the result first shows (what its comment always said). Over three local runs: `database.group`
 134–142 ms (it read 517–640), `database.sort` 150–206 ms, `database.filter` 77–124 ms. The
 budgets are unchanged.
+
+## Opening a big database faster
+
+**Found: 1.3 s of `database.open` was the page being left.** Opening "Tasks" from the
+10,000-block page measured 4.1–4.7 s. A timeline trace showed the first 1.3 s spent before the
+database even started loading: leaving the page, TipTap's `EditorContent` resets the editor's
+node views as it unmounts, and the menus around the editor each unregister a plugin, every one
+rebuilding the state, so ProseMirror redrew all 10,000 blocks of a page about to be destroyed.
+Leaving a page now switches those off on its editor (it's destroyed next); they're put back if
+the page shows again (React's StrictMode tries an unmount in development).
+
+**Tests:** `editor.spec.ts`: leaving a 400-block page changes fewer than 20 nodes in it (800
+without the fix). Over three local perf runs, `database.open` 2735–2912 ms (it read 4.1–4.7 s);
+no other metric moved.
+
+**What's left, and why it stays for now.** Of the remaining 2.7–2.9 s, 1.5–1.9 s is Yjs
+decoding the 28.8 MB database doc (50,000 rows; much of it garbage collection), about 0.3 s the
+computed values (formulas, rollups) and about 0.3 s a related database waiting on the main
+process, busy decoding the same doc. Halving it means not decoding the whole doc to show its
+first rows (rows in pages, or a snapshot kept next to the doc), a storage change of its own.
+Typing on the 10,000-block page stays at 55–75 ms at p95 (target 16): the time is in
+y-tiptap's sync of the changed block (`updateYFragment`) and Blink's style and layout of
+a 10,000-node document. That needs the page's blocks rendered only near the screen, a larger
+change to the editor than this step.
