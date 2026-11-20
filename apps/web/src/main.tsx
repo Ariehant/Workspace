@@ -11,6 +11,8 @@ import {
   Card,
   InviteScreen,
   ShareLinkScreen,
+  DuplicateScreen,
+  type DuplicateInfo,
   SignIn,
   WorkspacePicker,
   type ShareLinkInfo,
@@ -23,6 +25,9 @@ const LAST_WORKSPACE = 'workspace.last';
 const workspaceFromPath = () => /^\/w\/([0-9a-f-]{36})\/?$/i.exec(location.pathname)?.[1] ?? null;
 /** `/s/<token>` → a page's share link token. */
 const shareLinkFromPath = () => /^\/s\/([\w-]{10,64})\/?$/.exec(location.pathname)?.[1] ?? null;
+/** `/d/<slug>` → a published page to duplicate. */
+const duplicateFromPath = () =>
+  /^\/d\/([a-z0-9][a-z0-9-]{1,62}[a-z0-9])\/?$/.exec(location.pathname)?.[1] ?? null;
 /** `/invite/<token>` → the invite token. */
 const inviteFromPath = () => /^\/invite\/([\w-]{1,200})\/?$/.exec(location.pathname)?.[1] ?? null;
 
@@ -90,6 +95,7 @@ type State =
       problem: string | null;
       user: Me | null;
     }
+  | { screen: 'duplicate'; slug: string; info: DuplicateInfo | null; user: Me | null }
   | { screen: 'pick'; user: Me }
   | {
       screen: 'app';
@@ -119,6 +125,17 @@ async function resolveState(): Promise<State> {
         },
       );
       return { screen: 'link', token: linkToken, user, ...found };
+    }
+    const slug = duplicateFromPath();
+    if (slug) {
+      const info = await api<DuplicateInfo>(
+        'GET',
+        `/api/published/${encodeURIComponent(slug)}/duplicate`,
+      ).catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      });
+      return { screen: 'duplicate', slug, info, user };
     }
     const token = inviteFromPath();
     if (token) {
@@ -218,6 +235,15 @@ function Root() {
           link={state.link}
           problem={state.problem}
           user={state.user}
+        />
+      );
+    case 'duplicate':
+      return (
+        <DuplicateScreen
+          slug={state.slug}
+          info={state.info}
+          user={state.user}
+          onSignedIn={() => void resolveState().then(setState)}
         />
       );
     case 'pick':

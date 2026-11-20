@@ -91,6 +91,7 @@ export function PublishSection({
                 slug: title.trim() ? slugFromTitle(title) : suggested,
                 includeSubpages: true,
                 allowIndexing: false,
+                allowDuplicate: false,
                 title: '',
                 description: '',
               })
@@ -165,6 +166,14 @@ export function PublishSection({
                 />
                 Search engines may index it
               </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.allowDuplicate}
+                  onChange={(e) => setDraft({ ...draft, allowDuplicate: e.target.checked })}
+                />
+                Allow duplicate as template
+              </label>
               <input
                 aria-label="Title for search results"
                 placeholder="Title for search results and link previews"
@@ -200,6 +209,7 @@ const settingsOf = (p: PublishedPage): PublishSettings => ({
   slug: p.slug,
   includeSubpages: p.includeSubpages,
   allowIndexing: p.allowIndexing,
+  allowDuplicate: p.allowDuplicate,
   title: p.title,
   description: p.description,
 });

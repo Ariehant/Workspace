@@ -25,7 +25,11 @@ function useBacklinks(pageId: string): Backlink[] {
     const load = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        void platform.backlinks(pageId).then((l) => live && setLinks({ pageId, links: l }));
+        // A failed read (the server busy, offline) keeps what was shown; the next change retries.
+        platform.backlinks(pageId).then(
+          (l) => live && setLinks({ pageId, links: l }),
+          () => {},
+        );
       }, 150);
     };
     load();

@@ -621,6 +621,10 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX api_file_uploads_integration ON api_file_uploads (integration_id, created_at);
   `,
+  // 19: published pages visitors may duplicate (Phase 8 #35).
+  `
+  ALTER TABLE published_pages ADD COLUMN allow_duplicate boolean NOT NULL DEFAULT false;
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

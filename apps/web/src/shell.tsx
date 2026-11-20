@@ -483,3 +483,117 @@ export function ShareLinkScreen({
     </Card>
   );
 }
+
+/** A published page visitors may copy, as the server tells it. */
+export interface DuplicateInfo {
+  title: string;
+  includeSubpages: boolean;
+}
+
+/**
+ * Duplicating a published page (`/d/<slug>`, Phase 8 #35): signed out, you sign in (or create
+ * an account where the server allows it); then you choose one of your workspaces, and the
+ * page (with its published sub-pages) is copied into your private pages there.
+ */
+export function DuplicateScreen({
+  slug,
+  info,
+  user,
+  onSignedIn,
+}: {
+  slug: string;
+  info: DuplicateInfo | null;
+  user: Me | null;
+  onSignedIn(): void;
+}) {
+  const [workspaces, setWorkspaces] = useState<RemoteWorkspace[] | null>(null);
+  const [target, setTarget] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user || !info) return;
+    void api<{ workspaces: RemoteWorkspace[] }>('GET', '/api/workspaces').then(
+      ({ workspaces: list }) => {
+        const usable = list.filter((w) => w.role !== 'guest');
+        setWorkspaces(usable);
+        setTarget((t) => t || usable[0]?.id || '');
+      },
+      (e: unknown) => setError(e instanceof ApiError ? e.message : String(e)),
+    );
+  }, [user, info]);
+  if (!info) {
+    return (
+      <Card title="Can’t duplicate this page">
+        <p className="text-sm text-muted" data-testid="duplicate-problem">
+          This page isn’t published, or its publisher doesn’t allow copies.
+        </p>
+      </Card>
+    );
+  }
+  const name = info.title || 'Untitled';
+  const title = `Duplicate “${name}”`;
+  const intro = (
+    <p className="text-sm text-muted" data-testid="duplicate-intro">
+      A copy of <strong className="text-fg">{name}</strong>
+      {info.includeSubpages ? ' and its sub-pages' : ''} goes to your private pages in a workspace
+      of yours, to change as you like.
+    </p>
+  );
+  if (!user) {
+    return <SignIn onSignedIn={onSignedIn} invited={{ token: '', email: '', title, intro }} />;
+  }
+  const duplicate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { workspaceId, pageId } = await api<{ workspaceId: string; pageId: string }>(
+        'POST',
+        `/api/published/${encodeURIComponent(slug)}/duplicate`,
+        { to: target },
+      );
+      location.assign(`/w/${workspaceId}#page=${encodeURIComponent(pageId)}`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title={title}>
+      <div className="flex flex-col gap-3">
+        {intro}
+        {workspaces && workspaces.length === 0 ? (
+          <p className="text-sm text-muted">
+            You’re not a member of a workspace here yet: create one first, then come back.
+          </p>
+        ) : (
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Into</span>
+            <select
+              aria-label="Workspace"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              className={input}
+              disabled={!workspaces}
+            >
+              {(workspaces ?? []).map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <p className="text-sm text-muted">Signed in as {user.email}.</p>
+        <Button
+          variant="primary"
+          className="h-9 justify-center"
+          disabled={busy || !target}
+          onClick={() => void duplicate()}
+        >
+          {busy ? 'Duplicating…' : 'Duplicate'}
+        </Button>
+        {error && <ErrorText error={error} />}
+      </div>
+    </Card>
+  );
+}

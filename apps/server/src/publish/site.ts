@@ -193,6 +193,13 @@ function withHead(html: string, pub: Published, isRoot: boolean): string {
     if (pub.title) meta.push(`<meta property="og:title" content="${escapeHtml(pub.title)}">`);
   }
   let out = html.replace('<head>', `<head>\n${meta.join('\n')}`);
+  // Visitors may copy it into a workspace of theirs (the web app asks them to sign in).
+  if (pub.allowDuplicate) {
+    out = out.replace(
+      '<body>',
+      `<body>\n<p class="duplicate" style="margin:12px 16px 0;text-align:right;font:14px system-ui,sans-serif"><a href="/d/${escapeHtml(pub.slug)}" style="padding:4px 10px;border:1px solid #d0d0cc;border-radius:6px;color:inherit;text-decoration:none">Duplicate</a></p>`,
+    );
+  }
   if (isRoot && pub.title) {
     out = out.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(pub.title)}</title>`);
   }

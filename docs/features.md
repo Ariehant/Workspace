@@ -239,7 +239,9 @@ These need the [self-hosted server](self-hosting.md).
   you and requests for access (with Share and Decline), live, with desktop notifications. Email digests: after a mention, or daily, with
   one-click unsubscribe.
 - **Publish to web:** a public, read-only page (with its sub-pages if you like), with view
-  counts.
+  counts. **Allow duplicate as template** adds Duplicate to it: a visitor signs in (or signs
+  up, where the server allows it), picks one of their workspaces, and gets a copy of what the
+  page shows in their private pages there.
 
 ## Automations and forms
 

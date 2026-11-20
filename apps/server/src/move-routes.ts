@@ -158,44 +158,14 @@ export function moveRoutes(app: FastifyInstance, ctx: ServerContext) {
           throw error;
         }
 
-        // Its attachments, copied there first (the pages show them as soon as they arrive).
-        await copyFiles(ctx, sourceId, to, fileCandidates(bundle), userId);
-
-        // The copies: made aside, then written as the person (their private pages there).
-        const scope = await store.scopes.privateScope(to, userId);
-        await ctx.access.changed(to);
-        const target = await load(to, scope.treeDoc);
-        const made = new Map<string, Y.Doc>();
         let newId: string;
         try {
-          const treeUpdates: Uint8Array[] = [];
-          target.on('update', (u: Uint8Array) => treeUpdates.push(u));
-          newId = await instantiateBundle(bundle, target, {
-            parentId: null,
-            createdBy: userId,
-            withDoc: async (id, use) => {
-              const doc = made.get(id) ?? new Y.Doc();
-              made.set(id, doc);
-              return use(doc);
-            },
-          });
-          const author = { userId };
-          const placed = { scope: scope.id };
-          const pages = Y.mergeUpdates(treeUpdates);
-          await ctx.docs.edit(to, scope.treeDoc, author, (d) => Y.applyUpdate(d, pages), placed);
-          for (const [id, doc] of made) {
-            const state = Y.encodeStateAsUpdate(doc);
-            if (Y.encodeStateVector(doc).length <= 1) continue;
-            await ctx.docs.edit(to, id, author, (d) => Y.applyUpdate(d, state), placed);
-          }
+          newId = await copyBundleInto(ctx, bundle, { from: sourceId, to, userId });
         } catch (error) {
           if (error instanceof EditRefused) {
             return fail(reply, 403, 'forbidden', 'You can’t add pages to that workspace.');
           }
           throw error;
-        } finally {
-          target.destroy();
-          for (const doc of made.values()) doc.destroy();
         }
 
         // Then out of here: in the trash (restorable, as any deleted page).
@@ -206,6 +176,53 @@ export function moveRoutes(app: FastifyInstance, ctx: ServerContext) {
       }
     },
   );
+}
+
+/**
+ * Copy a bundle into `userId`'s private pages in workspace `to` (new ids), with the
+ * attachments it uses from workspace `from`; written as the person. Returns the new root's id.
+ * Throws `EditRefused` if they may not add pages there.
+ */
+export async function copyBundleInto(
+  ctx: ServerContext,
+  bundle: PageBundle,
+  { from, to, userId }: { from: string; to: string; userId: string },
+): Promise<string> {
+  // Its attachments, copied there first (the pages show them as soon as they arrive).
+  await copyFiles(ctx, from, to, fileCandidates(bundle), userId);
+  // The copies: made aside, then written as the person (their private pages there).
+  const scope = await ctx.store.scopes.privateScope(to, userId);
+  await ctx.access.changed(to);
+  const target = new Y.Doc();
+  const state = await ctx.store.docState(to, scope.treeDoc);
+  if (state) Y.applyUpdate(target, state);
+  const made = new Map<string, Y.Doc>();
+  try {
+    const treeUpdates: Uint8Array[] = [];
+    target.on('update', (u: Uint8Array) => treeUpdates.push(u));
+    const newId = await instantiateBundle(bundle, target, {
+      parentId: null,
+      createdBy: userId,
+      withDoc: async (id, use) => {
+        const doc = made.get(id) ?? new Y.Doc();
+        made.set(id, doc);
+        return use(doc);
+      },
+    });
+    const author = { userId };
+    const placed = { scope: scope.id };
+    const pages = Y.mergeUpdates(treeUpdates);
+    await ctx.docs.edit(to, scope.treeDoc, author, (d) => Y.applyUpdate(d, pages), placed);
+    for (const [id, doc] of made) {
+      if (Y.encodeStateVector(doc).length <= 1) continue;
+      const update = Y.encodeStateAsUpdate(doc);
+      await ctx.docs.edit(to, id, author, (d) => Y.applyUpdate(d, update), placed);
+    }
+    return newId;
+  } finally {
+    target.destroy();
+    for (const doc of made.values()) doc.destroy();
+  }
 }
 
 /** Copy the attachments among `ids` that are stored for `from` and not yet for `to`. */

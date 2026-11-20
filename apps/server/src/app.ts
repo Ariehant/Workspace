@@ -1,6 +1,7 @@
 import { unsplashRoutes } from './unsplash-routes';
 import { exportRoutes } from './export-routes';
 import { moveRoutes } from './move-routes';
+import { duplicateRoutes } from './publish/duplicate';
 import { VERSION } from './version';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
@@ -291,6 +292,7 @@ export function buildServer({
     emailRoutes(scope, ctx);
     exportRoutes(scope, ctx);
     moveRoutes(scope, ctx);
+    duplicateRoutes(scope, ctx);
     unsplashRoutes(scope, ctx);
   });
   apiRoutes(app, ctx, apiOptions);

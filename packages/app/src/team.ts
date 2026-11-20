@@ -331,6 +331,8 @@ export interface PublishSettings {
   slug: string;
   includeSubpages: boolean;
   allowIndexing: boolean;
+  /** Visitors may copy it into a workspace of theirs (signed in, on this server). */
+  allowDuplicate: boolean;
   title: string;
   description: string;
 }

@@ -78,14 +78,14 @@ milestones below; the others wait for a decision, by number.
 
 ### D. Sharing and publishing (need the server)
 
-| #   | Notion feature                                                                                          | What it's for (how you use it)                                                            | Effort                     | Suggest                        |
-| --- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------- | ------------------------------ |
-| 33  | **Request access** (someone without access clicks "Request", the owner gets it in the inbox, approves)  | Today they just see "no access" and must ask the owner outside the app.                   | S–M                        | ✅ Done (N4)                   |
-| 34  | **Share link for anyone with the link** (view/comment/edit, optionally with expiry), without publishing | Send a page to a client without making it public on the web.                              | M                          | ✅ Done (N8)                   |
-| 35  | **Published sites: custom domain**, site theme/nav bar, "Allow duplicate as template"                   | `notes.yourcompany.com` instead of the server address; let visitors copy a template page. | L (domain) / S (duplicate) | 🤔                             |
-| 36  | **Admin tools**: audit log, admin content search, disable export/download, SAML SSO, SCIM user sync     | Company security and compliance. We already have OIDC single sign-on.                     | M–L each                   | ❌ (unless a company needs it) |
-| 37  | **Slack notifications** (and Slack link previews)                                                       | Mentions and updates go to Slack. Needs a Slack app per server.                           | M                          | ❌                             |
-| 38  | **Workspace analytics** (who's active, popular pages)                                                   | For admins of big workspaces. We already have per-page views.                             | M                          | ❌                             |
+| #   | Notion feature                                                                                          | What it's for (how you use it)                                                            | Effort                     | Suggest                               |
+| --- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
+| 33  | **Request access** (someone without access clicks "Request", the owner gets it in the inbox, approves)  | Today they just see "no access" and must ask the owner outside the app.                   | S–M                        | ✅ Done (N4)                          |
+| 34  | **Share link for anyone with the link** (view/comment/edit, optionally with expiry), without publishing | Send a page to a client without making it public on the web.                              | M                          | ✅ Done (N8)                          |
+| 35  | **Published sites: custom domain**, site theme/nav bar, "Allow duplicate as template"                   | `notes.yourcompany.com` instead of the server address; let visitors copy a template page. | L (domain) / S (duplicate) | ✅ Duplicate done (step 5); domain ❌ |
+| 36  | **Admin tools**: audit log, admin content search, disable export/download, SAML SSO, SCIM user sync     | Company security and compliance. We already have OIDC single sign-on.                     | M–L each                   | ❌ (unless a company needs it)        |
+| 37  | **Slack notifications** (and Slack link previews)                                                       | Mentions and updates go to Slack. Needs a Slack app per server.                           | M                          | ❌                                    |
+| 38  | **Workspace analytics** (who's active, popular pages)                                                   | For admins of big workspaces. We already have per-page views.                             | M                          | ❌                                    |
 
 ### E. Import, export, developer platform
 
@@ -1066,3 +1066,27 @@ oversized messages; telling devices to come back at shutdown) and one in `automa
 (pausing when the maker can no longer edit). None touches the API. They passed in three more
 full runs, alone, and four times under full CPU load; with no output kept from that run, the
 cause isn't known. Watching CI for them.
+
+## Duplicate as template (#35, part)
+
+**Built.** Publishing has **Allow duplicate as template**. A page published with it shows
+Duplicate (a link to `/d/<slug>` in the web app). There a visitor signs in, or creates an account
+where the server allows it, picks one of their workspaces (where they're a member, not a guest),
+and gets a copy in their private pages there, opened. The copy is exactly what the site shows:
+the page, and its sub-pages only if they're published too, with their databases, rows and the
+attachments they use; links between them follow the copies (the move code's `copyBundleInto`,
+and `captureBundle` now takes a filter). It's written as the visitor, with their access there.
+`GET /api/published/<slug>/duplicate` says what it is (its title) to anyone, and
+`POST …/duplicate` with `{ to }` makes the copy; both answer 404 unless the page allows copies.
+A custom domain (the rest of #35) needs DNS and certificates outside the app: not done.
+
+**Fixed on the way:** a failed backlinks read (the web app's service worker answering 503 during
+a reload) was an uncaught error in the page; it now keeps what was shown, and the next change
+reads again.
+
+**Tests:** `publish.test.ts` (server): no Duplicate and 404 until allowed; then the button, the
+title, a copy into Bob's own workspace with the page's text and image but not its unpublished
+sub-page or another page's file; with sub-pages published, they come too; refused signed out,
+for a guest, and into someone else's workspace. `apps/web/e2e/duplicate.spec.ts`: Ada publishes
+and allows copies; Bob opens the published page, follows Duplicate, signs up, makes a workspace,
+duplicates, lands on his copy and edits it; Ada's page is unchanged.
