@@ -31,6 +31,51 @@ async function selectionState(window: Page): Promise<string> {
   });
 }
 
+/**
+ * Record what touches the selection from now on: the view's updates (and whether each wrote
+ * the page's selection), keys and selection changes, with ProseMirror's selection and the
+ * page's after each. Read back with `selectionLog` when something goes wrong.
+ */
+async function recordSelection(window: Page): Promise<void> {
+  await window.evaluate(() => {
+    type View = Record<string, (...args: unknown[]) => unknown> & {
+      state: { selection: { from: number; to: number } };
+    };
+    const el = document.querySelector('[data-testid="page-editor"]') as
+      (Element & { editor?: { view: View } }) | null;
+    const view = el?.editor?.view;
+    if (!view) return;
+    const log: string[] = [];
+    const t0 = performance.now();
+    const now = () => {
+      const s = getSelection();
+      const pm = view.state.selection;
+      return `pm ${pm.from}-${pm.to} page ${s?.anchorOffset}/${s?.focusOffset} "${s?.toString() ?? ''}"`;
+    };
+    const at = (what: string) => {
+      if (log.length < 200) log.push(`${Math.round(performance.now() - t0)}ms ${what}: ${now()}`);
+    };
+    for (const name of ['updateState', 'setProps', 'update', 'dispatch', 'focus']) {
+      const original = view[name]!.bind(view);
+      view[name] = (...args: unknown[]) => {
+        at(`> ${name}`);
+        const result = original(...args);
+        at(`< ${name}`);
+        return result;
+      };
+    }
+    document.addEventListener('selectionchange', () => at('selectionchange'), true);
+    document.addEventListener('keydown', (e) => at(`keydown ${e.key}`), true);
+    document.addEventListener('keyup', (e) => at(`keyup ${e.key}`), true);
+    (window as unknown as { __selectionLog: string[] }).__selectionLog = log;
+  });
+}
+
+const selectionLog = (window: Page) =>
+  window.evaluate(() =>
+    ((window as unknown as { __selectionLog?: string[] }).__selectionLog ?? []).join('\n'),
+  );
+
 const blocks = (window: Page) => editor(window).locator(':scope > *');
 
 test('to-do list: shortcut, checking items, and persistence', async ({ launch }) => {
@@ -76,13 +121,16 @@ test('toggles: "> " shortcut, collapsing, toggle headings and turn into', async 
   await window.keyboard.type('Section title');
   // Ctrl+End left the toggle (Enter didn't act on where the caret was before it).
   await expect(blocks(window).last()).toHaveText('Section title');
+  await recordSelection(window);
   await window.keyboard.press('Shift+Home');
   const toolbar = window.getByTestId('selection-toolbar');
   // (CI's runner has, now and then, never shown the toolbar here; if so, say what the window had.)
   await expect(toolbar)
     .toBeVisible({ timeout: 10_000 })
     .catch(async (error: Error) => {
-      throw new Error(`${error.message}\nState: ${await selectionState(window)}`);
+      throw new Error(
+        `${error.message}\nState: ${await selectionState(window)}\nSince Shift+Home:\n${await selectionLog(window)}`,
+      );
     });
   await toolbar.getByRole('button', { name: 'Turn into' }).click();
   await toolbar.getByRole('menuitem', { name: 'Toggle heading 2' }).click();
