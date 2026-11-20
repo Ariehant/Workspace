@@ -122,6 +122,8 @@ const keyMoving = new WeakSet<EditorView>();
 
 /** Views reading an unread selection right now (the read dispatches, and updates the view). */
 const reading = new WeakSet<EditorView>();
+/** Views whose updates read an unread key move first (see `readBeforeViewUpdates`). */
+const wrapped = new WeakSet<EditorView>();
 
 /**
  * Read a key's move of the selection that ProseMirror hasn't read yet, before an update of
@@ -148,12 +150,24 @@ function readUnreadSelection(view: EditorView): boolean {
 }
 
 /**
- * Have `updateState` and `setProps` read an unread key move first. A new state made from the
- * old one (the same document and selection, other plugins) keeps the move.
+ * Have the ways the view writes its selection to the page (`updateState`, `setProps` and
+ * `focus`) read an unread key move first. A new state made from the old one (the same document
+ * and selection, other plugins) keeps the move. (Not `update(props)`: it brings a state of its
+ * own, which reading first would then overwrite; left alone, the move is read after it.)
  */
 function readBeforeViewUpdates(view: EditorView): void {
+  // Once per view: plugin views are made again whenever a plugin is registered.
+  if (wrapped.has(view)) return;
+  wrapped.add(view);
   const updateState = view.updateState.bind(view);
   const setProps = view.setProps.bind(view);
+  const focus = view.focus.bind(view);
+  // Focusing puts ProseMirror's selection on the page: a menu or panel closing in that moment
+  // wrote the old caret over the key's move (CI's toggles test).
+  view.focus = () => {
+    readUnreadSelection(view);
+    focus();
+  };
   view.updateState = (state) => {
     const before = view.state;
     const keepsSelection = state.doc === before.doc && state.selection.eq(before.selection);

@@ -280,6 +280,31 @@ test('a selection made with the keyboard survives a redraw that is not a transac
   expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
 });
 
+for (const call of ['focus', 'update'] as const) {
+  test(`a selection made with the keyboard survives the view's ${call}() before it reads the move`, async ({
+    launch,
+  }) => {
+    const { window } = await launch();
+    await newPage(window, `Then ${call}`);
+    await window.keyboard.type('Keep this selected');
+    // The other two ways ProseMirror writes its selection to the page: focusing the editor
+    // (a menu or panel closing, say) and updating its props directly. Made to happen first in
+    // line for the selectionchange, as above.
+    await editor(window).evaluate((el, method) => {
+      type View = { focus(): void; update(props: unknown): void; props: unknown };
+      const view = (el as unknown as { editor: { view: View } }).editor.view;
+      document.addEventListener(
+        'selectionchange',
+        () => (method === 'focus' ? view.focus() : view.update(view.props)),
+        { capture: true, once: true },
+      );
+    }, call);
+    await window.keyboard.press('Shift+Home');
+    await expect(window.getByTestId('selection-toolbar')).toBeVisible();
+    expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
+  });
+}
+
 test('table: insert, add rows and columns, header row, row and column colours', async ({
   launch,
 }) => {

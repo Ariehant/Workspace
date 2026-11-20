@@ -1090,3 +1090,23 @@ sub-page or another page's file; with sub-pages published, they come too; refuse
 for a guest, and into someone else's workspace. `apps/web/e2e/duplicate.spec.ts`: Ada publishes
 and allows copies; Bob opens the published page, follows Duplicate, signs up, makes a workspace,
 duplicates, lands on his copy and edits it; Ada's page is unchanged.
+
+## The toggles test, once more
+
+CI on 149179c (a server and API change) failed the toggles test again, with the same symptom as
+before N9c: after Shift+Home, the editor's selection and the page's both collapsed at the caret.
+It didn't reproduce locally (40 of 40 under full CPU load). The test now records, from the key
+on, every view update, key and selection change with both selections, and puts it in the
+failure message. Locally that log shows the window: the page's selection moves at the key, and
+`selectionchange`, when ProseMirror reads the move, comes about 12 ms later.
+
+ProseMirror writes its selection to the page in two ways: a state update (`updateState`,
+`setProps`, `update`) and `focus()`. N9c covered `updateState` and `setProps`. A test that
+focuses the editor first in line for the `selectionchange` (a menu or panel closing at that
+moment) failed with exactly CI's symptom: toolbar never shown. `focus()` now reads an unread key
+move first too. `update(props)` isn't wrapped: it brings a state of its own, so reading first and
+then applying it puts the old selection back (its test showed that); left alone, the move is read
+right after it. The wrapping is also done once per view now (plugin views are made again each
+time a plugin is registered, which wrapped the methods again).
+
+Whether `focus()` was what CI hit isn't proven: the recorded log will say if it happens again.
