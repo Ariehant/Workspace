@@ -936,3 +936,13 @@ and a Drive file, each opens where it is, kept after a restart.
 
 **Runs (N9c):** formatting, lint, types, unit tests and both builds pass; the full desktop E2E
 suite with all of N9: 193 passed, 3 skipped.
+
+**Found: why `database.group` read 550 ms (and failed CI's budgets at random).** A CPU profile
+and a timeline trace of the step showed the app done in about 150 ms (the change, React's
+render, the virtualized groups painted), then the renderer idle for 400 ms. The perf test only
+began watching for the group header once Playwright's `selectOption` had returned, 100–400 ms
+after the events, and noted the end after another round trip: it timed the test, not the app.
+The timer now watches from before the action and notes the end in the renderer, in the frame
+the result first shows (what its comment always said). Over three local runs: `database.group`
+134–142 ms (it read 517–640), `database.sort` 150–206 ms, `database.filter` 77–124 ms. The
+budgets are unchanged.
