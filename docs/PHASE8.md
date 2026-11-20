@@ -1111,6 +1111,19 @@ time a plugin is registered, which wrapped the methods again).
 
 Whether `focus()` was what CI hit isn't proven: the recorded log will say if it happens again.
 
+It did, on c4ce0fb, and the log ruled `focus()` out: the page's selection moved at the key (13/0
+at keyup), then went back to the caret (13/13) before `selectionchange`, with no view update,
+dispatch or `focus()` call in between. The third way ProseMirror writes its selection is its
+own `focus` event handler: 20 ms after the editor gains focus, if the page's selection differs
+from what it last read, it puts its own there. A key moving the selection within those 20 ms,
+before its `selectionchange` is read, is written over. Made certain in a test (the
+`selectionchange` held back, the editor losing and gaining focus as the key goes down), the
+page's selection was emptied, as on CI. The editor's own `focus` handler, which runs before
+ProseMirror's, now sets a timer of the same 20 ms that reads an unread key move; timers of equal
+delay run in the order they were set, so the move is read before ProseMirror compares. The new
+test passes, and the toggles and selection tests passed 8 times each. The toggles log now
+records focus moving in and out (and the window's) too.
+
 ## The scroll budget on CI
 
 `scroll.frame.max` failed CI's performance check on three heads in a row (33, 167 and 33 ms

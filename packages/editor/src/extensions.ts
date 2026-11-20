@@ -206,6 +206,17 @@ const KeysUseCurrentSelection = Extension.create({
             keyMoving.add(view);
             return false;
           },
+          handleDOMEvents: {
+            // 20 ms after the editor gains focus, ProseMirror puts its selection on the page if
+            // the page's differs from what it last read: a key's move in those 20 ms, not yet
+            // read, was written over (CI's toggles failure on c4ce0fb). This runs before
+            // ProseMirror's own focus handler, so its timer, of the same delay, fires first
+            // (timers of equal delay run in the order they were set) and reads the move.
+            focus(view) {
+              setTimeout(() => readUnreadSelection(view), 20);
+              return false;
+            },
+          },
         },
         view(view) {
           readBeforeViewUpdates(view);

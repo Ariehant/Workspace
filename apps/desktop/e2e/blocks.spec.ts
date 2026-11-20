@@ -67,6 +67,19 @@ async function recordSelection(window: Page): Promise<void> {
     document.addEventListener('selectionchange', () => at('selectionchange'), true);
     document.addEventListener('keydown', (e) => at(`keydown ${e.key}`), true);
     document.addEventListener('keyup', (e) => at(`keyup ${e.key}`), true);
+    // Focus moving (ProseMirror puts its selection on the page 20 ms after the editor gains it).
+    for (const type of ['focusin', 'focusout']) {
+      document.addEventListener(
+        type,
+        (e) =>
+          at(
+            `${type} ${(e.target as HTMLElement).dataset?.testid ?? (e.target as HTMLElement).tagName}`,
+          ),
+        true,
+      );
+    }
+    window.addEventListener('blur', () => at('window blur'));
+    window.addEventListener('focus', () => at('window focus'));
     (window as unknown as { __selectionLog: string[] }).__selectionLog = log;
   });
 }
@@ -304,6 +317,39 @@ for (const call of ['focus', 'update'] as const) {
     expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
   });
 }
+
+test('a selection made with the keyboard survives the editor gaining focus before it reads the move', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newPage(window, 'Then focused');
+  await window.keyboard.type('Keep this selected');
+  // ProseMirror's focus handler puts its selection on the page 20 ms after the editor gains
+  // focus (if the page's differs from what it last read). A key moving the selection in those
+  // 20 ms, before its selectionchange is read, was written over: CI's toggles failure on
+  // c4ce0fb, where nothing else wrote the selection. Made certain here: the selectionchange
+  // is held back from everyone (as if late), and the editor loses and gains focus as the key
+  // goes down (ProseMirror's own blur and focus handlers).
+  await editor(window).evaluate((el) => {
+    document.addEventListener('selectionchange', (e) => e.stopImmediatePropagation(), {
+      capture: true,
+      once: true,
+    });
+    el.addEventListener(
+      'keydown',
+      () => {
+        el.dispatchEvent(new FocusEvent('blur'));
+        el.dispatchEvent(new FocusEvent('focus'));
+      },
+      { capture: true, once: true },
+    );
+  });
+  await window.keyboard.press('Shift+Home');
+  await window.waitForTimeout(100); // past ProseMirror's 20 ms
+  // The page keeps the key's selection (not written over), and the editor has read it.
+  expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
+  await expect(window.getByTestId('selection-toolbar')).toBeVisible();
+});
 
 test('table: insert, add rows and columns, header row, row and column colours', async ({
   launch,
