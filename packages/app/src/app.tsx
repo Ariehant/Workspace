@@ -78,7 +78,7 @@ import { can, type AppCommand, type Platform } from './platform';
 import { QuickFind } from './quick-find';
 import { ButtonEditorHost } from './buttons/button-dialog';
 import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
-import { MoveDialog } from './move-dialog';
+import { MoveDialog, type OtherWorkspaces } from './move-dialog';
 import { duplicatePage } from './page-actions';
 import { SyncDialog, useSyncInfo } from './sync-settings';
 import {
@@ -557,6 +557,17 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   }, []);
 
   const [moving, setMoving] = useState<PageId | null>(null);
+  // A page can also go to another of the person's workspaces on the server.
+  const otherWorkspaces = useMemo<OtherWorkspaces | undefined>(
+    () =>
+      team && scoped && moving
+        ? {
+            list: team.moveTargets,
+            move: async (to) => void (await team.moveToWorkspace(moving, to)),
+          }
+        : undefined,
+    [team, scoped, moving],
+  );
   const [sharing, setSharing] = useState<PageId | null>(null);
   /** Teamspace dialogs: new, browse, or one's settings (its scope id). */
   const [teamspaceDialog, setTeamspaceDialog] = useState<
@@ -1114,6 +1125,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
               navigate(moving);
             }}
             onClose={() => setMoving(null)}
+            otherWorkspaces={otherWorkspaces}
           />
         )}
         <ButtonEditorHost />

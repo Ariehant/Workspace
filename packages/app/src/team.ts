@@ -211,6 +211,15 @@ export function teamApi(team: TeamPlatform) {
     /** Emails about unread notifications (Phase 6 M7), and whether the server sends any. */
     emailSettings: () => r<EmailSettings>('GET', 'me/email'),
     setEmailDigest: (digest: EmailDigest) => r<EmailSettings>('PUT', 'me/email', { digest }),
+    // Moving a page to another workspace (Phase 8 #31): into your private pages there.
+    moveTargets: async () =>
+      (await r<{ workspaces: { id: string; name: string }[] }>('GET', 'move-targets')).workspaces,
+    moveToWorkspace: (pageId: string, to: string) =>
+      r<{ workspaceId: string; pageId: string }>(
+        'POST',
+        `pages/${encodeURIComponent(pageId)}/move-to-workspace`,
+        { to },
+      ),
     // Share links (Phase 8 N8): open to whoever signs in with the link.
     shareLink: (pageId: string) => r<{ link: ShareLinkInfo | null }>('GET', `pages/${pageId}/link`),
     makeShareLink: (pageId: string, role: ShareLinkRole, days: number | null) =>

@@ -65,16 +65,16 @@ milestones below; the others wait for a decision, by number.
 
 ### C. Navigation and workspace
 
-| #   | Notion feature                                                                                                                                                                                                                                              | What it's for (how you use it)                                                            | Effort         | Suggest      |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------- | ------------ |
-| 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅ Done (N4) |
-| 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | ✅ Done (N6) |
-| 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | ✅ Done (N8) |
-| 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | ✅ Done (N7) |
-| 29  | **Full keyboard shortcut set** (move blocks with `Ctrl+Shift+↑/↓`, `Ctrl+Alt+0–9` turn into, `Ctrl+D` duplicate, `Ctrl+Shift+H` last colour, `Ctrl+Shift+L` dark mode, `Ctrl+[`/`]` back/forward, `Ctrl+Shift+U` go to parent…) and a shortcuts help screen | Faster work for keyboard users; people coming from Notion expect the same keys.           | S              | ✅ Done (N1) |
-| 30  | **Comments display setting** (show comments on the page, minimized, or hidden)                                                                                                                                                                              | Keep busy pages clean.                                                                    | S              | ✅ Done (N6) |
-| 31  | **Move a page to another workspace**                                                                                                                                                                                                                        | Reorganise between personal and team workspaces.                                          | S–M            | 🤔           |
-| 32  | **Other languages** for the interface (Hindi etc.)                                                                                                                                                                                                          | Left for later in Phase 7; listed so it isn't forgotten.                                  | M per language | 🤔           |
+| #   | Notion feature                                                                                                                                                                                                                                              | What it's for (how you use it)                                                            | Effort         | Suggest          |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------- | ---------------- |
+| 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅ Done (N4)     |
+| 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | ✅ Done (N6)     |
+| 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | ✅ Done (N8)     |
+| 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | ✅ Done (N7)     |
+| 29  | **Full keyboard shortcut set** (move blocks with `Ctrl+Shift+↑/↓`, `Ctrl+Alt+0–9` turn into, `Ctrl+D` duplicate, `Ctrl+Shift+H` last colour, `Ctrl+Shift+L` dark mode, `Ctrl+[`/`]` back/forward, `Ctrl+Shift+U` go to parent…) and a shortcuts help screen | Faster work for keyboard users; people coming from Notion expect the same keys.           | S              | ✅ Done (N1)     |
+| 30  | **Comments display setting** (show comments on the page, minimized, or hidden)                                                                                                                                                                              | Keep busy pages clean.                                                                    | S              | ✅ Done (N6)     |
+| 31  | **Move a page to another workspace**                                                                                                                                                                                                                        | Reorganise between personal and team workspaces.                                          | S–M            | ✅ Done (step 3) |
+| 32  | **Other languages** for the interface (Hindi etc.)                                                                                                                                                                                                          | Left for later in Phase 7; listed so it isn't forgotten.                                  | M per language | 🤔               |
 
 ### D. Sharing and publishing (need the server)
 
@@ -1009,3 +1009,30 @@ edit by the related database's properties, nothing when that database or the lin
 another database is edited by the bot, with a formula value. `local-automations.spec.ts`: the
 same from the editor on the desktop, a formula's error shown as it's typed, and only the linked
 page changed.
+
+## Moving a page to another workspace (#31)
+
+**Built.** On a server, the Move dialog lists the person's other workspaces (where they're a
+member, not a guest) under "Another workspace". Moving copies the page with its sub-pages,
+databases, their rows and the attachments any of them use into the person's private pages
+there, with new ids: links, sub-page blocks, inline databases and relations between them point
+at the copies (the template code's `captureBundle` and `instantiateBundle`). The original then
+goes to the trash, where it can be restored. The server does it all
+(`POST /api/workspaces/<id>/pages/<page>/move-to-workspace`, and `GET …/move-targets`), as the
+person: it needs full access to the page (moving it out is sharing it), every doc it copies must
+be one they can read, and the copies are written with their own access there. Up to 20,000
+pages and rows at once (more: export and import). Attachments are found by their ids in the
+copied docs and copied when stored here; files on Drive or on the computer stay pointers.
+
+What doesn't follow: links to it from other pages here (they point at the page in the trash),
+comments, its history, sharing, and custom emoji (they belong to the workspace). A desktop that
+isn't synced has one workspace, so it doesn't offer this.
+
+**Tests:** `move.test.ts` (server): a page with a sub-page, an image, and a database whose
+rows relate to each other moves with all of it (the relation links the copies, the file is
+served there), the original is in the trash and can't be moved again; Bob (who may edit but
+not share) can't, a guest there isn't offered it, and the same workspace, an unknown one or an
+unknown page are refused; ids are found in encoded docs whatever follows them.
+`move-workspace.spec.ts`: Ada moves a page and its sub-page from the Move dialog; it shows in
+the trash in Lab, and her desktop on Home has it, its text, and a sub-page link that opens the
+copy.

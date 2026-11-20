@@ -221,6 +221,10 @@ These need the [self-hosted server](self-hosting.md).
   never or in 1, 7 or 30 days. Whoever opens it signs in or creates an account (even on an
   invite-only server) and joins as a guest with that role on that page alone. A new link ends
   the old one; turning it off ends it.
+- **Move to another workspace:** Move to → Another workspace (on a server, for someone with
+  full access to the page): the page, its sub-pages, databases, rows and attachments are copied
+  to your private pages in another of your workspaces (links and relations between them follow
+  the copies), and the page goes to the trash here.
 - **Request access:** a link or mention of a page you can't open shows "You don't have access
   to this page" (nothing else about it), where you ask to view, comment or edit, with a
   message. The people with full access to it get the request in their inbox and in its share
