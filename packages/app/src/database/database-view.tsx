@@ -38,6 +38,7 @@ import {
   type CardPreview,
   type CardSize,
   type ViewConfig,
+  type ViewResult,
   type ViewType,
 } from '@workspace/database';
 import { PageIcon } from '@workspace/editor';
@@ -85,6 +86,7 @@ import {
   GanttChart,
   BarChart3,
   ClipboardList,
+  LayoutDashboard,
   Zap,
   Lock,
   ArrowUpRight,
@@ -106,6 +108,7 @@ import {
   useMemo,
   useState,
   useSyncExternalStore,
+  type ReactNode,
 } from 'react';
 import { useApp } from '../context';
 import { useDocVersion } from '../hooks';
@@ -125,6 +128,7 @@ import { AutomationsDialog, automationsHost } from './automations-dialog';
 
 // recharts is large: load it when a chart is shown.
 const ChartView = lazy(() => import('./chart'));
+const DashboardView = lazy(() => import('./dashboard'));
 
 const VIEW_ICONS: Record<ViewType, LucideIcon> = {
   table: Table2,
@@ -136,6 +140,7 @@ const VIEW_ICONS: Record<ViewType, LucideIcon> = {
   timeline: GanttChart,
   chart: BarChart3,
   form: ClipboardList,
+  dashboard: LayoutDashboard,
 };
 
 export function ViewIcon({ type, size = 14 }: { type: ViewType; size?: number }) {
@@ -279,6 +284,66 @@ export function DatabaseView({
   const sortNames = view.sorts.map((s) => byId.get(s.propertyId)?.name).filter(Boolean);
   const showBar = ruleCount > 0 || view.sorts.length > 0;
   const isForm = view.type === 'form';
+
+  /** A view's layout over `rows` (this tab's, or a dashboard widget's). */
+  const layout = (v: View, rows: ViewResult): ReactNode => {
+    if (v.type === 'table') {
+      return (
+        <RowPresenceContext.Provider value={viewers}>
+          <TableView
+            handle={handle}
+            snapshot={snapshot}
+            view={v}
+            result={rows}
+            ctx={viewCtx}
+            editable={editable}
+            onOpenRow={(rowId) => openRow(rowId, databaseId, v.openPagesIn)}
+            onFilter={addFilter}
+          />
+        </RowPresenceContext.Provider>
+      );
+    }
+    const props = {
+      handle,
+      snapshot,
+      view: v,
+      result: rows,
+      ctx: viewCtx,
+      editable,
+      onOpenRow: (rowId: string) => openRow(rowId, databaseId, v.openPagesIn),
+    };
+    if (v.type === 'board') return <BoardView {...props} />;
+    if (v.type === 'form') {
+      return (
+        <FormView
+          handle={handle}
+          snapshot={snapshot}
+          view={v}
+          structureEditable={structureEditable}
+          databaseTitle={databaseTitle}
+        />
+      );
+    }
+    if (v.type === 'list') return <ListView {...props} />;
+    if (v.type === 'feed') return <FeedView {...props} />;
+    if (v.type === 'calendar') return <CalendarView {...props} />;
+    if (v.type === 'timeline') return <TimelineView {...props} />;
+    if (v.type === 'chart') {
+      return (
+        <Suspense fallback={<div className="h-[400px]" aria-busy="true" />}>
+          <ChartView {...props} />
+        </Suspense>
+      );
+    }
+    if (v.type === 'dashboard') {
+      return (
+        <Suspense fallback={<div className="h-[400px]" aria-busy="true" />}>
+          <DashboardView {...props} views={views} onOpenView={setActiveId} renderLayout={layout} />
+        </Suspense>
+      );
+    }
+    return <GalleryView {...props} />;
+  };
 
   const toolbarButton = (active: boolean) =>
     cn(
@@ -441,55 +506,60 @@ export function DatabaseView({
                 )}
               </PopoverContent>
             </Popover>
-            <Popover open={panel === 'sort'} onOpenChange={(o) => !o && setPanel(null)}>
-              <PopoverAnchor asChild>
-                <button
-                  type="button"
-                  className={toolbarButton(view.sorts.length > 0)}
-                  onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
-                >
-                  <ArrowUpDown size={15} /> <span className="max-md:hidden">Sort</span>
-                </button>
-              </PopoverAnchor>
-              <PopoverContent aria-label="Sorts" align="end">
-                {view.sorts.length === 0 ? (
-                  <PropertyPicker
-                    properties={properties}
-                    label="Sort by…"
-                    onPick={(p) =>
-                      setViewQuery({ sorts: [{ propertyId: p.id, direction: 'asc' }] })
-                    }
-                  />
-                ) : (
-                  <SortEditor
-                    sorts={view.sorts}
-                    properties={properties}
-                    onChange={(sorts) => setViewQuery({ sorts })}
-                  />
-                )}
-              </PopoverContent>
-            </Popover>
-            <Popover open={panel === 'group'} onOpenChange={(o) => !o && setPanel(null)}>
-              <PopoverAnchor asChild>
-                <button
-                  type="button"
-                  className={toolbarButton(view.groupBy !== null)}
-                  disabled={!viewsEditable}
-                  onClick={() => setPanel(panel === 'group' ? null : 'group')}
-                >
-                  <Layers size={15} /> <span className="max-md:hidden">Group</span>
-                </button>
-              </PopoverAnchor>
-              <PopoverContent aria-label="Group" align="end">
-                <GroupEditor
-                  properties={properties}
-                  groupBy={view.groupBy}
-                  subGroupBy={view.subGroupBy}
-                  groups={result.groups}
-                  onChange={(changes) => updateView(doc, view.id, changes)}
-                />
-              </PopoverContent>
-            </Popover>
+            {/* A dashboard's widgets show its rows as they each say: no sorts or groups. */}
+            {view.type !== 'dashboard' && (
+              <>
+                <Popover open={panel === 'sort'} onOpenChange={(o) => !o && setPanel(null)}>
+                  <PopoverAnchor asChild>
+                    <button
+                      type="button"
+                      className={toolbarButton(view.sorts.length > 0)}
+                      onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
+                    >
+                      <ArrowUpDown size={15} /> <span className="max-md:hidden">Sort</span>
+                    </button>
+                  </PopoverAnchor>
+                  <PopoverContent aria-label="Sorts" align="end">
+                    {view.sorts.length === 0 ? (
+                      <PropertyPicker
+                        properties={properties}
+                        label="Sort by…"
+                        onPick={(p) =>
+                          setViewQuery({ sorts: [{ propertyId: p.id, direction: 'asc' }] })
+                        }
+                      />
+                    ) : (
+                      <SortEditor
+                        sorts={view.sorts}
+                        properties={properties}
+                        onChange={(sorts) => setViewQuery({ sorts })}
+                      />
+                    )}
+                  </PopoverContent>
+                </Popover>
+                <Popover open={panel === 'group'} onOpenChange={(o) => !o && setPanel(null)}>
+                  <PopoverAnchor asChild>
+                    <button
+                      type="button"
+                      className={toolbarButton(view.groupBy !== null)}
+                      disabled={!viewsEditable}
+                      onClick={() => setPanel(panel === 'group' ? null : 'group')}
+                    >
+                      <Layers size={15} /> <span className="max-md:hidden">Group</span>
+                    </button>
+                  </PopoverAnchor>
+                  <PopoverContent aria-label="Group" align="end">
+                    <GroupEditor
+                      properties={properties}
+                      groupBy={view.groupBy}
+                      subGroupBy={view.subGroupBy}
+                      groups={result.groups}
+                      onChange={(changes) => updateView(doc, view.id, changes)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
             {search === null ? (
               <IconButton label="Search" onClick={() => setSearch('')}>
                 <Search size={15} />
@@ -639,56 +709,7 @@ export function DatabaseView({
         </div>
       )}
 
-      {view.type === 'table' && (
-        <RowPresenceContext.Provider value={viewers}>
-          <TableView
-            handle={handle}
-            snapshot={snapshot}
-            view={view}
-            result={result}
-            ctx={viewCtx}
-            editable={editable}
-            onOpenRow={open}
-            onFilter={addFilter}
-          />
-        </RowPresenceContext.Provider>
-      )}
-      {view.type !== 'table' &&
-        (() => {
-          const props = {
-            handle,
-            snapshot,
-            view,
-            result,
-            ctx: viewCtx,
-            editable,
-            onOpenRow: open,
-          };
-          if (view.type === 'board') return <BoardView {...props} />;
-          if (view.type === 'form') {
-            return (
-              <FormView
-                handle={handle}
-                snapshot={snapshot}
-                view={view}
-                structureEditable={structureEditable}
-                databaseTitle={databaseTitle}
-              />
-            );
-          }
-          if (view.type === 'list') return <ListView {...props} />;
-          if (view.type === 'feed') return <FeedView {...props} />;
-          if (view.type === 'calendar') return <CalendarView {...props} />;
-          if (view.type === 'timeline') return <TimelineView {...props} />;
-          if (view.type === 'chart') {
-            return (
-              <Suspense fallback={<div className="h-[400px]" aria-busy="true" />}>
-                <ChartView {...props} />
-              </Suspense>
-            );
-          }
-          return <GalleryView {...props} />;
-        })()}
+      {layout(view, result)}
       {!isForm && result.rows.length === 0 && (ruleCount > 0 || search) && (
         <p className="py-3 text-sm text-faint" data-testid="no-results">
           No results

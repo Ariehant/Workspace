@@ -56,7 +56,7 @@ milestones below; the others wait for a decision, by number.
 | 16  | **Form conditional logic** (show a question only if an earlier answer was X) and **file upload questions**                                                                  | Smarter forms: "If bug → ask for steps"; let people attach a screenshot.                                                                                         | M      | ✅ Done (N3)                 |
 | 17  | **Map view + Place property** (Notion 3.0/3.1)                                                                                                                              | Store addresses/places; see rows as pins on a map. For travel, field work, sites, customers. Needs a map tile source (OpenStreetMap).                            | L      | 🤔                           |
 | 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | ✅ Done (N7)                 |
-| 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | 🤔                           |
+| 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | ✅ Done (step 6)             |
 | 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌                           |
 | 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | ✅ Done (not email or Slack) |
 | 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | ✅ Done (N8)                 |
@@ -1135,3 +1135,40 @@ So the failures come from a first-scroll stall that main has as well, exposed by
 test happens to scroll, and from a gate that a single dropped frame fails. The stall itself is
 worth fixing (a table of 50,000 rows freezing for a quarter second on its first scroll after a
 pause); it's on the list, not done here.
+
+## Dashboard view (#19)
+
+**Built.** "Dashboard" is a view type of its own (Add a view, or Layout in the view's menu): one
+screen of widgets in a three-column grid (one column when the window is narrow), over the rows
+the dashboard's own filter and search keep. A widget is:
+
+- **a number**: the page count, or a column calculation over a property (sum, average, percent
+  checked, latest date…), shown in the property's format;
+- **a chart**: settings of its own, the chart view's (type, X axis, Y axis, group by, sort,
+  labels), drawn the same way;
+- **a view**: another view of the database (table, board, list, gallery, feed, calendar,
+  timeline or chart), laid out as its tab is, over the dashboard's rows and then its own
+  filter, in a box that scrolls; "Open" goes to its tab.
+
+A new dashboard starts with the page count and, when the database has a select or status
+property (or another to group by), a bar chart by it. With edit access you add widgets ("Add a
+widget"), rename them (click the title; emptied, it's named after what it shows again), and
+from a widget's "…" menu choose its property and calculation or its view, its width (a third,
+two thirds, full width), move it earlier or later, or remove it. A locked database shows
+dashboards without these. Sorts and groups aren't offered on a dashboard (its widgets show the
+rows as they each say). Linked views copy a dashboard with the rest of the view's settings; the
+API lists it as a view (`type: "dashboard"`) and queries its rows as any view's.
+
+Not here yet: a filter per widget (Notion has one), and dragging widgets to rearrange them.
+
+**Tests:** `dashboard.test.ts` (database): the starting widgets with and without something to
+chart by, a number widget's text (count, sum, percent checked, in the property's format), adding,
+changing, moving and removing widgets, titles from what they show, and a dashboard read back from
+the doc (missing fields filled in) and copied to a linked view. `dashboard.spec.ts`: "Parts" gets
+a Board and a Dashboard, which starts with the count and a chart by Stage; a sum of Points (18) is
+added and renamed, then the Board as a widget; the dashboard's filter (Points > 4) changes all of
+them (2, 15, two cards); the board widget is narrowed and moved first, the chart removed; axe finds
+nothing on the dashboard; "Open" goes to the Board tab; after a restart it's all there.
+`a11y.spec.ts` adds the dashboard to the layouts it checks, in both themes. The view menu helpers
+in `a11y`, `dated` and `layouts` now find "Board" exactly (the add-view menu also has
+"Dashboard").

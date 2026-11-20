@@ -17,6 +17,7 @@ export * from './board';
 export * from './calendar';
 export * from './timeline';
 export * from './chart';
+export * from './dashboard';
 export * from './templates';
 export * from './conversions';
 export * from './placeholders';

@@ -264,10 +264,16 @@ for (const theme of THEMES) {
       'Timeline',
       'Chart',
       'Form',
+      'Dashboard',
     ]) {
       await database.getByRole('button', { name: 'Add a view' }).click();
-      await window.getByTestId('add-view-menu').getByRole('menuitem', { name: layout }).click();
-      await expect(database.getByRole('tab', { name: layout, selected: true })).toBeVisible();
+      await window
+        .getByTestId('add-view-menu')
+        .getByRole('menuitem', { name: layout, exact: true })
+        .click();
+      await expect(
+        database.getByRole('tab', { name: layout, exact: true, selected: true }),
+      ).toBeVisible();
       await expectAccessible(window, s(`a ${layout.toLowerCase()}`));
     }
     await database.getByRole('tab', { name: 'Table' }).click();

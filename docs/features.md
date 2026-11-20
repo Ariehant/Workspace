@@ -99,7 +99,7 @@ Database" on an empty page).
   not; a status as a checkbox, ticked when it's in the Complete group (ticking sets the first
   Complete option, unticking the first To-do one).
 - **Views:** table, board, list, gallery, feed, calendar, timeline, chart (bar, line, pie,
-  donut) and form. Each view has its own filters (simple chips or nested AND/OR), sorts, grouping and
+  donut), form and dashboard (numbers, charts and other views of the database in one grid). Each view has its own filters (simple chips or nested AND/OR), sorts, grouping and
   sub-grouping, column calculations, visible properties, card preview and size, and a search.
 - **Table:** edit cells in place, keyboard navigation, copy and paste, undo; rename, retype,
   hide, resize, reorder, duplicate and delete columns; drag rows to reorder. "Freeze up to this

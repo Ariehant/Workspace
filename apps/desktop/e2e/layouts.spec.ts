@@ -14,7 +14,10 @@ async function columnCards(window: Page, label: string) {
 
 async function addView(window: Page, type: string) {
   await db(window).getByRole('button', { name: 'Add a view' }).click();
-  await window.getByTestId('add-view-menu').getByRole('menuitem', { name: type }).click();
+  await window
+    .getByTestId('add-view-menu')
+    .getByRole('menuitem', { name: type, exact: true })
+    .click();
 }
 
 async function viewMenu(window: Page, tab: string) {

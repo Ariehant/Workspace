@@ -6,7 +6,10 @@ import {
   type ChartConfig,
   type ChartType,
   type DateBucket,
+  type DisplayContext,
   type OptionColor,
+  type Property,
+  type Row,
 } from '@workspace/database';
 import { Popover, PopoverContent, PopoverTrigger } from '@workspace/ui';
 import { Settings2 } from 'lucide-react';
@@ -68,7 +71,37 @@ export default function ChartView({
   editable,
 }: LayoutViewProps) {
   const config = view.chart;
-  const data = chartData(result.rows, snapshot.properties, config, ctx);
+  return (
+    <div data-testid="chart-view" data-chart-type={config.type} className="pt-2 pb-4 text-sm">
+      <div className="flex h-10 items-center justify-end">
+        {editable && !snapshot.meta.lockViews && (
+          <ChartSettings
+            config={config}
+            properties={snapshot.properties}
+            onChange={(chart) => updateView(handle.doc, view.id, { chart })}
+          />
+        )}
+      </div>
+      <ChartCanvas config={config} rows={result.rows} properties={snapshot.properties} ctx={ctx} />
+    </div>
+  );
+}
+
+/** A chart of `rows` as `config` says (a chart view's, or a dashboard widget's). */
+export function ChartCanvas({
+  config,
+  rows: source,
+  properties,
+  ctx,
+  height = 360,
+}: {
+  config: ChartConfig;
+  rows: readonly Row[];
+  properties: readonly Property[];
+  ctx: DisplayContext;
+  height?: number;
+}) {
+  const data = chartData(source, properties, config, ctx);
   const color = useColors();
   const pie = config.type === 'pie' || config.type === 'donut';
   const rows = data.categories.map((c) => ({ name: c.label, total: c.total, ...c.values }));
@@ -172,19 +205,14 @@ export default function ChartView({
   }
 
   return (
-    <div data-testid="chart-view" data-chart-type={config.type} className="pt-2 pb-4 text-sm">
-      <div className="flex h-10 items-center justify-end">
-        {editable && !snapshot.meta.lockViews && <ChartSettings {...{ handle, snapshot, view }} />}
-      </div>
-      <div className="h-[360px] w-full" data-testid="chart-canvas">
-        {data.categories.length === 0 ? (
-          chart
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            {chart as never}
-          </ResponsiveContainer>
-        )}
-      </div>
+    <div className="w-full" style={{ height }} data-testid="chart-canvas">
+      {data.categories.length === 0 ? (
+        chart
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          {chart as never}
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
@@ -200,21 +228,26 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 const selectClass = 'h-7 w-40 rounded border border-line bg-transparent px-1.5 text-sm text-fg';
 
-function ChartSettings({
-  handle,
-  snapshot,
-  view,
-}: Pick<LayoutViewProps, 'handle' | 'snapshot' | 'view'>) {
-  const config = view.chart;
-  const set = (changes: Partial<ChartConfig>) =>
-    updateView(handle.doc, view.id, { chart: { ...config, ...changes } });
-  const groupable = snapshot.properties.filter((p) => GROUPABLE_TYPES.includes(p.type));
-  const numbers = snapshot.properties.filter(
+/** A chart's settings, in a popover (a chart view's, or a dashboard widget's). */
+export function ChartSettings({
+  config,
+  properties,
+  onChange,
+  label = 'Chart settings',
+}: {
+  config: ChartConfig;
+  properties: readonly Property[];
+  onChange(config: ChartConfig): void;
+  label?: string;
+}) {
+  const set = (changes: Partial<ChartConfig>) => onChange({ ...config, ...changes });
+  const groupable = properties.filter((p) => GROUPABLE_TYPES.includes(p.type));
+  const numbers = properties.filter(
     (p) =>
       p.type === 'number' ||
       ((p.type === 'formula' || p.type === 'rollup') && p.config.resultType === 'number'),
   );
-  const xProperty = snapshot.properties.find((p) => p.id === config.x?.propertyId);
+  const xProperty = properties.find((p) => p.id === config.x?.propertyId);
   const isDate = xProperty && ['date', 'createdTime', 'lastEditedTime'].includes(xProperty.type);
   const pie = config.type === 'pie' || config.type === 'donut';
   const toggle = (key: 'stacked' | 'legend' | 'labels' | 'hideEmpty', label: string) => (
@@ -235,7 +268,7 @@ function ChartSettings({
           type="button"
           className="flex h-7 items-center gap-1 rounded px-1.5 text-muted hover:bg-hover"
         >
-          <Settings2 size={15} /> Chart settings
+          <Settings2 size={15} /> {label}
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -263,7 +296,7 @@ function ChartSettings({
             aria-label="X axis"
             value={config.x?.propertyId ?? ''}
             onChange={(e) => {
-              const p = snapshot.properties.find((q) => q.id === e.target.value);
+              const p = properties.find((q) => q.id === e.target.value);
               const date = p && ['date', 'createdTime', 'lastEditedTime'].includes(p.type);
               set({
                 x: p
