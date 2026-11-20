@@ -1110,3 +1110,28 @@ right after it. The wrapping is also done once per view now (plugin views are ma
 time a plugin is registered, which wrapped the methods again).
 
 Whether `focus()` was what CI hit isn't proven: the recorded log will say if it happens again.
+
+## The scroll budget on CI
+
+`scroll.frame.max` failed CI's performance check on three heads in a row (33, 167 and 33 ms
+against the base branch's 16.8 ms). Two of those runs were also slow machines: every pure
+benchmark was 28–48% slower, including code the changes didn't touch. What was measured:
+
+- The metric moves in whole frames: 16.8 ms is one frame at 60 Hz, 33.4 ms one dropped frame.
+  The gate fails anything 20% over the base branch's last run, so with a base of one frame,
+  a single dropped frame fails. Main itself, measured here with its own test, gave 33.4 ms in
+  4 of 7 runs.
+- With this branch's perf test (e5aa582 times each step to the frame it ends, instead of when
+  the test hears back), the views' scrolling showed 50–133 ms frames in about half the runs,
+  with main's app as with this branch's. Waiting for the renderer to be idle first, and
+  replacing Playwright's frame polling, didn't change that.
+- Pausing 8 s before the scrolling made it consistent: the first Table scroll stalls
+  200–280 ms, with main's app and main's own test too. A trace shows the stall inside the
+  virtualizer's scroll listener (TanStack Virtual re-rendering the rows synchronously), mostly
+  the browser's own layout and style work rather than JavaScript (71 ms of script in a 283 ms
+  frame, 40–50 ms of garbage collection).
+
+So the failures come from a first-scroll stall that main has as well, exposed by when the
+test happens to scroll, and from a gate that a single dropped frame fails. The stall itself is
+worth fixing (a table of 50,000 rows freezing for a quarter second on its first scroll after a
+pause); it's on the list, not done here.
