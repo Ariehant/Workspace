@@ -106,6 +106,11 @@ milestones below; the others wait for a decision, by number.
 | 46  | **Mobile apps (Android, iOS)**                                         | Phone access. Today the web app works in a phone browser (not optimised). A real app is a large project.                         | L      | 🤔 (start with a phone-friendly web app) |
 | 47  | **Web clipper** (browser extension to save a web page into a database) | Save articles/research in one click.                                                                                             | M      | 🤔                                       |
 
+Not now (2026-11-21, the owner's decision): the phone-friendly web app for #46. Parked instead,
+to come back to: [the desktop app as a native productivity app](ideas/desktop-integration.md)
+(notifications, today in the top bar or tray, quick capture). A calendar app that works with
+Workspace through its API is planned for another builder: [the handoff](calendar-app/HANDOFF.md).
+
 ## Milestones
 
 | Milestone | Items                                                                                                      | Estimate  |
