@@ -12,11 +12,19 @@ it to a server.
 ## Install
 
 Workspace runs on Ubuntu 24.04 and later (x86-64); other modern Linux desktops should work too.
-Each release on [GitHub](https://github.com/ariehant/workspace/releases) has a `.deb`, an
-AppImage, a Snap and a Flatpak, with `SHA256SUMS` (signed, `.asc`, once the project's key is
-set up). Until the first release, build them from source, below.
+Each release on the repository's [Releases](https://github.com/Ariehant/Workspace/releases) page
+has a `.deb`, an AppImage, a Snap and a Flatpak, with `SHA256SUMS` (signed, `.asc`, once the
+project's key is set up). The first will be a release candidate, `v1.0.0-rc.1`: download the
+`.deb` from its Assets and install it with `sudo apt install ~/Downloads/workspace-app_*_amd64.deb`.
 
-**From the apt repository (recommended):** updates come with `apt upgrade`.
+**The latest build** (until the first release is out): the
+[latest-build](https://github.com/Ariehant/Workspace/releases/tag/latest-build) pre-release has
+the `.deb` and AppImage of `main` as it is now. CI publishes it after its tests pass and replaces
+it with every change; it isn't signed and doesn't update itself, so install a newer one the same
+way.
+
+**From the apt repository** (from v1.0.0; release candidates aren't published to it): updates
+come with `apt upgrade`.
 
 ```sh
 curl -fsSL https://ariehant.github.io/workspace/apt/workspace-archive-keyring.gpg \
@@ -52,6 +60,8 @@ Flatpak** (from Flathub, once listed) update through their stores.
 **From source** (Node.js 22.13 or later, pnpm 10):
 
 ```sh
+git clone https://github.com/Ariehant/Workspace.git
+cd Workspace
 corepack enable
 pnpm install
 pnpm package        # apps/desktop/dist/: a .deb and an AppImage

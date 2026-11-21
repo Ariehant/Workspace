@@ -125,19 +125,35 @@ The full inventory, block by block, is in [docs/features.md](docs/features.md).
 
 ### The desktop app
 
-Workspace runs on Ubuntu 24.04 and later (x86-64). Build the packages from source (there are no
-published releases yet):
+Workspace runs on Ubuntu 24.04 and later (x86-64). Download it from the repository's
+[Releases](https://github.com/Ariehant/Workspace/releases) page: each release has a `.deb`, an
+AppImage, a Snap and a Flatpak, with `SHA256SUMS`. The first one will be a release candidate,
+`v1.0.0-rc.1`.
+
+**Until the first release is out,** download the
+[latest build](https://github.com/Ariehant/Workspace/releases/tag/latest-build) from the same
+page: a pre-release of `main` that CI publishes after its tests pass and replaces with every
+change (unsigned, and it doesn't update itself).
 
 ```sh
+# The .deb from the release's Assets (here, into ~/Downloads), then:
+sudo apt install ~/Downloads/workspace-app_*_amd64.deb
+```
+
+Prefer the `.deb`: it installs an AppArmor profile so Chromium's sandbox works under Ubuntu
+24.04's restrictions. The AppImage, the apt repository (from v1.0.0), where your data lives and
+backups are covered in the [desktop guide](docs/desktop.md).
+
+**From source** instead (Node.js 22.13 or later): clone the repository and build the packages.
+
+```sh
+git clone https://github.com/Ariehant/Workspace.git
+cd Workspace
 corepack enable        # pnpm, at the version the repo pins
 pnpm install
 pnpm package           # .deb and AppImage in apps/desktop/dist/
 sudo apt install ./apps/desktop/dist/workspace-app_*_amd64.deb
 ```
-
-Prefer the `.deb`: it installs an AppArmor profile so Chromium's sandbox works under Ubuntu
-24.04's restrictions. Where your data lives, backups and the AppImage are covered in the
-[desktop guide](docs/desktop.md).
 
 ### The sync server
 
