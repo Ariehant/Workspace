@@ -127,8 +127,13 @@ The full inventory, block by block, is in [docs/features.md](docs/features.md).
 
 Workspace runs on Ubuntu 24.04 and later (x86-64). Download it from the repository's
 [Releases](https://github.com/Ariehant/Workspace/releases) page: each release has a `.deb`, an
-AppImage, a Snap and a Flatpak, with `SHA256SUMS`. The first one is a release candidate,
+AppImage, a Snap and a Flatpak, with `SHA256SUMS`. The first one will be a release candidate,
 `v1.0.0-rc.1`.
+
+**Until the first release is out,** download the
+[latest build](https://github.com/Ariehant/Workspace/releases/tag/latest-build) from the same
+page: a pre-release of `main` that CI publishes after its tests pass and replaces with every
+change (unsigned, and it doesn't update itself).
 
 ```sh
 # The .deb from the release's Assets (here, into ~/Downloads), then:
