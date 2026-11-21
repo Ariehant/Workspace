@@ -4,7 +4,7 @@
  * server workspace adds: sharing, members, the inbox and comments.
  */
 import AxeBuilder from '@axe-core/playwright';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
@@ -75,7 +75,7 @@ async function checkOpen(
 for (const theme of THEMES) {
   test(`the main screens and dialogs, ${theme.toLowerCase()} theme`, async ({ launch }) => {
     test.setTimeout(180_000);
-    const { window } = await launch();
+    const { app, window } = await launch();
     await setTheme(window, theme);
     const s = (name: string) => `${name} (${theme})`;
     const sidebarButton = (name: string) => window.getByRole('button', { name, exact: true });
@@ -106,7 +106,25 @@ for (const theme of THEMES) {
     );
     await expect(window.getByTestId('no-access')).toContainText('This page doesn’t exist');
     await expectAccessible(window, s('a page that doesn’t exist'));
+    // Back is the page it was opened over.
     await window.keyboard.press('Alt+ArrowLeft');
+    await expect(window.getByTestId('no-access')).toBeHidden();
+    await sidebarButton('Home').click();
+    await expect(window.getByTestId('home-recent-page').first()).toBeVisible();
+    await expectAccessible(window, s('home'));
+    await window.keyboard.press('Alt+ArrowLeft');
+    await expect(window.getByTestId('home')).toBeHidden();
+    await sidebarButton('People').click();
+    await expect(window.getByTestId('person-pages')).toBeVisible();
+    await expectAccessible(window, s('people'));
+    await window.keyboard.press('Alt+ArrowLeft');
+    await expect(window.getByTestId('people')).toBeHidden();
+    await checkOpen(window, s('presenting a page'), async () => {
+      await window.getByRole('button', { name: 'Page options' }).click();
+      await window.getByRole('menuitem', { name: 'Present' }).click();
+      await expect(window.getByTestId('slide-count')).toBeVisible();
+    });
+    await expect(window.getByTestId('presentation')).toBeHidden();
     await checkOpen(window, s('templates'), () => sidebarButton('Templates').click());
     await checkOpen(window, s('the trash'), () => sidebarButton('Trash').click());
     await checkOpen(window, s('sync settings'), () => window.getByTestId('sync-indicator').click());
@@ -115,6 +133,35 @@ for (const theme of THEMES) {
       await window.getByRole('button', { name: /workspace menu/i }).click();
       await window.getByRole('menuitem', { name: 'Language and region…' }).click();
       await expect(window.getByTestId('region-dialog')).toBeVisible();
+    });
+
+    await checkOpen(window, s('settings, appearance'), async () => {
+      await window.keyboard.press('Control+,');
+      await expect(window.getByTestId('appearance-settings')).toBeVisible();
+    });
+
+    await checkOpen(window, s('settings, notifications'), async () => {
+      await window.keyboard.press('Control+,');
+      await window.getByRole('tab', { name: 'Notifications' }).click();
+      await expect(window.getByTestId('notification-settings')).toBeVisible();
+    });
+
+    await checkOpen(window, s('emoji settings'), async () => {
+      await window.getByRole('button', { name: /workspace menu/i }).click();
+      await window.getByRole('menuitem', { name: 'Emoji…' }).click();
+      await expect(window.getByTestId('emoji-settings')).toBeVisible();
+    });
+
+    await checkOpen(window, s('linked folders settings'), async () => {
+      await window.keyboard.press('Control+,');
+      await window.getByRole('tab', { name: 'Linked folders' }).click();
+      await expect(window.getByTestId('linked-folders')).toBeVisible();
+    });
+
+    await checkOpen(window, s('connections settings'), async () => {
+      await window.keyboard.press('Control+,');
+      await window.getByRole('tab', { name: 'Connections' }).click();
+      await expect(window.getByLabel('OAuth client ID')).toBeVisible();
     });
 
     await checkOpen(window, s('about'), async () => {
@@ -158,6 +205,29 @@ for (const theme of THEMES) {
     await window.keyboard.type('In the first tab');
     await expectAccessible(window, s('a tabs block'));
 
+    // Linked files: one found, one that has moved (its problem and Locate…).
+    const files = mkdtempSync(join(tmpdir(), 'workspace-a11y-linked-'));
+    writeFileSync(join(files, 'gripper.step'), 'ISO-10303-21;');
+    writeFileSync(join(files, 'old.step'), 'ISO-10303-21;');
+    await app.evaluate(
+      ({ dialog }, filePaths) => {
+        dialog.showOpenDialog = (async () => ({ canceled: false, filePaths })) as never;
+      },
+      [join(files, 'gripper.step'), join(files, 'old.step')],
+    );
+    await editor(window).first().locator(':scope > p').last().click();
+    await window.keyboard.type('/linked file');
+    await window
+      .getByTestId('slash-menu')
+      .getByRole('option', { name: /^Linked file/ })
+      .click();
+    await expect(window.getByTestId('linked-file')).toHaveCount(2);
+    rmSync(join(files, 'old.step'));
+    await window.evaluate(() => globalThis.dispatchEvent(new Event('focus')));
+    await expect(window.getByRole('button', { name: 'Locate…' })).toBeVisible();
+    await expectAccessible(window, s('linked files'));
+    rmSync(files, { recursive: true, force: true });
+
     // An image and its crop dialog, on the line after the tabs.
     await editor(window).first().locator(':scope > p').last().click();
     await window.keyboard.type('/image');
@@ -185,10 +255,25 @@ for (const theme of THEMES) {
     await window.keyboard.press('Escape');
     const database = window.getByTestId('database-view');
     await expectAccessible(window, s('a table'));
-    for (const layout of ['Board', 'List', 'Gallery', 'Calendar', 'Timeline', 'Chart', 'Form']) {
+    for (const layout of [
+      'Board',
+      'List',
+      'Gallery',
+      'Feed',
+      'Calendar',
+      'Timeline',
+      'Chart',
+      'Form',
+      'Dashboard',
+    ]) {
       await database.getByRole('button', { name: 'Add a view' }).click();
-      await window.getByTestId('add-view-menu').getByRole('menuitem', { name: layout }).click();
-      await expect(database.getByRole('tab', { name: layout, selected: true })).toBeVisible();
+      await window
+        .getByTestId('add-view-menu')
+        .getByRole('menuitem', { name: layout, exact: true })
+        .click();
+      await expect(
+        database.getByRole('tab', { name: layout, exact: true, selected: true }),
+      ).toBeVisible();
       await expectAccessible(window, s(`a ${layout.toLowerCase()}`));
     }
     await database.getByRole('tab', { name: 'Table' }).click();

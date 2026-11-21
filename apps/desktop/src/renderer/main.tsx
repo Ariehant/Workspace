@@ -69,7 +69,18 @@ const platform: Platform = {
   fileUrl: (id) => `ws-file://${id}`,
   openFile: (id) => void api.files.open(id),
   linkPreview: (url) => api.linkPreview(url),
+  google: {
+    ...api.google,
+    // Fetched by the main process with the account's token.
+    thumbnailUrl: (fileId) => `ws-file://drive/${encodeURIComponent(fileId)}`,
+  },
+  linkedFiles: {
+    ...api.linkedFiles,
+    // Served by the main process from this computer's linked folders (images only).
+    previewUrl: (ref) => `ws-file://linked/?ref=${encodeURIComponent(JSON.stringify(ref))}`,
+  },
   backlinks: (id) => api.links.backlinks(id),
+  upcoming: () => api.links.upcoming(),
   syncedPlaces: (id) => api.links.syncedPlaces(id),
   listVersions: (docId) => api.history.list(docId),
   getVersion: (id) => api.history.get(id),

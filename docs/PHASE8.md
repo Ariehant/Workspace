@@ -31,72 +31,72 @@ milestones below; the others wait for a decision, by number.
 
 ### A. Pages and blocks
 
-| #   | Notion feature                                                                                                                                                                | What it's for (how you use it)                                                                                                                        | Effort | Suggest      |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ |
-| 1   | **Property commands in `/`** (`/relation`, `/rollup`, `/date`, `/select`, `/formula`…)                                                                                        | On a database row's page, type `/relation` to add that kind of property to the database without going to the table header. Faster setup of databases. | S      | ✅ Done (N1) |
-| 2   | **Other quick `/` commands**: `/red`, `/blue background` (colour the block), `/comment`, `/date` or `/today`, `/mention`, `/emoji`, `/duplicate`, `/delete`, `/turn into`     | Do the block menu's actions from the keyboard without the mouse.                                                                                      | S      | ✅ Done (N1) |
-| 3   | **Tabs block** (`/tabs`, Notion 3.4, March 2026)                                                                                                                              | Put content in clickable tabs on one page (e.g. "Specs / Tests / Notes") instead of making sub-pages.                                                 | M      | ✅ Done (N2) |
-| 4   | **Embed any website** (generic embed) and more providers: GitHub Gist, Google Docs/Sheets/Slides/Drive, Miro, X/Twitter, Spotify, SoundCloud, Typeform, Airtable, Excalidraw… | Paste any link and see it live in the page. Today only YouTube, Vimeo, Loom, Figma, CodePen and Google Maps work; everything else becomes a bookmark. | M      | ✅ Done (N2) |
-| 5   | **Link mentions** (paste a URL → "Mention" chip with the site's icon and title)                                                                                               | A small inline link that shows what it points to (a GitHub PR, a Figma file, a web page), instead of a bare URL.                                      | S–M    | ✅ Done (N2) |
-| 6   | **Presentation mode** (Notion 3.4, beta)                                                                                                                                      | Turn a page into a slideshow (each divider = new slide), full-screen, arrow keys to move. For meetings and demos.                                     | M      | 🤔           |
-| 7   | **Custom emoji** (upload your own, used anywhere `:` works)                                                                                                                   | Team logos, project icons as emoji.                                                                                                                   | M      | 🤔           |
-| 8   | **Simple table colours** (colour a row or a column)                                                                                                                           | Highlight a header row or a total column in a plain table.                                                                                            | S      | 🤔           |
-| 9   | **Office file previews** (Word, Excel, PowerPoint shown in the page, Notion 3.6)                                                                                              | See a `.docx` / `.xlsx` attachment without downloading it.                                                                                            | M      | 🤔           |
-| 10  | **Interactive HTML block** (Notion 3.6)                                                                                                                                       | Small custom widgets (a calculator, a chart) written in HTML inside a page. Mostly made by Notion's AI there; a security risk to run arbitrary HTML.  | M      | ❌           |
+| #   | Notion feature                                                                                                                                                                | What it's for (how you use it)                                                                                                                        | Effort | Suggest                        |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------ |
+| 1   | **Property commands in `/`** (`/relation`, `/rollup`, `/date`, `/select`, `/formula`…)                                                                                        | On a database row's page, type `/relation` to add that kind of property to the database without going to the table header. Faster setup of databases. | S      | ✅ Done (N1)                   |
+| 2   | **Other quick `/` commands**: `/red`, `/blue background` (colour the block), `/comment`, `/date` or `/today`, `/mention`, `/emoji`, `/duplicate`, `/delete`, `/turn into`     | Do the block menu's actions from the keyboard without the mouse.                                                                                      | S      | ✅ Done (N1)                   |
+| 3   | **Tabs block** (`/tabs`, Notion 3.4, March 2026)                                                                                                                              | Put content in clickable tabs on one page (e.g. "Specs / Tests / Notes") instead of making sub-pages.                                                 | M      | ✅ Done (N2)                   |
+| 4   | **Embed any website** (generic embed) and more providers: GitHub Gist, Google Docs/Sheets/Slides/Drive, Miro, X/Twitter, Spotify, SoundCloud, Typeform, Airtable, Excalidraw… | Paste any link and see it live in the page. Today only YouTube, Vimeo, Loom, Figma, CodePen and Google Maps work; everything else becomes a bookmark. | M      | ✅ Done (N2)                   |
+| 5   | **Link mentions** (paste a URL → "Mention" chip with the site's icon and title)                                                                                               | A small inline link that shows what it points to (a GitHub PR, a Figma file, a web page), instead of a bare URL.                                      | S–M    | ✅ Done (N2)                   |
+| 6   | **Presentation mode** (Notion 3.4, beta)                                                                                                                                      | Turn a page into a slideshow (each divider = new slide), full-screen, arrow keys to move. For meetings and demos.                                     | M      | ✅ Done (N6)                   |
+| 7   | **Custom emoji** (upload your own, used anywhere `:` works)                                                                                                                   | Team logos, project icons as emoji.                                                                                                                   | M      | ✅ Done (N8)                   |
+| 8   | **Simple table colours** (colour a row or a column)                                                                                                                           | Highlight a header row or a total column in a plain table.                                                                                            | S      | ✅ Done (N6)                   |
+| 9   | **Office file previews** (Word, Excel, PowerPoint shown in the page, Notion 3.6)                                                                                              | See a `.docx` / `.xlsx` attachment without downloading it.                                                                                            | M      | ✅ Done (N9: Word, Excel, PDF) |
+| 10  | **Interactive HTML block** (Notion 3.6)                                                                                                                                       | Small custom widgets (a calculator, a chart) written in HTML inside a page. Mostly made by Notion's AI there; a security risk to run arbitrary HTML.  | M      | ❌                             |
 
 ### B. Databases
 
-| #   | Notion feature                                                                                                                                                              | What it's for (how you use it)                                                                                                                                   | Effort | Suggest      |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ |
-| 11  | **Row page layouts** ("Customize layout": pinned properties under the title, property sections, a tabbed layout; relations shown **as a page section**)                     | Make every row page of a database look the same and tidy: the 3 important properties at the top, the rest folded, related tasks shown as a list inside the page. | M–L    | ✅ Done (N3) |
-| 12  | **Number shown as a bar or ring** (progress), checkbox / status **"show as"** options                                                                                       | A "% done" column drawn as a progress bar; ratings as stars-like bars.                                                                                           | S      | ✅ Done (N3) |
-| 13  | **Freeze columns, row height, load limit** per view                                                                                                                         | Keep the title column visible while scrolling sideways; compact or tall rows; show 25/50/100 rows then "Load more" in big tables.                                | S      | ✅ Done (N3) |
-| 14  | **Bulk edit** (select many rows → set a property, duplicate, delete, move)                                                                                                  | Change the status of 30 tasks at once. (Needs checking: our table has row selection for copy/delete, not "edit property for all".)                               | M      | ✅ Done (N3) |
-| 15  | **Recurring templates** (a template that creates a page every day/week/month)                                                                                               | "Weekly review" or "Daily standup" pages appear by themselves on schedule.                                                                                       | M      | ✅ Done (N3) |
-| 16  | **Form conditional logic** (show a question only if an earlier answer was X) and **file upload questions**                                                                  | Smarter forms: "If bug → ask for steps"; let people attach a screenshot.                                                                                         | M      | ✅ Done (N3) |
-| 17  | **Map view + Place property** (Notion 3.0/3.1)                                                                                                                              | Store addresses/places; see rows as pins on a map. For travel, field work, sites, customers. Needs a map tile source (OpenStreetMap).                            | L      | 🤔           |
-| 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | 🤔           |
-| 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | 🤔           |
-| 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌           |
-| 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | 🤔           |
-| 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | 🤔           |
-| 23  | **Synced databases from GitHub/Jira/external APIs**                                                                                                                         | Issues from GitHub or Jira show up as a live database. Needs each service's API and accounts.                                                                    | L      | ❌           |
-| 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | 🤔           |
+| #   | Notion feature                                                                                                                                                              | What it's for (how you use it)                                                                                                                                   | Effort | Suggest                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------- |
+| 11  | **Row page layouts** ("Customize layout": pinned properties under the title, property sections, a tabbed layout; relations shown **as a page section**)                     | Make every row page of a database look the same and tidy: the 3 important properties at the top, the rest folded, related tasks shown as a list inside the page. | M–L    | ✅ Done (N3)                 |
+| 12  | **Number shown as a bar or ring** (progress), checkbox / status **"show as"** options                                                                                       | A "% done" column drawn as a progress bar; ratings as stars-like bars.                                                                                           | S      | ✅ Done (N3)                 |
+| 13  | **Freeze columns, row height, load limit** per view                                                                                                                         | Keep the title column visible while scrolling sideways; compact or tall rows; show 25/50/100 rows then "Load more" in big tables.                                | S      | ✅ Done (N3)                 |
+| 14  | **Bulk edit** (select many rows → set a property, duplicate, delete, move)                                                                                                  | Change the status of 30 tasks at once. (Needs checking: our table has row selection for copy/delete, not "edit property for all".)                               | M      | ✅ Done (N3)                 |
+| 15  | **Recurring templates** (a template that creates a page every day/week/month)                                                                                               | "Weekly review" or "Daily standup" pages appear by themselves on schedule.                                                                                       | M      | ✅ Done (N3)                 |
+| 16  | **Form conditional logic** (show a question only if an earlier answer was X) and **file upload questions**                                                                  | Smarter forms: "If bug → ask for steps"; let people attach a screenshot.                                                                                         | M      | ✅ Done (N3)                 |
+| 17  | **Map view + Place property** (Notion 3.0/3.1)                                                                                                                              | Store addresses/places; see rows as pins on a map. For travel, field work, sites, customers. Needs a map tile source (OpenStreetMap).                            | L      | 🤔                           |
+| 18  | **Feed view**                                                                                                                                                               | Rows shown as a scrolling feed of full pages (like a blog/updates stream), not cards.                                                                            | M      | ✅ Done (N7)                 |
+| 19  | **Dashboard view** (Notion 3.4: up to 12 widgets — views, charts, KPI numbers — in one database view)                                                                       | One overview screen for a project: open tasks count, a chart, "my tasks", in one place.                                                                          | L      | ✅ Done (step 6)             |
+| 20  | **Several data sources in one database** ("databases reimagined", 2025)                                                                                                     | One database block holding e.g. Projects + Tasks + Sprints as tabs, set up as one system/template. Complex; integrations must support it.                        | L      | ❌                           |
+| 21  | **More automation actions and triggers**: edit pages in another (related) database, use formulas/variables in values, "when a button is pressed", send email, post to Slack | Bigger workflows: "when a project is Done, mark all its tasks Done". (Slack/email need those services set up.)                                                   | M      | ✅ Done (not email or Slack) |
+| 22  | **"Can create pages" database permission** (Notion 3.4)                                                                                                                     | Let someone add rows without being able to edit others' rows (e.g. a request tracker).                                                                           | S–M    | ✅ Done (N8)                 |
+| 23  | **Synced databases from GitHub/Jira/external APIs**                                                                                                                         | Issues from GitHub or Jira show up as a live database. Needs each service's API and accounts.                                                                    | L      | ❌                           |
+| 24  | **Wiki / verified pages** (mark a page "verified until date", owners, a wiki database of pages)                                                                             | Company handbooks: shows which docs are up to date and who owns them.                                                                                            | M      | ✅ Done (N7)                 |
 
 ### C. Navigation and workspace
 
-| #   | Notion feature                                                                                                                                                                                                                                              | What it's for (how you use it)                                                            | Effort         | Suggest      |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------- | ------------ |
-| 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅ Done (N4) |
-| 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | 🤔           |
-| 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | 🤔           |
-| 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | 🤔           |
-| 29  | **Full keyboard shortcut set** (move blocks with `Ctrl+Shift+↑/↓`, `Ctrl+Alt+0–9` turn into, `Ctrl+D` duplicate, `Ctrl+Shift+H` last colour, `Ctrl+Shift+L` dark mode, `Ctrl+[`/`]` back/forward, `Ctrl+Shift+U` go to parent…) and a shortcuts help screen | Faster work for keyboard users; people coming from Notion expect the same keys.           | S              | ✅ Done (N1) |
-| 30  | **Comments display setting** (show comments on the page, minimized, or hidden)                                                                                                                                                                              | Keep busy pages clean.                                                                    | S              | 🤔           |
-| 31  | **Move a page to another workspace**                                                                                                                                                                                                                        | Reorganise between personal and team workspaces.                                          | S–M            | 🤔           |
-| 32  | **Other languages** for the interface (Hindi etc.)                                                                                                                                                                                                          | Left for later in Phase 7; listed so it isn't forgotten.                                  | M per language | 🤔           |
+| #   | Notion feature                                                                                                                                                                                                                                              | What it's for (how you use it)                                                            | Effort         | Suggest          |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------- | ---------------- |
+| 25  | **Quick find filters and sorting** (only titles, created by, in teamspace, date range; sort by last edited / best match)                                                                                                                                    | Find the right page fast in a big workspace.                                              | M              | ✅ Done (N4)     |
+| 26  | **Home page** (recently visited, upcoming reminders, "my tasks" across databases) + **Recents** in the sidebar                                                                                                                                              | A start screen that shows what you were doing and what's due.                             | M              | ✅ Done (N6)     |
+| 27  | **One Settings window** (account, appearance, region, notifications, members, teamspaces, integrations, sync, offline, import/export, in one place with a left menu)                                                                                        | Today they're separate dialogs spread over menus; one window is easier to find things in. | M              | ✅ Done (N8)     |
+| 28  | **People directory** (Notion 3.2: everyone in the workspace with profile, team, what they work on)                                                                                                                                                          | See who's who; click a person to see their pages.                                         | S–M            | ✅ Done (N7)     |
+| 29  | **Full keyboard shortcut set** (move blocks with `Ctrl+Shift+↑/↓`, `Ctrl+Alt+0–9` turn into, `Ctrl+D` duplicate, `Ctrl+Shift+H` last colour, `Ctrl+Shift+L` dark mode, `Ctrl+[`/`]` back/forward, `Ctrl+Shift+U` go to parent…) and a shortcuts help screen | Faster work for keyboard users; people coming from Notion expect the same keys.           | S              | ✅ Done (N1)     |
+| 30  | **Comments display setting** (show comments on the page, minimized, or hidden)                                                                                                                                                                              | Keep busy pages clean.                                                                    | S              | ✅ Done (N6)     |
+| 31  | **Move a page to another workspace**                                                                                                                                                                                                                        | Reorganise between personal and team workspaces.                                          | S–M            | ✅ Done (step 3) |
+| 32  | **Other languages** for the interface (Hindi etc.)                                                                                                                                                                                                          | Left for later in Phase 7; listed so it isn't forgotten.                                  | M per language | 🤔               |
 
 ### D. Sharing and publishing (need the server)
 
-| #   | Notion feature                                                                                          | What it's for (how you use it)                                                            | Effort                     | Suggest                        |
-| --- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------- | ------------------------------ |
-| 33  | **Request access** (someone without access clicks "Request", the owner gets it in the inbox, approves)  | Today they just see "no access" and must ask the owner outside the app.                   | S–M                        | ✅ Done (N4)                   |
-| 34  | **Share link for anyone with the link** (view/comment/edit, optionally with expiry), without publishing | Send a page to a client without making it public on the web.                              | M                          | 🤔                             |
-| 35  | **Published sites: custom domain**, site theme/nav bar, "Allow duplicate as template"                   | `notes.yourcompany.com` instead of the server address; let visitors copy a template page. | L (domain) / S (duplicate) | 🤔                             |
-| 36  | **Admin tools**: audit log, admin content search, disable export/download, SAML SSO, SCIM user sync     | Company security and compliance. We already have OIDC single sign-on.                     | M–L each                   | ❌ (unless a company needs it) |
-| 37  | **Slack notifications** (and Slack link previews)                                                       | Mentions and updates go to Slack. Needs a Slack app per server.                           | M                          | ❌                             |
-| 38  | **Workspace analytics** (who's active, popular pages)                                                   | For admins of big workspaces. We already have per-page views.                             | M                          | ❌                             |
+| #   | Notion feature                                                                                          | What it's for (how you use it)                                                            | Effort                     | Suggest                               |
+| --- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
+| 33  | **Request access** (someone without access clicks "Request", the owner gets it in the inbox, approves)  | Today they just see "no access" and must ask the owner outside the app.                   | S–M                        | ✅ Done (N4)                          |
+| 34  | **Share link for anyone with the link** (view/comment/edit, optionally with expiry), without publishing | Send a page to a client without making it public on the web.                              | M                          | ✅ Done (N8)                          |
+| 35  | **Published sites: custom domain**, site theme/nav bar, "Allow duplicate as template"                   | `notes.yourcompany.com` instead of the server address; let visitors copy a template page. | L (domain) / S (duplicate) | ✅ Duplicate done (step 5); domain ❌ |
+| 36  | **Admin tools**: audit log, admin content search, disable export/download, SAML SSO, SCIM user sync     | Company security and compliance. We already have OIDC single sign-on.                     | M–L each                   | ❌ (unless a company needs it)        |
+| 37  | **Slack notifications** (and Slack link previews)                                                       | Mentions and updates go to Slack. Needs a Slack app per server.                           | M                          | ❌                                    |
+| 38  | **Workspace analytics** (who's active, popular pages)                                                   | For admins of big workspaces. We already have per-page views.                             | M                          | ❌                                    |
 
 ### E. Import, export, developer platform
 
-| #   | Notion feature                                                                                 | What it's for (how you use it)                                               | Effort | Suggest      |
-| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ | ------------ |
-| 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅ Done (N5) |
-| 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | 🤔           |
-| 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌           |
-| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | 🤔           |
-| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | 🤔           |
-| 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌           |
+| #   | Notion feature                                                                                 | What it's for (how you use it)                                               | Effort | Suggest                             |
+| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ | ----------------------------------- |
+| 39  | **Import from Word (`.docx`)** and **Google Docs** (as `.docx`)                                | Bring existing documents in with their formatting.                           | M      | ✅ Done (N5)                        |
+| 40  | **Import from Asana, Jira, Monday** (their CSV/JSON exports)                                   | Move project boards in, like Trello today.                                   | M each | ✅ Done (Asana, Jira N7; Monday N8) |
+| 41  | **Import from Dropbox Paper, Quip, Coda, Workflowy**                                           | Less common tools.                                                           | M each | ❌                                  |
+| 42  | **PDF export of a page with all sub-pages / the whole workspace** (ours is one page at a time) | One PDF of a whole handbook.                                                 | S–M    | ✅ Done (N6)                        |
+| 43  | **API: file uploads, views endpoints, Markdown API** (Notion 3.5)                              | Integrations that attach files, read views, or read/write pages as Markdown. | M      | ✅ Done (step 4)                    |
+| 44  | **Notion CLI and Workers** (hosted custom code)                                                | Developer tooling; heavy, and Notion-specific.                               | L      | ❌                                  |
 
 ### F. Platforms and apps
 
@@ -106,15 +106,24 @@ milestones below; the others wait for a decision, by number.
 | 46  | **Mobile apps (Android, iOS)**                                         | Phone access. Today the web app works in a phone browser (not optimised). A real app is a large project.                         | L      | 🤔 (start with a phone-friendly web app) |
 | 47  | **Web clipper** (browser extension to save a web page into a database) | Save articles/research in one click.                                                                                             | M      | 🤔                                       |
 
+Not now (2026-11-21, the owner's decision): the phone-friendly web app for #46. Parked instead,
+to come back to: [the desktop app as a native productivity app](ideas/desktop-integration.md)
+(notifications, today in the top bar or tray, quick capture). A calendar app that works with
+Workspace through its API is planned for another builder: [the handoff](calendar-app/HANDOFF.md).
+
 ## Milestones
 
-| Milestone | Items                                                                      | Estimate  |
-| --------- | -------------------------------------------------------------------------- | --------- |
-| N1        | The slash menu and keyboard (#1, #2, #29)                                  | 1 week    |
-| N2        | Blocks: tabs, embedding any site, link mentions (#3, #4, #5)               | 1.5 weeks |
-| N3        | Databases: layouts, show as, freeze, bulk edit, recurring templates, forms | 3 weeks   |
-| N4        | Quick find filters, request access (#25, #33)                              | 1.5 weeks |
-| N5        | Import from Word and Google Docs (#39)                                     | 1 week    |
+| Milestone | Items                                                                                                      | Estimate  |
+| --------- | ---------------------------------------------------------------------------------------------------------- | --------- |
+| N1        | The slash menu and keyboard (#1, #2, #29)                                                                  | 1 week    |
+| N2        | Blocks: tabs, embedding any site, link mentions (#3, #4, #5)                                               | 1.5 weeks |
+| N3        | Databases: layouts, show as, freeze, bulk edit, recurring templates, forms                                 | 3 weeks   |
+| N4        | Quick find filters, request access (#25, #33)                                                              | 1.5 weeks |
+| N5        | Import from Word and Google Docs (#39)                                                                     | 1 week    |
+| N6        | Table colours, comments display, Home, workspace PDF, presenting (#8, #30, #26, #42, #6)                   | 1.5 weeks |
+| N7        | Feed view, verified pages, People, Asana and Jira import (#18, #24, #28, #40)                              | 1.5 weeks |
+| N8        | Monday import, custom emoji, one Settings window, "can create pages", share links (#40, #7, #27, #22, #34) | 2 weeks   |
+| N9        | Linked files (pointers to files on the computer), then a Google Drive connector                            | 2 weeks   |
 
 Each milestone is committed and pushed with its tests, after the full checks: formatting, lint,
 types, unit tests, both builds, the desktop E2E suite twice and the web E2E suite.
@@ -580,3 +589,623 @@ an **Install** and a **Use it** section, and Word and Google Docs import. A new
 importing and working with others. The screenshots were taken again from
 `apps/desktop/e2e/readme-shots.spec.ts`, which now also shows quick find's filters, bulk edit, a
 row page's layout, an imported Word document and a tabs block (the last only in the spec).
+
+## N6: Table colours, comments display, Home, workspace PDF, presenting
+
+With N1–N5 done, five of the 🤔 items that need no outside service were picked to finish the
+app's everyday surface: #8, #30, #26, #42 and #6.
+
+**Built:**
+
+- **Simple table colours (#8):** Row color and Column color in a table's toolbar colour every
+  cell of the row or column of the cursor (text or background, the usual palette; a merged cell
+  once). HTML export keeps them.
+- **Comments display (#30):** `···` → Show comments: **On the page**, **Minimized** (page
+  comments fold into one "N comments" line that opens them) or **Hidden** (no page comments and
+  no highlights in the text; the comments button and panel still work, and the thread open in
+  the panel is highlighted). Saved per page, like the backlinks setting, through a shared
+  `usePageSetting` hook.
+- **Home (#26):** Home in the sidebar, under Search: a greeting, the pages visited last as
+  cards, the reminders still to come (`@remind` in pages and on date properties, read from the
+  desktop's reminder index by `SqliteStore.upcomingReminders`) and the pages edited last.
+  Each opens its page (a reminder, at its block); Back from Home is the page it was opened over.
+  The web app shows Home without Upcoming (the server keeps no index of future reminders).
+- **One PDF (#42):** a page with its sub-pages already exported as one PDF; now the whole
+  workspace does too (Export all workspace content → PDF), in the sidebar's order. A PDF of more
+  than one page starts with a **Contents** sheet linking to each page, and each page starts a
+  sheet.
+- **Present (#6):** `···` → Present shows the page full screen as slides, a new one at each
+  divider (the first with the title; slides with nothing in them are left out). Arrow keys,
+  Space, Page Up/Down, Home and End move; Escape, or leaving full screen, ends it. The page is
+  drawn once, read-only, with the other slides' blocks hidden, so every block looks as it does
+  on the page.
+
+**Fixed on the way:**
+
+- **Back from "This page doesn't exist"** returns to the page it was opened over (it stayed put
+  when there was no earlier history).
+- **A keyboard selection survives a change from elsewhere.** ProseMirror reads a selection the
+  browser moved (Shift+Home, say) from a later `selectionchange`; a change to the page or its
+  decorations in between made it write its old selection back, and the move was lost. Now, after
+  a key, such a change reads the page's selection first and keeps it. A test makes it happen on
+  purpose; it failed before. (Remote edits through the sync plugin restore the selection their own
+  way, and aren't covered.) This was the first guess for the toggles test's failure on CI (the
+  toolbar never showed after Shift+Home), but CI failed the same way with it, so that cause is
+  still open: the test now says, when it fails, whether the window had focus and what the page and
+  the editor had selected. CI's traces can't be read from here (the session's network policy
+  blocks GitHub's artifact storage).
+
+**Tests:**
+
+- **Unit:** the row and column colour command on the real schema, HTML export of coloured
+  cells, `upcomingReminders`, Home's greeting and dates, the print order, slide splitting, and
+  delivery to a host name.
+- **Desktop E2E:** colouring a row and a column, kept after a restart (`blocks.spec.ts`); each
+  comments mode, kept after a restart, and presenting a page (`page.spec.ts`); Home
+  (`home.spec.ts`); the workspace as one PDF, its sheets and links (`export.spec.ts`); and axe on
+  Home and on a presentation in both themes (`a11y.spec.ts`).
+
+**Runs:**
+
+- **The full desktop suite, twice:** 177 passed and 3 skipped each time; no app failed to close.
+  (A first pair of runs failed one forms test both times: the test before it left the inbox
+  open, and with Home in the sidebar the inbox now covers the Form tab. The test closes it now.)
+- **The web suite:** 6 passed. Formatting, lint, types, unit tests and the web, server and
+  desktop builds pass.
+- **CI on the pull request:** all five jobs green (lint and unit tests, desktop and web E2E, the
+  Compose stack, packaging, performance budgets). Two more races CI's runner exposed were fixed
+  on the way: a `sync` test comparing 150 KB byte by byte (now checks it gets the same bytes
+  back), and a server access test that expected "live" before the catch-up had ended.
+- **Performance budgets** compare each metric with one run of the base branch; on shared
+  runners whole runs vary by 30–60%, so the job fails on runner speed alone at times. A fix
+  (calibrate by the pure-code benchmarks, best of three for UI cases) is proposed on the pull
+  request rather than made here. Grouping 50,000 rows takes either about 120 ms or about 500 ms
+  on `main` as on this branch: a slow path worth its own look.
+
+## N7: Feed view, verified pages, People, Asana and Jira import
+
+Four more 🤔 items that need no outside service: #18, #24, #28 and #40 (Asana and Jira; Monday
+exports Excel workbooks, which need a reader of their own, so it waits).
+
+**Built:**
+
+- **Feed view (#18):** a database layout showing rows as a stream of whole pages: each row's
+  icon, title (which opens it), the properties picked for the view, and its content, read-only.
+  A new feed shows the title and the first status, select, person and date properties, and
+  loads 10 rows at first (each one is a whole page); only the rows in view are drawn, and their
+  pages loaded. Filters, sorts, groups and Load more work as in the other layouts.
+- **Verified pages (#24):** `···` → Verify: for 1 week, 30 days, 90 days or indefinitely, or
+  remove it. A badge under the title says who verified the page and until when ("Verified by
+  Ada · until Dec 19"), or, once that's past, "Verification expired …" in the warning colour.
+  Workspace pages only (database rows have their own properties for that); copies of a page
+  aren't verified.
+- **People (#28):** People in the sidebar, under Home: everyone in the workspace with their
+  picture, and, on a server workspace, their email and role, and the groups. Guests, who may
+  not see the members list, get the names only. Selecting a person lists the pages they made,
+  newest first, each opening its page. (Pages made before Phase 8 N4 don't record who made them.)
+- **Asana and Jira import (#40):** an Asana project's CSV, or Jira issues exported as CSV, through
+  the same Import button. Each becomes a database shown as a board (by section, or by status)
+  and a table: Asana's section, assignee, start and due dates, done, tags and notes; Jira's key,
+  type, status, priority (coloured), assignee, reporter, due date, labels (its repeated columns
+  joined), description and comments. Parent tasks become sub-items. Columns not mapped (custom
+  fields, mostly) come over as text. The fixtures follow the columns these exports are
+  documented to have, written from memory: no real export could be fetched from here.
+
+**Fixed on the way:**
+
+- **The desktop build of the import worker.** electron-vite puts its CommonJS shim after the
+  last thing its regex takes for an `import` statement; comments reading "the import's page …"
+  matched it, and once the new importers changed the bundle, the shim landed inside `parseCsv`
+  and the build failed. The comments are reworded, and a unit test runs the same regex over the
+  importers' sources.
+
+**Tests:**
+
+- **Unit:** feed defaults and switching a view to a feed; verification stored, its state before
+  and after it ends, kept out of copies, a malformed value; the Asana and Jira importers (columns,
+  options, dates, sub-items, content, warnings, a plain CSV still a table); the date formats;
+  the bundler check.
+- **Desktop E2E:** the feed (content, search, opening a row, Load more) in `layouts.spec.ts`;
+  verifying, expiry, a restart and removing it in `page.spec.ts`; People in `home.spec.ts`, and
+  on a server (the owner sees roles and emails, a guest only names) in `scopes.spec.ts`; both
+  imports through the Import button in `import.spec.ts`; and axe on Feed and People in both
+  themes.
+
+**Runs:**
+
+- **The full desktop suite, twice:** 183 passed and 3 skipped each time.
+- **The web suite:** 6 passed. Formatting, lint, types, unit tests and the desktop and web
+  builds pass.
+- **CI on the pull request:** lint and unit tests, the Electron E2E suite, the Compose stack and
+  packaging are green. Performance budgets failed on `scroll.frame.max` alone (the Table view's
+  worst frame, 66.6 ms against 16.8 ms on the base branch). Three local runs on this head and
+  three on the previous one give the same spread, 16.8 to 50 ms: the metric moves in whole
+  dropped frames, so a single base run can't settle it. The numbers are on the pull request;
+  the gate's change is the owner's call, as before.
+
+## N8: Monday import, custom emoji, one Settings window, "can create pages", share links
+
+The owner chose the rest of the 🤔 items that need no outside service, "in sequence however
+you like": #40 (Monday), #7, #27, #22 and #34. Each was committed and pushed with its tests.
+
+**Built:**
+
+- **Monday import (#40):** a monday.com board's Excel export (`.xlsx`) through the Import button.
+  A small `.xlsx` reader (shared and inline strings, numbers, booleans, dates by their number
+  format, every sheet, the same size guard as `.docx`) feeds the tracker helpers from N7. The
+  board becomes a database shown as a board by status (by group without one) and a table:
+  groups as a select, status and priority coloured, a timeline as a date range, subitems as
+  sub-items, other columns as text. Other workbooks are reported, not imported (yet). The
+  export's layout is written from memory, like N7's fixtures; the fixture is generated by
+  `mondayBoard()` in `src/xlsx-fixture.ts`, and a test checks the two match.
+- **Custom emoji (#7):** Settings → Emoji adds an image under a name (suggested from the file;
+  built-in names can't be taken) or removes one. They're kept in the workspace's own data (the
+  owner's choice), so they work in local workspaces and offline. Typing `:name:` offers them
+  first and inserts an inline image; the icon picker lists them (a page icon is the image
+  itself, so it stays if the emoji is removed). A removed emoji shows its `:name:` in pages.
+  Markdown and HTML export write the image; the API gives the name as text. Reactions on
+  comments stay the standard set.
+- **One Settings window (#27):** Ctrl+, or Settings… in the workspace menu: Account,
+  Appearance (theme, and zoom on the desktop), Language and region, Notifications (the
+  desktop's system notifications and the email digest), Emoji, Members, Teamspaces, Sync,
+  Keyboard shortcuts and About, as the host and workspace have them. The menu items, the sync
+  indicator and Ctrl+? open it at their section. Each old dialog's body is now a section
+  (`SettingsShell`), with the same titles and test ids, so the many tests that sign in through
+  Sync didn't change. Creating a teamspace and a teamspace's settings stay dialogs of their own.
+- **"Can create pages" (#22):** a database role between "can comment" and "can edit content".
+  People with it add pages with New (from a template too) and edit the pages they made, on the
+  page itself; the views and other people's pages are read-only for them, and templates can't
+  be changed. The server holds them to it: a database update may change only rows, only rows
+  whose creator is the sender (who can't change it), and a row's page only if it's theirs.
+  Sync protocol 6 carries the role; a migration allows it.
+- **Share links (#34):** Share → Share link makes a link for the page: can view, comment or
+  edit, ending never or in 1, 7 or 30 days. Whoever opens it on the web app sees what it opens,
+  signs in or creates an account (the link counts as an invite on an invite-only server), and
+  joins the workspace as a guest with that role on that page alone, never less than they had.
+  A new link ends the old one, and turning it off ends it; people who joined keep their access,
+  as with invites. Opening a page without an account (the owner chose sign-in for every link)
+  would need an anonymous identity through sync; it's left out.
+
+**Fixed on the way:**
+
+- **A new row's page could land in the wrong scope.** The desktop tells the server where a new
+  doc belongs from its page index, which takes in new rows a moment later; a row's page written
+  in that moment went without a hint, to the workspace's default scope (with "can edit content"
+  too). It now finds the row in its open database. A unit test fails without the fix.
+- **The sync hub asks a refused doc again** after the rest of the same push, in order, so an
+  update that needed one later in the push (a row's page before its row) goes in.
+- **Share links found a new page** in its scope's page tree when the search index hadn't taken
+  it in yet ("No such page" in the first web test run).
+- **"Link role" took the invite form's label.** The share dialog's link section labelled its
+  role "Link role", so `getByLabel('Role')` matched two controls and CI's `collab-exit` test
+  failed. It's now "Anyone with the link can"; the web test checks "Role" is one control.
+- **A compaction could leave a connection one row behind.** Compacting a doc writes to the
+  store outside the sync hub's ring of recent rows, which then said it reached the end of the
+  log one row short; a connection catching up from it stopped there (the convergence test
+  timed out on CI, seed 11). The hub now reads the log after a compaction. A hub test fails
+  without the fix.
+
+**Tests:**
+
+- **Unit:**
+  - the `.xlsx` reader (cells, dates, prefixes, the size guard, the committed fixture) and
+    the monday importer;
+  - the emoji store, the emoji names and suggestions, and their export;
+  - `checkOwnRowsChange`;
+  - the "create" role through the real sync hub (`create-role.test.ts`);
+  - the hub's second look;
+  - the scope of a new row's page;
+  - share links end to end on the server (`share-links.test.ts`), with sign-up on an
+    invite-only server.
+- **Desktop E2E:**
+  - the monday import (`import.spec.ts`);
+  - custom emoji: added, typed, a page icon, kept after a restart, removed (`inline.spec.ts`);
+  - the Settings window by keyboard and from each entry point (`settings.spec.ts`);
+  - "can create pages" with two desktops and a server (`create-role.spec.ts`);
+  - axe on the Emoji, Appearance and Notifications sections in both themes, and on the share
+    dialog with its link section.
+- **Web E2E:** a share link, used by someone signing up from it on an invite-only server
+  (`share-link.spec.ts`).
+
+**Runs:**
+
+- Formatting, lint, types, unit tests and both builds pass; each part's own E2E tests passed
+  when it was pushed.
+- Desktop E2E, the full suite twice: 188 passed, 3 skipped, each time.
+- Web E2E: 7 passed.
+- The sync convergence tests with `SYNC_FUZZ_SEEDS=100`: passed.
+- CI's performance budgets went over on two N8 pushes (`sync.first`, then a broad slowdown
+  with `database.group` at 1215 ms). Run locally, the same budgets on the commit before and
+  after the change gave the same numbers (`database.group` 527–606 ms against 544–585 ms), so
+  it was the runner, as in N7; the budgets are unchanged.
+
+## N9: linked files, then Google Drive
+
+The owner asked for files linked rather than imported, "like pointers", from the computer and
+from Google Drive, as Claude's own interface does. Local files come first (no outside
+service); the Drive connector follows.
+
+**N9a, linked files (built):**
+
+- **A `linkedFile` block** (`/linked file`, desktop): a pointer, not a copy. It keeps a linked
+  folder's name and a path inside it, or a full path, with the file's name, size and date. The
+  card opens the file in its default app, shows it in the file manager, and shows an image in
+  the page; a moved file says "Not found on this computer" and offers Locate…; a folder that
+  isn't linked on this computer says which and offers Link it… (Settings). The web app and
+  other computers show the card and where it is.
+- **Linked folders:** their names are the workspace's (its data doc, beside custom emoji);
+  where each is on a computer is that computer's own setting, kept by the main process.
+- **Safety:** pointers come from pages others can edit, so the main process does the work:
+  - it resolves a folder pointer inside its folder only (`..` and absolute parts refused, the
+    result checked to stay inside);
+  - it opens files only when clicked, and asks before running a program or script (by
+    extension, or executable on Linux), naming the real file, not the page's name for it;
+  - the page can't read or set where folders are through the settings IPC;
+  - previews are served for images only (up to 50 MB).
+- **Exports and the API** give a linked file as its name and where it is (text, not a link).
+
+**Tests:**
+
+- **Unit:** folder names and paths (`relativeParts`, `pathInFolder` on Linux and Windows,
+  `linkedFileOf`), the slash menu offering it only on the desktop, Markdown and HTML export,
+  and the API.
+- **Desktop E2E** (`linked-files.spec.ts`): a linked folder; two files in it and a script by
+  full path; opening, showing in the folder, the script's confirmation (cancelled, then run);
+  the image preview; a moved file located again; the folder unlinked and linked again; kept
+  after a restart; and the page failing to move the folder through the settings IPC (that
+  check fails with the guard removed). axe on the Linked folders section and the cards, in
+  both themes.
+
+**N9b, Google Drive (built):** the owner chose Google's Picker (`drive.file` only) and the
+sign-in on the desktop.
+
+- **Signing in** is an installed app's: the system browser, authorization code with PKCE, the
+  answer to a server on 127.0.0.1 for that moment. The refresh token is kept by the main
+  process (encrypted by the OS keyring where there is one), out of the settings IPC; access
+  tokens stay in memory. A revoked token reads as not connected.
+- **The Picker** is Google's script, so it runs in a window of its own (no preload, its own
+  session), on a page served from 127.0.0.1 for one pick; the page posts the ids back, and
+  the app asks Drive for each (Drive's word, not the Picker's).
+- **A `driveFile` block:** the file's id and what Drive last said (name, kind, size, date). It
+  asks Drive when shown, when the window comes back and when the connection changes, and
+  keeps the page current (renamed, changed). Deleted, no access, offline and not connected
+  each say so. It opens in Drive by its id (`drive.google.com/open?id=…`), never by a URL from
+  the page. Icons are the app's own (no images from elsewhere).
+- **Settings → Connections:** the owner's Google Cloud client (OAuth client ID and secret, the
+  Picker's API key, the project number), or one a build brings by environment; Connect and
+  Disconnect (Google is told). The steps are in `desktop.md`.
+- **Exports and the API** give a Drive file as a link to it in Drive.
+
+**Not done:** previews (Docs and Sheets need the browser's Google session; thumbnails could
+come through the main process), Drive files in a database's files property, and other
+services (Dropbox, OneDrive) the same way. The real Google wasn't reachable from here: the
+tests run against a stand-in that checks the same things (PKCE, the client, refresh tokens,
+revocation, `files.get`, the Picker's settings), and the first sign-in against Google is the
+owner's to try.
+
+**Tests (N9b):**
+
+- **Unit:** Drive pointers and Drive's file descriptions, kinds, the open URL, the sign-in URL
+  (scopes, PKCE, offline), the email from an ID token, the slash menu offering it only where
+  Drive connects, and Markdown, HTML and API output.
+- **Desktop E2E** (`drive.spec.ts`, against `google.ts`): the client set in Settings; connecting
+  through the "browser"; the tokens refused to the page; two files from the Picker (which got
+  the token, key and app id) with Drive's names and details; opening one; renamed and trashed
+  in Drive; after a restart (by the refresh token); disconnecting (revoked, the cards keeping
+  what they knew); and picking while disconnected sending you to connect. axe on Connections.
+
+**Runs (N9):** formatting, lint, types, unit tests and both builds pass. The full desktop E2E
+suite: 190 passed, 3 skipped (with both N9 parts); `drive.spec.ts` and `linked-files.spec.ts`
+again on the final build: passed.
+
+## N9c: the toggles failure found, file previews, and linked files in databases
+
+**Fixed: the keyboard selection lost on CI (toggles test).** The diagnostics added earlier
+caught the failure: the editor's selection and the page's both collapsed at the caret after
+Shift+Home. A view update that isn't a transaction (a plugin registered, props set) landing
+after the browser moved the selection but before ProseMirror read it redraws the page with the
+old selection. The guard for transactions didn't see it. `updateState` and `setProps` now read
+an unread key move first. A test forcing the ordering (a plugin with a paragraph node view,
+registered first in line for the `selectionchange`) failed 3 of 3 before the fix with CI's exact
+state; after it, it and the toggles test passed 45 of 45 under CPU load, and the full desktop
+suite passes.
+
+**Built: previews (#9).**
+
+- A Word document (`.docx`) or Excel workbook (`.xlsx`) attached to a page, or linked on the
+  computer, has **Show preview**: the document's headings, text, lists, tables and code (from
+  the importer's own reader, shown from its blocks, never as HTML from the file; pictures as
+  placeholders), or the workbook's sheets one at a time (the first 200 rows and 50 columns).
+  A linked PDF shows in the viewer, a linked image as before. PowerPoint isn't previewed yet.
+- Opening a preview is kept in the page where it can be edited (everyone sees it open), or
+  for the reader alone. The readers load only when a preview opens (their own chunk).
+- A Google Drive file Drive has a picture of (a Doc, a Sheet, a PDF, an image) shows it under
+  its card: Drive's `thumbnailLink`, fetched by the main process with the account's token
+  (`ws-file://drive/<id>`), and only from Google's hosts.
+- Previews are read up to 50 MB; larger files open in their own app.
+
+**Tests:** preview kinds (unit); `file-preview.spec.ts` (an attached Word document and
+workbook, sheet tabs, a linked workbook, axe on the previews, kept after a restart);
+`drive.spec.ts` (the sheet's picture through the token; none for a file without one).
+
+**Built: pointers in a database's Files & media.** The files editor has **Link a file on this
+computer** (desktop) and **From Google Drive** (where Drive is connected) beside Upload. The
+value keeps a linked file's folder and path, or a Drive file's id (`FileValue.linked`,
+`FileValue.drive`); nothing is copied. In cells and on the row page they show with their own
+icon and open where they are (the default app, or Drive; on the web a Drive file links to
+Drive). The API gives a Drive file as an external link to it and a linked file as
+`{ type: 'linked', linked: { location } }`; neither can be written through the API.
+
+**Tests:** the API output for both (unit); `drive.spec.ts`: a cell gets a file on the computer
+and a Drive file, each opens where it is, kept after a restart.
+
+**Runs (N9c):** formatting, lint, types, unit tests and both builds pass; the full desktop E2E
+suite with all of N9: 193 passed, 3 skipped.
+
+**Found: why `database.group` read 550 ms (and failed CI's budgets at random).** A CPU profile
+and a timeline trace of the step showed the app done in about 150 ms (the change, React's
+render, the virtualized groups painted), then the renderer idle for 400 ms. The perf test only
+began watching for the group header once Playwright's `selectOption` had returned, 100–400 ms
+after the events, and noted the end after another round trip: it timed the test, not the app.
+The timer now watches from before the action and notes the end in the renderer, in the frame
+the result first shows (what its comment always said). Over three local runs: `database.group`
+134–142 ms (it read 517–640), `database.sort` 150–206 ms, `database.filter` 77–124 ms. The
+budgets are unchanged.
+
+## Opening a big database faster
+
+**Found: 1.3 s of `database.open` was the page being left.** Opening "Tasks" from the
+10,000-block page measured 4.1–4.7 s. A timeline trace showed the first 1.3 s spent before the
+database even started loading: leaving the page, TipTap's `EditorContent` resets the editor's
+node views as it unmounts, and the menus around the editor each unregister a plugin, every one
+rebuilding the state, so ProseMirror redrew all 10,000 blocks of a page about to be destroyed.
+Leaving a page now switches those off on its editor (it's destroyed next); they're put back if
+the page shows again (React's StrictMode tries an unmount in development).
+
+**Tests:** `editor.spec.ts`: leaving a 400-block page changes fewer than 20 nodes in it (800
+without the fix). Over three local perf runs, `database.open` 2735–2912 ms (it read 4.1–4.7 s);
+no other metric moved.
+
+**What's left, and why it stays for now.** Of the remaining 2.7–2.9 s, 1.5–1.9 s is Yjs
+decoding the 28.8 MB database doc (50,000 rows; much of it garbage collection), about 0.3 s the
+computed values (formulas, rollups) and about 0.3 s a related database waiting on the main
+process, busy decoding the same doc. Halving it means not decoding the whole doc to show its
+first rows (rows in pages, or a snapshot kept next to the doc), a storage change of its own.
+Typing on the 10,000-block page stays at 55–75 ms at p95 (target 16): the time is in
+y-tiptap's sync of the changed block (`updateYFragment`) and Blink's style and layout of
+a 10,000-node document. That needs the page's blocks rendered only near the screen, a larger
+change to the editor than this step.
+
+## More automations (#21)
+
+**Built.** Three additions to database automations, run the same way on the server and on a
+desktop that isn't synced:
+
+- **"When a button is pressed"** as a trigger, for a button property. Pressing it notes the
+  press (when, by whom) in its cell, only when an automation starts on it; the change syncs like
+  any edit, so the runner sees it where automations run. A button can have steps of its own as
+  well; a declined confirmation step stops both.
+- **"Edit pages in a related database"** as an action: the pages linked in one of the page's
+  relations get the values set, by the related database's properties (trashed pages and
+  templates are left alone). It runs with its maker's access: on the server, if they can't edit
+  that database, the run fails with "Not allowed to edit".
+- **A formula for a value** (the Σ button by a value): a formula over the page that started it
+  (`prop("Name") + " ×" + prop("Qty")`), checked as it's typed, and written as the property's
+  type: numbers, checkboxes and dates as they are; anything else read as text would be (an
+  option by its name; an option the property doesn't have isn't added). People, relations and
+  files can't come from a formula. Formulas read stored values and other formulas, not rollups.
+
+Sending email and posting to Slack (also in #21) need those services; not done.
+
+**Fixed: "page added" could see a page before its title.** Running the desktop E2E right after
+the unit tests, `phase6-exit.spec.ts` failed twice: Bob's new order reached the automation's
+webhook with an empty title. The server read a workspace's new changes 3 s after the _first_
+one, so a page added was seen as it was then; a title arriving later (typed slowly, or sent
+late by a busy server) was missed. The desktop's runner already waited for changes to pause.
+The server now does too: 3 s after the last change, and at most 15 s after the first (a
+workspace that never pauses is still read). A server test typing a title a letter at a time,
+for twice the wait, sent "Gri" before the fix and the whole title after it; the wait and its cap
+have unit tests of their own.
+
+**Tests:** `automations.test.ts` (unit): a press starts it once per press, nothing else does;
+formula values of each type, a broken formula and an unknown option write nothing; a related
+edit by the related database's properties, nothing when that database or the link is missing.
+`automations.test.ts` (server): Bob presses the button on his device, and the linked project in
+another database is edited by the bot, with a formula value. `local-automations.spec.ts`: the
+same from the editor on the desktop, a formula's error shown as it's typed, and only the linked
+page changed.
+
+## Moving a page to another workspace (#31)
+
+**Built.** On a server, the Move dialog lists the person's other workspaces (where they're a
+member, not a guest) under "Another workspace". Moving copies the page with its sub-pages,
+databases, their rows and the attachments any of them use into the person's private pages
+there, with new ids: links, sub-page blocks, inline databases and relations between them point
+at the copies (the template code's `captureBundle` and `instantiateBundle`). The original then
+goes to the trash, where it can be restored. The server does it all
+(`POST /api/workspaces/<id>/pages/<page>/move-to-workspace`, and `GET …/move-targets`), as the
+person: it needs full access to the page (moving it out is sharing it), every doc it copies must
+be one they can read, and the copies are written with their own access there. Up to 20,000
+pages and rows at once (more: export and import). Attachments are found by their ids in the
+copied docs and copied when stored here; files on Drive or on the computer stay pointers.
+
+What doesn't follow: links to it from other pages here (they point at the page in the trash),
+comments, its history, sharing, and custom emoji (they belong to the workspace). A desktop that
+isn't synced has one workspace, so it doesn't offer this.
+
+**Tests:** `move.test.ts` (server): a page with a sub-page, an image, and a database whose
+rows relate to each other moves with all of it (the relation links the copies, the file is
+served there), the original is in the trash and can't be moved again; Bob (who may edit but
+not share) can't, a guest there isn't offered it, and the same workspace, an unknown one or an
+unknown page are refused; ids are found in encoded docs whatever follows them.
+`move-workspace.spec.ts`: Ada moves a page and its sub-page from the Move dialog; it shows in
+the trash in Lab, and her desktop on Home has it, its text, and a sub-page link that opens the
+copy.
+
+## API additions (#43)
+
+**Built,** all in `docs/api.md`:
+
+- **File uploads**, as Notion's: `POST /v1/file_uploads` (single part), the file sent to its
+  `upload_url` as multipart (up to 20 MB), then attached by id in media and file blocks and in
+  files property values. The bytes are stored as the workspace's attachment (by hash), so an
+  upload only names one; a new table (`api_file_uploads`, schema version 18) keeps who made it
+  and when it was sent. Before a route reads its body, the uploads it names (of that
+  integration, sent) are loaded, so the block and property readers stay synchronous.
+- **Pages as Markdown** (Workspace's own): read with the exporter's Markdown, written with the
+  editor's reader, appended or in place of the content (one change, so collaborators see one
+  edit).
+- **Views** (Workspace's own): a database's views listed, and queried as the app runs them
+  (`runView`: its filter, then its sorts), with paging and an extra filter.
+
+**Tests:** `api.test.ts`: Markdown read, appended (blocks and the desktop see it), replaced, on a
+row, and refused for a database, a page not shared, bad bodies and view-only access; views
+listed with their sorts and grouping, and queried in order, narrowed and paged; an upload made,
+refused before it's sent, sent once, attached to a block (served by its signed link, on the
+desktop) and to a files property, invisible to another integration, and bad requests refused.
+Unit tests for the upload in blocks and files values.
+
+**Seen once, not reproduced:** in the first full server run after these changes, besides the
+schema-version tests (updated), three tests failed: two in `sync.test.ts` (text frames and
+oversized messages; telling devices to come back at shutdown) and one in `automations.test.ts`
+(pausing when the maker can no longer edit). None touches the API. They passed in three more
+full runs, alone, and four times under full CPU load; with no output kept from that run, the
+cause isn't known. Watching CI for them.
+
+## Duplicate as template (#35, part)
+
+**Built.** Publishing has **Allow duplicate as template**. A page published with it shows
+Duplicate (a link to `/d/<slug>` in the web app). There a visitor signs in, or creates an account
+where the server allows it, picks one of their workspaces (where they're a member, not a guest),
+and gets a copy in their private pages there, opened. The copy is exactly what the site shows:
+the page, and its sub-pages only if they're published too, with their databases, rows and the
+attachments they use; links between them follow the copies (the move code's `copyBundleInto`,
+and `captureBundle` now takes a filter). It's written as the visitor, with their access there.
+`GET /api/published/<slug>/duplicate` says what it is (its title) to anyone, and
+`POST …/duplicate` with `{ to }` makes the copy; both answer 404 unless the page allows copies.
+A custom domain (the rest of #35) needs DNS and certificates outside the app: not done.
+
+**Fixed on the way:** a failed backlinks read (the web app's service worker answering 503 during
+a reload) was an uncaught error in the page; it now keeps what was shown, and the next change
+reads again.
+
+**Tests:** `publish.test.ts` (server): no Duplicate and 404 until allowed; then the button, the
+title, a copy into Bob's own workspace with the page's text and image but not its unpublished
+sub-page or another page's file; with sub-pages published, they come too; refused signed out,
+for a guest, and into someone else's workspace. `apps/web/e2e/duplicate.spec.ts`: Ada publishes
+and allows copies; Bob opens the published page, follows Duplicate, signs up, makes a workspace,
+duplicates, lands on his copy and edits it; Ada's page is unchanged.
+
+## The toggles test, once more
+
+CI on 149179c (a server and API change) failed the toggles test again, with the same symptom as
+before N9c: after Shift+Home, the editor's selection and the page's both collapsed at the caret.
+It didn't reproduce locally (40 of 40 under full CPU load). The test now records, from the key
+on, every view update, key and selection change with both selections, and puts it in the
+failure message. Locally that log shows the window: the page's selection moves at the key, and
+`selectionchange`, when ProseMirror reads the move, comes about 12 ms later.
+
+ProseMirror writes its selection to the page in two ways: a state update (`updateState`,
+`setProps`, `update`) and `focus()`. N9c covered `updateState` and `setProps`. A test that
+focuses the editor first in line for the `selectionchange` (a menu or panel closing at that
+moment) failed with exactly CI's symptom: toolbar never shown. `focus()` now reads an unread key
+move first too. `update(props)` isn't wrapped: it brings a state of its own, so reading first and
+then applying it puts the old selection back (its test showed that); left alone, the move is read
+right after it. The wrapping is also done once per view now (plugin views are made again each
+time a plugin is registered, which wrapped the methods again).
+
+Whether `focus()` was what CI hit isn't proven: the recorded log will say if it happens again.
+
+It did, on c4ce0fb, and the log ruled `focus()` out: the page's selection moved at the key (13/0
+at keyup), then went back to the caret (13/13) before `selectionchange`, with no view update,
+dispatch or `focus()` call in between. The third way ProseMirror writes its selection is its
+own `focus` event handler: 20 ms after the editor gains focus, if the page's selection differs
+from what it last read, it puts its own there. A key moving the selection within those 20 ms,
+before its `selectionchange` is read, is written over. Made certain in a test (the
+`selectionchange` held back, the editor losing and gaining focus as the key goes down), the
+page's selection was emptied, as on CI. The editor's own `focus` handler, which runs before
+ProseMirror's, now sets a timer of the same 20 ms that reads an unread key move; timers of equal
+delay run in the order they were set, so the move is read before ProseMirror compares. The new
+test passes, and the toggles and selection tests passed 8 times each. The toggles log now
+records focus moving in and out (and the window's) too.
+
+## The scroll budget on CI
+
+`scroll.frame.max` failed CI's performance check on three heads in a row (33, 167 and 33 ms
+against the base branch's 16.8 ms). Two of those runs were also slow machines: every pure
+benchmark was 28–48% slower, including code the changes didn't touch. What was measured:
+
+- The metric moves in whole frames: 16.8 ms is one frame at 60 Hz, 33.4 ms one dropped frame.
+  The gate fails anything 20% over the base branch's last run, so with a base of one frame,
+  a single dropped frame fails. Main itself, measured here with its own test, gave 33.4 ms in
+  4 of 7 runs.
+- With this branch's perf test (e5aa582 times each step to the frame it ends, instead of when
+  the test hears back), the views' scrolling showed 50–133 ms frames in about half the runs,
+  with main's app as with this branch's. Waiting for the renderer to be idle first, and
+  replacing Playwright's frame polling, didn't change that.
+- Pausing 8 s before the scrolling made it consistent: the first Table scroll stalls
+  200–280 ms, with main's app and main's own test too. A trace shows the stall inside the
+  virtualizer's scroll listener (TanStack Virtual re-rendering the rows synchronously), mostly
+  the browser's own layout and style work rather than JavaScript (71 ms of script in a 283 ms
+  frame, 40–50 ms of garbage collection).
+
+So the failures come from a first-scroll stall that main has as well, exposed by when the
+test happens to scroll, and from a gate that a single dropped frame fails. The stall itself is
+worth fixing (a table of 50,000 rows freezing for a quarter second on its first scroll after a
+pause); it's on the list, not done here.
+
+**The stall, fixed.** It failed CI again on 3c2d4b1 (183 ms), so it was taken up. A timeline
+trace of the frame, recorded around the first scroll after the 8 s pause (281 ms), corrects the
+reading above: it isn't layout (style and layout took under 5 ms) but garbage collection. During
+the pause V8 starts marking the heap (large, with 50,000 rows); TanStack Virtual's scroll
+listener then re-rendered the whole table synchronously, every row and cell in view, and while
+marking is on, each bit of memory that allocates makes V8 mark some more: 30 steps of about 5 ms
+in that one listener (174 ms), then 52 ms to finish the collection, around 40 ms of the app's
+own script.
+
+Scrolling now draws only what comes into view. The virtualizer moved out of the table into its
+own small component, so a scroll re-renders only that, and a line still in view keeps the
+element it was drawn with (`useReusedLines`: kept while the component's props are the same
+object, which they are when only its own scroll state changed; anything else draws afresh). The
+board's columns and the list, gallery and feed views (`Lines`) use it too. The first scroll after
+the pause went from 266 ms to 16.8 ms (one frame) in each run, with no garbage collection in it;
+three perf runs gave the Table 16.8 ms each. Frames that still drop one or two now and then
+(the board's columns mounting and measuring cards as they come in) are the single dropped frames
+main shows as well, which the gate, at one frame on the base branch, still fails.
+
+## Dashboard view (#19)
+
+**Built.** "Dashboard" is a view type of its own (Add a view, or Layout in the view's menu): one
+screen of widgets in a three-column grid (one column when the window is narrow), over the rows
+the dashboard's own filter and search keep. A widget is:
+
+- **a number**: the page count, or a column calculation over a property (sum, average, percent
+  checked, latest date…), shown in the property's format;
+- **a chart**: settings of its own, the chart view's (type, X axis, Y axis, group by, sort,
+  labels), drawn the same way;
+- **a view**: another view of the database (table, board, list, gallery, feed, calendar,
+  timeline or chart), laid out as its tab is, over the dashboard's rows and then its own
+  filter, in a box that scrolls; "Open" goes to its tab.
+
+A new dashboard starts with the page count and, when the database has a select or status
+property (or another to group by), a bar chart by it. With edit access you add widgets ("Add a
+widget"), rename them (click the title; emptied, it's named after what it shows again), and
+from a widget's "…" menu choose its property and calculation or its view, its width (a third,
+two thirds, full width), move it earlier or later, or remove it. A locked database shows
+dashboards without these. Sorts and groups aren't offered on a dashboard (its widgets show the
+rows as they each say). Linked views copy a dashboard with the rest of the view's settings; the
+API lists it as a view (`type: "dashboard"`) and queries its rows as any view's.
+
+Not here yet: a filter per widget (Notion has one), and dragging widgets to rearrange them.
+
+**Tests:** `dashboard.test.ts` (database): the starting widgets with and without something to
+chart by, a number widget's text (count, sum, percent checked, in the property's format), adding,
+changing, moving and removing widgets, titles from what they show, and a dashboard read back from
+the doc (missing fields filled in) and copied to a linked view. `dashboard.spec.ts`: "Parts" gets
+a Board and a Dashboard, which starts with the count and a chart by Stage; a sum of Points (18) is
+added and renamed, then the Board as a widget; the dashboard's filter (Points > 4) changes all of
+them (2, 15, two cards); the board widget is narrowed and moved first, the chart removed; axe finds
+nothing on the dashboard; "Open" goes to the Board tab; after a restart it's all there.
+`a11y.spec.ts` adds the dashboard to the layouts it checks, in both themes. The view menu helpers
+in `a11y`, `dated` and `layouts` now find "Board" exactly (the add-view menu also has
+"Dashboard").

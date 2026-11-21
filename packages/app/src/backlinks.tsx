@@ -5,42 +5,14 @@ import { useEffect, useState } from 'react';
 import { useApp } from './context';
 import { useNavigation } from './navigation';
 import type { Backlink } from './platform';
+import { usePageSetting } from './page-setting';
 
 /** How a page shows its backlinks (a per-page setting, like Notion's). */
 export type BacklinksMode = 'popover' | 'expanded' | 'off';
-export const backlinksSettingKey = (pageId: string) => `backlinks.${pageId}`;
-
-/** Tell every mounted `useBacklinksMode` of a page about a change (menu → list). */
-const modeListeners = new Set<(pageId: string, mode: BacklinksMode) => void>();
 
 /** The display setting for a page's backlinks, saved in settings. */
 export function useBacklinksMode(pageId: string): [BacklinksMode, (mode: BacklinksMode) => void] {
-  const { platform } = useApp();
-  const [mode, setMode] = useState<{ pageId: string; mode: BacklinksMode } | null>(null);
-  useEffect(() => {
-    let live = true;
-    void platform.getSetting<BacklinksMode>(backlinksSettingKey(pageId)).then(
-      (m) =>
-        live &&
-        // A change made while loading wins.
-        setMode((current) =>
-          current?.pageId === pageId ? current : { pageId, mode: m ?? 'popover' },
-        ),
-    );
-    const listener = (id: string, next: BacklinksMode) => {
-      if (id === pageId) setMode({ pageId, mode: next });
-    };
-    modeListeners.add(listener);
-    return () => {
-      live = false;
-      modeListeners.delete(listener);
-    };
-  }, [platform, pageId]);
-  const set = (next: BacklinksMode) => {
-    platform.setSetting(backlinksSettingKey(pageId), next);
-    for (const listener of modeListeners) listener(pageId, next);
-  };
-  return [mode?.pageId === pageId ? mode.mode : 'popover', set];
+  return usePageSetting<BacklinksMode>('backlinks', pageId, 'popover');
 }
 
 /** Backlinks of a page, refreshed when pages change (the index follows edits). */
@@ -53,7 +25,11 @@ function useBacklinks(pageId: string): Backlink[] {
     const load = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        void platform.backlinks(pageId).then((l) => live && setLinks({ pageId, links: l }));
+        // A failed read (the server busy, offline) keeps what was shown; the next change retries.
+        platform.backlinks(pageId).then(
+          (l) => live && setLinks({ pageId, links: l }),
+          () => {},
+        );
       }, 150);
     };
     load();

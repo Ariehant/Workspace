@@ -112,6 +112,8 @@ function rowPageModel(
     smallText: row.smallText,
     font: row.font,
     locked: row.locked,
+    // Rows aren't verified (a wiki's pages are).
+    verified: null,
   };
   return {
     id: row.id,
@@ -472,7 +474,7 @@ function RowContent({
   blockTarget?: BlockTarget | null;
 }) {
   const found = useRow(rowId, databaseId);
-  const { workspace, pages } = useApp();
+  const { workspace, pages, user } = useApp();
   const { pageDoc, onEditor, focusBody } = usePageBody(rowId);
   // Others see this row open (in their views and its header); its editor shows cursors.
   useRowPresence(databaseId, found?.handle.doc ?? null, rowId);
@@ -505,8 +507,12 @@ function RowContent({
     .map((id) => snapshot.properties.find((p) => p.id === id && p.type === 'relation'))
     .filter((p): p is Property => p !== undefined);
   // As its database: read-only for someone who may only view or comment ("can edit
-  // content" edits rows and their pages).
-  const editable = !row.locked && !model.trashed && roleAllows(pages.role(rowId), 'content');
+  // content" edits rows and their pages; "can create pages", the rows they made).
+  const role = pages.role(rowId);
+  const editable =
+    !row.locked &&
+    !model.trashed &&
+    (roleAllows(role, 'content') || (role === 'create' && row.createdBy === user.id));
   return (
     <>
       {row.isTemplate && (

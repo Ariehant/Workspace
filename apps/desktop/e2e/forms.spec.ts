@@ -132,6 +132,8 @@ test('shared with anyone who has the link, it’s answered signed out', async ()
     { timeout: 15_000 },
   );
   await shot(A, 'forms-4-inbox');
+  await A.keyboard.press('Escape');
+  await expect(A.getByTestId('inbox')).toBeHidden();
 });
 
 test('conditions and file questions, in the app and on the public page', async () => {

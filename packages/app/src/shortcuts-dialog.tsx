@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from '@workspace/ui';
+import { SettingsShell } from './settings/shell';
 
 /** Every keyboard shortcut, by where it works (also in docs/desktop.md). */
 export const SHORTCUTS: { section: string; keys: [keys: string, does: string][] }[] = [
@@ -54,36 +54,35 @@ export const SHORTCUTS: { section: string; keys: [keys: string, does: string][] 
 
 export function ShortcutsDialog({ onClose }: { onClose(): void }) {
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        title="Keyboard shortcuts"
-        data-testid="shortcuts-dialog"
-        className="w-[min(640px,calc(100vw-32px))]"
+    <SettingsShell
+      onClose={onClose}
+      title="Keyboard shortcuts"
+      data-testid="shortcuts-dialog"
+      className="w-[min(640px,calc(100vw-32px))]"
+    >
+      {/* Focusable, so the list scrolls with the keyboard too. */}
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label="Shortcuts"
+        className="max-h-[70vh] overflow-y-auto p-4 pt-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        {/* Focusable, so the list scrolls with the keyboard too. */}
-        <div
-          tabIndex={0}
-          role="region"
-          aria-label="Shortcuts"
-          className="max-h-[70vh] overflow-y-auto p-4 pt-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          {SHORTCUTS.map(({ section, keys }) => (
-            <section key={section} className="mb-3">
-              <h3 className="mb-1 text-xs font-medium text-muted">{section}</h3>
-              <dl className="grid grid-cols-[minmax(0,14rem)_1fr] gap-x-4 gap-y-1">
-                {keys.map(([combo, does]) => (
-                  <div key={combo} className="contents">
-                    <dt>
-                      <kbd className="font-mono text-xs">{combo}</kbd>
-                    </dt>
-                    <dd className="text-muted">{does}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
+        {SHORTCUTS.map(({ section, keys }) => (
+          <section key={section} className="mb-3">
+            <h3 className="mb-1 text-xs font-medium text-muted">{section}</h3>
+            <dl className="grid grid-cols-[minmax(0,14rem)_1fr] gap-x-4 gap-y-1">
+              {keys.map(([combo, does]) => (
+                <div key={combo} className="contents">
+                  <dt>
+                    <kbd className="font-mono text-xs">{combo}</kbd>
+                  </dt>
+                  <dd className="text-muted">{does}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
+      </div>
+    </SettingsShell>
   );
 }

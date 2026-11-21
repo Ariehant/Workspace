@@ -455,7 +455,8 @@ describe('access', () => {
     mo.client.start();
     await until(() => mo.resets.includes('plan'), 'refused and reset');
     expect(mo.text('plan')).toBe('plan body');
-    expect(mo.client.state.state).toBe('live');
+    // And it goes live (the refusal can come before the catch-up ends: they're separate replies).
+    await w.live(mo);
 
     // A group grant reaches its members.
     const group = (

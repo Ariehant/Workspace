@@ -10,6 +10,7 @@ import {
   getPageContent,
   listPages,
   setPageOptions,
+  verificationState,
   type PageTreeNode,
 } from './index';
 
@@ -26,6 +27,7 @@ describe('page options', () => {
       smallText: false,
       font: 'default',
       locked: false,
+      verified: null,
     });
   });
 
@@ -98,5 +100,33 @@ describe('countWords', () => {
     expect(countWords('The robot arm moves.')).toBe(4);
     expect(countWords("don't stop — it's 3.5 V")).toBe(5);
     expect(countWords('ロボット arm')).toBe(5);
+  });
+
+  it('verification: who and until when; expired after; not kept by a copy', () => {
+    const doc = new Y.Doc();
+    const id = createPage(doc, { title: 'Handbook' });
+    const at = Date.UTC(2026, 10, 1);
+    const until = at + 30 * 86_400_000;
+    setPageOptions(doc, id, { verified: { by: 'ada', at, until } });
+    const verified = getPage(doc, id)!.verified;
+    expect(verified).toEqual({ by: 'ada', at, until });
+    expect(verificationState(verified, at)).toBe('valid');
+    expect(verificationState(verified, until - 1)).toBe('valid');
+    expect(verificationState(verified, until)).toBe('expired');
+    expect(verificationState({ by: 'ada', at, until: null }, until * 2)).toBe('valid');
+    expect(verificationState(null, at)).toBe('none');
+
+    const copy = duplicatePageTree(doc, id, at).get(id)!;
+    expect(getPage(doc, copy)!.verified).toBeNull();
+
+    setPageOptions(doc, id, { verified: null });
+    expect(getPage(doc, id)!.verified).toBeNull();
+  });
+
+  it('a malformed verification reads as none', () => {
+    const doc = new Y.Doc();
+    const id = createPage(doc, { title: 'P' });
+    setPageOptions(doc, id, { verified: { by: 7 } as never });
+    expect(getPage(doc, id)!.verified).toBeNull();
   });
 });

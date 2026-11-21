@@ -23,7 +23,7 @@ import {
   toggleGroupKey,
   type LayoutViewProps,
 } from './cards';
-import { usePageVirtualizer } from './virtual';
+import { usePageVirtualizer, useReusedLines } from './virtual';
 
 const COLUMN_WIDTH = { small: 220, medium: 260, large: 310 } as const;
 /** Above this many cards, a column only renders the cards in view. */
@@ -319,25 +319,7 @@ export function BoardView(props: LayoutViewProps) {
 }
 
 /** One column of one lane: its cards (virtualized when long) and "+ New". */
-function BoardCell({
-  lane,
-  column,
-  cards,
-  width,
-  props,
-  properties,
-  editable,
-  drag,
-  drop,
-  editingTitle,
-  onTitleDone,
-  onOpen,
-  onDragStart,
-  onDragEnd,
-  onDropAt,
-  onDrop,
-  onAdd,
-}: {
+function BoardCell(cell: {
   lane: BoardLane;
   column: BoardColumn;
   cards: Row[];
@@ -356,6 +338,26 @@ function BoardCell({
   onDrop(): void;
   onAdd?: () => void;
 }) {
+  const {
+    lane,
+    column,
+    cards,
+    width,
+    props,
+    properties,
+    editable,
+    drag,
+    drop,
+    editingTitle,
+    onTitleDone,
+    onOpen,
+    onDragStart,
+    onDragEnd,
+    onDropAt,
+    onDrop,
+    onAdd,
+  } = cell;
+  const reuse = useReusedLines<Row>(cell);
   const { view } = props;
   const virtual = cards.length >= VIRTUALIZE_FROM;
   const { bodyRef, virtualizer } = usePageVirtualizer({
@@ -423,7 +425,7 @@ function BoardCell({
               className="absolute top-0 left-0 w-full pb-2"
               style={{ transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
             >
-              {card(cards[v.index]!, v.index)}
+              {reuse(cards[v.index]!, () => card(cards[v.index]!, v.index))}
             </div>
           ))}
         </div>

@@ -580,6 +580,51 @@ export const MIGRATIONS: string[] = [
     CHECK (kind IN ('mention', 'comment', 'reply', 'reminder', 'access', 'form', 'automation',
       'request'));
   `,
+  // 16: Phase 8 N8. The "create" role (a database's "can create pages": add rows, and edit
+  // only the ones you made).
+  `
+  ALTER TABLE scope_access DROP CONSTRAINT scope_access_role_check;
+  ALTER TABLE scope_access ADD CONSTRAINT scope_access_role_check
+    CHECK (role IN ('full', 'edit', 'content', 'create', 'comment', 'view'));
+  ALTER TABLE scopes DROP CONSTRAINT scopes_join_role_check;
+  ALTER TABLE scopes ADD CONSTRAINT scopes_join_role_check
+    CHECK (join_role IN ('full', 'edit', 'content', 'create', 'comment', 'view'));
+  `,
+  // 17: Phase 8 N8. Share links: a page opened to anyone with the link who signs in (they
+  // join as a guest with the link's role on it). One link per page; turning it off ends it.
+  `
+  CREATE TABLE share_links (
+    id uuid PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    page_id text NOT NULL,
+    token text NOT NULL UNIQUE,
+    role text NOT NULL CHECK (role IN ('view', 'comment', 'edit')),
+    title text NOT NULL DEFAULT '',
+    expires_at timestamptz,
+    created_by uuid REFERENCES users ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE UNIQUE INDEX share_links_page ON share_links (workspace_id, page_id);
+  `,
+  // 18: files sent through the API (Phase 8 #43).
+  `
+  CREATE TABLE api_file_uploads (
+    id uuid PRIMARY KEY,
+    workspace_id uuid NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    integration_id uuid NOT NULL REFERENCES integrations ON DELETE CASCADE,
+    filename text NOT NULL,
+    content_type text,
+    file_id text,
+    size bigint,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    uploaded_at timestamptz
+  );
+  CREATE INDEX api_file_uploads_integration ON api_file_uploads (integration_id, created_at);
+  `,
+  // 19: published pages visitors may duplicate (Phase 8 #35).
+  `
+  ALTER TABLE published_pages ADD COLUMN allow_duplicate boolean NOT NULL DEFAULT false;
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

@@ -37,7 +37,23 @@ export const IPC = {
   fileImport: 'file:import',
   fileOpen: 'file:open',
   linkPreview: 'link:preview',
+  linkedPick: 'linked:pick',
+  linkedStatus: 'linked:status',
+  linkedOpen: 'linked:open',
+  linkedReveal: 'linked:reveal',
+  linkedFolders: 'linked:folders',
+  linkedFolderChoose: 'linked:folder-choose',
+  linkedFolderForget: 'linked:folder-forget',
+  googleState: 'google:state',
+  googleConfigure: 'google:configure',
+  googleConnect: 'google:connect',
+  googleDisconnect: 'google:disconnect',
+  googleChanged: 'google:changed',
+  drivePick: 'drive:pick',
+  driveStatus: 'drive:status',
+  driveOpen: 'drive:open',
   backlinks: 'links:backlinks',
+  remindersUpcoming: 'reminders:upcoming',
   syncedPlaces: 'links:synced',
   historyList: 'history:list',
   historyGet: 'history:get',
@@ -192,6 +208,14 @@ export interface UpdateState {
 }
 
 /** An attachment stored in the workspace (see FileStore). */
+export type {
+  DriveFileRef,
+  DriveFileStatus,
+  GoogleClientConfig,
+  GoogleState,
+  LinkedFileStatus,
+} from '@workspace/core';
+
 export interface FileRef {
   id: string;
   name: string;

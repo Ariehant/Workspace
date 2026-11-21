@@ -129,7 +129,7 @@ export function commentRoutes(app: FastifyInstance) {
       throw invalid('body should be an object.');
     }
     const { parent, discussion_id, rich_text } = body as Record<string, unknown>;
-    const text = commentBodyIn(rich_text, { isUser: (u) => api.access.isMember(u) });
+    const text = commentBodyIn(rich_text, api.writeContext);
     let page: Located;
     let threadId: string;
     let commentId: string;

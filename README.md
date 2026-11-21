@@ -32,8 +32,8 @@ without the AI.**
   offline merge cleanly when you reconnect, because every page is a CRDT (Yjs).
 - **Notion-compatible.** Import a Notion export, and point existing Notion integrations at your
   server: the official `@notionhq/client` SDK works against it unchanged.
-- **Bring everything in.** Word and Google Docs files, Evernote, Trello and Confluence exports,
-  Markdown, HTML and CSV come in with their structure.
+- **Bring everything in.** Word and Google Docs files, Evernote, Trello, Asana, Jira,
+  monday.com and Confluence exports, Markdown, HTML and CSV come in with their structure.
 - **No AI, no lock-in.** Export everything as Markdown, CSV, HTML or PDF, or back up the whole
   workspace to a `.zip`.
 
@@ -46,20 +46,22 @@ without the AI.**
 **Editor**
 
 - Slash menu, Markdown shortcuts, drag handles and columns
-- Headings, lists, to-dos, toggles, callouts, quotes, tables
+- Headings, lists, to-dos, toggles, callouts, quotes, tables with coloured rows and columns
 - Code with highlighting for ~190 languages, Mermaid diagrams, KaTeX equations
 - Images, video, audio, PDFs, files, bookmarks and embeds
 - @-mentions of pages, people and dates, reminders, emoji; link mentions with the site's title
 - Tabs, synced blocks, buttons, table of contents, find and replace
 - Embed any website; YouTube, Figma, Google Docs, Miro, GitHub Gists and more
 - `/` commands for everything, and Notion's keyboard shortcuts (`Ctrl+?` lists them)
+- Present a page as slides, full screen
+- Verified pages: who checked a page, and until when
 
 </td>
 <td width="50%" valign="top">
 
 **Databases**
 
-- Table, board, list, gallery, calendar, timeline, chart and form views
+- Table, board, list, gallery, feed, calendar, timeline, chart and form views
 - 20+ property types, with Notion's Formula 2.0 language
 - Relations, rollups, sub-items and dependencies
 - Filters (nested AND/OR), sorts, groups, calculations per view
@@ -77,13 +79,16 @@ without the AI.**
 
 **Workspace**
 
+- Home: recent pages, upcoming reminders, recent edits
+- People: everyone in the workspace, and the pages each one made
 - Page tree with drag and drop, favorites, trash
 - Quick find (`Ctrl+K`) with filters: titles only, section, last edited, created by
 - Tabs, several windows, back and forward, `workspace://` links
 - Backlinks, page history with restore, a templates gallery
-- Import from Notion, Word, Google Docs, Evernote, Trello and Confluence, and Markdown, HTML
-  and CSV
-- Export Markdown & CSV, HTML, PDF; full backups
+- Import from Notion, Word, Google Docs, Evernote, Trello, Asana, Jira, monday.com and
+  Confluence, and Markdown, HTML and CSV
+- One Settings window (`Ctrl+,`); custom emoji for the whole workspace
+- Export Markdown & CSV, HTML, PDF (a page, or the whole workspace with contents); full backups
 - Light, dark and system themes
 
 </td>
@@ -93,7 +98,8 @@ without the AI.**
 
 - Accounts with passwords or single sign-on (OpenID Connect)
 - Members, guests, groups, teamspaces and per-page sharing, with requests for access
-- Live cursors and presence, comments, suggested edits
+- Share links for people outside the workspace, and "can create pages" for request trackers
+- Live cursors and presence, comments (shown, minimized or hidden per page), suggested edits
 - An inbox for mentions, comments and reminders, with email digests
 - Publish pages to the web, and a web app with the same UI
 - A Notion-compatible REST API with integration tokens and webhooks
@@ -251,7 +257,7 @@ flowchart LR
 | `packages/storage-remote` | Postgres store for the server: migrations, the update log, accounts |
 | `packages/sync`           | The sync protocol: messages, the server hub and clients             |
 | `packages/api-model`      | Notion's API objects, both ways                                     |
-| `packages/importers`      | Notion, Word, Evernote, Trello, Confluence; Markdown, HTML, CSV     |
+| `packages/importers`      | Notion, Word, Evernote, Trello, Asana, Jira, Confluence, Markdown   |
 | `packages/exporters`      | Markdown, CSV, HTML, PDF and backups                                |
 | `infra`                   | Docker Compose stack, Caddyfile, systemd unit, backup script        |
 

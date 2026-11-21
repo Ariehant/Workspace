@@ -17,6 +17,8 @@ import { ApiView } from './view';
 import { blockRoutes } from './blocks';
 import { commentRoutes } from './comments';
 import { databaseRoutes } from './databases';
+import { fileUploadRoutes } from './file-uploads';
+import { markdownRoutes } from './markdown';
 import { pageRoutes } from './pages';
 import { searchRoutes } from './search';
 import { userRoutes } from './users';
@@ -121,6 +123,13 @@ export function apiRoutes(app: FastifyInstance, ctx: ServerContext, options: Api
         await request.api.prepare();
       });
 
+      // Blocks and property values can name sent file uploads: loaded before the route reads them.
+      v1.addHook('preHandler', async (request) => {
+        if (request.api && request.body && typeof request.body === 'object') {
+          await request.api.loadUploads(request.body);
+        }
+      });
+
       v1.setErrorHandler((error, _request, reply) => {
         if (error instanceof ApiError) return send(reply, error);
         const e = error as {
@@ -173,10 +182,12 @@ export function apiRoutes(app: FastifyInstance, ctx: ServerContext, options: Api
 
       userRoutes(v1);
       pageRoutes(v1);
+      markdownRoutes(v1);
       databaseRoutes(v1);
       searchRoutes(v1);
       blockRoutes(v1);
       commentRoutes(v1);
+      fileUploadRoutes(v1);
     },
     { prefix: '/v1' },
   );

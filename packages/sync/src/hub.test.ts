@@ -237,9 +237,12 @@ describe('SyncHub', () => {
       ],
     });
     await until(() => ofType(a.received, 'revoke').length > 0);
+    // Refused ones are asked once more, after the rest of the push.
     expect(writes).toEqual([
       ['ro', null],
       ['p', 's1'],
+      ['secret', null],
+      ['ro', null],
       ['secret', null],
     ]);
     expect(ofType(a.received, 'ack')[0]!.items).toEqual([
@@ -256,6 +259,51 @@ describe('SyncHub', () => {
     ]);
     expect(a.peer.closed).toBeNull();
     expect((await store.since(WS, 0, 10)).map((r) => r.docId)).toEqual(['ro', 'p']);
+  });
+
+  it('a doc compacted in the store (not through the hub) still reaches a connection behind', async () => {
+    const { store, hub, open } = setup();
+    const a = open();
+    a.hello(0, 'A');
+    a.send({
+      type: 'push',
+      items: [1, 2, 3].map((n) => ({ localId: n, docId: 'p', update: edit(`${n}`) })),
+    });
+    await until(() => ofType(a.received, 'ack').length > 0);
+    // The store merges the doc into a new row (4) that the hub's recent rows don't have.
+    expect(store.compact(WS, 'p')).toBe(4);
+    hub.notify(WS);
+    const b = open();
+    b.hello(0, 'B');
+    await until(() => ofType(b.received, 'caught-up').length > 0);
+    expect(ofType(b.received, 'caught-up')[0]!.cursor).toBe(4);
+  });
+
+  it('asks a refused doc again after the rest of the push, keeping its updates in order', async () => {
+    const { store, open } = setup();
+    // "page" may be written once "db" has been (as a new row's page, after its row).
+    let dbWritten = false;
+    const policy: DocPolicy = {
+      canRead: () => true,
+      canWrite: (docId) => {
+        if (docId === 'db') dbWritten = true;
+        return docId === 'db' || dbWritten;
+      },
+    };
+    const a = open({ policy, userId: 'u1' });
+    a.hello(0, 'A');
+    a.send({
+      type: 'push',
+      items: [
+        { localId: 1, docId: 'page', update: edit('first') },
+        { localId: 2, docId: 'page', update: edit('second') },
+        { localId: 3, docId: 'db', update: edit('row') },
+      ],
+    });
+    await until(() => ofType(a.received, 'ack').length > 0);
+    expect(ofType(a.received, 'ack')[0]!.items.map((i) => i.denied)).toEqual([false, false, false]);
+    // Stored in an order that keeps each doc's updates in theirs.
+    expect((await store.since(WS, 0, 10)).map((r) => r.docId)).toEqual(['page', 'page', 'db']);
   });
 
   it('sends only readable docs, refuses opening the rest, and starts with the scopes', async () => {

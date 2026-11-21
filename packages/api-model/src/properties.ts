@@ -4,7 +4,13 @@
  * edited times and people, unique IDs) come out in Notion's shapes and are refused on
  * write, as Notion does.
  */
-import { newId } from '@workspace/core';
+import {
+  driveOpenUrl,
+  isDriveFileId,
+  linkedFileLocation,
+  linkedFileOf,
+  newId,
+} from '@workspace/core';
 import {
   OPTION_COLORS,
   STATUS_GROUPS,
@@ -30,6 +36,7 @@ import {
   type Row,
   type SelectOption,
 } from '@workspace/database';
+import { uploadIn, type UploadedFile } from './blocks';
 import { invalid } from './errors';
 import { parseId } from './ids';
 import { readRichSpans, readRichText, richText, richTextFromSpans } from './rich-text';
@@ -424,11 +431,23 @@ function selectValue(p: Property, id: unknown) {
 
 function filesValue(value: unknown, ctx: ValueContext) {
   if (!Array.isArray(value)) return [];
-  return (value as FileValue[]).map((f) =>
-    f.id
-      ? { name: f.name, type: 'file', file: ctx.fileUrl(f.id, f.name) }
-      : { name: f.name, type: 'external', external: { url: f.url ?? '' } },
-  );
+  return (value as FileValue[]).map((f) => {
+    if (f.id) return { name: f.name, type: 'file', file: ctx.fileUrl(f.id, f.name) };
+    // A Google Drive file: a link to it in Drive.
+    if (f.drive && isDriveFileId(f.drive.fileId)) {
+      return { name: f.name, type: 'external', external: { url: driveOpenUrl(f.drive.fileId) } };
+    }
+    // A file on someone's computer: where it is, not a link (Phase 8 N9).
+    if (f.linked) {
+      const ref = linkedFileOf({ ...f.linked, name: f.name });
+      return {
+        name: f.name,
+        type: 'linked',
+        linked: { location: ref ? linkedFileLocation(ref) : '' },
+      };
+    }
+    return { name: f.name, type: 'external', external: { url: f.url ?? '' } };
+  });
 }
 
 /** A computed formula's value, as `{type, <type>: value}`. */
@@ -541,6 +560,8 @@ export interface ParsedValue {
 export interface ParseContext {
   /** Is this someone (a person property's values)? */
   isUser(id: string): boolean;
+  /** A sent file upload of the integration's, by id (files properties). */
+  fileUpload?(id: string): UploadedFile | null;
 }
 
 function readOption(
@@ -643,9 +664,16 @@ export function parseValue(p: Property, input: unknown, ctx: ParseContext): Pars
       if (!Array.isArray(raw)) throw invalid(`${at} should be an array.`);
       const files = raw.map((x, i): FileValue => {
         const f = asObject(x, `${at}[${i}]`);
+        if (f.type === 'file_upload' || f.file_upload !== undefined) {
+          const upload = uploadIn(f, `${at}[${i}]`, ctx);
+          const name = typeof f.name === 'string' && f.name ? f.name : upload.name;
+          return { id: upload.fileId, name: name.slice(0, 200) };
+        }
         const url = (f.external as { url?: unknown } | undefined)?.url;
         if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
-          throw invalid(`${at}[${i}] should be an external file with an http(s) URL.`);
+          throw invalid(
+            `${at}[${i}] should be an external file with an http(s) URL, or a sent file upload.`,
+          );
         }
         const name = typeof f.name === 'string' && f.name ? f.name : url;
         return { url, name: name.slice(0, 200) };

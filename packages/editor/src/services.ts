@@ -1,4 +1,11 @@
-import type { ButtonConfig } from '@workspace/core';
+import type {
+  ButtonConfig,
+  DriveFileRef,
+  DriveFileStatus,
+  LinkedFileRef,
+  LinkedFileStatus,
+  PreviewKind,
+} from '@workspace/core';
 import type { LucideIcon } from 'lucide-react';
 import type * as Y from 'yjs';
 import { Extension } from '@tiptap/core';
@@ -94,7 +101,46 @@ export interface EditorServices {
   fileUrl(id: string): string;
   /** Open a stored file with the system's default app. */
   openFile(id: string): void;
+  /**
+   * A file's preview in the page (a Word document, an Excel workbook, a PDF), from a URL the
+   * renderer can load. Where the app provides one.
+   */
+  renderFilePreview?(source: { url: string; name: string; kind: PreviewKind }): ReactNode;
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /**
+   * Linked files (Phase 8 N9): pointers to files on this computer instead of copies. Only
+   * where the host has files of its own (the desktop); elsewhere a link says where it is.
+   */
+  linkedFiles?: {
+    /** Pick files to link (none when cancelled). */
+    pick(): Promise<LinkedFileRef[]>;
+    /** Pick where a moved file is now. */
+    locate(): Promise<LinkedFileRef | null>;
+    status(ref: LinkedFileRef): Promise<LinkedFileStatus>;
+    open(ref: LinkedFileRef): Promise<boolean>;
+    /** Show it in the file manager. */
+    reveal(ref: LinkedFileRef): Promise<boolean>;
+    /** A URL a linked image shows from. */
+    previewUrl(ref: LinkedFileRef): string;
+    /** Open Settings at Linked folders. */
+    setUpFolders(): void;
+  };
+  /**
+   * Google Drive (Phase 8 N9): files picked with Google's Picker, where the host connects to
+   * Drive (the desktop). Elsewhere a Drive block shows what it last knew and links to Drive.
+   */
+  drive?: {
+    /** Pick files (none if cancelled; not connected opens Settings). */
+    pick(): Promise<DriveFileRef[]>;
+    status(fileId: string): Promise<DriveFileStatus>;
+    open(fileId: string): Promise<boolean>;
+    /** Open Settings at Connections. */
+    setUp(): void;
+    /** The connection changed (connected, disconnected). */
+    subscribe(listener: () => void): () => void;
+    /** Where Drive's picture of a file shows from (when its status says it has one). */
+    thumbnailUrl?(fileId: string): string;
+  };
   /**
    * On a database row's page, for someone who may change the database's properties: the
    * property types `/relation`, `/select`… add to the database (`types` is empty when
@@ -111,6 +157,11 @@ export interface EditorServices {
     me?: string;
     list(): PersonRef[];
     get(id: string): PersonRef | null;
+    subscribe(listener: () => void): () => void;
+  };
+  /** The workspace's custom emoji (`:name:` → an uploaded image). */
+  customEmoji?: {
+    list(): { name: string; fileId: string }[];
     subscribe(listener: () => void): () => void;
   };
   /** The workspace's KaTeX macros (`\R` -> `\mathbb{R}`), shared by every page. */

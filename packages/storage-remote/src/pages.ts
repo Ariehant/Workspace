@@ -34,6 +34,8 @@ export interface Published {
   slug: string;
   includeSubpages: boolean;
   allowIndexing: boolean;
+  /** Visitors may copy it into a workspace of theirs (Phase 8 #35). */
+  allowDuplicate: boolean;
   title: string;
   description: string;
   publishedBy: string | null;
@@ -44,6 +46,7 @@ export interface PublishSettings {
   slug: string;
   includeSubpages: boolean;
   allowIndexing: boolean;
+  allowDuplicate: boolean;
   title: string;
   description: string;
 }
@@ -54,6 +57,7 @@ interface PublishedRow {
   slug: string;
   include_subpages: boolean;
   allow_indexing: boolean;
+  allow_duplicate: boolean;
   title: string;
   description: string;
   published_by: string | null;
@@ -66,6 +70,7 @@ const published = (r: PublishedRow): Published => ({
   slug: r.slug,
   includeSubpages: r.include_subpages,
   allowIndexing: r.allow_indexing,
+  allowDuplicate: r.allow_duplicate,
   title: r.title,
   description: r.description,
   publishedBy: r.published_by,
@@ -333,12 +338,13 @@ export class Pages {
     try {
       await this.pool.query(
         `INSERT INTO published_pages
-           (workspace_id, page_id, slug, include_subpages, allow_indexing, title, description, published_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           (workspace_id, page_id, slug, include_subpages, allow_indexing, title, description,
+            published_by, allow_duplicate)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT (workspace_id, page_id) DO UPDATE SET
            slug = excluded.slug, include_subpages = excluded.include_subpages,
            allow_indexing = excluded.allow_indexing, title = excluded.title,
-           description = excluded.description`,
+           description = excluded.description, allow_duplicate = excluded.allow_duplicate`,
         [
           workspaceId,
           pageId,
@@ -348,6 +354,7 @@ export class Pages {
           settings.title,
           settings.description,
           by,
+          settings.allowDuplicate,
         ],
       );
       return true;

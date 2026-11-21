@@ -7,12 +7,16 @@
  * run does (`planActions`). The server runs them (as the automation's maker, written as
  * the workspace's automations bot), and changes an automation makes never start one.
  */
-import { isTimeZone, zonedTime } from '@workspace/core';
+import { PageField, isTimeZone, zonedTime } from '@workspace/core';
 import type * as Y from 'yjs';
+import { getRowMap, hasRow, setCell, setRowTitle } from './doc';
 import { matchesFilter } from './filter';
-import { cellValue } from './properties';
+import { previewFormula, resultTypeOf, toCellValue } from './formula';
+import { cellValue, propertyKind, relationIds } from './properties';
 import {
+  RowField,
   TITLE_PROPERTY_ID,
+  type DatabaseSnapshot,
   type DateValue,
   type DisplayContext,
   type FilterGroup,
@@ -28,7 +32,15 @@ export type AutomationTrigger =
   | { kind: 'pageAdded' }
   /** A property edited; with `to`, only when it becomes that (an option id, true…). */
   | { kind: 'propertyEdited'; propertyId: string; to?: unknown }
-  | { kind: 'schedule'; schedule: Schedule };
+  | { kind: 'schedule'; schedule: Schedule }
+  /** A button property pressed on a page (pressing it notes when and by whom in its cell). */
+  | { kind: 'buttonPressed'; propertyId: string };
+
+/** What a pressed button property keeps in its cell: the last press. */
+export interface ButtonPress {
+  at: number;
+  by: string;
+}
 
 export interface Schedule {
   every: 'day' | 'week' | 'month';
@@ -51,7 +63,9 @@ export type ActionValue =
   /** The person whose change started it (person properties). */
   | { kind: 'triggeredBy' }
   /** The value of a property of the page that started it. */
-  | { kind: 'copy'; propertyId: string };
+  | { kind: 'copy'; propertyId: string }
+  /** A formula over the page that started it (`prop("Name")`), as the property's type. */
+  | { kind: 'formula'; expression: string };
 
 export type AutomationAction =
   /** Set properties of the page that started it. */
@@ -63,6 +77,11 @@ export type AutomationAction =
       values: Record<string, ActionValue>;
       templateId?: string | null;
     }
+  /**
+   * Set properties of the pages linked in a relation of the page that started it (in the
+   * related database: `values` are by its property ids).
+   */
+  | { kind: 'editRelated'; relationId: string; values: Record<string, ActionValue> }
   /** Tell people (and/or the people in a person property of the page). */
   | { kind: 'notify'; people: string[]; peopleProperty: string | null; message: string }
   /** POST the page (or the run) as JSON to a URL. */
@@ -142,7 +161,12 @@ export function triggeredBy(
       const { trigger } = automation;
       let hit = false;
       if (trigger.kind === 'pageAdded') hit = !was;
-      else if (trigger.kind === 'propertyEdited' && was) {
+      else if (trigger.kind === 'buttonPressed' && was) {
+        // A new press (its time) in the button's cell.
+        const now = row.values[trigger.propertyId] as ButtonPress | undefined;
+        const then = was.values[trigger.propertyId] as ButtonPress | undefined;
+        hit = byId.get(trigger.propertyId)?.type === 'button' && !!now && now.at !== then?.at;
+      } else if (trigger.kind === 'propertyEdited' && was) {
         const property = byId.get(trigger.propertyId);
         if (property) {
           const now = cellValue(row, property);
@@ -165,6 +189,14 @@ export function triggeredBy(
 export type Effect =
   | { kind: 'edit'; rowId: string; values: Record<string, unknown>; title?: string }
   | { kind: 'add'; title: string; values: Record<string, unknown>; templateId?: string }
+  /** Edit pages of another database (those linked from the page that started it). */
+  | {
+      kind: 'editRelated';
+      databaseId: string;
+      rowIds: string[];
+      values: Record<string, unknown>;
+      title?: string;
+    }
   | { kind: 'notify'; userIds: string[]; message: string; rowId: string | null }
   | { kind: 'webhook'; url: string; headers: Record<string, string>; body: WebhookBody };
 
@@ -183,7 +215,60 @@ export interface RunContext {
   now: number;
 }
 
+/** What a run can read beyond the page: for formulas, and edits in related databases. */
+export interface PlanSources {
+  /** The database (formulas in values read its properties). */
+  snapshot?: DatabaseSnapshot;
+  ctx?: DisplayContext;
+  /** Another database's properties (edits in a related one); null when it isn't there. */
+  propertiesOf?(databaseId: string): readonly Property[] | null;
+}
+
 const today = (now: number) => new Date(now).toISOString().slice(0, 10);
+
+/** A formula's result on the page, as a value of `property` (null when it can't be one). */
+export function formulaActionValue(
+  expression: string,
+  row: Row | null,
+  property: Property,
+  snapshot: DatabaseSnapshot | undefined,
+  ctx: DisplayContext,
+): unknown {
+  if (!row || !snapshot || !expression.trim()) return null;
+  const result = previewFormula(expression, row, snapshot, ctx);
+  if ('error' in result || result.value === null) return null;
+  const type = resultTypeOf(result.type);
+  const value = toCellValue(result.value, type);
+  if (value === null) return null;
+  switch (property.type) {
+    case 'number':
+      if (typeof value === 'number') return value;
+      break;
+    case 'checkbox':
+      if (typeof value === 'boolean') return value;
+      break;
+    case 'date':
+      if (type === 'date') return value;
+      break;
+    case 'person':
+    case 'relation':
+    case 'files':
+      // Ids, not text: a formula's text doesn't name them.
+      return null;
+  }
+  // Otherwise read as text would be (an option by its name, a number, a date…).
+  const text = typeof value === 'string' ? value : String(value);
+  if (property.type === 'title' || property.type === 'text') return text;
+  const parsed = propertyKind(property.type).parse(text, property, ctx);
+  // Only options the property has (an automation doesn't add options).
+  const added = new Set((parsed.newOptions ?? []).map((o) => o.id));
+  if (!added.size) return parsed.value;
+  if (Array.isArray(parsed.value)) {
+    const kept = parsed.value.filter((id) => !added.has(String(id)));
+    return kept.length ? kept : null;
+  }
+  return added.has(String(parsed.value)) ? null : parsed.value;
+}
 
 function resolve(
   value: ActionValue,
@@ -191,6 +276,7 @@ function resolve(
   row: Row | null,
   properties: ReadonlyMap<string, Property>,
   run: RunContext,
+  sources: PlanSources,
 ): unknown {
   switch (value.kind) {
     case 'fixed':
@@ -203,21 +289,35 @@ function resolve(
       const source = properties.get(value.propertyId);
       return row && source ? cellValue(row, source) : null;
     }
+    case 'formula':
+      return property
+        ? formulaActionValue(value.expression, row, property, sources.snapshot, {
+            users: new Map(),
+            ...sources.ctx,
+            now: run.now,
+          })
+        : null;
   }
 }
 
-/** The values to write, by property (stored properties only; the title separately). */
+/**
+ * The values to write, by property (stored properties only; the title separately).
+ * `targets`: the properties written (another database's, for a related edit); values
+ * are read from the page that started it (`properties`).
+ */
 function resolveValues(
   values: Record<string, ActionValue>,
   row: Row | null,
   properties: ReadonlyMap<string, Property>,
   run: RunContext,
+  sources: PlanSources,
+  targets: ReadonlyMap<string, Property> = properties,
 ): { title?: string; values: Record<string, unknown> } {
   const out: { title?: string; values: Record<string, unknown> } = { values: {} };
   for (const [propertyId, value] of Object.entries(values)) {
-    const property = properties.get(propertyId);
+    const property = targets.get(propertyId);
     if (!property) continue;
-    const resolved = resolve(value, property, row, properties, run);
+    const resolved = resolve(value, property, row, properties, run, sources);
     if (propertyId === TITLE_PROPERTY_ID || property.type === 'title') {
       out.title = typeof resolved === 'string' ? resolved : '';
     } else if (!COMPUTED.has(property.type)) {
@@ -245,12 +345,54 @@ export function pageJson(row: Row, properties: readonly Property[]) {
   return { id: row.id, title: row.title, properties: out };
 }
 
+/** The other databases an automation's actions edit (by relation): load them for a run. */
+export function relatedDatabasesOf(
+  automation: Automation,
+  properties: readonly Property[],
+): string[] {
+  const ids = new Set<string>();
+  for (const action of automation.actions) {
+    if (action.kind !== 'editRelated') continue;
+    const relation = properties.find((p) => p.id === action.relationId);
+    const id = relation?.type === 'relation' ? relation.config.databaseId : undefined;
+    if (id) ids.add(id);
+  }
+  return [...ids];
+}
+
+/**
+ * Write a related edit into the related database's doc: its pages that are still there
+ * (not trashed, not templates). Returns how many were changed.
+ */
+export function applyRelatedEdit(
+  doc: Y.Doc,
+  effect: Extract<Effect, { kind: 'editRelated' }>,
+  actor: string | null,
+  now = Date.now(),
+): number {
+  let changed = 0;
+  doc.transact(() => {
+    for (const rowId of effect.rowIds) {
+      if (!hasRow(doc, rowId)) continue;
+      const map = getRowMap(doc, rowId);
+      if (map.get(PageField.trashedAt) != null || map.get(RowField.template) === true) continue;
+      for (const [propertyId, value] of Object.entries(effect.values)) {
+        setCell(doc, rowId, propertyId, value, actor, now);
+      }
+      if (effect.title !== undefined) setRowTitle(doc, rowId, effect.title, actor, now);
+      changed++;
+    }
+  });
+  return changed;
+}
+
 /** What a run does (`row`: the page that started it; null for a scheduled run). */
 export function planActions(
   automation: Automation,
   row: Row | null,
   properties: readonly Property[],
   run: RunContext,
+  sources: PlanSources = {},
 ): Effect[] {
   const byId = new Map(properties.map((p) => [p.id, p]));
   const effects: Effect[] = [];
@@ -258,7 +400,7 @@ export function planActions(
     switch (action.kind) {
       case 'setProperties': {
         if (!row) break;
-        const { title, values } = resolveValues(action.values, row, byId, run);
+        const { title, values } = resolveValues(action.values, row, byId, run, sources);
         effects.push({
           kind: 'edit',
           rowId: row.id,
@@ -268,12 +410,38 @@ export function planActions(
         break;
       }
       case 'addPage': {
-        const { title, values } = resolveValues(action.values, row, byId, run);
+        const { title, values } = resolveValues(action.values, row, byId, run, sources);
         effects.push({
           kind: 'add',
           title: title ?? action.title,
           values,
           ...(action.templateId ? { templateId: action.templateId } : {}),
+        });
+        break;
+      }
+      case 'editRelated': {
+        const relation = byId.get(action.relationId);
+        const databaseId = relation?.type === 'relation' ? relation.config.databaseId : undefined;
+        if (!row || !relation || !databaseId) break;
+        const rowIds = relationIds(cellValue(row, relation));
+        const targets =
+          databaseId === run.databaseId ? properties : sources.propertiesOf?.(databaseId);
+        if (!rowIds.length || !targets) break;
+        const { title, values } = resolveValues(
+          action.values,
+          row,
+          byId,
+          run,
+          sources,
+          new Map(targets.map((p) => [p.id, p])),
+        );
+        if (title === undefined && !Object.keys(values).length) break;
+        effects.push({
+          kind: 'editRelated',
+          databaseId,
+          rowIds,
+          values,
+          ...(title !== undefined && { title }),
         });
         break;
       }

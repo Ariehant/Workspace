@@ -229,3 +229,69 @@ test('find and replace in a page', async ({ launch }) => {
   await expect(bar).toHaveCount(0);
   await expect(editor(window).locator('.ProseMirror-search-match')).toHaveCount(0);
 });
+
+test('custom emoji: added in settings, typed as :name:, a page icon, kept, removed', async ({
+  launch,
+}) => {
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEklEQVR4nGP4z8AARwzEcQwDAH2gC/UmQhvLAAAAAElFTkSuQmCC',
+    'base64',
+  );
+  const launched = await launch();
+  let { window } = launched;
+  const openEmoji = async () => {
+    await window.getByRole('button', { name: /workspace menu/i }).click();
+    await window.getByRole('menuitem', { name: 'Emoji…' }).click();
+    const settings = window.getByTestId('emoji-settings');
+    await expect(settings).toBeVisible();
+    return settings;
+  };
+
+  let settings = await openEmoji();
+  await settings
+    .getByLabel('Emoji image')
+    .setInputFiles({ name: 'Team Logo.png', mimeType: 'image/png', buffer: PNG });
+  // Named from the file, which can be changed; a built-in name can't be taken.
+  await expect(settings.getByLabel('Emoji name')).toHaveValue('team_logo');
+  await settings.getByLabel('Emoji name').fill('rocket');
+  await expect(settings.getByRole('alert')).toHaveText(':rocket: is already an emoji');
+  await expect(settings.getByRole('button', { name: 'Add emoji' })).toBeDisabled();
+  await settings.getByLabel('Emoji name').fill('teamlogo');
+  await settings.getByRole('button', { name: 'Add emoji' }).click();
+  await expect(settings.getByTestId('custom-emoji')).toHaveText([/:teamlogo:/]);
+  await window.keyboard.press('Escape');
+
+  await newPage(window, 'Kickoff');
+  await window.keyboard.type('Welcome :teaml');
+  const menu = window.getByTestId('emoji-menu');
+  await expect(menu.getByRole('option').first()).toContainText(':teamlogo:');
+  await window.keyboard.press('Enter');
+  const emoji = editor(window).locator('img.ws-emoji');
+  await expect(emoji).toHaveAttribute('alt', ':teamlogo:');
+  await expect(emoji).toHaveAttribute('src', /^ws-file:\/\//);
+  await window.keyboard.type(' all');
+  await expect(editor(window).locator('p').first()).toContainText('Welcome');
+
+  // A page icon too.
+  await window.getByLabel('Page title').hover();
+  await window.getByRole('button', { name: 'Add icon' }).click();
+  const iconButton = window.getByRole('button', { name: 'Change page icon' });
+  await iconButton.click();
+  const picker = window.getByTestId('icon-picker');
+  await picker.getByRole('button', { name: 'teamlogo' }).click();
+  await expect(iconButton.locator('img')).toHaveAttribute('src', /^ws-file:\/\//);
+
+  await waitForIndexed(window, 'Welcome');
+  await quit(launched.app);
+  ({ window } = await launch());
+  await expect(window.getByLabel('Page title')).toHaveValue('Kickoff');
+  await expect(editor(window).locator('img.ws-emoji')).toHaveAttribute('alt', ':teamlogo:');
+
+  // Removed: pages show its name instead.
+  settings = await openEmoji();
+  await settings.getByRole('button', { name: 'Remove :teamlogo:' }).click();
+  await expect(settings.getByTestId('custom-emoji')).toHaveCount(0);
+  await window.keyboard.press('Escape');
+  await expect(editor(window).locator('img.ws-emoji')).toHaveCount(0);
+  await expect(editor(window).locator('p').first()).toHaveText('Welcome :teamlogo: all');
+});

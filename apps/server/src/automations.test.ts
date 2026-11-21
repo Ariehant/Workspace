@@ -5,6 +5,7 @@
  * Ada (owner) has the database "tasks" in the first teamspace T (everyone may edit).
  * Bob is a member.
  */
+import { lookup } from 'node:dns/promises';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,10 +17,13 @@ import {
   addOption,
   addProperty,
   addRow,
+  createRelation,
   initDatabase,
   readDatabase,
   setAutomation,
   setCell,
+  setRelation,
+  TITLE_PROPERTY_ID,
   type Automation,
 } from '@workspace/database';
 import { PgStore } from '@workspace/storage-remote';
@@ -70,7 +74,7 @@ async function receiver(statuses: number[] = []) {
   return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/hook`, got };
 }
 
-async function world(now?: () => number) {
+async function world(now?: () => number, delayMs = 50) {
   const store = new PgStore(await createTestDatabase(inject('pgUrl')), { max: 8 });
   await store.migrate();
   const config = loadConfig({
@@ -88,7 +92,7 @@ async function world(now?: () => number) {
     files: new FsStorage(dir),
     mailer: null,
     jobs: { pollMs: 20, backoffMs: [50] },
-    automations: { delayMs: 50, ...(now && { now }) },
+    automations: { delayMs, ...(now && { now }) },
   });
   await app.listen({ host: '127.0.0.1', port: 0 });
   app.jobs.start();
@@ -252,6 +256,33 @@ describe('automations', () => {
     expect((await w.runs('a1'))[0]).toMatchObject({ status: 'done' });
   });
 
+  it('a page added is looked at once its edits pause (a title typed after it, slowly)', async () => {
+    const w = await world(undefined, 400);
+    const hook = await receiver();
+    setAutomation(
+      w.a.doc('tasks'),
+      w.automation({
+        id: 'added',
+        actions: [{ kind: 'webhook', url: hook.url, headers: {} }],
+      }),
+    );
+    await w.settled(w.a);
+    await settle(600);
+    // A new page, then its title a letter at a time, each sent before the next: the typing
+    // takes twice the wait, but no pause in it is as long.
+    const db = w.a.doc('tasks');
+    addRow(db, { id: 'typed', actor: w.ada.id, title: '' });
+    await w.settled(w.a);
+    const title = 'Gripper';
+    for (let i = 1; i <= title.length; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      setCell(db, 'typed', TITLE_PROPERTY_ID, title.slice(0, i), w.ada.id);
+      await w.settled(w.a);
+    }
+    await until(() => hook.got.length === 1, 'the webhook', 20_000);
+    expect(JSON.parse(hook.got[0]!.body)).toMatchObject({ data: { title: 'Gripper' } });
+  });
+
   it('changes an automation makes never start one (no loops)', async () => {
     const w = await world();
     const { points } = w.ids;
@@ -271,6 +302,65 @@ describe('automations', () => {
     );
     await settle(600);
     expect(await w.runs('loop')).toHaveLength(1);
+  });
+
+  it('a button pressed: the linked pages in another database are edited, a formula for a value', async () => {
+    const w = await world();
+    const db = w.a.doc('tasks');
+    createPage(w.a.doc('workspace'), { id: 'projects', title: 'Projects' });
+    const projects = w.a.doc('projects');
+    initDatabase(projects, { databaseId: 'projects' });
+    const phase = addProperty(projects, { name: 'Phase', type: 'select' });
+    addOption(projects, phase, { id: 'build', name: 'Build', color: 'blue' });
+    const note = addProperty(projects, { name: 'Note', type: 'text' });
+    const arm = addRow(projects, { actor: w.ada.id, title: 'Arm' });
+    const docs: Record<string, Y.Doc> = { tasks: db, projects };
+    const { propertyId: project } = createRelation((id) => docs[id], {
+      databaseId: 'tasks',
+      name: 'Project',
+      targetId: 'projects',
+    });
+    setRelation((id) => docs[id], 'tasks', 'r1', project, [arm], w.ada.id);
+    setCell(db, 'r1', w.ids.points, 3, w.ada.id);
+    const ship = addProperty(db, { name: 'Start build', type: 'button' });
+    setAutomation(
+      db,
+      w.automation({
+        id: 'press',
+        trigger: { kind: 'buttonPressed', propertyId: ship },
+        actions: [
+          {
+            kind: 'editRelated',
+            relationId: project,
+            values: {
+              [phase]: { kind: 'fixed', value: 'build' },
+              [note]: {
+                kind: 'formula',
+                expression: 'prop("Name") + ": " + prop("Points") + " points"',
+              },
+            },
+          },
+        ],
+      }),
+    );
+    await w.settled(w.a);
+
+    // Bob presses it on his device.
+    const b = await w.device('bob-1', w.bob.token);
+    await until(() => b.has('tasks'), 'Bob has the database');
+    setCell(b.doc('tasks'), 'r1', ship, { at: Date.now(), by: w.bob.id }, w.bob.id);
+    await w.settled(b);
+    const target = () => readDatabase(w.a.doc('projects')).rows.find((r) => r.id === arm)!;
+    await until(() => target().values[note] !== undefined, 'the project edited');
+    expect(target().values).toMatchObject({
+      [phase]: 'build',
+      [note]: 'Grease the gears: 3 points',
+    });
+    expect(target().updatedBy).toBe(automationsBotId(w.ws));
+    expect((await w.runs('press'))[0]).toMatchObject({
+      status: 'done',
+      result: { done: ['editRelated'] },
+    });
   });
 
   it('pauses, and tells its maker, when they can no longer edit the database', async () => {
@@ -521,6 +611,33 @@ describe('webhook delivery', () => {
     const ok = await deliver(hook.url, { a: 1 }, 's', {}, { allowPrivate: true, allowHttp: true });
     expect(ok.status).toBe(200);
     expect(hook.got[0]!.headers['x-notion-signature']).toBe(signature('s', '{"a":1}'));
+  });
+
+  it('delivers to a host name, at the address that was checked', async () => {
+    // A name goes through the pinned lookup (an IP address doesn't), which Node asks for every
+    // address at once when it connects (`all: true`).
+    const got: string[] = [];
+    const server = createServer((req, res) => {
+      req.on('data', (chunk: Buffer) => got.push(chunk.toString()));
+      req.on('end', () => res.end('ok'));
+    });
+    // Where "localhost" goes first (127.0.0.1, or ::1 on some machines).
+    const [first] = await lookup('localhost', { all: true });
+    await new Promise<void>((r) => server.listen(0, first!.address, r));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const sent = await deliver(
+        `http://localhost:${port}/hook`,
+        { a: 1 },
+        's',
+        {},
+        { allowPrivate: true, allowHttp: true },
+      );
+      expect(sent).toEqual({ status: 200, body: 'ok' });
+      expect(got).toEqual(['{"a":1}']);
+    } finally {
+      server.close();
+    }
   });
 
   it('doesn’t follow redirects, and gives up on slow receivers', async () => {

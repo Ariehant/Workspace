@@ -15,6 +15,80 @@ async function slash(window: Page, query: string) {
   await window.keyboard.press('Enter');
 }
 
+/** The window's focus and selection, the page's and the editor's (for a failure's message). */
+async function selectionState(window: Page): Promise<string> {
+  return window.evaluate(() => {
+    const el = document.querySelector('[data-testid="page-editor"]') as
+      (Element & { editor?: { state: { selection: { from: number; to: number } } } }) | null;
+    const pm = el?.editor?.state.selection;
+    return JSON.stringify({
+      windowFocused: document.hasFocus(),
+      active:
+        document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName,
+      page: getSelection()?.toString(),
+      editor: pm ? [pm.from, pm.to] : null,
+    });
+  });
+}
+
+/**
+ * Record what touches the selection from now on: the view's updates (and whether each wrote
+ * the page's selection), keys and selection changes, with ProseMirror's selection and the
+ * page's after each. Read back with `selectionLog` when something goes wrong.
+ */
+async function recordSelection(window: Page): Promise<void> {
+  await window.evaluate(() => {
+    type View = Record<string, (...args: unknown[]) => unknown> & {
+      state: { selection: { from: number; to: number } };
+    };
+    const el = document.querySelector('[data-testid="page-editor"]') as
+      (Element & { editor?: { view: View } }) | null;
+    const view = el?.editor?.view;
+    if (!view) return;
+    const log: string[] = [];
+    const t0 = performance.now();
+    const now = () => {
+      const s = getSelection();
+      const pm = view.state.selection;
+      return `pm ${pm.from}-${pm.to} page ${s?.anchorOffset}/${s?.focusOffset} "${s?.toString() ?? ''}"`;
+    };
+    const at = (what: string) => {
+      if (log.length < 200) log.push(`${Math.round(performance.now() - t0)}ms ${what}: ${now()}`);
+    };
+    for (const name of ['updateState', 'setProps', 'update', 'dispatch', 'focus']) {
+      const original = view[name]!.bind(view);
+      view[name] = (...args: unknown[]) => {
+        at(`> ${name}`);
+        const result = original(...args);
+        at(`< ${name}`);
+        return result;
+      };
+    }
+    document.addEventListener('selectionchange', () => at('selectionchange'), true);
+    document.addEventListener('keydown', (e) => at(`keydown ${e.key}`), true);
+    document.addEventListener('keyup', (e) => at(`keyup ${e.key}`), true);
+    // Focus moving (ProseMirror puts its selection on the page 20 ms after the editor gains it).
+    for (const type of ['focusin', 'focusout']) {
+      document.addEventListener(
+        type,
+        (e) =>
+          at(
+            `${type} ${(e.target as HTMLElement).dataset?.testid ?? (e.target as HTMLElement).tagName}`,
+          ),
+        true,
+      );
+    }
+    globalThis.addEventListener('blur', () => at('window blur'));
+    globalThis.addEventListener('focus', () => at('window focus'));
+    (window as unknown as { __selectionLog: string[] }).__selectionLog = log;
+  });
+}
+
+const selectionLog = (window: Page) =>
+  window.evaluate(() =>
+    ((window as unknown as { __selectionLog?: string[] }).__selectionLog ?? []).join('\n'),
+  );
+
 const blocks = (window: Page) => editor(window).locator(':scope > *');
 
 test('to-do list: shortcut, checking items, and persistence', async ({ launch }) => {
@@ -60,8 +134,17 @@ test('toggles: "> " shortcut, collapsing, toggle headings and turn into', async 
   await window.keyboard.type('Section title');
   // Ctrl+End left the toggle (Enter didn't act on where the caret was before it).
   await expect(blocks(window).last()).toHaveText('Section title');
+  await recordSelection(window);
   await window.keyboard.press('Shift+Home');
   const toolbar = window.getByTestId('selection-toolbar');
+  // (CI's runner has, now and then, never shown the toolbar here; if so, say what the window had.)
+  await expect(toolbar)
+    .toBeVisible({ timeout: 10_000 })
+    .catch(async (error: Error) => {
+      throw new Error(
+        `${error.message}\nState: ${await selectionState(window)}\nSince Shift+Home:\n${await selectionLog(window)}`,
+      );
+    });
   await toolbar.getByRole('button', { name: 'Turn into' }).click();
   await toolbar.getByRole('menuitem', { name: 'Toggle heading 2' }).click();
   await expect(editor(window).locator('summary[data-level="2"]')).toHaveText('Section title');
@@ -127,8 +210,152 @@ test('equations: block via "$$ ", inline via $…$, and editing', async ({ launc
   await expect(inline).toHaveAttribute('data-latex', '2\\pi r');
 });
 
-test('table: insert, add rows and columns, header row', async ({ launch }) => {
+test('a selection made with the keyboard survives a transaction from elsewhere', async ({
+  launch,
+}) => {
   const { window } = await launch();
+  await newPage(window, 'Selection');
+  await window.keyboard.type('Keep this selected');
+  // Something else (a collaborator's cursor moving, a synced change) dispatches a transaction
+  // after a key moved the selection but before the editor read the move (CI's runner ordered
+  // them so, and the toolbar never showed). Here it's made to happen: first in line for the
+  // selectionchange the key causes, ahead of the editor's own listener.
+  await editor(window).evaluate((el) => {
+    type Tr = { insert(pos: number, node: unknown): Tr };
+    type View = {
+      dispatch(tr: Tr): void;
+      state: {
+        tr: Tr;
+        schema: {
+          nodes: { paragraph: { create(a: null, c: unknown): unknown } };
+          text(t: string): unknown;
+        };
+      };
+    };
+    const view = (el as unknown as { editor: { view: View } }).editor.view;
+    document.addEventListener(
+      'selectionchange',
+      () => {
+        // Someone else adds a paragraph at the top of the page.
+        const { schema } = view.state;
+        view.dispatch(
+          view.state.tr.insert(0, schema.nodes.paragraph.create(null, schema.text('Elsewhere'))),
+        );
+      },
+      { capture: true, once: true },
+    );
+  });
+  await window.keyboard.press('Shift+Home');
+  await expect(window.getByTestId('selection-toolbar')).toBeVisible();
+  expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
+  // And the other change went in.
+  await expect(blocks(window).first()).toHaveText('Elsewhere');
+});
+
+test('a selection made with the keyboard survives a redraw that is not a transaction', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newPage(window, 'Redraw');
+  await window.keyboard.type('Keep this selected');
+  // A plugin registered in that same moment (collaborators' cursors arriving, say) redraws the
+  // page without a transaction; ProseMirror then wrote its old caret back (CI's toggles test:
+  // the editor's selection and the page's both collapsed, the toolbar never shown). Here the
+  // plugin's node view for paragraphs forces the redraw, first in line for the selectionchange.
+  await editor(window).evaluate((el) => {
+    type Editor = {
+      registerPlugin(plugin: unknown): void;
+      view: { state: { plugins: { constructor: new (spec: object) => unknown }[] } };
+    };
+    const ed = (el as unknown as { editor: Editor }).editor;
+    const Plugin = ed.view.state.plugins[0]!.constructor;
+    document.addEventListener(
+      'selectionchange',
+      () => {
+        ed.registerPlugin(
+          new Plugin({
+            props: {
+              nodeViews: {
+                paragraph: () => {
+                  const dom = document.createElement('p');
+                  return { dom, contentDOM: dom };
+                },
+              },
+            },
+          }),
+        );
+      },
+      { capture: true, once: true },
+    );
+  });
+  await window.keyboard.press('Shift+Home');
+  await expect(window.getByTestId('selection-toolbar')).toBeVisible();
+  expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
+});
+
+for (const call of ['focus', 'update'] as const) {
+  test(`a selection made with the keyboard survives the view's ${call}() before it reads the move`, async ({
+    launch,
+  }) => {
+    const { window } = await launch();
+    await newPage(window, `Then ${call}`);
+    await window.keyboard.type('Keep this selected');
+    // The other two ways ProseMirror writes its selection to the page: focusing the editor
+    // (a menu or panel closing, say) and updating its props directly. Made to happen first in
+    // line for the selectionchange, as above.
+    await editor(window).evaluate((el, method) => {
+      type View = { focus(): void; update(props: unknown): void; props: unknown };
+      const view = (el as unknown as { editor: { view: View } }).editor.view;
+      document.addEventListener(
+        'selectionchange',
+        () => (method === 'focus' ? view.focus() : view.update(view.props)),
+        { capture: true, once: true },
+      );
+    }, call);
+    await window.keyboard.press('Shift+Home');
+    await expect(window.getByTestId('selection-toolbar')).toBeVisible();
+    expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
+  });
+}
+
+test('a selection made with the keyboard survives the editor gaining focus before it reads the move', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  await newPage(window, 'Then focused');
+  await window.keyboard.type('Keep this selected');
+  // ProseMirror's focus handler puts its selection on the page 20 ms after the editor gains
+  // focus (if the page's differs from what it last read). A key moving the selection in those
+  // 20 ms, before its selectionchange is read, was written over: CI's toggles failure on
+  // c4ce0fb, where nothing else wrote the selection. Made certain here: the selectionchange
+  // is held back from everyone (as if late), and the editor loses and gains focus as the key
+  // goes down (ProseMirror's own blur and focus handlers).
+  await editor(window).evaluate((el) => {
+    document.addEventListener('selectionchange', (e) => e.stopImmediatePropagation(), {
+      capture: true,
+      once: true,
+    });
+    el.addEventListener(
+      'keydown',
+      () => {
+        el.dispatchEvent(new FocusEvent('blur'));
+        el.dispatchEvent(new FocusEvent('focus'));
+      },
+      { capture: true, once: true },
+    );
+  });
+  await window.keyboard.press('Shift+Home');
+  await window.waitForTimeout(100); // past ProseMirror's 20 ms
+  // The page keeps the key's selection (not written over), and the editor has read it.
+  expect(await window.evaluate(() => getSelection()?.toString())).toBe('Keep this selected');
+  await expect(window.getByTestId('selection-toolbar')).toBeVisible();
+});
+
+test('table: insert, add rows and columns, header row, row and column colours', async ({
+  launch,
+}) => {
+  const launched = await launch();
+  let { window } = launched;
   await newPage(window, 'Table');
   await slash(window, 'table');
   const table = editor(window).locator('table');
@@ -142,6 +369,24 @@ test('table: insert, add rows and columns, header row', async ({ launch }) => {
   await expect(table.locator('tr').first().locator('td, th')).toHaveCount(4);
   await menu.getByRole('button', { name: 'Header row' }).click();
   await expect(table.locator('th').first()).toHaveText('Joint');
+
+  // Colour the header row, then the first column; the colours stay after a reload.
+  await menu.getByRole('button', { name: 'Row color' }).click();
+  await menu.getByRole('menuitem', { name: 'Gray background' }).click();
+  await expect(table.locator('th[data-color="gray_background"]')).toHaveCount(4);
+  await table.locator('td').first().click();
+  await menu.getByRole('button', { name: 'Column color' }).click();
+  await menu.getByRole('menuitem', { name: 'Blue text' }).click();
+  await expect(table.locator('td[data-color="blue"]')).toHaveCount(3);
+  await expect(table.locator('th').first()).toHaveAttribute('data-color', 'blue');
+  await waitForIndexed(window, 'Joint');
+  await quit(launched.app);
+  ({ window } = await launch());
+  await expect(editor(window).locator('th').nth(1)).toHaveAttribute(
+    'data-color',
+    'gray_background',
+  );
+  await expect(editor(window).locator('td[data-color="blue"]')).toHaveCount(3);
 });
 
 test('columns: from the slash menu and by dropping a block beside another', async ({ launch }) => {

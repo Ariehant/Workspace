@@ -20,6 +20,7 @@ import {
   type TeamApi,
 } from './team';
 import { PublishSection } from './publish-section';
+import { ShareLinkSection } from './share-link-section';
 
 const select =
   'h-8 rounded-md border border-line bg-surface px-1.5 text-sm text-fg outline-none focus:border-accent disabled:opacity-60';
@@ -31,7 +32,7 @@ const REQUEST_VERBS: Record<RequestedRole, string> = {
   edit: 'edit',
 };
 /** A database also offers "can edit content" (its rows, not its properties or views). */
-const DATABASE_ROLES: ScopeRole[] = ['full', 'edit', 'content', 'comment', 'view'];
+const DATABASE_ROLES: ScopeRole[] = ['full', 'edit', 'content', 'create', 'comment', 'view'];
 
 export function ShareDialog({
   team,
@@ -398,6 +399,9 @@ export function ShareDialog({
             </>
           )}
           {error && scopes && <p className="text-sm text-red-600">{error}</p>}
+          {here && canShare && (
+            <ShareLinkSection team={team} pageId={pageId} onChanged={() => void reload()} />
+          )}
           {here && (
             <PublishSection
               team={team}

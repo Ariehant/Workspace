@@ -31,7 +31,15 @@ import {
   type RangeAnchor,
 } from '@workspace/editor';
 import { Avatar, Button, IconButton, cn, scrollBehavior } from '@workspace/ui';
-import { Check, MessageSquare, MoreHorizontal, RotateCcw, SmilePlus, X } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  MessageSquare,
+  MoreHorizontal,
+  RotateCcw,
+  SmilePlus,
+  X,
+} from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -47,6 +55,7 @@ import type * as Y from 'yjs';
 import { useApp } from './context';
 import { useDisplayContext } from './database/hooks';
 import { useDoc } from './hooks';
+import { usePageSetting } from './page-setting';
 
 // --- The editor's side --------------------------------------------------------------------
 
@@ -720,6 +729,17 @@ function ThreadView({
   );
 }
 
+/**
+ * How a page shows its comments (a per-page setting): page comments under the title and
+ * highlights in the text, page comments folded into one line, or neither (the comments
+ * button and panel still work).
+ */
+export type CommentsMode = 'show' | 'minimized' | 'hidden';
+
+export function useCommentsMode(pageId: string) {
+  return usePageSetting<CommentsMode>('comments', pageId, 'show');
+}
+
 const isOpen = (t: ThreadData) =>
   t.resolvedAt === null && (!t.suggestion || t.suggestion.status === 'open');
 
@@ -844,24 +864,45 @@ export function PageCommentsSection({
   comments,
   composing,
   onDone,
+  mode = 'show',
 }: {
   comments: PageComments;
   composing: boolean;
   onDone(): void;
+  mode?: CommentsMode;
 }) {
   const { user } = useApp();
   const { doc } = comments;
   const active = useSyncExternalStore(comments.host.subscribe, () => comments.host.activeThread());
+  // Minimized: unfolded by a click (or by writing a new comment).
+  const [unfolded, setUnfolded] = useState(false);
   if (!doc) return null;
-  const threads = comments.threads.filter((t) => t.anchor.kind === 'page' && t.resolvedAt === null);
-  const showComposer = comments.canComment && (composing || threads.length > 0);
-  if (threads.length === 0 && !showComposer) return null;
+  const all = comments.threads.filter((t) => t.anchor.kind === 'page' && t.resolvedAt === null);
+  // Hidden: only a comment being written shows.
+  const threads = mode === 'hidden' || (mode === 'minimized' && !unfolded && !composing) ? [] : all;
+  const showComposer =
+    comments.canComment && (composing || (threads.length > 0 && mode !== 'hidden'));
+  const folded = mode === 'minimized' && all.length > 0 && !composing;
+  if (threads.length === 0 && !showComposer && !folded) return null;
   return (
     <section
       aria-label="Page comments"
       data-testid="page-comments"
       className="mt-3 flex flex-col gap-2 border-b border-line pb-3"
     >
+      {folded && (
+        <button
+          type="button"
+          aria-expanded={unfolded}
+          onClick={() => setUnfolded(!unfolded)}
+          data-testid="page-comments-toggle"
+          className="flex h-7 items-center gap-1.5 self-start rounded px-1.5 text-sm text-muted hover:bg-hover"
+        >
+          <ChevronRight size={14} className={cn('transition-transform', unfolded && 'rotate-90')} />
+          <MessageSquare size={14} />
+          {all.length === 1 ? '1 comment' : `${all.length} comments`}
+        </button>
+      )}
       {threads.map((t) => (
         <ThreadView
           key={t.id}

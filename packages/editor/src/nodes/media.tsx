@@ -2,6 +2,7 @@ import type { Editor, JSONContent } from '@tiptap/core';
 import { Fragment } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { NodeViewWrapper, type ReactNodeViewProps } from '@tiptap/react';
+import { previewKindOf } from '@workspace/core';
 import { cn } from '@workspace/ui';
 import {
   Bookmark,
@@ -368,6 +369,10 @@ function mediaView(kind: Exclude<MediaKind, 'image'>) {
       );
     }
 
+    const previewKind = kind === 'file' ? previewKindOf(name) : null;
+    const canPreview =
+      !!services.renderFilePreview && (previewKind === 'docx' || previewKind === 'xlsx');
+
     let body: ReactNode;
     if (kind === 'video')
       body = <video controls preload="metadata" src={src} className="w-full rounded" />;
@@ -394,6 +399,18 @@ function mediaView(kind: Exclude<MediaKind, 'image'>) {
           )}
         </button>
       );
+      if (canPreview && previewKind) {
+        body = (
+          <FilePreviewToggle
+            preview={node.attrs.preview === true}
+            editable={editor.isEditable}
+            onChange={(preview) => updateAttributes({ preview: preview || null })}
+            render={() => services.renderFilePreview!({ url: src, name, kind: previewKind })}
+          >
+            {body}
+          </FilePreviewToggle>
+        );
+      }
     }
 
     return (
@@ -417,7 +434,57 @@ export const PdfBlock = atomBlock('pdf', mediaView('pdf'), fileAttrs);
 export const FileBlock = atomBlock('file', mediaView('file'), {
   ...fileAttrs,
   size: dataAttr('size'),
+  preview: { default: null },
 });
+
+/**
+ * A file's card with Show/Hide preview under it (Phase 8 N9). Kept in the block where the page
+ * can be edited (everyone sees it open); otherwise for this person alone.
+ */
+export function FilePreviewToggle({
+  preview,
+  editable,
+  onChange,
+  render,
+  children,
+}: {
+  preview: boolean;
+  editable: boolean;
+  onChange(preview: boolean): void;
+  render(): ReactNode;
+  children: ReactNode;
+}) {
+  const [mine, setMine] = useState<boolean | null>(null);
+  const shown = mine ?? preview;
+  return (
+    <>
+      <div className="flex items-center gap-1">
+        <div className="min-w-0 flex-1">{children}</div>
+        <button
+          type="button"
+          contentEditable={false}
+          aria-expanded={shown}
+          className="shrink-0 rounded px-2 py-1 text-sm text-muted hover:bg-hover"
+          onClick={() => {
+            if (editable) {
+              setMine(null);
+              onChange(!shown);
+            } else {
+              setMine(!shown);
+            }
+          }}
+        >
+          {shown ? 'Hide preview' : 'Show preview'}
+        </button>
+      </div>
+      {shown && (
+        <div contentEditable={false} className="mt-1">
+          {render()}
+        </div>
+      )}
+    </>
+  );
+}
 
 // --- Web bookmark --------------------------------------------------------------------
 

@@ -312,6 +312,28 @@ export async function appendBlocks(
   return ids;
 }
 
+/** Replace a page's whole content with `nodes`, in one change. Returns the new blocks' ids. */
+export async function replaceContent(
+  api: ApiView,
+  page: Located,
+  nodes: readonly PMNode[],
+): Promise<string[]> {
+  const { elements: made, dropped } = contentElements(nodes);
+  if (dropped.length) throw invalid(`body.markdown: ${dropped.join(', ')} couldn't be made.`);
+  const ids = await api.edit(
+    contentDocOf(page),
+    (doc) => {
+      const fragment = doc.getXmlFragment(PAGE_CONTENT_FIELD);
+      fragment.delete(0, fragment.length);
+      fragment.insert(0, made);
+      return newIds(made);
+    },
+    scopeOf(page),
+  );
+  rememberBlocks(page.id, ids);
+  return ids;
+}
+
 /** The element holding a block's text (a list item's paragraph, a toggle's summary…). */
 function textHolder(el: Y.XmlElement): Y.XmlElement | null {
   switch (el.nodeName) {

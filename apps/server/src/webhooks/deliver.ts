@@ -12,6 +12,7 @@
  *   Notion signs its webhooks, so receivers written for it work.
  */
 import { createHmac } from 'node:crypto';
+import type { LookupAddress } from 'node:dns';
 import { lookup } from 'node:dns/promises';
 import http from 'node:http';
 import https from 'node:https';
@@ -144,10 +145,16 @@ export async function deliver(
       target,
       {
         method: 'POST',
-        // Connect to the address that was checked, whatever DNS says now.
-        lookup: (_hostname, _opts, callback) => {
-          const cb = callback as (e: Error | null, address: string, family: number) => void;
-          cb(null, chosen.address, chosen.family);
+        // Connect to the address that was checked, whatever DNS says now. Node asks for every
+        // address (`all`) when it may try several (happy eyeballs), or for one.
+        lookup: (_hostname, opts, callback) => {
+          if ((opts as { all?: boolean }).all) {
+            const cb = callback as (e: Error | null, addresses: LookupAddress[]) => void;
+            cb(null, [{ address: chosen.address, family: chosen.family }]);
+          } else {
+            const cb = callback as (e: Error | null, address: string, family: number) => void;
+            cb(null, chosen.address, chosen.family);
+          }
         },
         headers: {
           ...extra,

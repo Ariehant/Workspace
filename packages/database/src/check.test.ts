@@ -4,6 +4,7 @@ import {
   addProperty,
   addRow,
   addView,
+  checkOwnRowsChange,
   checkRowsOnlyChange,
   deleteRow,
   initDatabase,
@@ -98,5 +99,56 @@ describe('checkRowsOnlyChange', () => {
     const later = changeOf(client, (doc) => setRowTitle(doc, rowId, 'Later', 'bob'));
     expect(checkRowsOnlyChange(server, later)).toBe('depends on unknown changes');
     expect(checkRowsOnlyChange(server, new Uint8Array([1, 2, 3]))).toBe('malformed update');
+  });
+});
+
+describe('checkOwnRowsChange ("can create pages")', () => {
+  it('allows adding rows as themselves, then editing, moving, trashing and deleting them', () => {
+    const { server, client } = setup();
+    const tags = readDatabase(client).properties.find((p) => p.name === 'Tags')!;
+    let mine = '';
+    const changes = [
+      (doc: Y.Doc) => void (mine = addRow(doc, { actor: 'bob', title: 'Request' })),
+      (doc: Y.Doc) => setRowTitle(doc, mine, 'My request', 'bob'),
+      (doc: Y.Doc) => setCell(doc, mine, tags.id, [], 'bob'),
+      (doc: Y.Doc) => moveRow(doc, mine, null),
+      (doc: Y.Doc) => trashRow(doc, mine),
+      (doc: Y.Doc) => deleteRow(doc, mine),
+    ];
+    for (const change of changes) {
+      const update = changeOf(client, change);
+      expect(checkOwnRowsChange(server, update, 'bob')).toBeNull();
+      Y.applyUpdate(server, update);
+    }
+  });
+
+  it('refuses someone else’s rows, rows said to be someone else’s, and the database itself', () => {
+    const { server, rowId } = setup();
+    // Each change from a fresh copy of what the server has (none of them is applied).
+    const check = (change: (doc: Y.Doc) => void) => {
+      const client = new Y.Doc();
+      Y.applyUpdate(client, Y.encodeStateAsUpdate(server));
+      return checkOwnRowsChange(server, changeOf(client, change), 'bob');
+    };
+    // Ada's row: not to be edited, trashed or deleted.
+    expect(check((doc) => setRowTitle(doc, rowId, 'Mine now', 'bob'))).toMatch(/someone else/);
+    expect(check((doc) => trashRow(doc, rowId))).toMatch(/someone else/);
+    expect(check((doc) => deleteRow(doc, rowId))).toMatch(/someone else/);
+    // A new row made in someone else's name, or no one's.
+    expect(check((doc) => addRow(doc, { actor: 'ada', title: 'Fake' }))).toMatch(/not made by/);
+    expect(check((doc) => addRow(doc, { actor: null, title: 'Nobody' }))).toMatch(/not made by/);
+    // The database: properties and views, as for "can edit content".
+    expect(check((doc) => addProperty(doc, { name: 'Cost', type: 'number' }))).toMatch(/changed "/);
+  });
+
+  it('refuses taking over a row by changing who made it', () => {
+    const { server, client } = setup();
+    const add = changeOf(client, (doc) => addRow(doc, { actor: 'bob', id: 'r2', title: 'Mine' }));
+    Y.applyUpdate(server, add);
+    const update = changeOf(client, (doc) => {
+      const row = doc.getMap<Y.Map<unknown>>('rows').get('r2')!;
+      row.set('createdBy', 'ada');
+    });
+    expect(checkOwnRowsChange(server, update, 'bob')).toMatch(/who made/);
   });
 });

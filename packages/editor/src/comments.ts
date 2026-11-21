@@ -343,6 +343,10 @@ export const Comments = Extension.create<CommentsOptions>({
             const el = (event.target as HTMLElement | null)?.closest?.('[data-thread]');
             const id = el?.getAttribute('data-thread');
             if (!id) return false;
+            // Comments hidden on this page: a click on what was highlighted is just a click.
+            if (el?.classList.contains('ws-comment') && el.closest('[data-comments="hidden"]')) {
+              return false;
+            }
             host.open(id);
             return false;
           },

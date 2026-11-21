@@ -198,6 +198,38 @@ describe('blocks', () => {
     { type: 'button', attrs: { id: 'bt', label: 'Go' } },
   ];
 
+  it('give a Drive file as its name, linked to Drive', () => {
+    const [out] = blocksOut(
+      [{ type: 'driveFile', attrs: { id: 'df', fileId: '1AbC_def-GHIjkl23', name: 'BOM' } }],
+      ctx,
+    );
+    expect(out).toMatchObject({
+      type: 'paragraph',
+      value: {
+        rich_text: [
+          { plain_text: 'BOM', href: 'https://drive.google.com/open?id=1AbC_def-GHIjkl23' },
+        ],
+      },
+    });
+  });
+
+  it('give a linked file as its name and where it is', () => {
+    const [out] = blocksOut(
+      [
+        {
+          type: 'linkedFile',
+          attrs: { id: 'lf', folder: 'Projects', path: 'arm/v3.step', name: 'v3.step' },
+        },
+      ],
+      ctx,
+    );
+    expect(out).toMatchObject({
+      id: 'lf',
+      type: 'paragraph',
+      value: { rich_text: [{ plain_text: '📎 v3.step (Projects/arm/v3.step)' }] },
+    });
+  });
+
   it('come out as Notion blocks, lists taken apart', () => {
     const out = blocksOut(doc, ctx);
     expect(out.map((b) => b.type)).toEqual([
@@ -294,7 +326,49 @@ describe('blocks', () => {
     ).toThrow(/at most 100/);
     expect(() =>
       blocksIn([{ type: 'image', image: { type: 'file', file: { url: 'x' } } }], 'children', write),
-    ).toThrow(/uploads/);
+    ).toThrow(/http\(s\) URL \(or send the file/);
+  });
+
+  it('a sent file upload goes in as the stored file; one not sent (or not theirs) is refused', () => {
+    const UPLOAD = '5f0c1a2b-0000-4000-8000-0000000000aa';
+    const fileId = `${'c'.repeat(64)}.png`;
+    const ctx = {
+      ...write,
+      fileUpload: (id: string) => (id === UPLOAD ? { fileId, name: 'gripper.png' } : null),
+    };
+    expect(
+      blocksIn(
+        [
+          { type: 'image', image: { type: 'file_upload', file_upload: { id: UPLOAD } } },
+          {
+            type: 'file',
+            file: { type: 'file_upload', file_upload: { id: UPLOAD }, name: 'Drawing' },
+          },
+        ],
+        'children',
+        ctx,
+      ),
+    ).toEqual([
+      { type: 'image', attrs: { fileId, name: 'gripper.png' } },
+      { type: 'file', attrs: { fileId, name: 'Drawing' } },
+    ]);
+    for (const id of ['5f0c1a2b-0000-4000-8000-0000000000bb', 'nope']) {
+      expect(() =>
+        blocksIn(
+          [{ type: 'image', image: { type: 'file_upload', file_upload: { id } } }],
+          'children',
+          ctx,
+        ),
+      ).toThrow(/children\[0\]\.image\.file_upload\.id should be a file upload/);
+    }
+    // Without uploads (a context that has none), the same.
+    expect(() =>
+      blocksIn(
+        [{ type: 'image', image: { type: 'file_upload', file_upload: { id: UPLOAD } } }],
+        'children',
+        write,
+      ),
+    ).toThrow(/file upload/);
   });
 
   it('updates change the text and settings', () => {

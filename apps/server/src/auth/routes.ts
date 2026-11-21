@@ -78,6 +78,11 @@ export function authRoutes(app: FastifyInstance, ctx: ServerContext) {
     if (!invite) return { problem: 'You need an invite to sign up here.', useInvite: false };
     // An invite to a workspace on this server lets its invitee sign up too.
     if (await workspaceInviteFor(ctx, invite, address)) return { problem: null, useInvite: false };
+    // So does a page's share link, still working: it's for anyone who has it (Phase 8 N8).
+    const link = await ctx.store.shareLinks.byToken(invite);
+    if (link && (link.expiresAt === null || link.expiresAt > Date.now())) {
+      return { problem: null, useInvite: false };
+    }
     if (!(await accounts.inviteValid(invite, address))) {
       return {
         problem: 'This invite is not valid: it was used, expired or is for someone else.',

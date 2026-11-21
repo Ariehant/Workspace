@@ -13,9 +13,11 @@ import type { AccessModel, ScopeRole } from '@workspace/storage-remote';
 export const RANK: Record<ScopeRole, number> = {
   view: 1,
   comment: 2,
-  content: 3,
-  edit: 4,
-  full: 5,
+  // A database's "can create pages": add rows, edit only one's own.
+  create: 3,
+  content: 4,
+  edit: 5,
+  full: 6,
 };
 
 export const atLeast = (role: ScopeRole | undefined, needed: ScopeRole) =>

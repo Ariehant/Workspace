@@ -37,6 +37,9 @@ const TEAM_ROUTES: [RegExp, TeamRequest['method'][]][] = [
   [new RegExp(`^scopes/${UUID}/access$`), ['PUT']],
   [new RegExp(`^scopes/${UUID}/(join|leave)$`), ['POST']],
   [new RegExp(`^pages/${UUID}/(share|move)$`), ['POST']],
+  // Moving a page to another of the person's workspaces (Phase 8 #31).
+  [/^move-targets$/, ['GET']],
+  [/^pages\/[\w-]{1,128}\/move-to-workspace$/, ['POST']],
   // The inbox (Phase 5 M6): notifications, and following pages.
   [/^notifications(\?filter=(all|mentions|unread|archived)(&before=\d{1,16})?)?$/, ['GET']],
   [/^notifications\/(read|archive)$/, ['POST']],

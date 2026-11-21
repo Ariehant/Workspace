@@ -50,6 +50,26 @@ describe('Markdown export', () => {
     );
   });
 
+  it('writes custom emoji as their image, or their name without one', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el(
+        'paragraph',
+        {},
+        'Go ',
+        el('customEmoji', { name: 'teamlogo', fileId: 'f1' }),
+        ' ',
+        el('customEmoji', { name: 'gone' }),
+      ),
+    );
+    expect(blocksMarkdown(readContent(doc), ctx)).toBe(
+      'Go ![:teamlogo:](Page/teamlogo.png) :gone:',
+    );
+    expect(blocksHtml(readContent(doc), ctx)).toContain(
+      '<img class="emoji" src="Page/teamlogo.png" alt=":teamlogo:" title=":teamlogo:"> :gone:',
+    );
+  });
+
   it('writes person mentions as the person’s name', () => {
     const doc = setContent(
       new Y.Doc(),
@@ -202,6 +222,43 @@ describe('Markdown export', () => {
   });
 });
 
+describe('linked files', () => {
+  it('come out as their name and where they are, in Markdown and HTML', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el('linkedFile', { folder: 'Projects', path: 'arm/v3_*.step', name: 'v3_*.step', size: 9 }),
+      el('linkedFile', { folder: null, path: '/data/<run>.bag', name: '<run>.bag' }),
+      // A pointer climbing out of its folder isn't one.
+      el('linkedFile', { folder: 'Projects', path: '../x', name: 'x' }),
+    );
+    const content = readContent(doc);
+    expect(blocksMarkdown(content, ctx)).toBe(
+      '📎 v3\\_\\*.step (`Projects/arm/v3_*.step`)\n\n📎 <run>.bag (`/data/<run>.bag`)',
+    );
+    expect(blocksHtml(content, ctx).trimEnd()).toBe(
+      '<p class="linked-file">📎 v3_*.step <code>Projects/arm/v3_*.step</code></p>\n' +
+        '<p class="linked-file">📎 &lt;run&gt;.bag <code>/data/&lt;run&gt;.bag</code></p>',
+    );
+  });
+});
+
+describe('Google Drive files', () => {
+  it('come out as links to them in Drive', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el('driveFile', { fileId: '1AbC_def-GHIjkl23', name: 'BOM [v2]', mimeType: 'x' }),
+      el('driveFile', { fileId: 'bad id', name: 'x' }),
+    );
+    const content = readContent(doc);
+    expect(blocksMarkdown(content, ctx)).toBe(
+      '📎 [BOM \\[v2\\]](https://drive.google.com/open?id=1AbC_def-GHIjkl23)',
+    );
+    expect(blocksHtml(content, ctx).trimEnd()).toBe(
+      '<p class="drive-file">📎 <a href="https://drive.google.com/open?id=1AbC_def-GHIjkl23">BOM [v2]</a></p>',
+    );
+  });
+});
+
 describe('HTML export', () => {
   it('escapes text, keeps marks and colors, and embeds Mermaid diagrams', () => {
     const doc = setContent(
@@ -220,6 +277,32 @@ describe('HTML export', () => {
     expect(html).toContain('<img class="diagram" alt="Diagram" src="data:image/svg+xml');
     expect(html).toContain('<summary>Mermaid source</summary>');
     expect(html).toContain('<input type="checkbox" disabled checked>');
+  });
+
+  it('keeps the colours of a simple table’s cells', () => {
+    const doc = setContent(
+      new Y.Doc(),
+      el(
+        'table',
+        {},
+        el(
+          'tableRow',
+          {},
+          el('tableHeader', { color: 'gray_background' }, el('paragraph', {}, 'Joint')),
+          el('tableHeader', { color: 'gray_background' }, el('paragraph', {}, 'Limit')),
+        ),
+        el(
+          'tableRow',
+          {},
+          el('tableCell', {}, el('paragraph', {}, 'J1')),
+          el('tableCell', { color: 'red' }, el('paragraph', {}, '90°')),
+        ),
+      ),
+    );
+    expect(blocksHtml(readContent(doc), ctx)).toBe(
+      '<table><tr><th class="bg-gray"><p>Joint</p></th><th class="bg-gray"><p>Limit</p></th></tr>' +
+        '<tr><td><p>J1</p></td><td class="color-red"><p>90°</p></td></tr></table>',
+    );
   });
 });
 

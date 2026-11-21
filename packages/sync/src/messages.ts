@@ -32,11 +32,14 @@
  *
  * Version 5 adds the "content" role (a database's rows, not its properties or views),
  * which older clients can't read.
+ *
+ * Version 6 adds the "create" role (a database's "can create pages": add rows, and edit only
+ * one's own).
  */
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Largest message a client may send (the server's WebSocket limit). */
 export const MAX_CLIENT_MESSAGE_BYTES = 16 * 1024 * 1024;
@@ -75,9 +78,9 @@ export interface AccessScope {
   role: ScopeRole;
 }
 
-export type ScopeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
+export type ScopeRole = 'full' | 'edit' | 'content' | 'create' | 'comment' | 'view';
 /** Roles on the wire, by index (new ones go at the end). */
-const ROLES: readonly ScopeRole[] = ['full', 'edit', 'comment', 'view', 'content'];
+const ROLES: readonly ScopeRole[] = ['full', 'edit', 'comment', 'view', 'content', 'create'];
 const KINDS: readonly AccessScope['kind'][] = ['teamspace', 'private', 'shared'];
 /** Most scopes in an access message. */
 export const MAX_SCOPES = 10_000;

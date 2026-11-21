@@ -91,6 +91,7 @@ export function pageRoutes(
       slug: string;
       includeSubpages?: boolean;
       allowIndexing?: boolean;
+      allowDuplicate?: boolean;
       title?: string;
       description?: string;
     };
@@ -107,6 +108,7 @@ export function pageRoutes(
             slug: { type: 'string', maxLength: 64 },
             includeSubpages: { type: 'boolean' },
             allowIndexing: { type: 'boolean' },
+            allowDuplicate: { type: 'boolean' },
             title: { type: 'string', maxLength: 200 },
             description: { type: 'string', maxLength: 500 },
           },
@@ -133,6 +135,7 @@ export function pageRoutes(
           slug,
           includeSubpages: body.includeSubpages ?? true,
           allowIndexing: body.allowIndexing ?? false,
+          allowDuplicate: body.allowDuplicate ?? false,
           title: body.title?.trim() ?? '',
           description: body.description?.trim() ?? '',
         },

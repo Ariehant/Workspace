@@ -20,7 +20,7 @@ function isRequest(value: unknown): value is ExportRequest {
     return false;
   if (r.format === 'pdf') {
     const pdf = r.pdf;
-    if (!r.pageId || !pdf || !['A4', 'Letter'].includes(pdf.pageSize)) return false;
+    if (!pdf || !['A4', 'Letter'].includes(pdf.pageSize)) return false;
     if (typeof pdf.scale !== 'number' || pdf.scale < 0.1 || pdf.scale > 2) return false;
   }
   return true;
@@ -184,7 +184,8 @@ export function registerExport(deps: ExportDeps): void {
     send: (status: ExportStatus) => void,
     finish: (status: ExportStatus) => void,
   ) {
-    const params = new URLSearchParams({ print: request.pageId! });
+    // Without a page: the whole workspace.
+    const params = new URLSearchParams({ print: request.pageId ?? 'all' });
     if (request.includeSubpages) params.set('subpages', '1');
     const window = deps.createPrintWindow(params.toString());
     let settled = false;

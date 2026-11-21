@@ -203,11 +203,25 @@ describe('date property reminders', () => {
     // Content reminders on the row's page don't replace the property's.
     store.replaceReminders(row, [{ blockId: 'b1', fireAt: at, text: 'From content' }]);
     expect(store.dueReminders(at)).toHaveLength(2);
+    // Home's Upcoming: still to come, soonest first; a property's reminder is at no block.
+    expect(
+      store
+        .upcomingReminders(at - 1, 10)
+        .map((r) => [r.blockId, r.text])
+        .sort(),
+    ).toEqual([
+      [null, 'Due: Ship'],
+      ['b1', 'From content'],
+    ]);
+    expect(store.upcomingReminders(at + 1, 10)).toEqual([]);
+    expect(store.upcomingReminders(at - 1, 1)).toHaveLength(1);
 
     store.markReminderFired({ pageId: row, blockId: `prop:${due}`, fireAt: at });
     setCell(db, row, due, { start: '2026-10-20', reminder: 'onDay' }, null);
     manager.flush();
     expect(store.dueReminders(at).map((r) => r.text)).toEqual(['From content']);
+    // A reminder that fired isn't upcoming.
+    expect(store.upcomingReminders(at - 1, 10).map((r) => r.text)).toEqual(['From content']);
 
     setCell(db, row, due, { start: '2026-10-21' }, null);
     manager.flush();

@@ -20,6 +20,7 @@ import {
   setResolved,
 } from '@workspace/core';
 import {
+  addView,
   addOption,
   addProperty,
   addRow,
@@ -1104,5 +1105,275 @@ describe('blocks and comments (M6)', () => {
     expect((await get(url.pathname + url.search)).statusCode).toBe(403);
     url.searchParams.set('exp', String(Date.now() - 1000));
     expect((await get(url.pathname + url.search)).statusCode).toBe(403);
+  });
+});
+
+describe('pages as Markdown (#43)', () => {
+  it('read as Markdown, appended to and replaced; live on the desktop', async () => {
+    const w = await world();
+    const S = await w.share('edit');
+    w.a.hint = S.id;
+    appendContent(w.a.doc(ARM), [
+      '# Plan\n\nIntro **bold** and [a link](https://lab.io)\n\n- One\n- Two',
+    ]);
+    await w.settled();
+
+    const read = await w.v1('GET', `/pages/${ARM}/markdown`, w.bot.token);
+    expect(read.status).toBe(200);
+    expect(read.body).toMatchObject({ object: 'page_markdown', id: ARM });
+    expect(read.body.markdown).toContain('# Plan');
+    expect(read.body.markdown).toContain('Intro **bold** and [a link](https://lab.io)');
+    expect(read.body.markdown).toContain('- One\n- Two');
+
+    // Appended (the default): blocks the API and the desktop see.
+    const added = await w.v1('PATCH', `/pages/${ARM}/markdown`, w.bot.token, {
+      markdown: '## Next\n\n- [ ] Order servos\n\n| Part | Qty |\n| --- | --- |\n| Servo | 4 |',
+    });
+    expect(added.status).toBe(200);
+    expect(added.body.markdown).toContain('# Plan');
+    expect(added.body.markdown).toContain('## Next');
+    expect(added.body.markdown).toContain('Order servos');
+    const blocks = await w.v1('GET', `/blocks/${ARM}/children`, w.bot.token);
+    expect((blocks.body.results as Json[]).map((b) => b.type)).toEqual([
+      'heading_1',
+      'paragraph',
+      'bulleted_list_item',
+      'bulleted_list_item',
+      'heading_2',
+      'to_do',
+      'table',
+    ]);
+    await until(
+      () => JSON.stringify(contentJson(w.a.doc(ARM))).includes('Order servos'),
+      'the desktop has it',
+    );
+
+    // Replaced: only the new content.
+    const replaced = await w.v1('PATCH', `/pages/${ARM}/markdown`, w.bot.token, {
+      markdown: '# Fresh start\n\nNothing else.',
+      mode: 'replace',
+    });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.markdown.trim()).toBe('# Fresh start\n\nNothing else.');
+    await until(
+      () => !JSON.stringify(contentJson(w.a.doc(ARM))).includes('Order servos'),
+      'the desktop has the replacement',
+    );
+
+    // A database row has content too.
+    const row = await w.v1('PATCH', `/pages/${SERVO}/markdown`, w.bot.token, {
+      markdown: 'Torque: 2 Nm',
+    });
+    expect(row.status).toBe(200);
+    expect(row.body.markdown.trim()).toBe('Torque: 2 Nm');
+  });
+
+  it('refuses databases, pages not shared, bad bodies, and writes without access', async () => {
+    const w = await world();
+    await w.share('view');
+    expect((await w.v1('GET', `/pages/${ARM}/markdown`, w.bot.token)).status).toBe(200);
+    const write = await w.v1('PATCH', `/pages/${ARM}/markdown`, w.bot.token, { markdown: 'x' });
+    expect(write.status).toBe(403);
+    expect(write.body.code).toBe('restricted_resource');
+    const database = await w.v1('GET', `/pages/${PARTS}/markdown`, w.bot.token);
+    expect(database.status).toBe(400);
+    expect(database.body.code).toBe('validation_error');
+    expect((await w.v1('GET', `/pages/${SECRETS}/markdown`, w.bot.token)).status).toBe(404);
+    expect((await w.v1('GET', '/pages/nope/markdown', w.bot.token)).status).toBe(400);
+    await w.share('edit');
+    for (const body of [{}, { markdown: 3 }, { markdown: 'x', mode: 'prepend' }]) {
+      const bad = await w.v1('PATCH', `/pages/${ARM}/markdown`, w.bot.token, body);
+      expect(bad.status).toBe(400);
+      expect(bad.body.code).toBe('validation_error');
+    }
+  });
+});
+
+describe('views (#43)', () => {
+  it('a database’s views are listed, and each is queried as it shows its rows', async () => {
+    const w = await world();
+    await w.share('view');
+    const db = w.a.doc(PARTS);
+    addRow(db, {
+      actor: w.ada.id,
+      title: 'Bolt',
+      values: { [w.ids.stock]: 100, [w.ids.kind]: 'k-gear' },
+    });
+    const gears = addView(db, {
+      viewSet: PARTS,
+      name: 'Gears by stock',
+      type: 'board',
+      config: {
+        filter: {
+          type: 'group',
+          id: 'f',
+          conjunction: 'and',
+          filters: [
+            { type: 'rule', id: 'r', propertyId: w.ids.kind, operator: 'is', value: ['k-gear'] },
+          ],
+        },
+        sorts: [{ propertyId: w.ids.stock, direction: 'desc' }],
+        groupBy: { propertyId: w.ids.kind } as never,
+      },
+    });
+    await w.settled();
+
+    const list = await w.v1('GET', `/databases/${PARTS}/views`, w.bot.token);
+    expect(list.status).toBe(200);
+    expect(list.body.object).toBe('list');
+    const views = list.body.results as Json[];
+    expect(views.map((v) => v.name)).toEqual(['Table', 'Gears by stock']);
+    expect(views[1]).toMatchObject({
+      object: 'view',
+      id: gears,
+      type: 'board',
+      database_id: PARTS,
+      sorts: [{ property: 'Stock', direction: 'descending' }],
+      has_filter: true,
+      group_by: 'Kind',
+    });
+
+    const title = (r: Json) => r.properties.Name.title[0]?.plain_text as string;
+    const rows = await w.v1('POST', `/databases/${PARTS}/views/${gears}/query`, w.bot.token, {});
+    expect(rows.status).toBe(200);
+    expect((rows.body.results as Json[]).map(title)).toEqual(['Bolt', 'Spur gear']);
+    // Narrowed further with Notion's filter, and paged.
+    const narrowed = await w.v1('POST', `/databases/${PARTS}/views/${gears}/query`, w.bot.token, {
+      filter: { property: 'Stock', number: { less_than: 50 } },
+    });
+    expect((narrowed.body.results as Json[]).map(title)).toEqual(['Spur gear']);
+    const paged = await w.v1('POST', `/databases/${PARTS}/views/${gears}/query`, w.bot.token, {
+      page_size: 1,
+    });
+    expect((paged.body.results as Json[]).map(title)).toEqual(['Bolt']);
+    expect(paged.body.has_more).toBe(true);
+    const next = await w.v1('POST', `/databases/${PARTS}/views/${gears}/query`, w.bot.token, {
+      page_size: 1,
+      start_cursor: paged.body.next_cursor,
+    });
+    expect((next.body.results as Json[]).map(title)).toEqual(['Spur gear']);
+
+    // An unknown view, or a database not shared.
+    const missing = await w.v1('POST', `/databases/${PARTS}/views/nope/query`, w.bot.token, {});
+    expect(missing.status).toBe(404);
+    expect(missing.body.code).toBe('object_not_found');
+  });
+});
+
+describe('file uploads (#43)', () => {
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEklEQVR4nGP4z8AARwzEcQwDAH2gC/UmQhvLAAAAAElFTkSuQmCC',
+    'base64',
+  );
+  const multipartBody = (filename: string, bytes: Buffer, type: string, field = 'file') => {
+    const boundary = `----workspace${Date.now()}`;
+    const head = `--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${filename}"\r\nContent-Type: ${type}\r\n\r\n`;
+    return {
+      payload: Buffer.concat([Buffer.from(head), bytes, Buffer.from(`\r\n--${boundary}--\r\n`)]),
+      type: `multipart/form-data; boundary=${boundary}`,
+    };
+  };
+
+  it('created, sent, then attached to a block and a files property; only by its integration', async () => {
+    const w = await world();
+    const S = await w.share('edit');
+    w.a.hint = S.id;
+    addProperty(w.a.doc(PARTS), { name: 'Drawings', type: 'files' });
+    await w.settled();
+    const send = async (id: string, body = multipartBody('gripper.png', PNG, 'image/png')) => {
+      const res = await w.app.inject({
+        method: 'POST',
+        url: `/v1/file_uploads/${id}/send`,
+        payload: body.payload,
+        headers: {
+          authorization: `Bearer ${w.bot.token}`,
+          'notion-version': '2022-06-28',
+          'content-type': body.type,
+        },
+      });
+      return { status: res.statusCode, body: res.json() as Json };
+    };
+
+    const made = await w.v1('POST', '/file_uploads', w.bot.token, { filename: 'gripper.png' });
+    expect(made.status).toBe(200);
+    expect(made.body).toMatchObject({
+      object: 'file_upload',
+      status: 'pending',
+      filename: 'gripper.png',
+    });
+    expect(made.body.upload_url).toBe(`http://app.test/v1/file_uploads/${made.body.id}/send`);
+    const id = made.body.id as string;
+
+    // Not sent yet: it can't be attached.
+    const early = await w.v1('PATCH', `/blocks/${ARM}/children`, w.bot.token, {
+      children: [{ type: 'image', image: { type: 'file_upload', file_upload: { id } } }],
+    });
+    expect(early.status).toBe(400);
+    expect(early.body.message).toMatch(/file upload of this integration that has been sent/);
+
+    const sent = await send(id);
+    expect(sent.status).toBe(200);
+    expect(sent.body).toMatchObject({
+      status: 'uploaded',
+      content_type: 'image/png',
+      content_length: PNG.byteLength,
+      upload_url: null,
+      expiry_time: null,
+    });
+    expect((await w.v1('GET', `/file_uploads/${id}`, w.bot.token)).body.status).toBe('uploaded');
+    // Once.
+    expect((await send(id)).body.message).toMatch(/sent already/);
+
+    // In a block: the page has the stored file, served by a signed link.
+    const added = await w.v1('PATCH', `/blocks/${ARM}/children`, w.bot.token, {
+      children: [{ type: 'image', image: { type: 'file_upload', file_upload: { id } } }],
+    });
+    expect(added.status).toBe(200);
+    const image = (added.body.results as Json[])[0]!;
+    expect(image.type).toBe('image');
+    expect(image.image.type).toBe('file');
+    const link = new URL(image.image.file.url as string);
+    const got = await w.app.inject({ method: 'GET', url: link.pathname + link.search });
+    expect(got.statusCode).toBe(200);
+    expect(got.rawPayload.equals(PNG)).toBe(true);
+    await until(
+      () =>
+        JSON.stringify(contentJson(w.a.doc(ARM))).includes(
+          createHash('sha256').update(PNG).digest('hex'),
+        ),
+      'the desktop has the image',
+    );
+
+    // In a files property of a row.
+    const row = await w.v1('PATCH', `/pages/${SERVO}`, w.bot.token, {
+      properties: {
+        Drawings: { files: [{ type: 'file_upload', file_upload: { id }, name: 'Servo bracket' }] },
+      },
+    });
+    expect(row.status).toBe(200);
+    expect(row.body.properties.Drawings.files).toEqual([
+      expect.objectContaining({ name: 'Servo bracket', type: 'file' }),
+    ]);
+
+    // Another integration doesn't see it, nor can it use it.
+    const other = await w.call('POST', `/api/workspaces/${w.ws}/integrations`, w.ada.token, {
+      name: 'Other bot',
+    });
+    const otherToken = other.body.token as string;
+    expect((await w.v1('GET', `/file_uploads/${id}`, otherToken)).status).toBe(404);
+
+    // Bad requests.
+    expect((await w.v1('POST', '/file_uploads', w.bot.token, {})).status).toBe(400);
+    expect(
+      (await w.v1('POST', '/file_uploads', w.bot.token, { filename: 'x', mode: 'multi_part' }))
+        .status,
+    ).toBe(400);
+    const second = await w.v1('POST', '/file_uploads', w.bot.token, { filename: 'notes.txt' });
+    const wrongPart = await send(
+      second.body.id as string,
+      multipartBody('notes.txt', Buffer.from('hi'), 'text/plain', 'attachment'),
+    );
+    expect(wrongPart.status).toBe(400);
+    expect(wrongPart.body.message).toMatch(/part named "file"/);
   });
 });

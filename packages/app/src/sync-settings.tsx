@@ -1,5 +1,5 @@
 import { formatDateTime } from '@workspace/core';
-import { Button, Dialog, DialogContent, cn } from '@workspace/ui';
+import { Button, cn } from '@workspace/ui';
 import {
   AlertTriangle,
   Cloud,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { SyncInfo, SyncPlatform, SyncServerInfo } from './platform';
+import { SettingsShell } from './settings/shell';
 
 /** The live sync status from the host. */
 export function useSyncInfo(sync: SyncPlatform | undefined): SyncInfo | null {
@@ -144,26 +145,25 @@ export function SyncDialog({
 }) {
   const signedOut = info.mode === 'on' && info.state === 'unauthorized';
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        title="Sync"
-        className="w-[min(520px,calc(100vw-32px))]"
-        data-testid="sync-dialog"
-      >
-        <div className="flex flex-col gap-4 p-4 pt-2">
-          {info.mode === 'off' && <SignIn sync={sync} />}
-          {info.mode === 'account' && (
-            <ChooseWorkspace sync={sync} info={info} onBackup={onBackup} onDone={onClose} />
-          )}
-          {info.mode === 'on' && (
-            <>
-              <Status sync={sync} info={info} />
-              {signedOut && <SignIn sync={sync} server={info.server ?? undefined} />}
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+    <SettingsShell
+      onClose={onClose}
+      title="Sync"
+      className="w-[min(520px,calc(100vw-32px))]"
+      data-testid="sync-dialog"
+    >
+      <div className="flex flex-col gap-4 p-4 pt-2">
+        {info.mode === 'off' && <SignIn sync={sync} />}
+        {info.mode === 'account' && (
+          <ChooseWorkspace sync={sync} info={info} onBackup={onBackup} onDone={onClose} />
+        )}
+        {info.mode === 'on' && (
+          <>
+            <Status sync={sync} info={info} />
+            {signedOut && <SignIn sync={sync} server={info.server ?? undefined} />}
+          </>
+        )}
+      </div>
+    </SettingsShell>
   );
 }
 

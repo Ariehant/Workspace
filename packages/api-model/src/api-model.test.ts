@@ -102,6 +102,44 @@ describe('rich text', () => {
 });
 
 describe('property values', () => {
+  it('files: a sent upload is stored as the workspace’s file', () => {
+    const { ids, prop } = setup();
+    const UPLOAD = '5f0c1a2b-0000-4000-8000-0000000000aa';
+    const fileId = `${'d'.repeat(64)}.pdf`;
+    const ctx = {
+      isUser: () => false,
+      fileUpload: (id: string) => (id === UPLOAD ? { fileId, name: 'spec.pdf' } : null),
+    };
+    expect(
+      parseValue(
+        prop(ids.files),
+        {
+          files: [
+            { type: 'file_upload', file_upload: { id: UPLOAD } },
+            { type: 'file_upload', file_upload: { id: UPLOAD }, name: 'Spec, signed' },
+            { name: 'site', external: { url: 'https://lab.io' } },
+          ],
+        },
+        ctx,
+      ).value,
+    ).toEqual([
+      { id: fileId, name: 'spec.pdf' },
+      { id: fileId, name: 'Spec, signed' },
+      { url: 'https://lab.io', name: 'site' },
+    ]);
+    expect(() =>
+      parseValue(
+        prop(ids.files),
+        {
+          files: [
+            { type: 'file_upload', file_upload: { id: '5f0c1a2b-0000-4000-8000-0000000000bb' } },
+          ],
+        },
+        ctx,
+      ),
+    ).toThrow(/file upload of this integration/);
+  });
+
   it('every stored type, both ways', () => {
     const { doc, ids, prop } = setup();
     const ctx = { isUser: (id: string) => id === ADA || id === BOB };
@@ -170,6 +208,30 @@ describe('property values', () => {
     });
     expect(propertyValue(again, prop(ids.due), links)).toMatchObject({
       date: { start: '2026-10-12T09:30:00.000+00:00' },
+    });
+
+    // Pointers (Phase 8 N9): a Drive file links to Drive; a file on a computer says where it is.
+    setCell(
+      doc,
+      row,
+      ids.files,
+      [
+        { name: 'BOM', drive: { fileId: '1Sheet_gripperBOM-abc' } },
+        { name: 'v3.step', linked: { folder: 'Projects', path: 'arm/v3.step' } },
+      ],
+      ADA,
+    );
+    expect(propertyValue(rowOf(doc, row), prop(ids.files), links)).toEqual({
+      id: ids.files,
+      type: 'files',
+      files: [
+        {
+          name: 'BOM',
+          type: 'external',
+          external: { url: 'https://drive.google.com/open?id=1Sheet_gripperBOM-abc' },
+        },
+        { name: 'v3.step', type: 'linked', linked: { location: 'Projects/arm/v3.step' } },
+      ],
     });
   });
 

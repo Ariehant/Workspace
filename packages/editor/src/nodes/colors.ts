@@ -109,5 +109,9 @@ export const TextColor = Mark.create({
 /** `color` attribute on block types, rendered as `data-color`. */
 export const BlockColor = Extension.create({
   name: 'blockColor',
-  addGlobalAttributes: () => [{ types: COLORABLE_BLOCKS, attributes: { color: colorAttr } }],
+  addGlobalAttributes: () => [
+    { types: COLORABLE_BLOCKS, attributes: { color: colorAttr } },
+    // A simple table's cells, coloured a row or a column at a time.
+    { types: ['tableCell', 'tableHeader'], attributes: { color: colorAttr } },
+  ],
 });

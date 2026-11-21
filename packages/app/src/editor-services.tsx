@@ -1,6 +1,8 @@
 import {
   createPage,
   getMathMacros,
+  listCustomEmoji,
+  observeCustomEmoji,
   listUsers,
   observeMathMacros,
   setMathMacros,
@@ -10,7 +12,7 @@ import {
 } from '@workspace/core';
 import { fillFromTable, tableCells } from '@workspace/database';
 import type { EditorServices } from '@workspace/editor';
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { useApp } from './context';
 import { InlineDatabase } from './database/database-view';
 import { createDatabase } from './database/registry';
@@ -18,6 +20,11 @@ import { useNavigation } from './navigation';
 import { observePeople, readPeople } from './people';
 import { editButton } from './buttons/button-dialog';
 import { runButton } from './buttons/run-button';
+import { setDrivePickProblem } from './connections';
+import { openSettings } from './settings/open';
+
+/** Loaded when a preview is first opened (it brings the document readers). */
+const FilePreview = lazy(() => import('./file-preview'));
 
 /** What the editor of page (or row) `pageId` needs from the app. */
 export function useEditorServices(
@@ -98,6 +105,43 @@ export function useEditorServices(
       fileUrl: (id) => platform.fileUrl(id),
       openFile: (id) => platform.openFile(id),
       linkPreview: (url) => platform.linkPreview(url),
+      drive: platform.google && {
+        pick: async () => {
+          const result = await platform.google!.pick();
+          if ('ok' in result) return result.ok;
+          // Not connected (or no Picker key): Settings says what's missing.
+          setDrivePickProblem(
+            result.error === 'notConnected'
+              ? 'Connect Google Drive to link its files.'
+              : result.error,
+          );
+          openSettings('connections');
+          return [];
+        },
+        status: (fileId) => platform.google!.status(fileId),
+        open: (fileId) => platform.google!.open(fileId),
+        setUp: () => openSettings('connections'),
+        subscribe: (listener) => platform.google!.onChange(listener),
+        thumbnailUrl: platform.google.thumbnailUrl,
+      },
+      renderFilePreview: (source) => (
+        <Suspense fallback={<p className="text-sm text-muted">Opening the preview…</p>}>
+          <FilePreview {...source} />
+        </Suspense>
+      ),
+      linkedFiles: platform.linkedFiles && {
+        pick: () => platform.linkedFiles!.pick(false),
+        locate: async () => (await platform.linkedFiles!.pick(true))[0] ?? null,
+        status: (ref) => platform.linkedFiles!.status(ref),
+        open: (ref) => platform.linkedFiles!.open(ref),
+        reveal: (ref) => platform.linkedFiles!.reveal(ref),
+        previewUrl: (ref) => platform.linkedFiles!.previewUrl(ref),
+        setUpFolders: () => openSettings('linkedFolders'),
+      },
+      customEmoji: {
+        list: () => listCustomEmoji(workspaceDataDoc(workspace)),
+        subscribe: (listener) => observeCustomEmoji(workspaceDataDoc(workspace), listener),
+      },
       mathMacros: {
         get: () => getMathMacros(workspaceDataDoc(workspace)),
         set: (macros) => setMathMacros(workspaceDataDoc(workspace), macros),

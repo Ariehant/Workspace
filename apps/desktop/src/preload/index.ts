@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { SearchOptions } from '@workspace/core';
+import type {
+  DriveFileRef,
+  DriveFileStatus,
+  GoogleClientConfig,
+  GoogleState,
+  LinkedFileRef,
+  LinkedFileStatus,
+  SearchOptions,
+} from '@workspace/core';
 import {
   IPC,
   type ExportRequest,
@@ -78,6 +86,29 @@ const api = {
   },
   linkPreview: (url: string): Promise<LinkPreview | null> =>
     ipcRenderer.invoke(IPC.linkPreview, url),
+  google: {
+    state: (): Promise<GoogleState> => ipcRenderer.invoke(IPC.googleState),
+    configure: (config: GoogleClientConfig): Promise<Result> =>
+      ipcRenderer.invoke(IPC.googleConfigure, config),
+    connect: (): Promise<Result<{ email: string | null }>> => ipcRenderer.invoke(IPC.googleConnect),
+    disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.googleDisconnect),
+    onChange: (listener: () => void): Unsubscribe => on(IPC.googleChanged, listener),
+    pick: (): Promise<Result<DriveFileRef[]>> => ipcRenderer.invoke(IPC.drivePick),
+    status: (fileId: string): Promise<DriveFileStatus> =>
+      ipcRenderer.invoke(IPC.driveStatus, fileId),
+    open: (fileId: string): Promise<boolean> => ipcRenderer.invoke(IPC.driveOpen, fileId),
+  },
+  linkedFiles: {
+    pick: (one: boolean): Promise<LinkedFileRef[]> => ipcRenderer.invoke(IPC.linkedPick, one),
+    status: (ref: LinkedFileRef): Promise<LinkedFileStatus> =>
+      ipcRenderer.invoke(IPC.linkedStatus, ref),
+    open: (ref: LinkedFileRef): Promise<boolean> => ipcRenderer.invoke(IPC.linkedOpen, ref),
+    reveal: (ref: LinkedFileRef): Promise<boolean> => ipcRenderer.invoke(IPC.linkedReveal, ref),
+    folders: (): Promise<Record<string, string>> => ipcRenderer.invoke(IPC.linkedFolders),
+    chooseFolder: (name: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.linkedFolderChoose, name),
+    forgetFolder: (name: string): Promise<void> => ipcRenderer.invoke(IPC.linkedFolderForget, name),
+  },
   links: {
     backlinks: (
       pageId: string,
@@ -92,6 +123,15 @@ const api = {
         snippet: string;
       }[]
     > => ipcRenderer.invoke(IPC.backlinks, pageId),
+    upcoming: (): Promise<
+      {
+        pageId: string;
+        blockId: string | null;
+        fireAt: number;
+        text: string;
+        pageTitle: string;
+      }[]
+    > => ipcRenderer.invoke(IPC.remindersUpcoming),
     syncedPlaces: (syncedId: string): Promise<number> =>
       ipcRenderer.invoke(IPC.syncedPlaces, syncedId),
   },

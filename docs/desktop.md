@@ -85,6 +85,9 @@ named after the file (**Import**, for several files), and a report lists what ca
 | Notion      | Settings → Export all workspace content, Markdown & CSV or HTML    | the `.zip`        |
 | Evernote    | Select notes or a notebook → Export → ENEX (one file per notebook) | the `.enex` files |
 | Trello      | Board menu → Print, export and share → Export as JSON              | the `.json`       |
+| Asana       | The project's menu → Export/Print → CSV                            | the `.csv`        |
+| Jira        | Filters → the issues to move → Export → Export CSV (all fields)    | the `.csv`        |
+| monday.com  | The board's menu → Export board to Excel                           | the `.xlsx`       |
 | Confluence  | Space settings → Export space → HTML                               | the `.zip`        |
 | Word        | Save as Word Document (`.docx`)                                    | the `.docx` files |
 | Google Docs | File → Download → Microsoft Word (`.docx`)                         | the `.docx` files |
@@ -93,9 +96,59 @@ named after the file (**Import**, for several files), and a report lists what ca
 Each Evernote notebook becomes a database of its notes (tags, created and updated dates and
 the source address as columns). A Trello board becomes a database shown as a board grouped by
 list; its attachments come across as links (the files stay on Trello) and archived cards are
-left out. A Confluence space becomes its page tree. Encrypted text in Evernote notes can't come
+left out. An Asana project or a Jira export becomes a database shown as a board (by section, or
+by status) and a table; sub-tasks become sub-items of their parent, and columns the importer
+doesn't know (custom fields) come across as text. A monday.com board becomes a database by
+status with its groups, its timeline as a date range and subitems as sub-items; other Excel
+workbooks aren't imported yet. Jira's wiki formatting in descriptions stays
+as plain text. A Confluence space becomes its page tree. Encrypted text in Evernote notes can't come
 across. A single Word document becomes the page itself, titled from its Title (or its file
 name); its pictures are stored with it. Older `.doc` files need saving as `.docx` first.
+
+## Linked files
+
+`/linked file` in a page links files on this computer without copying them into the
+workspace, for files too big or too often changed to import (CAD models, rosbags, datasets).
+The page keeps a pointer: the file's name, size and date, and where it is.
+
+- **Linked folders** (Settings → Linked folders): give a folder a name, such as "Projects", and
+  choose where it is on this computer. Files linked from inside it are kept as "Projects/…",
+  so they open on any computer that links a "Projects" folder too: the same folder kept in
+  sync by Dropbox, Syncthing or git, or a copy. Each computer chooses its own place for it.
+- **Other files** are kept by their full path, and open on the computer they were linked on.
+- **Safety:** pages are shared, so nothing opens by itself. A file opens when you click it;
+  a program or script (an executable, `.sh`, `.AppImage`, `.desktop`…) asks first. The page
+  can't change where a linked folder is: only Settings can.
+- **Moved or missing:** the link says so; **Locate…** points it at the new place.
+
+## Google Drive
+
+`/google drive` links files from Google Drive into a page, picked with Google's own Picker.
+Each becomes a card with its name, kind, size and date, kept current while Drive is connected
+(renamed, changed, deleted); it opens in Drive. Workspace asks Google only for `drive.file`:
+it can see the files you pick and nothing else in your Drive. The sign-in stays on this
+computer (encrypted by the system keyring where there is one).
+
+It needs your own Google Cloud project, once:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project (or use
+   one) and note its **project number** (Dashboard → Project info).
+2. **APIs & Services → Library:** enable the **Google Drive API** and the **Google Picker
+   API**.
+3. **OAuth consent screen:** user type External (or Internal in a Google Workspace
+   organisation), the app's name and your email; under scopes add `.../auth/drive.file`. While
+   the app is "Testing", add yourself as a test user; publish it (no review is needed for
+   `drive.file`) so the sign-in doesn't lapse after 7 days.
+4. **Credentials → Create credentials → OAuth client ID**, type **Desktop app**: note the
+   client ID and client secret (for a desktop app it isn't kept secret).
+5. **Credentials → Create credentials → API key**, restricted to the Google Picker API.
+6. In Workspace: **Settings → Connections**, enter the four, **Save**, then **Connect Google
+   Drive…** and allow it in the browser.
+
+A build can bring the client instead (`WORKSPACE_GOOGLE_CLIENT_ID`,
+`WORKSPACE_GOOGLE_CLIENT_SECRET`, `WORKSPACE_GOOGLE_API_KEY`, `WORKSPACE_GOOGLE_APP_ID`).
+**Disconnect** in Settings signs out and tells Google; the cards keep what they last knew.
+On the web app and on computers not connected, a card shows that and links to Drive.
 
 ## Several workspaces
 
@@ -160,7 +213,7 @@ menu bar).
 
 ## Language and region
 
-**Workspace menu → Language and region…** sets how dates, times and numbers look: pick your
+**Settings → Language and region** (`Ctrl+,`, or the workspace menu) sets how dates, times and numbers look: pick your
 region (it starts as your system's), or set the date format, the 12- or 24-hour clock and the
 first day of the week on their own. The app's text is in English for now. A database property
 with its own date or number format keeps it.

@@ -35,6 +35,8 @@ export async function captureBundle(
   workspace: PageTree,
   rootId: PageId,
   withDoc: WithDoc,
+  /** Only these of its sub-pages (a published page's, say); default all. */
+  include?: (page: PageMeta) => boolean,
 ): Promise<PageBundle> {
   const root = getPage(workspace, rootId);
   if (!root) throw new Error(`Page not found: ${rootId}`);
@@ -42,7 +44,8 @@ export async function captureBundle(
     root,
     ...getDescendantIds(workspace, rootId)
       .filter((id) => !isInTrash(workspace, id))
-      .map((id) => getPage(workspace, id)!),
+      .map((id) => getPage(workspace, id)!)
+      .filter((page) => !include || include(page)),
   ];
   const docs: Record<string, Uint8Array> = {};
   const save = (id: string, doc: Y.Doc) => {

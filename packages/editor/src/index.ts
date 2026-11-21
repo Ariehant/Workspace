@@ -4,7 +4,8 @@ export { PageEditor, type PageEditorProps } from './page-editor';
 export type { EditorServices, FileRef, LinkPreview, PageRef } from './services';
 export type { Editor } from '@tiptap/react';
 export { PageIcon, type PageIconProps } from './page-icon';
-export { searchEmoji, EMOJI } from './nodes/emoji';
+export { searchEmoji, EMOJI, isStandardEmoji } from './nodes/emoji';
+export { useCustomEmoji, type CustomEmojiRef } from './nodes/custom-emoji';
 export {
   appendContent,
   contentElements,
@@ -14,6 +15,8 @@ export {
   type ContentPart,
 } from './content';
 export { renderMermaid, svgWidth } from './nodes/mermaid';
+export { LINKED_FILE, linkedFileNode } from './nodes/linked-file';
+export { DRIVE_FILE, driveFileNode } from './nodes/drive-file';
 export type { JSONContent } from '@tiptap/core';
 export * from './comments';
 export {

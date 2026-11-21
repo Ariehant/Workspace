@@ -1,5 +1,5 @@
 import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 /**
  * A virtualizer for a list inside the page's scroll area (`[data-scroll-root]`):
@@ -46,4 +46,26 @@ export function usePageVirtualizer(options: {
     getItemKey: options.getItemKey,
   });
   return { bodyRef, virtualizer };
+}
+
+/**
+ * Draws the lines in a virtual window, reusing the element a line had last time while
+ * `owner` is the same object: pass the component's props, which stay the same object when only
+ * its own state changed (a scroll), and are new when anything it draws from may have. React
+ * leaves a reused element alone, so a scroll draws only the lines coming into view. (A
+ * 50,000-row table drew every line in view on each scroll frame; that allocation, while a
+ * garbage collection was marking, held its first scroll after a pause for a quarter second.)
+ */
+export function useReusedLines<K>(owner: object): (key: K, draw: () => ReactNode) => ReactNode {
+  const last = useRef<{ owner: object; lines: Map<K, ReactNode> }>(null);
+  const before = last.current?.owner === owner ? last.current.lines : null;
+  const lines = new Map<K, ReactNode>();
+  useEffect(() => {
+    last.current = { owner, lines };
+  });
+  return (key, draw) => {
+    const element = before?.has(key) ? before.get(key) : draw();
+    lines.set(key, element);
+    return element;
+  };
 }

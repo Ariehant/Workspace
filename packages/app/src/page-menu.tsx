@@ -2,6 +2,7 @@ import {
   countWords,
   formatDay,
   formatPlainNumber,
+  formatShortDay,
   type PageFont,
   type PageMeta,
   pageText,
@@ -23,6 +24,7 @@ import {
 } from '@workspace/ui';
 import {
   ArrowUpLeft,
+  BadgeCheck,
   Bell,
   Copy,
   Download,
@@ -31,12 +33,15 @@ import {
   LayoutTemplate,
   Link2,
   Lock,
+  MessageSquare,
   MoreHorizontal,
   PenLine,
+  Presentation,
   Plug,
   Trash2,
 } from 'lucide-react';
 import { useBacklinksMode, type BacklinksMode } from './backlinks';
+import { useCommentsMode, type CommentsMode } from './comments';
 import { useApp } from './context';
 import { HistoryDialog } from './history-dialog';
 import { can } from './platform';
@@ -47,7 +52,9 @@ export interface PageMenuProps {
   page: PageMeta;
   /** The page's content doc, for the word count (null while loading). */
   pageDoc: Y.Doc | null;
-  onOptions(options: Partial<Pick<PageMeta, 'font' | 'smallText' | 'fullWidth' | 'locked'>>): void;
+  onOptions(
+    options: Partial<Pick<PageMeta, 'font' | 'smallText' | 'fullWidth' | 'locked' | 'verified'>>,
+  ): void;
   onDuplicate(): void;
   /** Omitted where pages can't be moved (database rows). */
   onMove?(): void;
@@ -65,7 +72,21 @@ export interface PageMenuProps {
   follow?: { get(): Promise<boolean>; set(on: boolean): Promise<void> };
   /** Suggest edits: on, and its toggle (null when it's always on: they may only comment). */
   suggest?: { on: boolean; toggle: (() => void) | null };
+  /** The page has comments (not a database or its rows): how they show. */
+  hasComments?: boolean;
+  /** Present the page as slides (pages, not databases). */
+  onPresent?(): void;
+  /** The page can be verified (workspace pages, not database rows). */
+  canVerify?: boolean;
 }
+
+/** How long a verification lasts, from the Verify menu (null: until removed). */
+const VERIFY_FOR: { label: string; days: number | null }[] = [
+  { label: 'For 1 week', days: 7 },
+  { label: 'For 30 days', days: 30 },
+  { label: 'For 90 days', days: 90 },
+  { label: 'Indefinitely', days: null },
+];
 
 const FONTS: { font: PageFont; label: string; sample: string }[] = [
   { font: 'default', label: 'Default', sample: 'font-sans' },
@@ -116,6 +137,9 @@ export function PageMenu({
   suggest,
   follow,
   views,
+  hasComments = false,
+  onPresent,
+  canVerify = false,
 }: PageMenuProps) {
   const [following, setFollowing] = useState<boolean | null>(null);
   const [seen, setSeen] = useState<{ views: number; viewers: number } | null>(null);
@@ -123,7 +147,8 @@ export function PageMenu({
   const [stats, setStats] = useState<{ words: number; now: number } | null>(null);
   const [history, setHistory] = useState(false);
   const [backlinks, setBacklinks] = useBacklinksMode(page.id);
-  const { platform } = useApp();
+  const [commentsMode, setCommentsMode] = useCommentsMode(page.id);
+  const { platform, user } = useApp();
 
   return (
     <>
@@ -199,6 +224,45 @@ export function PageMenu({
             <span className="flex-1">Lock page</span>
             <Toggle on={page.locked} />
           </MenuItem>
+          {canVerify && (
+            <MenuSub>
+              <MenuSubTrigger icon={<BadgeCheck size={14} />}>
+                <span className="flex-1">{page.verified ? 'Verified' : 'Verify'}</span>
+              </MenuSubTrigger>
+              <MenuSubContent aria-label="Verify page">
+                {VERIFY_FOR.map(({ label, days }) => (
+                  <MenuItem
+                    key={label}
+                    onSelect={() => {
+                      const at = Date.now();
+                      onOptions({
+                        verified: {
+                          by: user.id,
+                          at,
+                          until: days === null ? null : at + days * 86_400_000,
+                        },
+                      });
+                    }}
+                  >
+                    {label}
+                    {days !== null && stats && (
+                      <span className="ml-auto pl-4 text-xs text-muted">
+                        {formatShortDay(new Date(stats.now + days * 86_400_000))}
+                      </span>
+                    )}
+                  </MenuItem>
+                ))}
+                {page.verified && (
+                  <>
+                    <MenuSeparator />
+                    <MenuItem onSelect={() => onOptions({ verified: null })}>
+                      Remove verification
+                    </MenuItem>
+                  </>
+                )}
+              </MenuSubContent>
+            </MenuSub>
+          )}
           {follow && following !== null && (
             <MenuItem
               icon={<Bell size={14} />}
@@ -243,6 +307,23 @@ export function PageMenu({
               </MenuSubContent>
             </MenuSub>
           )}
+          {hasComments && (
+            <MenuSub>
+              <MenuSubTrigger icon={<MessageSquare size={14} />}>
+                <span className="flex-1">Show comments</span>
+              </MenuSubTrigger>
+              <MenuSubContent>
+                <MenuRadioGroup
+                  value={commentsMode}
+                  onValueChange={(mode) => setCommentsMode(mode as CommentsMode)}
+                >
+                  <MenuRadioItem value="show">On the page</MenuRadioItem>
+                  <MenuRadioItem value="minimized">Minimized</MenuRadioItem>
+                  <MenuRadioItem value="hidden">Hidden</MenuRadioItem>
+                </MenuRadioGroup>
+              </MenuSubContent>
+            </MenuSub>
+          )}
           {pageDoc && can(platform, 'history') && (
             <MenuItem icon={<History size={14} />} onSelect={() => setHistory(true)}>
               Page history
@@ -269,6 +350,11 @@ export function PageMenu({
           <MenuItem icon={<Link2 size={14} />} onSelect={onCopyLink}>
             Copy link
           </MenuItem>
+          {onPresent && (
+            <MenuItem icon={<Presentation size={14} />} onSelect={onPresent}>
+              Present
+            </MenuItem>
+          )}
           {onExport && (
             <MenuItem icon={<Download size={14} />} onSelect={onExport}>
               Export…

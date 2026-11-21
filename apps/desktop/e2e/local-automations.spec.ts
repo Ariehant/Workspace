@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { ElectronApplication, Page } from '@playwright/test';
-import { addProperty, addRow, cell, newDatabase, titles } from './db';
+import { addProperty, addRow, cell, header, newDatabase, table, titles } from './db';
 import { expect, launchApp, settle, test, type Launched } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
@@ -244,4 +244,76 @@ test('a button sends a signed webhook and a notification from the desktop', asyn
   await expect
     .poll(async () => (await notifications(me.app)).map((n) => `${n.title}: ${n.body}`))
     .toContain('Button: Ping the lab: Someone pinged the lab');
+});
+
+test('a button pressed edits the linked pages in another database, a formula for a value', async () => {
+  const W = me.window;
+  await newDatabase(W, 'Projects');
+  await addProperty(W, 'Text', 'Note');
+  await addProperty(W, 'Checkbox', 'Started');
+  await addRow(W, 'Arm');
+  await addRow(W, 'Base');
+
+  await newDatabase(W, 'Parts');
+  await addProperty(W, 'Number', 'Qty');
+  await addRow(W, 'Servo');
+  await (await cell(W, 'Servo', 'Qty')).click();
+  await W.keyboard.type('4');
+  await W.keyboard.press('Enter');
+  await W.keyboard.press('Escape');
+  await table(W).getByRole('button', { name: 'Add a property' }).click();
+  await W.getByTestId('add-property-menu')
+    .getByRole('menuitem', { name: 'Relation', exact: true })
+    .click();
+  const setup = W.getByTestId('relation-setup');
+  await setup.getByLabel('Related to').selectOption({ label: 'Projects' });
+  await setup.getByRole('button', { name: 'Add relation' }).click();
+  await expect(header(W, 'Projects')).toBeVisible();
+  await (await cell(W, 'Servo', 'Projects')).click();
+  await W.getByTestId('relation-editor').getByRole('option', { name: 'Arm' }).click();
+  await W.keyboard.press('Escape');
+  // A button with no steps of its own: an automation starts on it.
+  await table(W).getByRole('button', { name: 'Add a property' }).click();
+  await W.getByTestId('add-property-menu')
+    .getByRole('menuitem', { name: 'Button', exact: true })
+    .click();
+  const button = W.getByTestId('button-editor');
+  await button.getByLabel('Button label').fill('Order');
+  await button.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(button).toHaveCount(0);
+
+  await W.getByTestId('automations-button').click();
+  const automations = W.getByTestId('automations-dialog');
+  await automations.getByRole('button', { name: 'New automation' }).click();
+  const editor = automations.getByTestId('automation-editor');
+  await editor.getByLabel('Automation name').fill('Order parts');
+  await editor.getByLabel('Trigger').selectOption('buttonPressed');
+  await expect(editor.getByLabel('Button')).toHaveValue(/.+/);
+  await editor.getByLabel('Add an action').selectOption('editRelated');
+  await expect(editor.getByLabel('Pages in')).toHaveText('the pages in Projects');
+  await editor.getByLabel('Set a property').selectOption({ label: 'Note' });
+  await editor.getByRole('button', { name: 'Set Note with a formula' }).click();
+  const formula = editor.getByLabel('Note formula');
+  // Checked as it's typed, against this database's properties.
+  await formula.fill('prop("Nope")');
+  await expect(editor.getByRole('alert')).toContainText('Nope');
+  await formula.fill('prop("Name") + " ×" + prop("Qty")');
+  await expect(editor.getByRole('alert')).toHaveCount(0);
+  await formula.blur();
+  await editor.getByLabel('Set a property').selectOption({ label: 'Started' });
+  await editor.getByLabel('Started value').check();
+  await shot(W, 'local-automations-5-related');
+  await editor.getByTestId('automation-save').click();
+  await expect(automations.getByTestId('automation-row')).toContainText('When Button is pressed');
+  await W.keyboard.press('Escape');
+
+  await (await cell(W, 'Servo', 'Button')).getByRole('button', { name: 'Order' }).click();
+  await W.getByTestId('sidebar-page-title').filter({ hasText: 'Projects' }).click();
+  await expect(await cell(W, 'Arm', 'Note')).toHaveText('Servo ×4', { timeout: 10_000 });
+  await expect((await cell(W, 'Arm', 'Started')).getByRole('checkbox')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  // Only the linked page.
+  await expect(await cell(W, 'Base', 'Note')).toHaveText('');
 });

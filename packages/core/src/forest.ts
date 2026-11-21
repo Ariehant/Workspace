@@ -19,7 +19,7 @@ export const isTreeDocId = (docId: string): boolean =>
   docId === 'workspace' || docId.startsWith('tree:');
 
 export type TreeKind = 'teamspace' | 'private' | 'shared' | 'local';
-export type TreeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
+export type TreeRole = 'full' | 'edit' | 'content' | 'create' | 'comment' | 'view';
 
 export interface TreeInfo {
   /** The tree doc's id: `workspace`, or `tree:<scopeId>`. */
@@ -38,7 +38,18 @@ export interface Tree {
   doc: Y.Doc;
 }
 
-const RANK: Record<TreeRole, number> = { view: 1, comment: 2, content: 3, edit: 4, full: 5 };
+/**
+ * `create` (a database's "can create pages"): add rows and edit only those one made; below
+ * `content`, so nothing that needs `content` allows it.
+ */
+const RANK: Record<TreeRole, number> = {
+  view: 1,
+  comment: 2,
+  create: 3,
+  content: 4,
+  edit: 5,
+  full: 6,
+};
 
 /** Does `role` allow at least `needed`? */
 export const roleAllows = (role: TreeRole | null | undefined, needed: TreeRole): boolean =>

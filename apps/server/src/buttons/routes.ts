@@ -63,7 +63,7 @@ export function buttonRoutes(app: FastifyInstance, ctx: ServerContext) {
       void fail(reply, 404, 'not_found', 'No such page.');
       return null;
     }
-    if (!(await access.canWrite(roles, docId, null))) {
+    if (!(await access.canWrite(roles, docId, null, userId))) {
       void fail(reply, 403, 'forbidden', 'Only people who can edit this page use its buttons.');
       return null;
     }

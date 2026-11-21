@@ -58,6 +58,8 @@ export interface PageMeta {
   font: PageFont;
   /** Locked pages can't be edited until unlocked (guards against accidental edits). */
   locked: boolean;
+  /** Someone vouched for the page (a wiki's "verified"), until a time or for good; or `null`. */
+  verified: PageVerification | null;
   /** In a forest (see `Forest`): the tree doc the page lives in. */
   tree?: string;
   /** In a forest: the tree it shows in (where its stub is, or its own). */
@@ -65,6 +67,24 @@ export interface PageMeta {
 }
 
 export type PageFont = 'default' | 'serif' | 'mono';
+
+/** A page's verification (Phase 8 N7): who, when, and until when (`null`: indefinitely). */
+export interface PageVerification {
+  by: string;
+  at: number;
+  until: number | null;
+}
+
+/** Whether a page is verified now: not at all, still, or no longer. */
+export type VerificationState = 'none' | 'valid' | 'expired';
+
+export function verificationState(
+  verified: PageVerification | null,
+  now: number,
+): VerificationState {
+  if (!verified) return 'none';
+  return verified.until !== null && verified.until <= now ? 'expired' : 'valid';
+}
 
 /** Banner image above the title. */
 export interface PageCover {
@@ -81,7 +101,10 @@ export interface PageCover {
 }
 
 /** Options set from the page menu (see `setPageOptions`). */
-export type PageOptions = Pick<PageMeta, 'cover' | 'fullWidth' | 'smallText' | 'font' | 'locked'>;
+export type PageOptions = Pick<
+  PageMeta,
+  'cover' | 'fullWidth' | 'smallText' | 'font' | 'locked' | 'verified'
+>;
 
 /**
  * An icon is an emoji, or `file:<id>` for an uploaded image. Missing on older
@@ -106,6 +129,7 @@ export const PageField = {
   smallText: 'smallText',
   font: 'font',
   locked: 'locked',
+  verified: 'verified',
   /**
    * Only on a *stub*: the page lives in another scope (this id), and this tree keeps just
    * its place (id, parent, position). Readers of both see it here.

@@ -46,12 +46,15 @@ export function NewButton({
   view,
   databaseTitle,
   onOpenRow,
+  manage = true,
 }: {
   handle: DatabaseHandle;
   snapshot: DatabaseSnapshot;
   view: View;
   databaseTitle: string;
   onOpenRow(rowId: string): void;
+  /** Templates can be changed here (not with "can create pages": only used). */
+  manage?: boolean;
 }) {
   const { user, client, platform, pages } = useApp();
   const [open, setOpen] = useState(false);
@@ -170,7 +173,7 @@ export function NewButton({
                 <span className="truncate">{t.title || 'Untitled'}</span>
                 {current?.id === t.id && badge}
               </button>
-              {optionsMenu(t.id, t.title || 'Untitled')}
+              {manage && optionsMenu(t.id, t.title || 'Untitled')}
             </div>
           ))}
           <div
@@ -186,16 +189,20 @@ export function NewButton({
               <span className="truncate">Empty page</span>
               {!current && templates.length > 0 && badge}
             </button>
-            {templates.length > 0 && optionsMenu(null, 'Empty page')}
+            {manage && templates.length > 0 && optionsMenu(null, 'Empty page')}
           </div>
-          <MenuLikeSeparator />
-          <button
-            type="button"
-            onClick={() => edit(addTemplate(doc, { actor: user.id }))}
-            className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-muted hover:bg-hover"
-          >
-            <Plus size={14} /> New template
-          </button>
+          {manage && (
+            <>
+              <MenuLikeSeparator />
+              <button
+                type="button"
+                onClick={() => edit(addTemplate(doc, { actor: user.id }))}
+                className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-muted hover:bg-hover"
+              >
+                <Plus size={14} /> New template
+              </button>
+            </>
+          )}
         </PopoverContent>
       </Popover>
       {repeating && (

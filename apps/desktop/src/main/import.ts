@@ -12,7 +12,7 @@ export const IMPORT_ORIGIN = 'import';
 
 /**
  * Imports: pick files (a Notion or Confluence export zip, Evernote .enex, Trello board JSON,
- * Markdown, HTML, CSV or text), build the pages
+ * Asana or Jira CSV, a monday.com board's .xlsx, Markdown, HTML, CSV or text), build the pages
  * in a worker, then apply them here. One at a time, cancellable until it's applied.
  */
 export function registerImport(deps: {
@@ -32,7 +32,7 @@ export function registerImport(deps: {
       properties: ['openFile' as const, 'multiSelections' as const],
       filters: [
         {
-          name: 'Word or Google Docs (.docx), Notion, Confluence, Evernote or Trello export, Markdown, HTML, CSV or text',
+          name: 'Word or Google Docs (.docx), Notion, Confluence, Evernote, Trello, Asana, Jira or monday.com export, Markdown, HTML, CSV or text',
           extensions: [
             'docx',
             'zip',
@@ -43,6 +43,7 @@ export function registerImport(deps: {
             'html',
             'htm',
             'csv',
+            'xlsx',
             'txt',
           ],
         },

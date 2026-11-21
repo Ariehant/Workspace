@@ -1,5 +1,11 @@
 import type {
   DocTransport,
+  DriveFileRef,
+  DriveFileStatus,
+  GoogleClientConfig,
+  GoogleState,
+  LinkedFileRef,
+  LinkedFileStatus,
   NotificationData,
   NotificationKind,
   SearchOptions,
@@ -71,10 +77,50 @@ export interface Platform {
   openFile(id: string): void;
   /** Title, description and image for a web bookmark. */
   linkPreview(url: string): Promise<LinkPreview | null>;
+  /**
+   * Google Drive (Phase 8 N9): this computer's connection to Google, and files picked with
+   * Google's Picker. Hosts that sign in to Google themselves (the desktop).
+   */
+  google?: {
+    state(): Promise<GoogleState>;
+    configure(config: GoogleClientConfig): Promise<{ ok: true } | { error: string }>;
+    /** Sign in through the browser. */
+    connect(): Promise<{ ok: { email: string | null } } | { error: string }>;
+    disconnect(): Promise<void>;
+    onChange(listener: () => void): () => void;
+    /** `error` 'notConnected' when no account is connected. */
+    pick(): Promise<{ ok: DriveFileRef[] } | { error: string }>;
+    status(fileId: string): Promise<DriveFileStatus>;
+    open(fileId: string): Promise<boolean>;
+    /** Where Drive's picture of a file shows from. */
+    thumbnailUrl?(fileId: string): string;
+  };
+  /**
+   * Linked files (Phase 8 N9): pointers to files on this computer, and where the
+   * workspace's linked folders are on it. Hosts with files of their own (the desktop).
+   */
+  linkedFiles?: {
+    /** Pick files to link (`one`: a file to locate a moved one). */
+    pick(one: boolean): Promise<LinkedFileRef[]>;
+    status(ref: LinkedFileRef): Promise<LinkedFileStatus>;
+    /** Open with the default app; false if it couldn't (or wasn't confirmed). */
+    open(ref: LinkedFileRef): Promise<boolean>;
+    /** Show it in the file manager. */
+    reveal(ref: LinkedFileRef): Promise<boolean>;
+    /** A URL the UI can show a linked image from. */
+    previewUrl(ref: LinkedFileRef): string;
+    /** Where each linked folder is on this computer. */
+    folders(): Promise<Record<string, string>>;
+    /** Ask where folder `name` is here; resolves its path, or null if cancelled. */
+    chooseFolder(name: string): Promise<string | null>;
+    forgetFolder(name: string): Promise<void>;
+  };
   /** Pages and rows that link to a page (mentions, links, link-to-page, relations). */
   backlinks(pageId: string): Promise<Backlink[]>;
   /** How many pages show a synced block. */
   syncedPlaces(syncedId: string): Promise<number>;
+  /** The next reminders, soonest first (Home's Upcoming; hosts that keep them). */
+  upcoming?(): Promise<UpcomingReminder[]>;
   /** Page history: saved versions of a doc, newest first. */
   listVersions(docId: string): Promise<DocVersionInfo[]>;
   /** The saved Yjs state of a version. */
@@ -377,6 +423,16 @@ export type ExportStatus =
   | { state: 'done'; path: string }
   | { state: 'cancelled' }
   | { state: 'failed'; error: string };
+
+/** A reminder still to come: an `@remind` in a page, or on a date property of a row. */
+export interface UpcomingReminder {
+  pageId: string;
+  /** The block it's in (null for a date property's). */
+  blockId: string | null;
+  fireAt: number;
+  text: string;
+  pageTitle: string;
+}
 
 export interface Backlink {
   id: string;

@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { createPage, getPageContent } from '@workspace/core';
+import { createPage, getPageContent, listPages } from '@workspace/core';
 import { PgStore } from '@workspace/storage-remote';
 import { createTestDatabase } from '@workspace/storage-remote/testing';
 import { unzipSync } from 'fflate';
@@ -90,7 +90,7 @@ async function world() {
     });
     return res;
   };
-  const json = async (method: string, url: string, token: string, payload?: object) => {
+  const json = async (method: string, url: string, token: string | null, payload?: object) => {
     const res = await call(method, url, token, payload);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { status: res.statusCode, body: res.json() as Record<string, any> };
@@ -286,6 +286,90 @@ describe('publishing', () => {
     );
     expect((await w.json('GET', versions, w.ada.token)).body.versions).toHaveLength(2);
     expect((await w.json('POST', versions, w.gus.token, { reason: 'restore' })).status).toBe(404);
+  });
+});
+
+describe('duplicate as template (#35)', () => {
+  it('only when allowed: a visitor copies what the site shows into a workspace of theirs', async () => {
+    const w = await world();
+    const publish = `/api/workspaces/${w.ws}/pages/gear/publish`;
+    expect(
+      (await w.json('PUT', publish, w.ada.token, { slug: 'gearbox', includeSubpages: false }))
+        .status,
+    ).toBe(200);
+    const pageHtml = async () => {
+      const start = await w.call('GET', '/p/gearbox', null);
+      return (await w.call('GET', start.headers.location as string, null)).body;
+    };
+    // Not allowed: no button, nothing to duplicate.
+    expect(await pageHtml()).not.toContain('href="/d/gearbox"');
+    expect((await w.json('GET', '/api/published/gearbox/duplicate', null)).status).toBe(404);
+
+    await w.json('PUT', publish, w.ada.token, {
+      slug: 'gearbox',
+      includeSubpages: false,
+      allowDuplicate: true,
+      title: 'Gearbox template',
+    });
+    expect(await pageHtml()).toContain('href="/d/gearbox"');
+    const info = await w.json('GET', '/api/published/gearbox/duplicate', null);
+    expect(info.body).toEqual({ title: 'Gearbox template', includeSubpages: false });
+
+    // Signed in, into a workspace of Bob's own.
+    const mine = (await w.json('POST', '/api/workspaces', w.bob.token, { name: 'Bob’s' })).body
+      .workspace.id as string;
+    // Signed out: refused.
+    expect([401, 403]).toContain(
+      (await w.json('POST', '/api/published/gearbox/duplicate', null, { to: mine })).status,
+    );
+    const copied = await w.json('POST', '/api/published/gearbox/duplicate', w.bob.token, {
+      to: mine,
+    });
+    expect(copied.status).toBe(200);
+    expect(copied.body.workspaceId).toBe(mine);
+    const scopes = (await w.json('GET', `/api/workspaces/${mine}/scopes`, w.bob.token)).body
+      .scopes as { kind: string; treeDoc: string }[];
+    const tree = new Y.Doc();
+    Y.applyUpdate(
+      tree,
+      (await w.store.docState(mine, scopes.find((s) => s.kind === 'private')!.treeDoc))!,
+    );
+    const titles = listPages(tree).map((p) => p.title);
+    // The page, not its sub-page (it isn't published).
+    expect(titles).toEqual(['Gearbox']);
+    const content = new Y.Doc();
+    Y.applyUpdate(content, (await w.store.docState(mine, copied.body.pageId as string))!);
+    expect(getPageContent(content).toString()).toContain('Planetary');
+    // Its image came along; the unpublished page's text didn't.
+    expect(await w.store.getFile(mine, IMAGE)).not.toBeNull();
+    expect(await w.store.getFile(mine, OTHER)).toBeNull();
+    expect(getPageContent(content).toString()).not.toContain('Do not share');
+
+    // A guest there can't; nor into a workspace that isn't theirs.
+    expect(
+      (await w.json('POST', '/api/published/gearbox/duplicate', w.gus.token, { to: w.ws })).status,
+    ).toBe(403);
+    expect(
+      (await w.json('POST', '/api/published/gearbox/duplicate', w.gus.token, { to: mine })).status,
+    ).toBe(404);
+
+    // With its sub-pages published, they come too.
+    await w.json('PUT', publish, w.ada.token, {
+      slug: 'gearbox',
+      includeSubpages: true,
+      allowDuplicate: true,
+    });
+    const again = await w.json('POST', '/api/published/gearbox/duplicate', w.bob.token, {
+      to: mine,
+    });
+    expect(again.status).toBe(200);
+    const tree2 = new Y.Doc();
+    Y.applyUpdate(
+      tree2,
+      (await w.store.docState(mine, scopes.find((s) => s.kind === 'private')!.treeDoc))!,
+    );
+    const titles2 = listPages(tree2).map((p) => p.title);
+    expect(titles2.sort()).toEqual(['Gearbox', 'Gearbox', 'Sub notes']);
   });
 });
 

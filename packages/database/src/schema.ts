@@ -195,26 +195,43 @@ export interface DateValue {
 export type DateReminder =
   'onDay' | '1d' | '2d' | '1w' | 'atTime' | '5m' | '10m' | '15m' | '30m' | '1h' | '2h';
 
-/** A file in the workspace file store (`id`) or a link to one on the web (`url`). */
+/**
+ * A file in the workspace file store (`id`), a link to one on the web (`url`), a file on the
+ * computer (`linked`: a linked folder's name and a path in it, or a full path) or a Google
+ * Drive file (`drive`). The last two are Phase 8 N9's pointers: nothing is copied.
+ */
 export interface FileValue {
   id?: string;
   url?: string;
+  linked?: { folder: string | null; path: string };
+  drive?: { fileId: string };
   name: string;
   mime?: string;
 }
 
 export type ViewType =
-  'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'chart' | 'form';
+  | 'table'
+  | 'board'
+  | 'list'
+  | 'gallery'
+  | 'feed'
+  | 'calendar'
+  | 'timeline'
+  | 'chart'
+  | 'form'
+  | 'dashboard';
 
 export const VIEW_TYPES: { type: ViewType; label: string }[] = [
   { type: 'table', label: 'Table' },
   { type: 'board', label: 'Board' },
   { type: 'list', label: 'List' },
   { type: 'gallery', label: 'Gallery' },
+  { type: 'feed', label: 'Feed' },
   { type: 'calendar', label: 'Calendar' },
   { type: 'timeline', label: 'Timeline' },
   { type: 'chart', label: 'Chart' },
   { type: 'form', label: 'Form' },
+  { type: 'dashboard', label: 'Dashboard' },
 ];
 
 /**
@@ -272,6 +289,28 @@ export interface ChartConfig {
   labels: boolean;
   /** Leave out categories without rows. */
   hideEmpty: boolean;
+}
+
+/** One tile of a dashboard view. */
+export interface DashboardWidget {
+  id: string;
+  /** A number (a calculation, or the row count), a chart, or another view of the database. */
+  kind: 'number' | 'chart' | 'view';
+  /** Shown above it (empty: a title from what it shows). */
+  title: string;
+  /** Columns of the dashboard's grid it takes (of 3). */
+  width: 1 | 2 | 3;
+  /** Number: over a property (null: count the rows). */
+  number?: { propertyId: string | null; calc: CalculationId };
+  /** Chart: its own settings, as a chart view's. */
+  chart?: ChartConfig;
+  /** View: which of the database's views it shows. */
+  viewId?: string;
+}
+
+/** Dashboard view settings: its widgets, in order. */
+export interface DashboardConfig {
+  widgets: DashboardWidget[];
 }
 
 /** What a board or gallery card shows above its title. */
@@ -406,6 +445,8 @@ export interface ViewConfig {
   chart: ChartConfig;
   /** Form views: questions and settings. */
   form: FormConfig;
+  /** Dashboard views: their widgets. */
+  dashboard: DashboardConfig;
   /**
    * The template "New" uses in this view: a template id, `'none'` for an empty page,
    * or null for the database's default.
@@ -567,5 +608,6 @@ export const DEFAULT_VIEW_CONFIG: ViewConfig = {
     notify: false,
     createdBy: null,
   },
+  dashboard: { widgets: [] },
   defaultTemplateId: null,
 };

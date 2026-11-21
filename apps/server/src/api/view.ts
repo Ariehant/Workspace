@@ -10,6 +10,7 @@ import {
   dataSourceObject,
   notFound,
   pageObject,
+  parseId,
   propertiesObject,
   richText,
   schemaObject,
@@ -17,6 +18,7 @@ import {
   type Common,
   type FileLinks,
   type Parent,
+  type UploadedFile,
 } from '@workspace/api-model';
 import {
   MEMBERS_DOC_ID,
@@ -71,6 +73,8 @@ export class ApiView {
   private ctxCache: DisplayContext | null = null;
   /** The workspace's secret for signed file links (loaded by `prepare`). */
   private fileSecret = '';
+  /** Sent file uploads the request's body names (loaded by `loadUploads`). */
+  private readonly uploads = new Map<string, UploadedFile>();
 
   constructor(
     readonly ctx: ServerContext,
@@ -90,6 +94,39 @@ export class ApiView {
       FILE_SECRET.databaseId,
       FILE_SECRET.automationId,
     );
+  }
+
+  /**
+   * The file uploads a body names (`file_upload: { id }`, anywhere in it): the sent ones of
+   * this integration's, for reading blocks and property values synchronously.
+   */
+  async loadUploads(body: unknown): Promise<void> {
+    const ids = new Set<string>();
+    const walk = (value: unknown, depth: number) => {
+      if (depth > 40 || ids.size >= 200 || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item, depth + 1);
+        return;
+      }
+      const record = value as Record<string, unknown>;
+      const id = parseId((record.file_upload as { id?: unknown } | undefined)?.id);
+      if (id) ids.add(id);
+      for (const child of Object.values(record)) walk(child, depth + 1);
+    };
+    walk(body, 0);
+    for (const upload of await this.ctx.store.fileUploads.many(this.botId, [...ids])) {
+      if (upload.fileId && upload.workspaceId === this.workspaceId) {
+        this.uploads.set(upload.id, { fileId: upload.fileId, name: upload.filename });
+      }
+    }
+  }
+
+  /** What reading blocks and property values sent in needs: people, and sent files. */
+  get writeContext() {
+    return {
+      isUser: (id: string) => this.access.isMember(id),
+      fileUpload: (id: string) => this.uploads.get(id) ?? null,
+    };
   }
 
   // --- Capabilities and access ------------------------------------------------------

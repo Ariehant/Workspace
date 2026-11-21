@@ -1,3 +1,4 @@
+import { driveFileOf, driveOpenUrl, linkedFileLocation, linkedFileOf } from '@workspace/core';
 import { flag, inlineText, type ContentNode, type Inline } from './content';
 import { formatDateMention, type RenderContext } from './context';
 
@@ -17,6 +18,12 @@ export function inlineMarkdown(inline: readonly Inline[], ctx: RenderContext): s
         const { attrs } = part;
         if (part.node === 'hardBreak') return '<br>';
         if (part.node === 'inlineMath') return `$${String(attrs.latex ?? '')}$`;
+        if (part.node === 'customEmoji') {
+          // Its image, copied next to the page; or the name when it can't be.
+          const name = String(attrs.name ?? '');
+          const href = attrs.fileId ? ctx.fileHref(String(attrs.fileId), `${name}.png`) : null;
+          return href ? `![:${name}:](${encodeHref(href)})` : `:${name}:`;
+        }
         if (attrs.kind === 'date') return `@${formatDateMention(String(attrs.date ?? ''))}`;
         if (attrs.kind === 'link') {
           const url = String(attrs.url ?? '');
@@ -180,6 +187,18 @@ export function blockMarkdown(node: ContentNode, ctx: RenderContext): string {
     case 'bookmark':
     case 'embed':
       return mediaMarkdown(node, ctx);
+    case 'driveFile': {
+      // A Google Drive file (Phase 8 N9): a link to it in Drive.
+      const ref = driveFileOf(attrs);
+      return ref ? `📎 [${escapeText(ref.name)}](${encodeHref(driveOpenUrl(ref.fileId))})` : '';
+    }
+    case 'linkedFile': {
+      // A file on someone's computer (Phase 8 N9): its name and where it is, not a link.
+      const ref = linkedFileOf(attrs);
+      return ref
+        ? `📎 ${escapeText(ref.name)} (\`${linkedFileLocation(ref).replace(/`/g, "'")}\`)`
+        : '';
+    }
     case 'button':
     case 'breadcrumb':
     case 'tableOfContents':

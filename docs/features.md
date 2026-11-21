@@ -33,6 +33,23 @@ planned is in [PHASE7.md](PHASE7.md).
   Tab/Shift+Tab on selected lines.
 - **Diagrams and math:** Mermaid diagrams (code, preview or split) and KaTeX equations, with
   workspace macros and live errors.
+- **Linked files** (desktop): `/linked file` points at files on the computer instead of
+  copying them in: CAD files, recordings, datasets. A card shows the name, where it is, its
+  size and date; it opens in its default app (a program or script only once confirmed), shows
+  in the file manager, and an image shows in the page. Settings → Linked folders names
+  folders ("Projects"), so files in them open on every computer that links a folder under that
+  name (one kept in sync with Dropbox, Syncthing or git). A moved file says so and can be
+  located again; on the web, a link says it's on a computer.
+- **Files & media pointers:** a database's files property can hold a file on the computer or a
+  Google Drive file as well as uploads and web links: Link a file on this computer, From Google
+  Drive. Each opens where it is.
+- **File previews:** Show preview on an attached or linked Word document (`.docx`) or Excel
+  workbook (`.xlsx`) reads it in the page (sheets one at a time); linked PDFs and images show
+  too, and Drive files show Drive's picture of them.
+- **Google Drive files** (desktop): `/google drive` picks files with Google's Picker; each is a
+  card (name, kind, size, date) kept current while Drive is connected, opening in Drive. Only
+  the files picked are visible to the app (`drive.file`). Settings → Connections holds your
+  Google Cloud client and the sign-in.
 - **Media:** images (upload, paste or drop; resize; crop and rotate, the file kept as it is;
   captions), video, audio, PDFs viewed in the page, any file (opens in its default app), web
   bookmarks with previews, and embeds: any https website (in a sandboxed frame, with its site
@@ -47,7 +64,8 @@ planned is in [PHASE7.md](PHASE7.md).
 - **Inline formatting:** a toolbar on selected text for bold, italic, underline, strikethrough,
   code, links, colors, equations and turn into. Ctrl+click opens a link.
 - **Mentions:** `@` for pages (live titles), people, and dates ("next fri", "in 2 weeks");
-  `@remind tomorrow` sets a reminder for 9:00. `:` suggests emoji. A pasted link can become a
+  `@remind tomorrow` sets a reminder for 9:00. `:` suggests emoji, the workspace's own first
+  (Settings → Emoji: an image under a name, also offered as a page icon). A pasted link can become a
   link mention: the site's icon and the page's title, as a link.
 - **Find and replace** in a page (`Ctrl+F`).
 - **Synced blocks:** the same content in several places, edited anywhere.
@@ -56,7 +74,16 @@ planned is in [PHASE7.md](PHASE7.md).
 - **Page settings:** emoji or image icons; covers (gradients, colors or images,
   repositionable, and photos from Unsplash on a server with an Unsplash key, credited on the
   cover); font (default, serif, mono), small text, full width, lock, word count.
+- **Verified pages** (`···` → Verify): for a week, 30 or 90 days, or indefinitely. A badge
+  under the title says who verified the page and until when, or that the verification has
+  expired. Copies of a page aren't verified.
 - **Every block has a stable id**, for block links, comments, sync and the API.
+
+- **Simple tables:** add and remove rows and columns, header row and column, and colour a
+  row or a column (text or background) from the table's toolbar.
+- **Present** (`···` → Present): the page as slides, full screen, a new slide at each divider
+  (the first with the title). Arrow keys, Space and Page Up/Down move, Home and End go to the
+  ends, Escape ends.
 
 ## Databases
 
@@ -71,15 +98,17 @@ Database" on an empty page).
   colour, the value that fills it ("Divide by", 100 by default) and the number beside it or
   not; a status as a checkbox, ticked when it's in the Complete group (ticking sets the first
   Complete option, unticking the first To-do one).
-- **Views:** table, board, list, gallery, calendar, timeline, chart (bar, line, pie, donut) and
-  form. Each view has its own filters (simple chips or nested AND/OR), sorts, grouping and
+- **Views:** table, board, list, gallery, feed, calendar, timeline, chart (bar, line, pie,
+  donut), form and dashboard (numbers, charts and other views of the database in one grid). Each view has its own filters (simple chips or nested AND/OR), sorts, grouping and
   sub-grouping, column calculations, visible properties, card preview and size, and a search.
 - **Table:** edit cells in place, keyboard navigation, copy and paste, undo; rename, retype,
   hide, resize, reorder, duplicate and delete columns; drag rows to reorder. "Freeze up to this
   column" keeps the first columns in place when the table scrolls sideways. Large tables only
   render the rows in view.
-- **Load limit:** a table, list or gallery can show 10, 25, 50, 100 or 500 pages (per group
-  when grouped), then "Load more".
+- **Feed:** rows as a stream of whole pages: each with its title, the properties picked for
+  the view and its content, read-only. A feed loads 10 rows at first.
+- **Load limit:** a table, list, gallery or feed can show 10, 25, 50, 100 or 500 pages (per
+  group when grouped), then "Load more".
 - **Bulk edit:** tick rows in a table (Shift+click for a range, Ctrl+A for all, Escape to let
   go), then set a property for all of them at once (one undo step), duplicate them, copy their
   links or delete them.
@@ -107,6 +136,10 @@ Database" on an empty page).
 
 ## Workspace and navigation
 
+- **Home** (sidebar → Home): the pages you visited last, the reminders coming up (`@remind` in
+  pages and on dates; in the desktop app) and the pages edited last.
+- **People** (sidebar → People): everyone in the workspace, with email and role on a server
+  (guests see names only) and its groups. Select someone to see the pages they made.
 - **Sidebar:** a page tree with drag and drop to reorder or nest, favorites and a resizable
   width. On a server workspace: sections for teamspaces, pages shared with you and your private
   pages.
@@ -125,6 +158,9 @@ Database" on an empty page).
 - **Trash:** restore or delete permanently; pages are deleted after 30 days.
 - **Templates gallery:** built-in templates for personal use, projects, engineering and a
   robotics lab, with previews. "Save as template" adds your own.
+- **Settings** (`Ctrl+,`, or the workspace menu): one window with a section each for your
+  account, appearance, language and region, notifications, emoji, members, teamspaces, sync,
+  keyboard shortcuts and about. The menu items for each open it at their section.
 - **Themes:** light, dark and system.
 - **Zoom** from 50% to 300% (`Ctrl+=`, `Ctrl+-`, `Ctrl+0` or `Ctrl` + wheel) in the desktop app,
   for every window, remembered.
@@ -141,10 +177,13 @@ Database" on an empty page).
 - **Import** (sidebar → Import): a Notion export zip (Markdown & CSV, or HTML), and Markdown,
   HTML, CSV and text files. Pages, databases with inferred types and relations, links and
   attachments come across.
-- **Import from Evernote, Trello and Confluence:** an Evernote notebook (`.enex`) as a database
-  of notes with tags, dates, checklists and attachments; a Trello board (its JSON export) as a
-  database with a board view by list, cards with labels, due dates, checklists and comments;
-  and a Confluence space (its HTML export zip) as the page tree, with panels, code, tasks,
+- **Import from Evernote, Trello, Asana, Jira, monday.com and Confluence:** an Evernote notebook (`.enex`)
+  as a database of notes with tags, dates, checklists and attachments; a Trello board (its
+  JSON export) as a database with a board view by list, cards with labels, due dates,
+  checklists and comments; an Asana project or Jira issues (their CSV export) as a database
+  with a board by section or status, sub-tasks as sub-items, and notes, descriptions and
+  comments in the pages; a monday.com board (its Excel export) as a database by status, with
+  groups, a timeline as a date range and subitems as sub-items; and a Confluence space (its HTML export zip) as the page tree, with panels, code, tasks,
   attachments and links between pages. See the
   [desktop guide](desktop.md#import-from-other-apps) for how to export from each.
 - **Import Word and Google Docs** (`.docx`; Google Docs: File → Download → Microsoft Word):
@@ -154,7 +193,8 @@ Database" on an empty page).
   becomes the page itself, titled from its Title. Equations, comments and text boxes come
   across as text, or are listed in the report.
 - **Export** a page (`···` → Export…) or the whole workspace as Markdown & CSV in Notion's
-  layout, HTML, or PDF.
+  layout, HTML, or PDF. A PDF of a page with its sub-pages, or of the whole workspace, is one
+  document that starts with its contents, linked to each page.
 - **Backups:** the whole workspace to a `.zip`, and restore from one.
 
 ## Sync and the web app
@@ -175,8 +215,16 @@ These need the [self-hosted server](self-hosting.md).
 - **Members:** invite people by email (a link to send, or an email when the server has SMTP) as
   admins, members or guests; groups; names and pictures.
 - **Sharing:** teamspaces and per-page sharing with full access, can edit, can edit content
-  (database rows only), can comment and can view, inherited down the page tree. The server
-  enforces it on every write.
+  (database rows only), can create pages (a database: add pages and edit only one's own), can
+  comment and can view, inherited down the page tree. The server enforces it on every write.
+- **Share links:** Share → Share link: a link for one page, to view, comment or edit, ending
+  never or in 1, 7 or 30 days. Whoever opens it signs in or creates an account (even on an
+  invite-only server) and joins as a guest with that role on that page alone. A new link ends
+  the old one; turning it off ends it.
+- **Move to another workspace:** Move to → Another workspace (on a server, for someone with
+  full access to the page): the page, its sub-pages, databases, rows and attachments are copied
+  to your private pages in another of your workspaces (links and relations between them follow
+  the copies), and the page goes to the trash here.
 - **Request access:** a link or mention of a page you can't open shows "You don't have access
   to this page" (nothing else about it), where you ask to view, comment or edit, with a
   message. The people with full access to it get the request in their inbox and in its share
@@ -185,18 +233,22 @@ These need the [self-hosted server](self-hosting.md).
 - **Presence:** avatars in the page header, named cursors in the editor, dots in the sidebar
   and avatars on database rows others have open.
 - **Comments:** on selected text or the whole page, with replies, @-mentions, reactions and
-  resolve. People who may only comment suggest edits, which an editor accepts or rejects.
+  resolve. People who may only comment suggest edits, which an editor accepts or rejects. Each
+  page shows its comments on the page, minimized or hidden (`···` → Show comments).
 - **Inbox:** mentions, comments and replies on pages you follow, reminders, pages shared with
   you and requests for access (with Share and Decline), live, with desktop notifications. Email digests: after a mention, or daily, with
   one-click unsubscribe.
 - **Publish to web:** a public, read-only page (with its sub-pages if you like), with view
-  counts.
+  counts. **Allow duplicate as template** adds Duplicate to it: a visitor signs in (or signs
+  up, where the server allows it), picks one of their workspaces, and gets a copy of what the
+  page shows in their private pages there.
 
 ## Automations and forms
 
-- **Automations** on a database: when a page is added, a property changes, or on a schedule,
-  set properties, add pages, notify people or call a webhook (signed with
-  `X-Notion-Signature`). On a server they run on the server, with the access of the person who
+- **Automations** on a database: when a page is added, a property changes, a button property
+  is pressed, or on a schedule, set properties (fixed values, or a formula over the page), edit
+  the pages linked in a relation (in the related database), add pages, notify people or call a
+  webhook (signed with `X-Notion-Signature`). On a server they run on the server, with the access of the person who
   made them; on a desktop that isn't synced, the app runs them (catching up on missed
   schedules).
 - **Forms:** a database's form view, filled in from the app, or shared by link and filled in
@@ -212,8 +264,9 @@ These need the [self-hosted server](self-hosting.md).
 ## API and integrations
 
 - **A REST API in Notion's shape** at `/v1`: pages, blocks, databases, data sources, comments,
-  search and users, in API versions `2022-06-28` and `2025-09-03`. The official SDK works
-  unchanged.
+  search, users and file uploads, in API versions `2022-06-28` and `2025-09-03`. The official
+  SDK works unchanged. Beyond Notion's: pages read and written as Markdown, and a database's
+  views listed and queried as they show their rows.
 - **Integrations** with tokens and capabilities, connected to pages like people are.
 - **Webhooks** for page, database and comment events, verified and signed as Notion's are.
 

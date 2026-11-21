@@ -1,6 +1,7 @@
 import { addView, type OptionColor } from '@workspace/database';
 import type { JSONContent } from '@workspace/editor';
 import { ImportBuilder } from './build';
+import { localTime } from './dates';
 import type { ImportOptions, ImportReport, ImportTarget } from './import';
 
 /**
@@ -76,14 +77,6 @@ const COLORS: Record<string, OptionColor> = {
 };
 const colorOf = (color: string | null | undefined): OptionColor =>
   COLORS[(color ?? '').replace(/_(light|dark)$/, '')] ?? 'gray';
-
-const pad = (n: number) => String(n).padStart(2, '0');
-/** An ISO time → local `YYYY-MM-DDTHH:mm`. */
-function localTime(iso: string): string | null {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 /** When a card was made: Trello ids start with its Unix time (8 hex digits). */
 const createdAt = (id: string) => {

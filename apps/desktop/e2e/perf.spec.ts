@@ -57,9 +57,20 @@ async function time(
     };
     document.addEventListener(event, listener, { capture: true, once: true });
   }, event);
+  // Watched from before the action, and the end noted in the renderer in the frame `done`
+  // first holds. (Noting it once the test heard back counted the test's own wait: an action
+  // returns 100–400 ms after its events, and "Group by" read 550 ms for a 150 ms change.)
+  // (Built here and sent as a function: the page's CSP refuses strings to evaluate.)
+  const watch = new Function(
+    'arg',
+    `const w = globalThis;
+    const ok = (${done.toString()})(arg);
+    if (ok && w.__perfStart != null && w.__perfEnd == null) w.__perfEnd = performance.now();
+    return w.__perfEnd != null;`,
+  ) as (arg: string | null) => boolean;
+  const watching = window.waitForFunction(watch, arg, { polling: 'raf', timeout: 120_000 });
   await act();
-  await window.waitForFunction(done, arg, { polling: 'raf', timeout: 120_000 });
-  await window.evaluate(() => ((globalThis as PerfWindow).__perfEnd = performance.now()));
+  await watching;
   return window.evaluate(() => {
     const w = globalThis as PerfWindow;
     return w.__perfEnd! - w.__perfStart!;

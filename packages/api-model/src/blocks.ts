@@ -13,6 +13,7 @@
  * Block ids are the editor's (`id` on every block node). Rows of a table have none, so
  * theirs are made from the table's id and their place.
  */
+import { driveFileOf, driveOpenUrl, linkedFileLocation, linkedFileOf } from '@workspace/core';
 import { invalid } from './errors';
 import { parseId } from './ids';
 import { MAX_TEXT, type Annotations } from './rich-text';
@@ -102,6 +103,9 @@ export function richTextOut(inline: readonly PMNode[] | undefined, ctx: BlockCon
       pushText(node.text, a, href);
     } else if (node.type === 'hardBreak') {
       pushText('\n', { ...PLAIN }, null);
+    } else if (node.type === 'customEmoji') {
+      // Notion's API has no custom emoji in text: their name, as typed.
+      pushText(`:${String(node.attrs?.name ?? '')}:`, annotationsOf(node.marks).a, null);
     } else if (node.type === 'inlineMath') {
       const latex = String(node.attrs?.latex ?? '');
       out.push({
@@ -170,9 +174,34 @@ const plainOf = (inline: readonly PMNode[] | undefined): string =>
 
 // --- Rich text in -----------------------------------------------------------------------
 
+/** A file sent with `POST /v1/file_uploads` (and its `send`): the stored attachment. */
+export interface UploadedFile {
+  fileId: string;
+  name: string;
+}
+
 export interface WriteContext {
   /** Is this someone (mentions of people)? */
   isUser(id: string): boolean;
+  /** A sent file upload of the integration's, by id (null: none, or not sent yet). */
+  fileUpload?(id: string): UploadedFile | null;
+}
+
+/** `{ type: "file_upload", file_upload: { id } }`: the uploaded file, or a validation error. */
+export function uploadIn(
+  value: Record<string, unknown>,
+  where: string,
+  ctx: { fileUpload?(id: string): UploadedFile | null },
+): UploadedFile {
+  const raw = (value.file_upload as { id?: unknown } | undefined)?.id;
+  const id = parseId(raw);
+  const upload = id ? (ctx.fileUpload?.(id) ?? null) : null;
+  if (!upload) {
+    throw invalid(
+      `${where}.file_upload.id should be a file upload of this integration that has been sent.`,
+    );
+  }
+  return upload;
 }
 
 const asObject = (v: unknown, where: string): Record<string, unknown> => {
@@ -394,6 +423,26 @@ export function blocksOut(nodes: readonly PMNode[], ctx: BlockContext): ApiBlock
           }),
         );
         break;
+      case 'driveFile': {
+        // A Google Drive file (Phase 8 N9): its name, linked to it in Drive.
+        const ref = driveFileOf(node.attrs);
+        if (ref) {
+          const item = textItem(ref.name, PLAIN, driveOpenUrl(ref.fileId));
+          out.push(block(id, 'paragraph', { rich_text: [item], color: 'default' }));
+        }
+        break;
+      }
+      case 'linkedFile': {
+        // A file on someone's computer (Phase 8 N9): its name and where it is, as text.
+        const ref = linkedFileOf(node.attrs);
+        if (ref) {
+          const text = `📎 ${ref.name} (${linkedFileLocation(ref)})`;
+          out.push(
+            block(id, 'paragraph', { rich_text: [textItem(text, PLAIN, null)], color: 'default' }),
+          );
+        }
+        break;
+      }
       case 'heading': {
         const level = Math.min(3, Math.max(1, Number(node.attrs?.level) || 1));
         out.push(
@@ -627,14 +676,21 @@ function fileIn(
   where: string,
   ctx: WriteContext,
 ): PMNode {
-  const ext = value.external as { url?: unknown } | undefined;
-  const url = ext?.url;
-  if (typeof url !== 'string' || !/^https?:\/\//.test(url) || url.length > 2000) {
-    throw invalid(`${where}.external.url should be an http(s) URL (uploads aren't supported).`);
-  }
   const caption = richTextIn(value.caption, `${where}.caption`, ctx)
     .map((n) => n.text ?? '')
     .join('');
+  if (value.type === 'file_upload' || value.file_upload !== undefined) {
+    const upload = uploadIn(value, where, ctx);
+    const name = typeof value.name === 'string' && value.name ? value.name : upload.name;
+    return { type, attrs: { fileId: upload.fileId, name, ...(caption && { caption }) } };
+  }
+  const ext = value.external as { url?: unknown } | undefined;
+  const url = ext?.url;
+  if (typeof url !== 'string' || !/^https?:\/\//.test(url) || url.length > 2000) {
+    throw invalid(
+      `${where}.external.url should be an http(s) URL (or send the file: type "file_upload").`,
+    );
+  }
   const name = typeof value.name === 'string' ? value.name : (url.split('/').pop() ?? '');
   return { type, attrs: { src: url, name, ...(caption && { caption }) } };
 }

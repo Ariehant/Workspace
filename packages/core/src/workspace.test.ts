@@ -46,6 +46,7 @@ describe('pages', () => {
       smallText: false,
       font: 'default',
       locked: false,
+      verified: null,
     });
   });
 

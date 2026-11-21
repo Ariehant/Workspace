@@ -1151,6 +1151,12 @@
   padding: 0;
   min-height: 1.5em;
 }
+/* A database feed's pages: read-only, so no room below to click into, nor a drag gutter. */
+.ws-feed-content .ws-prose {
+  padding: 0;
+  margin-left: 0;
+  min-height: 0;
+}
 
 .ws-button:not([data-color='default']) {
   border-color: transparent;
@@ -1213,6 +1219,13 @@
 .ws-comment.is-active {
   background-color: rgba(255, 212, 0, 0.42);
 }
+/* Comments hidden (a page setting): no highlights, except the thread open in the panel. */
+[data-comments='hidden'] .ws-comment:not(.is-active),
+[data-comments='hidden']:not([data-comments-panel]) .ws-comment {
+  background-color: transparent;
+  border-bottom-color: transparent;
+  cursor: text;
+}
 /* Suggested edits: what would go struck through, what would come underlined. */
 .ws-suggest-delete {
   color: var(--ws-red, #d44c47);
@@ -1245,4 +1258,122 @@
   outline: none;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Custom emoji (`:name:`): an image the size of the text around it. */
+.ws-emoji {
+  display: inline-block;
+  height: 1.25em;
+  width: auto;
+  max-width: 2.5em;
+  vertical-align: -0.25em;
+  object-fit: contain;
+}
+
+/* Linked files (Phase 8 N9): a pointer to a file on the computer. */
+.ws-linked-file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 2px 4px;
+  border: 1px solid var(--ws-border);
+  border-radius: 4px;
+  user-select: none;
+}
+.ws-linked-file + .ws-linked-file-problem,
+.ws-linked-file:last-child {
+  margin-bottom: 6px;
+}
+.ws-linked-file.is-selected {
+  outline: 3px solid var(--ws-selection);
+  outline-offset: 0;
+}
+.ws-linked-file.is-missing {
+  border-style: dashed;
+}
+.ws-linked-file-problem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px 0;
+  font-size: 13px;
+  color: var(--ws-muted);
+  user-select: none;
+}
+.ws-linked-file-problem button {
+  color: var(--ws-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ws-linked-file-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  margin: 6px 0;
+  border-radius: 4px;
+}
+.ws-prose .ProseMirror-selectednode:has(.ws-linked-file) {
+  background: none;
+}
+
+/* File previews (Phase 8 N9): a document's text, a workbook's cells. */
+.ws-file-preview {
+  max-height: 480px;
+  overflow: auto;
+  padding: 12px 16px;
+  border: 1px solid var(--ws-border);
+  border-radius: 4px;
+  font-size: 14px;
+  user-select: text;
+}
+.ws-file-preview-doc h1 {
+  font-size: 1.4em;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+.ws-file-preview-doc h2 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em;
+}
+.ws-file-preview-doc h3 {
+  font-weight: 600;
+  margin: 0.4em 0 0.2em;
+}
+.ws-file-preview-doc p {
+  margin: 0.3em 0;
+}
+.ws-file-preview-doc ul,
+.ws-file-preview-doc ol {
+  padding-left: 1.5em;
+}
+.ws-file-preview-doc ul {
+  list-style: disc;
+}
+.ws-file-preview-doc ol {
+  list-style: decimal;
+}
+.ws-file-preview-doc pre {
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--ws-hover);
+  white-space: pre-wrap;
+}
+.ws-file-preview-sheet {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ws-file-preview-sheet td,
+.ws-file-preview-sheet th {
+  padding: 2px 8px;
+  border: 1px solid var(--ws-border);
+  white-space: nowrap;
+  text-align: left;
+}
+.ws-file-preview-image {
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: 4px;
 }

@@ -11,6 +11,7 @@ import {
   type PageKind,
   type PageMeta,
   type PageOptions,
+  type PageVerification,
   type User,
 } from './schema';
 import { applyTextDiff } from './text';
@@ -89,9 +90,18 @@ export function readPageMap(page: Y.Map<unknown>): PageMeta {
     smallText: page.get(PageField.smallText) === true,
     font: (page.get(PageField.font) as PageFont | undefined) ?? 'default',
     locked: page.get(PageField.locked) === true,
+    verified: readVerification(page.get(PageField.verified)),
     // Only when known (pages made before Phase 8 N4 don't say).
     ...(typeof createdBy === 'string' && { createdBy }),
   };
+}
+
+/** A stored verification, if it's well formed (anything else reads as none). */
+function readVerification(value: unknown): PageVerification | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<PageVerification>;
+  if (typeof v.by !== 'string' || typeof v.at !== 'number') return null;
+  return { by: v.by, at: v.at, until: typeof v.until === 'number' ? v.until : null };
 }
 
 /** A page that lives in another scope: only its place in this tree is kept here. */

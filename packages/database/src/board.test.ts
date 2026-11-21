@@ -71,6 +71,32 @@ describe('board, list and gallery views', () => {
     });
   });
 
+  it('a feed loads 10 rows at first and shows the title and the first status, select, person and date', () => {
+    const doc = bare();
+    const status = addProperty(doc, { name: 'Status', type: 'status' });
+    addProperty(doc, { name: 'Notes', type: 'text' });
+    const owner = addProperty(doc, { name: 'Owner', type: 'person' });
+    const due = addProperty(doc, { name: 'Due', type: 'date' });
+    const feed = addView(doc, { viewSet: 'db', name: 'Updates', type: 'feed' });
+    expect(view(doc, feed).loadLimit).toBe(10);
+    expect(
+      view(doc, feed)
+        .properties.filter((p) => p.visible)
+        .map((p) => p.id),
+    ).toEqual([TITLE_PROPERTY_ID, status, owner, due]);
+  });
+
+  it('switching a view to a feed sets a load limit, keeping one already set', () => {
+    const doc = setup();
+    const id = readDatabase(doc).views[0]!.id;
+    setViewType(doc, id, 'feed');
+    expect(view(doc, id)).toMatchObject({ type: 'feed', loadLimit: 10 });
+    updateView(doc, id, { loadLimit: 50 });
+    setViewType(doc, id, 'table');
+    setViewType(doc, id, 'feed');
+    expect(view(doc, id).loadLimit).toBe(50);
+  });
+
   it('moving a card between groups', () => {
     const doc = setup();
     const tags = readDatabase(doc).properties.find((p) => p.type === 'multiSelect')!;

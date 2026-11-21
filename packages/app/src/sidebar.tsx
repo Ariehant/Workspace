@@ -35,9 +35,12 @@ import {
   CornerUpRight,
   Download,
   FileInput,
+  House,
+  Contact,
   Info,
   Keyboard,
   Languages,
+  SmilePlus,
   Compass,
   LayoutTemplate,
   MoreHorizontal,
@@ -106,8 +109,12 @@ export interface SidebarProps {
   onResize(width: number): void;
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
+  /** Open Settings (Ctrl+,). */
+  onSettings?(): void;
   /** Settings → Language and region. */
   onRegion?(): void;
+  /** Settings → Emoji (the workspace's custom emoji). */
+  onEmoji?(): void;
   /** About Workspace (versions, updates). */
   onAbout?(): void;
   /** The keyboard shortcuts. */
@@ -140,9 +147,18 @@ export interface SidebarProps {
     onSettings(scopeId: string): void;
     onLeave(scopeId: string): void;
   };
+  /** Show Home (recent pages, upcoming reminders). */
+  onHome?(): void;
+  /** Home is shown. */
+  homeActive?: boolean;
+  /** Show People (everyone in the workspace, and their pages). */
+  onPeople?(): void;
+  /** People is shown. */
+  peopleActive?: boolean;
 }
 
 export function Sidebar(props: SidebarProps) {
+  const zoomFactor = useZoomFactor(props.zoom);
   const { workspace, sections, favorites, width, onCreate, onCollapse, onSelect, onSearch } = props;
   const { theme, onThemeChange, fileUrl, account } = props;
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -213,9 +229,20 @@ export function Sidebar(props: SidebarProps) {
                 <MenuSeparator />
               </>
             )}
+            {props.onSettings && (
+              <MenuItem icon={<Settings size={14} />} onSelect={props.onSettings}>
+                <span className="flex-1">Settings…</span>
+                <span className="pl-4 text-xs text-muted">Ctrl+,</span>
+              </MenuItem>
+            )}
             {props.onRegion && (
               <MenuItem icon={<Languages size={14} />} onSelect={props.onRegion}>
                 Language and region…
+              </MenuItem>
+            )}
+            {props.onEmoji && (
+              <MenuItem icon={<SmilePlus size={14} />} onSelect={props.onEmoji}>
+                Emoji…
               </MenuItem>
             )}
             {props.can.export && (
@@ -261,6 +288,28 @@ export function Sidebar(props: SidebarProps) {
         <span className="flex-1 text-left">Search</span>
         <kbd className="font-sans text-xs text-faint">Ctrl+K</kbd>
       </button>
+      {props.onHome && (
+        <button
+          type="button"
+          onClick={props.onHome}
+          aria-current={props.homeActive ? 'page' : undefined}
+          className={cn(navButton, props.homeActive && 'bg-active text-fg')}
+        >
+          <House size={16} />
+          Home
+        </button>
+      )}
+      {props.onPeople && (
+        <button
+          type="button"
+          onClick={props.onPeople}
+          aria-current={props.peopleActive ? 'page' : undefined}
+          className={cn(navButton, props.peopleActive && 'bg-active text-fg')}
+        >
+          <Contact size={16} />
+          People
+        </button>
+      )}
       {props.inbox?.(navButton)}
       <button type="button" onClick={() => onCreate(null)} className={navButton}>
         <SquarePen size={16} />
@@ -394,7 +443,9 @@ export function Sidebar(props: SidebarProps) {
               <MenuRadioItem value="light">Light</MenuRadioItem>
               <MenuRadioItem value="dark">Dark</MenuRadioItem>
             </MenuRadioGroup>
-            {props.zoom && <ZoomItems zoom={props.zoom} />}
+            {props.zoom && zoomFactor !== null && (
+              <ZoomItems zoom={props.zoom} factor={zoomFactor} />
+            )}
           </MenuContent>
         </Menu>
       </div>
@@ -403,18 +454,28 @@ export function Sidebar(props: SidebarProps) {
   );
 }
 
-/** Zoom in the Appearance menu: the level, and in, out and back to 100% (the menu stays open). */
-function ZoomItems({ zoom }: { zoom: ZoomPlatform }) {
-  const [factor, setFactor] = useState(1);
+/**
+ * The app's zoom, followed while the sidebar is shown (null until known). Kept here rather
+ * than in the Appearance menu, which would show 100% for a moment each time it opens.
+ */
+export function useZoomFactor(zoom: ZoomPlatform | undefined): number | null {
+  const [factor, setFactor] = useState<number | null>(null);
   useEffect(() => {
+    if (!zoom) return;
     let live = true;
-    void zoom.get().then((f) => live && setFactor(f));
+    // A change heard first is newer.
+    void zoom.get().then((f) => live && setFactor((current) => current ?? f));
     const off = zoom.onChange(setFactor);
     return () => {
       live = false;
       off();
     };
   }, [zoom]);
+  return factor;
+}
+
+/** Zoom in the Appearance menu: the level, and in, out and back to 100% (the menu stays open). */
+function ZoomItems({ zoom, factor }: { zoom: ZoomPlatform; factor: number }) {
   const keepOpen = (change: () => void) => (event: Event) => {
     event.preventDefault();
     change();

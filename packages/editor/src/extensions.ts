@@ -4,7 +4,8 @@ import NodeRange, { isNodeRangeSelection } from '@tiptap/extension-node-range';
 import UniqueID from '@tiptap/extension-unique-id';
 import { Placeholder } from '@tiptap/extensions';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
-import { Plugin, TextSelection } from '@tiptap/pm/state';
+import { Plugin, TextSelection, type Transaction } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import { search } from 'prosemirror-search';
 import StarterKit from '@tiptap/starter-kit';
 import { PAGE_CONTENT_FIELD } from '@workspace/core';
@@ -15,11 +16,14 @@ import { CodeBlock } from './nodes/code-block';
 import { lineStarts } from './nodes/code-lines';
 import { Column, ColumnList } from './nodes/columns';
 import { BlockColor, TextColor } from './nodes/colors';
+import { CustomEmoji } from './nodes/custom-emoji';
 import { EmojiSuggest } from './nodes/emoji';
 import { MarkdownClipboard } from './nodes/markdown';
 import { mathExtensions } from './nodes/math';
 import { Mention } from './nodes/mention';
 import { MediaBlocks } from './nodes/media';
+import { LinkedFileBlock } from './nodes/linked-file';
+import { DriveFileBlock } from './nodes/drive-file';
 import { PasteAndDrop } from './nodes/paste-drop';
 import { Breadcrumb, PageLink, TableOfContents } from './nodes/page-blocks';
 import { DatabaseBlock, LinkedDatabaseBlock } from './nodes/database';
@@ -77,11 +81,116 @@ export const BLOCK_NODE_TYPES = [
  * event that comes later. A key pressed before that event (typing fast, or on a busy
  * machine, where input runs first) would act on the old cursor: Enter splitting the line
  * the caret just left. So the selection is read from the page before any key is handled.
+ *
+ * The same goes for a change that arrives in that moment from elsewhere (a decoration redrawn,
+ * a timer's update): ProseMirror would write its old selection back into the page, and the
+ * move (Shift+Home's selection, say) would be lost. So such a change reads it first too.
  */
+/** What these helpers use of ProseMirror's (internal) DOM observer. */
+interface DomObserver {
+  currentSelection: { eq(range: object): boolean };
+  pendingRecords(): readonly unknown[];
+  forceFlush(): void;
+  onSelectionChange(): void;
+}
+
+/**
+ * `tr`, made without a selection the page holds that ProseMirror hasn't read yet: the page's is
+ * read first, and the transaction keeps it (mapped through its changes). Transactions that set a
+ * selection themselves, and moments with unread typing (read together with it), pass unchanged.
+ */
+function withUnreadSelection(view: EditorView, tr: Transaction): Transaction {
+  // Only a key's move: other changes of the page's selection (the browser's caret as the editor
+  // takes focus back from a field, before ProseMirror puts its own back) aren't the person's.
+  if (!keyMoving.has(view)) return tr;
+  if (tr.selectionSet || view.isDestroyed || view.composing || !view.hasFocus()) return tr;
+  const observer = (view as unknown as { domObserver: DomObserver }).domObserver;
+  const dom = (view.root as Document).getSelection?.() ?? document.getSelection();
+  if (!dom?.focusNode || observer.currentSelection.eq(dom)) return tr;
+  if (observer.pendingRecords().length > 0) return tr;
+  const before = view.state;
+  observer.forceFlush();
+  observer.onSelectionChange();
+  const read = view.state;
+  // Read only a selection (the document is the one `tr` starts from), and something changed.
+  if (read.doc !== tr.before || read.selection.eq(before.selection)) return tr;
+  return tr.setSelection(read.selection.map(tr.doc, tr.mapping));
+}
+
+/** Views where a key was pressed whose move of the selection ProseMirror hasn't read yet. */
+const keyMoving = new WeakSet<EditorView>();
+
+/** Views reading an unread selection right now (the read dispatches, and updates the view). */
+const reading = new WeakSet<EditorView>();
+/** Views whose updates read an unread key move first (see `readBeforeViewUpdates`). */
+const wrapped = new WeakSet<EditorView>();
+
+/**
+ * Read a key's move of the selection that ProseMirror hasn't read yet, before an update of
+ * the view that isn't a transaction (a plugin registered or removed, props set): such an
+ * update redraws the page with ProseMirror's selection, writing the old caret back over the
+ * move. True if it read one.
+ */
+function readUnreadSelection(view: EditorView): boolean {
+  if (!keyMoving.has(view) || reading.has(view)) return false;
+  if (view.isDestroyed || view.composing || !view.hasFocus()) return false;
+  const observer = (view as unknown as { domObserver: DomObserver }).domObserver;
+  const dom = (view.root as Document).getSelection?.() ?? document.getSelection();
+  if (!dom?.focusNode || observer.currentSelection.eq(dom)) return false;
+  // Unread typing too: left to ProseMirror (reading it here would change the document).
+  if (observer.pendingRecords().length > 0) return false;
+  reading.add(view);
+  try {
+    observer.forceFlush();
+    observer.onSelectionChange();
+  } finally {
+    reading.delete(view);
+  }
+  return true;
+}
+
+/**
+ * Have the ways the view writes its selection to the page (`updateState`, `setProps` and
+ * `focus`) read an unread key move first. A new state made from the old one (the same document
+ * and selection, other plugins) keeps the move. (Not `update(props)`: it brings a state of its
+ * own, which reading first would then overwrite; left alone, the move is read after it.)
+ */
+function readBeforeViewUpdates(view: EditorView): void {
+  // Once per view: plugin views are made again whenever a plugin is registered.
+  if (wrapped.has(view)) return;
+  wrapped.add(view);
+  const updateState = view.updateState.bind(view);
+  const setProps = view.setProps.bind(view);
+  const focus = view.focus.bind(view);
+  // Focusing puts ProseMirror's selection on the page: a menu or panel closing in that moment
+  // wrote the old caret over the key's move (CI's toggles test).
+  view.focus = () => {
+    readUnreadSelection(view);
+    focus();
+  };
+  view.updateState = (state) => {
+    const before = view.state;
+    const keepsSelection = state.doc === before.doc && state.selection.eq(before.selection);
+    if (!keepsSelection || !readUnreadSelection(view)) return updateState(state);
+    const read = view.state.selection;
+    if (view.state.doc !== state.doc || read.eq(state.selection)) return updateState(state);
+    updateState(state.apply(state.tr.setSelection(read)));
+  };
+  view.setProps = (props) => {
+    readUnreadSelection(view);
+    setProps(props);
+  };
+}
+
 const KeysUseCurrentSelection = Extension.create({
   name: 'keysUseCurrentSelection',
   // Before every keymap.
   priority: 10_000,
+  dispatchTransaction({ transaction, next }) {
+    // Before the editor is mounted there's no page to read (and `view` throws).
+    if (!this.editor.isInitialized || this.editor.isDestroyed) return next(transaction);
+    next(withUnreadSelection(this.editor.view, transaction));
+  },
   addProseMirrorPlugins() {
     return [
       new Plugin({
@@ -93,8 +202,29 @@ const KeysUseCurrentSelection = Extension.create({
             (
               view as unknown as { domObserver: { onSelectionChange(): void } }
             ).domObserver.onSelectionChange();
+            // The browser may now move the selection itself, read on the next selectionchange.
+            keyMoving.add(view);
             return false;
           },
+          handleDOMEvents: {
+            // 20 ms after the editor gains focus, ProseMirror puts its selection on the page if
+            // the page's differs from what it last read: a key's move in those 20 ms, not yet
+            // read, was written over (CI's toggles failure on c4ce0fb). This runs before
+            // ProseMirror's own focus handler, so its timer, of the same delay, fires first
+            // (timers of equal delay run in the order they were set) and reads the move.
+            focus(view) {
+              setTimeout(() => readUnreadSelection(view), 20);
+              return false;
+            },
+          },
+        },
+        view(view) {
+          readBeforeViewUpdates(view);
+          // Registered after ProseMirror's own listener: by now it has read the move.
+          const read = () => keyMoving.delete(view);
+          const doc = view.dom.ownerDocument;
+          doc.addEventListener('selectionchange', read);
+          return { destroy: () => doc.removeEventListener('selectionchange', read) };
         },
       }),
     ];
@@ -287,9 +417,12 @@ export function pageExtensions(
     Breadcrumb,
     TableOfContents,
     ...MediaBlocks,
+    LinkedFileBlock,
+    DriveFileBlock,
     PasteAndDrop,
     MarkdownClipboard,
     Mention,
+    CustomEmoji,
     EmojiSuggest,
     TextColor,
     BlockColor,

@@ -6,9 +6,16 @@ import {
   type PageTree,
 } from '@workspace/core';
 import { PageIcon } from '@workspace/editor';
-import { Dialog, DialogContent, cn } from '@workspace/ui';
-import { Home } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Button, Dialog, DialogContent, cn } from '@workspace/ui';
+import { Building2, Home } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+
+/** Other workspaces the page can go to (a workspace on a server). */
+export interface OtherWorkspaces {
+  list(): Promise<{ id: string; name: string }[]>;
+  /** Copies it there (into your private pages) and puts it in the trash here. */
+  move(workspaceId: string): Promise<void>;
+}
 
 export interface MoveDialogProps {
   workspace: PageTree;
@@ -16,12 +23,21 @@ export interface MoveDialogProps {
   fileUrl(id: string): string;
   onMove(parentId: PageId | null): void;
   onClose(): void;
+  otherWorkspaces?: OtherWorkspaces;
 }
 
 /** Pick a new parent for a page (or the top level). A page can't move into itself. */
-export function MoveDialog({ workspace, pageId, fileUrl, onMove, onClose }: MoveDialogProps) {
+export function MoveDialog({
+  workspace,
+  pageId,
+  fileUrl,
+  onMove,
+  onClose,
+  otherWorkspaces,
+}: MoveDialogProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
+  const [elsewhere, setElsewhere] = useState<{ id: string; name: string } | null>(null);
 
   const targets = useMemo(() => {
     const excluded = new Set([pageId, ...getDescendantIds(workspace, pageId)]);
@@ -41,6 +57,19 @@ export function MoveDialog({ workspace, pageId, fileUrl, onMove, onClose }: Move
     onMove(target.id);
     onClose();
   };
+
+  if (elsewhere && otherWorkspaces) {
+    const title = listPages(workspace).find((p) => p.id === pageId)?.title || 'Untitled';
+    return (
+      <MoveElsewhere
+        title={title}
+        target={elsewhere}
+        move={() => otherWorkspaces.move(elsewhere.id)}
+        onBack={() => setElsewhere(null)}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -92,6 +121,122 @@ export function MoveDialog({ workspace, pageId, fileUrl, onMove, onClose }: Move
               <span className="truncate">{t.title}</span>
             </button>
           ))}
+        </div>
+        {otherWorkspaces && !query.trim() && (
+          <WorkspaceTargets list={otherWorkspaces.list} onPick={setElsewhere} />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The other workspaces, below the pages (loaded when the dialog opens). */
+function WorkspaceTargets({
+  list,
+  onPick,
+}: {
+  list: OtherWorkspaces['list'];
+  onPick(target: { id: string; name: string }): void;
+}) {
+  const [targets, setTargets] = useState<{ id: string; name: string }[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    list().then(
+      (found) => active && setTargets(found),
+      () => active && setTargets([]),
+    );
+    return () => {
+      active = false;
+    };
+  }, [list]);
+  if (!targets?.length) return null;
+  return (
+    <div
+      role="group"
+      aria-label="Other workspaces"
+      className="border-t border-line p-1"
+      data-testid="move-workspaces"
+    >
+      <p className="px-3 pt-1 pb-0.5 text-xs text-muted">Another workspace</p>
+      {targets.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => onPick(t)}
+          className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left hover:bg-hover"
+        >
+          <Building2 size={16} className="text-muted" aria-hidden />
+          <span className="truncate">{t.name}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Moving to another workspace: what it does, then done (or why not). */
+function MoveElsewhere({
+  title,
+  target,
+  move,
+  onBack,
+  onClose,
+}: {
+  title: string;
+  target: { id: string; name: string };
+  move(): Promise<void>;
+  onBack(): void;
+  onClose(): void;
+}) {
+  const [state, setState] = useState<'ask' | 'moving' | 'done' | { error: string }>('ask');
+  return (
+    <Dialog open onOpenChange={(open) => !open && state !== 'moving' && onClose()}>
+      <DialogContent
+        title={`Move to ${target.name}`}
+        data-testid="move-workspace-dialog"
+        className="flex flex-col gap-3 p-4"
+      >
+        {state === 'done' ? (
+          <p role="status">
+            “{title}” is in your private pages in {target.name}. Here, it’s in the trash.
+          </p>
+        ) : (
+          <p>
+            “{title}”, its sub-pages, databases and files are copied to your private pages in{' '}
+            {target.name}, then put in the trash here. Links to it from other pages here won’t
+            follow it.
+          </p>
+        )}
+        {typeof state === 'object' && (
+          <p role="alert" className="text-sm text-danger">
+            {state.error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          {state === 'done' ? (
+            <Button variant="primary" onClick={onClose}>
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button onClick={onBack} disabled={state === 'moving'}>
+                Back
+              </Button>
+              <Button
+                variant="primary"
+                disabled={state === 'moving'}
+                onClick={() => {
+                  setState('moving');
+                  move().then(
+                    () => setState('done'),
+                    (e: unknown) =>
+                      setState({ error: e instanceof Error ? e.message : 'It couldn’t be moved.' }),
+                  );
+                }}
+              >
+                {state === 'moving' ? 'Moving…' : 'Move'}
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

@@ -48,6 +48,33 @@ interface PickRequest {
  * becomes a Yjs update, so persistence and (later) live collaboration need no extra
  * wiring. Undo history comes from Yjs, so it only undoes this user's own edits.
  */
+/** What leaving a page switches off on its editor, to put back (see PageEditor). */
+const leaving = new WeakMap<
+  Editor,
+  { unregisterPlugin: Editor['unregisterPlugin']; setProps: Editor['view']['setProps'] }
+>();
+
+/**
+ * While the page is shown, its editor works as usual (put back after StrictMode's trial
+ * unmount, in development); leaving it, plugin removals and view updates do nothing (the
+ * editor is destroyed next).
+ */
+function skipWorkWhenLeaving(editor: Editor): (() => void) | undefined {
+  if (editor.isDestroyed) return undefined;
+  const saved = leaving.get(editor) ?? {
+    unregisterPlugin: editor.unregisterPlugin,
+    setProps: editor.view.setProps,
+  };
+  leaving.set(editor, saved);
+  editor.unregisterPlugin = saved.unregisterPlugin;
+  editor.view.setProps = saved.setProps;
+  return () => {
+    if (editor.isDestroyed) return;
+    editor.unregisterPlugin = () => undefined;
+    editor.view.setProps = () => undefined;
+  };
+}
+
 export function PageEditor({
   doc,
   services,
@@ -96,14 +123,11 @@ export function PageEditor({
   );
 
   // Leaving the page: the menus below unregister their plugins as they unmount (after this
-  // runs), and each unregistration rebuilds the editor state, re-rendering every block of a
-  // long page. The editor is about to be destroyed, so that work is skipped.
-  useLayoutEffect(() => {
-    if (!editor) return;
-    return () => {
-      if (!editor.isDestroyed) editor.unregisterPlugin = () => undefined;
-    };
-  }, [editor]);
+  // runs), each rebuilding the editor state, and TipTap's EditorContent resets the node
+  // views, redrawing every block of the page while it's still in the document (1.3 s for
+  // 10,000 blocks, before the next page could load). The editor is about to be destroyed, so
+  // that work is skipped. (Put back on a second run: React's StrictMode, in development.)
+  useLayoutEffect(() => (editor ? skipWorkWhenLeaving(editor) : undefined), [editor]);
 
   // Others' cursors: a plugin on the live editor (presence arrives after it's made).
   useEffect(() => {

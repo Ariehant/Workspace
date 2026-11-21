@@ -408,7 +408,8 @@ KINDS.push(
 KINDS.push({
   type: 'button',
   label: 'Button',
-  // Nothing is stored: the cell is a button that runs `config.button`.
+  // The cell is a button that runs `config.button`; it keeps only its last press when an
+  // automation starts on it (`ButtonPress`), never shown.
   computed: true,
   defaultConfig: () => ({ button: { label: '', color: 'default', steps: [] } }),
   isEmpty: () => true,

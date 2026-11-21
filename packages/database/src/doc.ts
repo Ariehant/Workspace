@@ -3,6 +3,7 @@ import { generateKeyBetween } from 'fractional-indexing';
 import * as Y from 'yjs';
 import { isPlain, normalizeSpans, plainOf, type RichSpan } from './rich-text';
 import { renameInFormula } from './formula/engine';
+import { defaultWidgets } from './dashboard';
 import { defaultForm } from './forms';
 import { cellText, propertyKind, optionsOf } from './properties';
 import {
@@ -24,6 +25,7 @@ import {
   type PropertyType,
   type Row,
   type SelectOption,
+  type DashboardWidget,
   type View,
   type ViewConfig,
   type ViewType,
@@ -141,6 +143,24 @@ export function readView(map: YMap): View {
       ...DEFAULT_VIEW_CONFIG.form,
       ...((map.get('form') as ViewConfig['form'] | undefined) ?? {}),
     },
+    dashboard: readDashboard(map.get('dashboard')),
+  };
+}
+
+/** A dashboard's widgets, each with the fields it may be missing filled in. */
+function readDashboard(raw: unknown): ViewConfig['dashboard'] {
+  const widgets = (raw as Partial<ViewConfig['dashboard']> | undefined)?.widgets;
+  if (!Array.isArray(widgets)) return { widgets: [] };
+  return {
+    widgets: widgets
+      .filter((w): w is DashboardWidget => !!w && typeof w === 'object' && typeof w.id === 'string')
+      .map((w) => ({
+        ...w,
+        kind: w.kind === 'chart' || w.kind === 'view' ? w.kind : 'number',
+        title: typeof w.title === 'string' ? w.title : '',
+        width: w.width === 2 || w.width === 3 ? w.width : 1,
+        ...(w.chart && { chart: { ...DEFAULT_VIEW_CONFIG.chart, ...w.chart } }),
+      })),
   };
 }
 
@@ -739,7 +759,26 @@ function viewTypeDefaults(doc: Y.Doc, type: ViewType): Partial<ViewConfig> {
   if (type === 'calendar' || type === 'timeline') return { dateProperty: defaultDateProperty(doc) };
   if (type === 'chart') return { chart: { ...DEFAULT_VIEW_CONFIG.chart, x: defaultChartX(doc) } };
   if (type === 'form') return { form: defaultForm(readProperties(doc)) };
+  if (type === 'dashboard') return { dashboard: { widgets: defaultWidgets(dashboardChartX(doc)) } };
+  if (type === 'feed') return { loadLimit: FEED_LOAD_LIMIT, properties: feedProperties(doc) };
   return {};
+}
+
+/** Rows a feed shows at first: each is a whole page. */
+export const FEED_LOAD_LIMIT = 10;
+
+/** Property types a feed shows under each title from the start (the first of each). */
+const FEED_TYPES: readonly PropertyType[] = ['status', 'select', 'person', 'date'];
+
+/** A new feed shows the title, and the first status, select, person and date property. */
+function feedProperties(doc: Y.Doc): ViewConfig['properties'] {
+  const properties = readProperties(doc);
+  const shown = new Set([TITLE_PROPERTY_ID]);
+  for (const type of FEED_TYPES) {
+    const property = properties.find((p) => p.type === type);
+    if (property) shown.add(property.id);
+  }
+  return properties.map((p) => ({ id: p.id, visible: shown.has(p.id) }));
 }
 
 /** What a new chart's X axis groups by: a select-like property, a date by month, or the title. */
@@ -752,6 +791,12 @@ function defaultChartX(doc: Y.Doc): GroupBy {
   const date = properties.find((p) => p.type === 'date' || p.type === 'createdTime');
   if (date) return { propertyId: date.id, dateBucket: 'month' };
   return { propertyId: TITLE_PROPERTY_ID };
+}
+
+/** A new dashboard's chart: by what a chart would group by, unless that's only the title. */
+function dashboardChartX(doc: Y.Doc): GroupBy | null {
+  const x = defaultChartX(doc);
+  return x.propertyId === TITLE_PROPERTY_ID ? null : x;
 }
 
 /** The date property a calendar or timeline uses: the first one, or a new "Date". */
@@ -798,9 +843,14 @@ export function setViewType(doc: Y.Doc, id: string, type: ViewType): void {
     if (type === 'chart' && !view.chart.x) {
       map.set('chart', { ...view.chart, x: defaultChartX(doc) });
     }
+    if (type === 'dashboard' && view.dashboard.widgets.length === 0) {
+      map.set('dashboard', { widgets: defaultWidgets(dashboardChartX(doc)) });
+    }
     if (type === 'gallery' && view.cardPreview.kind === 'none') {
       map.set('cardPreview', { kind: 'content' });
     }
+    // A feed of every row at once would load every page: start with a load limit.
+    if (type === 'feed' && view.loadLimit === null) map.set('loadLimit', FEED_LOAD_LIMIT);
   });
 }
 

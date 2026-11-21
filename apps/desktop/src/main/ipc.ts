@@ -4,12 +4,21 @@ import { userInfo } from 'node:os';
 import { BrowserWindow, app, ipcMain, nativeTheme, type WebContents } from 'electron';
 import { cleanSearchOptions } from '@workspace/core';
 import { IPC, type ThemeSource } from '../shared/ipc';
+import { GOOGLE_SETTING_PREFIX } from './google';
+import { LINKED_FOLDERS_SETTING } from './linked-files';
 
 const isDocId = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= 128;
-/** Settings the UI may read and write: not sync's (the session token is among them). */
+/**
+ * Settings the UI may read and write: not sync's or Google's (their tokens are among them),
+ * nor where linked folders are (the main process keeps pointers inside them).
+ */
 const isSettingKey = (value: unknown): value is string =>
-  typeof value === 'string' && /^[\w.-]{1,64}$/.test(value) && !value.startsWith('sync.');
+  typeof value === 'string' &&
+  /^[\w.-]{1,64}$/.test(value) &&
+  !value.startsWith('sync.') &&
+  !value.startsWith(GOOGLE_SETTING_PREFIX) &&
+  value !== LINKED_FOLDERS_SETTING;
 const THEMES: readonly ThemeSource[] = ['system', 'light', 'dark'];
 
 /**
@@ -110,6 +119,8 @@ export function registerIpc(
   ipcMain.handle(IPC.backlinks, (_event, id: unknown) =>
     isDocId(id) ? store.backlinks(id, ['mention', 'link', 'pageLink', 'relation']) : [],
   );
+  // Home's Upcoming: the next reminders, in pages and on date properties.
+  ipcMain.handle(IPC.remindersUpcoming, () => store.upcomingReminders(Date.now(), 20));
   ipcMain.handle(IPC.syncedPlaces, (_event, id: unknown) =>
     isDocId(id) ? store.syncedPlaces(id) : 0,
   );

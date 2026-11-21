@@ -18,7 +18,7 @@ export interface ContentNode {
 }
 
 /** Inline nodes: they sit inside a text block's text. */
-export const INLINE_NODES = new Set(['mention', 'inlineMath', 'hardBreak']);
+export const INLINE_NODES = new Set(['mention', 'inlineMath', 'hardBreak', 'customEmoji']);
 
 function readInline(text: Y.XmlText): Inline[] {
   return (text.toDelta() as { insert: unknown; attributes?: Marks }[]).flatMap((op) =>
@@ -65,7 +65,9 @@ export function inlineText(inline: readonly Inline[]): string {
           ? String(part.attrs.latex ?? '')
           : part.node === 'hardBreak'
             ? '\n'
-            : '',
+            : part.node === 'customEmoji'
+              ? `:${String(part.attrs.name ?? '')}:`
+              : '',
     )
     .join('');
 }

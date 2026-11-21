@@ -1,5 +1,6 @@
 import {
   FILE_ICON_PREFIX,
+  formatShortDay,
   getPage,
   getPageContent,
   getPageTitleText,
@@ -10,9 +11,11 @@ import {
   setPageOptions,
   roleAllows,
   setPageTitle,
+  verificationState,
   type PageId,
   type PageMeta,
   type PageOptions,
+  type PageVerification,
   type TreeRole,
 } from '@workspace/core';
 import {
@@ -36,6 +39,8 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
+  BadgeAlert,
+  BadgeCheck,
   ChevronsRight,
   ImageIcon,
   Lock,
@@ -66,6 +71,7 @@ import {
   CommentsButton,
   CommentsPanel,
   PageCommentsSection,
+  useCommentsMode,
   usePageComments,
   type PageComments,
 } from './comments';
@@ -77,6 +83,7 @@ import { useDoc, useDocVersion } from './hooks';
 import { IconPicker, randomEmoji } from './icon-picker';
 import { useNavigation } from './navigation';
 import { PageMenu } from './page-menu';
+import { Presentation } from './present';
 
 /** Back/forward and sidebar controls shared by every page header. */
 export interface ChromeProps {
@@ -195,9 +202,11 @@ export function PageHeader({
           <Eye size={12} />{' '}
           {access === 'content'
             ? 'Can edit content'
-            : access === 'comment'
-              ? 'Can comment'
-              : 'View only'}
+            : access === 'create'
+              ? 'Can create pages'
+              : access === 'comment'
+                ? 'Can comment'
+                : 'View only'}
         </span>
       )}
       {people.length > 0 && (
@@ -288,6 +297,7 @@ export function PageHero({
   const { platform } = useApp();
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [commenting, setCommenting] = useState(false);
+  const [commentsMode] = useCommentsMode(model.id);
   const { meta } = model;
   const canComment = !!comments?.canComment && !!comments.doc;
   const uploadImage = async (file: File) => (await platform.importFile(file)).id;
@@ -364,17 +374,48 @@ export function PageHero({
           readOnly={!editable}
           onEnter={onEnter}
         />
+        {meta.verified && <VerifiedBadge key={meta.verified.at} verified={meta.verified} />}
         {can(platform, 'backlinks') && <Backlinks pageId={model.id} />}
         {comments && (
           <PageCommentsSection
             key={`comments:${model.id}`}
             comments={comments}
+            mode={commentsMode}
             composing={commenting}
             onDone={() => setCommenting(false)}
           />
         )}
       </div>
     </>
+  );
+}
+
+/** "Verified by Ada · until Dec 1", or "Verification expired Nov 3" once it has. */
+function VerifiedBadge({ verified }: { verified: PageVerification }) {
+  const { users } = useDisplayContext();
+  // (Read when shown: a page open past its expiry says so when opened again.)
+  const [now] = useState(() => Date.now());
+  const state = verificationState(verified, now);
+  const who = users.get(verified.by) || 'someone';
+  const until = verified.until === null ? null : formatShortDay(new Date(verified.until));
+  return (
+    <p
+      data-testid="page-verified"
+      data-state={state}
+      className={cn(
+        'mt-1 flex items-center gap-1.5 text-sm',
+        state === 'expired' ? 'text-warning' : 'text-muted',
+      )}
+    >
+      {state === 'expired' ? (
+        <BadgeAlert size={15} aria-hidden />
+      ) : (
+        <BadgeCheck size={15} aria-hidden className="text-accent" />
+      )}
+      {state === 'expired'
+        ? `Verification expired ${until}`
+        : `Verified by ${who}${until ? ` · until ${until}` : ''}`}
+    </p>
   );
 }
 
@@ -610,6 +651,8 @@ export function PageView({
   const { user } = useApp();
   const role = pages.role(pageId);
   const comments = usePageComments(isDatabase ? null : pageId, role);
+  const [commentsMode] = useCommentsMode(pageId);
+  const [presenting, setPresenting] = useState(false);
   const awareness = usePresence(isDatabase ? null : pageId, pageDoc);
   const people = uniquePeople(usePeers(awareness, user.id));
   const articleRef = useRef<HTMLElement>(null);
@@ -657,14 +700,23 @@ export function PageView({
                 ? undefined
                 : { on: comments.suggesting, toggle: comments.toggleSuggesting }
             }
+            hasComments={!isDatabase && !!comments.doc}
+            onPresent={isDatabase ? undefined : () => setPresenting(true)}
+            canVerify
           />
         }
       />
       {model.trashed && <TrashBanner label="This page is in Trash." onRestore={model.restore} />}
+      {presenting && <Presentation pageId={pageId} onClose={() => setPresenting(false)} />}
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto" data-testid="page-scroll" data-scroll-root>
           <HeroCover model={model} editable={editable} />
-          <article ref={articleRef} {...articleProps(meta, isDatabase)}>
+          <article
+            ref={articleRef}
+            {...articleProps(meta, isDatabase)}
+            data-comments={commentsMode}
+            data-comments-panel={comments.panelOpen || undefined}
+          >
             <PageHero
               model={model}
               editable={editable}

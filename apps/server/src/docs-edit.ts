@@ -91,7 +91,7 @@ export class DocEditor {
         const checked = 'as' in author ? author.as : author.userId;
         const roles = access.roles(checked);
         const allowed =
-          (await access.canWrite(roles, docId, scope)) &&
+          (await access.canWrite(roles, docId, scope, checked)) &&
           (await access.checkUpdate(roles, checked, docId, update, []));
         if (!allowed) throw new EditRefused(docId);
       } else {

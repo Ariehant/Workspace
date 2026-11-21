@@ -23,6 +23,7 @@ export function ensureViewSet(doc: Y.Doc, viewSet: string, sourceViewSet: string
           groupBy: source.groupBy,
           dateProperty: source.dateProperty,
           chart: structuredClone(source.chart),
+          dashboard: structuredClone(source.dashboard),
         }
       : undefined,
   });

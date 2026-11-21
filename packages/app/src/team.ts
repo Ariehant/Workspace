@@ -26,7 +26,7 @@ export interface PendingInvite {
 
 export type InviteRole = Exclude<WorkspaceRole, 'owner'>;
 
-export type ScopeRole = 'full' | 'edit' | 'content' | 'comment' | 'view';
+export type ScopeRole = 'full' | 'edit' | 'content' | 'create' | 'comment' | 'view';
 export type ScopeVisibility = 'open' | 'closed' | 'private';
 
 /** Who gets what in a scope: `user:<id>`, `group:<id>` or `workspace` (every member). */
@@ -66,6 +66,7 @@ export const SCOPE_ROLE_LABELS: Record<ScopeRole, string> = {
   full: 'Full access',
   edit: 'Can edit',
   content: 'Can edit content',
+  create: 'Can create pages',
   comment: 'Can comment',
   view: 'Can view',
 };
@@ -74,9 +75,21 @@ export const SCOPE_ROLE_HINTS: Record<ScopeRole, string> = {
   full: 'Edit and share with others',
   edit: 'Edit, but not share',
   content: 'Edit rows, not properties or views',
+  create: 'Add pages, and edit only their own',
   comment: 'View and comment',
   view: 'View only',
 };
+
+export type ShareLinkRole = 'view' | 'comment' | 'edit';
+
+/** A page's share link, as its sharers see it. */
+export interface ShareLinkInfo {
+  url: string;
+  role: ShareLinkRole;
+  /** When it stops working (ms), or null. */
+  expiresAt: number | null;
+  createdAt: number;
+}
 
 export interface CreatedInvite {
   id: string;
@@ -198,6 +211,20 @@ export function teamApi(team: TeamPlatform) {
     /** Emails about unread notifications (Phase 6 M7), and whether the server sends any. */
     emailSettings: () => r<EmailSettings>('GET', 'me/email'),
     setEmailDigest: (digest: EmailDigest) => r<EmailSettings>('PUT', 'me/email', { digest }),
+    // Moving a page to another workspace (Phase 8 #31): into your private pages there.
+    moveTargets: async () =>
+      (await r<{ workspaces: { id: string; name: string }[] }>('GET', 'move-targets')).workspaces,
+    moveToWorkspace: (pageId: string, to: string) =>
+      r<{ workspaceId: string; pageId: string }>(
+        'POST',
+        `pages/${encodeURIComponent(pageId)}/move-to-workspace`,
+        { to },
+      ),
+    // Share links (Phase 8 N8): open to whoever signs in with the link.
+    shareLink: (pageId: string) => r<{ link: ShareLinkInfo | null }>('GET', `pages/${pageId}/link`),
+    makeShareLink: (pageId: string, role: ShareLinkRole, days: number | null) =>
+      r<{ link: ShareLinkInfo }>('PUT', `pages/${pageId}/link`, { role, days }),
+    removeShareLink: (pageId: string) => r<{ ok: true }>('DELETE', `pages/${pageId}/link`),
     // Publishing (Phase 5 M7).
     published: (pageId: string) =>
       r<{ published: PublishedPage | null; suggestedSlug: string }>(
@@ -304,6 +331,8 @@ export interface PublishSettings {
   slug: string;
   includeSubpages: boolean;
   allowIndexing: boolean;
+  /** Visitors may copy it into a workspace of theirs (signed in, on this server). */
+  allowDuplicate: boolean;
   title: string;
   description: string;
 }
