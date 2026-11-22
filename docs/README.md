@@ -25,6 +25,7 @@
 | [Phase 8](PHASE8.md)                            | What Notion has that Workspace didn't: the gap list, and adding it          |
 | [Ideas](ideas/desktop-integration.md)           | Parked: the desktop app as a native productivity app                        |
 | [Calendar app handoff](calendar-app/HANDOFF.md) | A build plan for Workspace Calendar, which uses the API                     |
+| [Calendar app context](calendar-app/CONTEXT.md) | What a new chat needs to start building Workspace Calendar in this repo     |
 | [Docs app handoff](docs-app/HANDOFF.md)         | A build plan for Workspace Write, a document editor (AI in v2)              |
 
 Each phase document has the plan, then notes on each milestone as it was done: what changed from
