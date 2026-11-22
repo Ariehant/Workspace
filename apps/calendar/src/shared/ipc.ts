@@ -17,6 +17,13 @@ export const IPC = {
   calendarRemove: 'calendar:remove',
   accountRemove: 'account:remove',
   settingsSet: 'settings:set',
+  eventCreate: 'event:create',
+  eventUpdate: 'event:update',
+  eventDelete: 'event:delete',
+  eventUndoDelete: 'event:undo-delete',
+  eventDismissConflict: 'event:dismiss-conflict',
+  search: 'events:search',
+  openLink: 'link:open',
   /** main → window: something shown changed (refetch). */
   changed: 'changed',
 } as const;
@@ -29,15 +36,21 @@ export interface Settings {
   theme: ThemePreference;
   /** 0 = Sunday, 1 = Monday, 6 = Saturday. */
   weekStartsOn: 0 | 1 | 6;
+  /** Another time zone shown as a second time column (IANA name), or null. */
+  secondZone: string | null;
 }
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'system', weekStartsOn: 1 };
+export const DEFAULT_SETTINGS: Settings = { theme: 'system', weekStartsOn: 1, secondZone: null };
 
 export interface SyncStatusView {
   online: boolean;
   syncing: boolean;
   error: string | null;
   lastSync: number | null;
+  /** Edits waiting to be sent. */
+  pending: number;
+  /** The last edit Workspace refused. */
+  editError: string | null;
 }
 
 export interface AppState {

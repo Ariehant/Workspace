@@ -210,7 +210,7 @@ describe('writing events', () => {
   it('creates, moves, resizes, renames and trashes rows as the user sees them', async () => {
     const db = await makeDatabase('Writing');
     const calendar = calendarFor(db);
-    const created = await engine.create(calendar, 'Standup', {
+    const { event: created } = await engine.create(calendar, 'Standup', {
       allDay: false,
       start: `${d(1)}T09:00`,
       end: `${d(1)}T09:15`,

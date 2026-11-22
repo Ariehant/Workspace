@@ -4,9 +4,11 @@ A fast, keyboard-first desktop calendar (Electron) that shows Workspace's dated 
 as events, through the Workspace server's public `/v1` API. The plan it follows is
 [the handoff](../../docs/calendar-app/HANDOFF.md).
 
-Status: **v1.0, milestone 1**. It connects to Workspace, lets you choose databases, and shows
-their rows in a week view, kept in sync and cached for offline use. Editing, the other views,
-notifications, the tray and packaging come in the next milestones.
+Status: **v1.0, milestone 2**. It connects to Workspace, shows chosen databases' rows as events
+(week, day, 2–6 days, month and agenda views), and edits them: drag to create, move and resize,
+the event panel, delete with Undo, the command bar (Ctrl+K) and search. Edits show at once and
+are sent in the background, queued while offline. Notifications, the tray and packaging come in
+milestone 3.
 
 ## Develop
 
@@ -25,6 +27,6 @@ on a throwaway Postgres from the installed PostgreSQL), through `@workspace/serv
 - `src/shared`: the date rules (Workspace's dates are wall-clock times with no zone), the
   mapping between rows and events, and the IPC types.
 - `src/main`: the API client (rate limited, waits on `429`), the Workspace source, the SQLite
-  cache (`node:sqlite`), syncing, and the window.
+  cache (`node:sqlite`), syncing, the outbox (edits waiting to be sent), and the window.
 - `src/preload`: the window's only way to the main process. Tokens never reach the window.
 - `src/renderer`: the React UI, on `@workspace/ui`.

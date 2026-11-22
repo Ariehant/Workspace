@@ -130,3 +130,10 @@ export function layoutAllDay(
 /** `count` consecutive days from `start`. */
 export const daysFrom = (start: string, count: number): string[] =>
   Array.from({ length: count }, (_, i) => addDays(start, i));
+
+/** The last day an event touches (a timed event ending at 00:00 ends the day before). */
+export function lastDayOf(event: Pick<CalEvent, 'allDay' | 'start' | 'end'>): string {
+  if (event.allDay) return event.end;
+  const endDay = dayOf(event.end);
+  return minutesOf(event.end) === 0 && endDay > dayOf(event.start) ? addDays(endDay, -1) : endDay;
+}

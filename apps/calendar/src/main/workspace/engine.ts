@@ -201,13 +201,17 @@ export class WorkspaceEngine {
     return { upserts, removed, serverTime };
   }
 
-  /** A new row; the event it became (null if the calendar wouldn't show it). */
-  async create(calendar: Calendar, title: string, time: EventTime): Promise<CalEvent | null> {
+  /** A new row: its id, and the event it became (null if the calendar wouldn't show it). */
+  async create(
+    calendar: Calendar,
+    title: string,
+    time: EventTime,
+  ): Promise<{ sourceId: string; event: CalEvent | null }> {
     const { body } = await this.client.request<ApiPage>('POST', '/pages', {
       parent: { database_id: calendar.databaseId },
       properties: newRowProperties(calendar, title, time),
     });
-    return pageToEvent(body, calendar);
+    return { sourceId: body.id, event: pageToEvent(body, calendar) };
   }
 
   /** Change a row's time and/or title; the event it is now (null if it left the calendar). */

@@ -46,6 +46,9 @@ const event = (sourceId: string, title: string, start = '2026-11-24'): CalEvent 
   lastEdited: '2026-11-20T00:00:00.000Z',
 });
 
+/** The server's clock in its answers (a real time: reads compare it with edit times). */
+const SERVER_TIME = Date.parse('2026-11-22T12:00:00Z');
+
 /** A source whose answers the test sets, recording what was asked. */
 function fakeEngine() {
   const calls: string[] = [];
@@ -53,7 +56,7 @@ function fakeEngine() {
     window: [] as CalEvent[],
     changes: { upserts: [] as CalEvent[], removed: [] as string[] },
     fail: null as Error | null,
-    serverTime: 5_000_000,
+    serverTime: SERVER_TIME,
     async fetchWindow() {
       calls.push('window');
       if (engine.fail) throw engine.fail;
@@ -109,7 +112,7 @@ describe('the cache', () => {
 
   it('migrates a new file and opens it again', () => {
     const cache = new Cache(':memory:');
-    expect(cache.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 1 });
+    expect(cache.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
   });
 });
 
@@ -127,7 +130,7 @@ describe('syncing', () => {
     s.advance(60_000);
     s.engine.changes = { upserts: [event('a', 'A, renamed'), event('c', 'C')], removed: ['b'] };
     await s.sync.syncAll();
-    expect(s.calls[1]).toBe('changed since 5000000');
+    expect(s.calls[1]).toBe(`changed since ${SERVER_TIME}`);
     expect(s.cache.eventsBetween('2026-01-01', '2027-12-31').map((e) => e.title)).toEqual([
       'A, renamed',
       'C',
@@ -140,7 +143,7 @@ describe('syncing', () => {
     await s.sync.syncAll();
     s.advance(14 * 60_000);
     await s.sync.syncAll();
-    expect(s.calls).toEqual(['window', 'changed since 5000000']);
+    expect(s.calls).toEqual(['window', `changed since ${SERVER_TIME}`]);
     s.advance(60_000);
     s.engine.window = [event('a', 'A')];
     await s.sync.syncAll();
