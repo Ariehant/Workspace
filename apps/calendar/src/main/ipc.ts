@@ -11,6 +11,7 @@ import {
   type Settings,
 } from '../shared/ipc';
 import { isDay, type EventTime } from '../shared/dates';
+import { REMINDER_CHOICES } from '../shared/reminders';
 import type { CalendarService } from './service';
 
 const isString = (v: unknown, max = 2048): v is string => typeof v === 'string' && v.length <= max;
@@ -78,7 +79,14 @@ export function applyTheme(settings: Settings) {
   nativeTheme.themeSource = settings.theme;
 }
 
-export function registerIpc(service: CalendarService, hooks: { syncNow: () => void }) {
+export interface IpcHooks {
+  syncNow: () => void;
+  snooze: (eventId: string) => void;
+  /** Settings changed: apply what lives outside the window (theme, tray, login). */
+  onSettings: (settings: Settings) => void;
+}
+
+export function registerIpc(service: CalendarService, hooks: IpcHooks) {
   ipcMain.handle(IPC.state, () => result(() => service.state()));
   ipcMain.handle(IPC.events, (_e, from: unknown, to: unknown) =>
     result(() => {
@@ -165,6 +173,10 @@ export function registerIpc(service: CalendarService, hooks: { syncNow: () => vo
         check(typeof p.visible === 'boolean');
         clean.visible = p.visible;
       }
+      if (p.reminder !== undefined) {
+        check((REMINDER_CHOICES as readonly unknown[]).includes(p.reminder));
+        clean.reminder = p.reminder as number | null;
+      }
       return service.updateCalendar(id, clean);
     }),
   );
@@ -216,6 +228,18 @@ export function registerIpc(service: CalendarService, hooks: { syncNow: () => vo
       service.dismissConflict(id);
     }),
   );
+  ipcMain.handle(IPC.eventGet, (_e, id: unknown) =>
+    result(() => {
+      check(isEventId(id));
+      return service.event(id);
+    }),
+  );
+  ipcMain.handle(IPC.snooze, (_e, id: unknown) =>
+    result(() => {
+      check(isEventId(id));
+      hooks.snooze(id);
+    }),
+  );
   ipcMain.handle(IPC.search, (_e, query: unknown) =>
     result(() => {
       check(isString(query, 200));
@@ -246,8 +270,14 @@ export function registerIpc(service: CalendarService, hooks: { syncNow: () => vo
         check(p.secondZone === null || (isString(p.secondZone, 64) && isTimeZone(p.secondZone)));
         clean.secondZone = p.secondZone;
       }
+      for (const key of ['keepInTray', 'startAtLogin', 'hardwareAcceleration'] as const) {
+        if (p[key] !== undefined) {
+          check(typeof p[key] === 'boolean');
+          clean[key] = p[key] as boolean;
+        }
+      }
       const next = service.setSettings(clean);
-      applyTheme(next);
+      hooks.onSettings(next);
       return next;
     }),
   );

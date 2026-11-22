@@ -3,6 +3,7 @@
  * Postgres, seeded with a workspace and an integration), and the built calendar app started on
  * a fresh data dir per test.
  */
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -36,19 +37,26 @@ export interface Launched {
 export class V1 {
   constructor(readonly seed: SeededWorkspace) {}
 
+  /** A `/v1` call; on `429` it waits for `Retry-After` and tries again, as the app does. */
   async call<T = Record<string, unknown>>(method: string, path: string, body?: object): Promise<T> {
-    const res = await fetch(`${this.seed.base}/v1${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${this.seed.integration.token}`,
-        'notion-version': '2022-06-28',
-        ...(body && { 'content-type': 'application/json' }),
-      },
-      body: body && JSON.stringify(body),
-    });
-    const json = (await res.json()) as T;
-    if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${JSON.stringify(json)}`);
-    return json;
+    for (;;) {
+      const res = await fetch(`${this.seed.base}/v1${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${this.seed.integration.token}`,
+          'notion-version': '2022-06-28',
+          ...(body && { 'content-type': 'application/json' }),
+        },
+        body: body && JSON.stringify(body),
+      });
+      if (res.status === 429) {
+        await new Promise((r) => setTimeout(r, Number(res.headers.get('retry-after') ?? 1) * 1000));
+        continue;
+      }
+      const json = (await res.json()) as T;
+      if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${JSON.stringify(json)}`);
+      return json;
+    }
   }
 
   /** A database with a title, a date property `When` and a select `Kind`. */
@@ -117,8 +125,13 @@ export const test = base.extend<
 });
 
 const CLOSE_TIMEOUT_MS = 20_000;
+/** Each app's last lines of output (the quit steps among them), for a report of a stuck exit. */
+const outputs = new WeakMap<ElectronApplication, string[]>();
 
-/** Close an app; one that won't close in 20 s is killed (and the test fails). */
+/**
+ * Close an app. One that won't close in 20 s is killed and the test fails, with the processes
+ * still running and the app's last lines of output.
+ */
 export async function closeApp(app: ElectronApplication) {
   let pid: number | undefined;
   try {
@@ -136,8 +149,23 @@ export async function closeApp(app: ElectronApplication) {
   ]);
   clearTimeout(timer);
   if (timedOut && pid) {
+    let tree: string;
+    try {
+      tree = execFileSync(
+        'ps',
+        ['-o', 'pid,ppid,stat,wchan:24,etime,args', '--ppid', String(pid), '-p', String(pid)],
+        {
+          encoding: 'utf8',
+        },
+      );
+    } catch (error) {
+      tree = `(ps failed: ${String(error)})`;
+    }
     process.kill(pid, 'SIGKILL');
-    throw new Error(`The app didn't close within ${CLOSE_TIMEOUT_MS / 1000} s`);
+    const said = (outputs.get(app) ?? []).join('\n') || '(nothing)';
+    throw new Error(
+      `The app didn't close within ${CLOSE_TIMEOUT_MS / 1000} s\n${tree}\nMain process output:\n${said}`,
+    );
   }
 }
 
@@ -156,10 +184,20 @@ export async function launchApp(
       ...process.env,
       CALENDAR_DATA_DIR: dataDir,
       CALENDAR_SYNC_INTERVAL_MS: '1500',
+      // Quit steps are written out (see src/main/index.ts).
+      CALENDAR_E2E: '1',
       ...env,
     },
     timeout: 40_000,
   });
+  const lines: string[] = [];
+  outputs.set(app, lines);
+  const keep = (data: Buffer) => {
+    for (const line of data.toString().split('\n')) if (line.trim()) lines.push(line);
+    lines.splice(0, Math.max(0, lines.length - 40));
+  };
+  app.process().stdout?.on('data', keep);
+  app.process().stderr?.on('data', keep);
   const window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
   await expect(window.getByRole('navigation', { name: 'Sidebar' })).toBeVisible();

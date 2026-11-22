@@ -50,6 +50,8 @@ export const MIGRATIONS: string[] = [
      error TEXT
    );
    CREATE INDEX outbox_by_event ON outbox(event_id);`,
+  // Reminders already shown (so a restart doesn't show them again).
+  `CREATE TABLE notified (key TEXT PRIMARY KEY, at INTEGER NOT NULL);`,
 ];
 
 export type OpKind = 'create' | 'update' | 'trash';
@@ -417,6 +419,23 @@ export class Cache {
       }
       for (const event of upserts) this.mergeIncoming(event, pending);
     });
+  }
+
+  // --- Reminders shown -----------------------------------------------------------------
+
+  wasNotified(key: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM notified WHERE key = ?').get(key);
+  }
+
+  markNotified(key: string, at: number) {
+    this.db
+      .prepare('INSERT INTO notified (key, at) VALUES (?, ?) ON CONFLICT(key) DO NOTHING')
+      .run(key, at);
+  }
+
+  /** Forget reminders shown before `before` (ms). */
+  pruneNotified(before: number) {
+    this.db.prepare('DELETE FROM notified WHERE at < ?').run(before);
   }
 
   // --- Outbox --------------------------------------------------------------------------

@@ -23,7 +23,11 @@ export const IPC = {
   eventUndoDelete: 'event:undo-delete',
   eventDismissConflict: 'event:dismiss-conflict',
   search: 'events:search',
+  eventGet: 'event:get',
+  snooze: 'event:snooze',
   openLink: 'link:open',
+  /** main → window: show this event (a notification or the tray was clicked). */
+  showEvent: 'event:show',
   /** main → window: something shown changed (refetch). */
   changed: 'changed',
 } as const;
@@ -38,9 +42,22 @@ export interface Settings {
   weekStartsOn: 0 | 1 | 6;
   /** Another time zone shown as a second time column (IANA name), or null. */
   secondZone: string | null;
+  /** Keep running in the tray when the window is closed (notifications still arrive). */
+  keepInTray: boolean;
+  /** Start when the user logs in, in the tray. */
+  startAtLogin: boolean;
+  /** Draw with the GPU (smoother on large screens, more memory). Applies after a restart. */
+  hardwareAcceleration: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'system', weekStartsOn: 1, secondZone: null };
+export const DEFAULT_SETTINGS: Settings = {
+  theme: 'system',
+  weekStartsOn: 1,
+  secondZone: null,
+  keepInTray: false,
+  startAtLogin: false,
+  hardwareAcceleration: false,
+};
 
 export interface SyncStatusView {
   online: boolean;
@@ -92,7 +109,13 @@ export type CalendarDraft = Pick<
   | 'titleProperty'
   | 'people'
   | 'colourBy'
->;
+> & { reminder?: number | null };
 
 /** What the window may change on a calendar. */
-export type CalendarPatch = Partial<Pick<Calendar, 'name' | 'colour' | 'visible'>>;
+export type CalendarPatch = Partial<Pick<Calendar, 'name' | 'colour' | 'visible' | 'reminder'>>;
+
+/** Sent with `showEvent`: the event, and whether it came from a notification (offer snooze). */
+export interface ShowEvent {
+  eventId: string;
+  fromNotification: boolean;
+}

@@ -13,6 +13,7 @@
 import { syncWindow } from '../shared/dates';
 import type { Account, Calendar } from '../shared/types';
 import type { Cache } from './cache';
+import type { Log } from './log';
 import { WorkspaceApiError } from './workspace/client';
 import { calendarProblem, type WorkspaceEngine } from './workspace/engine';
 
@@ -36,6 +37,8 @@ export interface SyncOptions {
   sweepEveryMs?: number;
   /** Something the window shows changed (events, statuses). */
   onChange?: () => void;
+  /** No tokens or event contents: counts, codes and messages from the server. */
+  log?: Log;
 }
 
 export class SyncService {
@@ -108,6 +111,8 @@ export class SyncService {
             this.setAccountError(account, e.message);
             break;
           }
+          if (e instanceof WorkspaceApiError)
+            this.options.log?.('warn', `sync: calendar ${calendar.id}: ${e.code}`);
           const problem = calendarProblem(e, calendar);
           if (problem) {
             reached = true;
@@ -124,6 +129,8 @@ export class SyncService {
       error,
       lastSync: this.now(),
     };
+    if (offline && !reached) this.options.log?.('warn', 'sync: no server could be reached');
+    if (error) this.options.log?.('error', `sync: ${error}`);
     this.changed();
   }
 

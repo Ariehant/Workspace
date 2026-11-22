@@ -176,6 +176,65 @@ jobs:
             apps/desktop/dist/*.AppImage
           retention-days: 14
 
+  package-calendar:
+    name: Package the calendar (Linux)
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @workspace/calendar package:linux
+      # Install the .deb the way a user would, then launch the installed app with the
+      # Chromium sandbox on (relying on the AppArmor profile the package installs).
+      - name: Install .deb
+        run: sudo apt-get install -y ./apps/calendar/dist/workspace-calendar_*_amd64.deb
+      - name: Smoke-test installed app
+        run: xvfb-run -a workspace-calendar --smoke-test
+      - name: Smoke-test AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          chmod +x apps/calendar/dist/*.AppImage
+          xvfb-run -a apps/calendar/dist/*.AppImage --no-sandbox --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calendar-linux-packages
+          path: |
+            apps/calendar/dist/*.deb
+            apps/calendar/dist/*.AppImage
+          retention-days: 14
+
+  package-calendar-windows:
+    name: Package the calendar (Windows)
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @workspace/calendar package:win
+      # The app is a GUI program: wait for it, and check how it ended.
+      - name: Smoke-test the app
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath "apps/calendar/dist/win-unpacked/workspace-calendar.exe" `
+            -ArgumentList '--smoke-test' -Wait -PassThru
+          if ($app.ExitCode -ne 0) { throw "The smoke test failed (exit code $($app.ExitCode))" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calendar-windows-installer
+          path: apps/calendar/dist/*.exe
+          retention-days: 14
+
   server:
     name: Server image and Compose stack
     needs: check

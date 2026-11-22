@@ -14,8 +14,10 @@ import {
   type Settings,
 } from '../shared/ipc';
 import type { EventTime } from '../shared/dates';
+import { DEFAULT_REMINDER, REMINDER_CHOICES } from '../shared/reminders';
 import { COLOURS, type Account, type CalEvent, type Calendar } from '../shared/types';
 import type { Cache } from './cache';
+import type { Log } from './log';
 import { Outbox } from './outbox';
 import { SyncService } from './sync';
 import { normaliseServer, WorkspaceClient, type ClientOptions } from './workspace/client';
@@ -29,6 +31,7 @@ export interface ServiceOptions {
   /** For tests: how clients are made (a fake fetch, limits). */
   clientOptions?: Partial<ClientOptions>;
   onChange?: () => void;
+  log?: Log;
 }
 
 interface Session {
@@ -55,6 +58,7 @@ export class CalendarService {
       cache: this.cache,
       engineFor: (account) => this.engineFor(account),
       onChange: options.onChange,
+      log: options.log,
     });
     this.outbox = new Outbox({
       cache: this.cache,
@@ -65,6 +69,7 @@ export class CalendarService {
       onChange: options.onChange,
       onDue: (at) => this.scheduleFlush(at),
       onRefused: (calendarId) => {
+        options.log?.('warn', `outbox: an edit to calendar ${calendarId} was refused and dropped`);
         // Read it again from the source, so it shows what Workspace has.
         this.cache.setSyncState(calendarId, { sweptAt: null });
         void this.sync.syncAll();
@@ -151,6 +156,10 @@ export class CalendarService {
         .map((c) => c.id),
     );
     return this.cache.search(query).filter((e) => visible.has(e.calendarId));
+  }
+
+  event(id: string): CalEvent | null {
+    return this.cache.event(id);
   }
 
   // --- Editing -------------------------------------------------------------------------
@@ -305,6 +314,7 @@ export class CalendarService {
             ? draft.colour
             : COLOURS[(used + i) % COLOURS.length]!,
           visible: true,
+          reminder: isReminder(draft.reminder) ? draft.reminder : DEFAULT_REMINDER,
           status: 'ok',
           statusMessage: null,
         });
@@ -324,6 +334,8 @@ export class CalendarService {
       ...(patch.colour !== undefined &&
         COLOURS.includes(patch.colour as never) && { colour: patch.colour }),
       ...(patch.visible !== undefined && { visible: !!patch.visible }),
+      ...(patch.reminder !== undefined &&
+        isReminder(patch.reminder) && { reminder: patch.reminder }),
     };
     this.cache.updateCalendar(next);
     this.options.onChange?.();
@@ -341,3 +353,6 @@ export class CalendarService {
     this.options.onChange?.();
   }
 }
+
+const isReminder = (v: unknown): v is number | null =>
+  (REMINDER_CHOICES as readonly unknown[]).includes(v);

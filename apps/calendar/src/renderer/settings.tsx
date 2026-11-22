@@ -1,6 +1,6 @@
-/** Settings: theme, the day weeks start on, and a second time zone. */
+/** Settings: theme, the day weeks start on, a second time zone, and running in the background. */
 import { Dialog, DialogContent } from '@workspace/ui';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Settings, ThemePreference } from '../shared/ipc';
 import { api, unwrap } from './api';
 
@@ -35,8 +35,15 @@ export function SettingsDialog({
       return [];
     }
   }, []);
-  const set = (patch: Partial<Settings>) =>
-    unwrap(api.settings.set(patch)).catch((e: Error) => onError(e.message));
+  // Shown at once; the main process saves and applies it.
+  const [current, setCurrent] = useState(settings);
+  const set = (patch: Partial<Settings>) => {
+    setCurrent((s) => ({ ...s, ...patch }));
+    return unwrap(api.settings.set(patch)).catch((e: Error) => {
+      setCurrent(settings);
+      onError(e.message);
+    });
+  };
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -48,7 +55,7 @@ export function SettingsDialog({
           <select
             id="theme"
             className={selectClass}
-            value={settings.theme}
+            value={current.theme}
             onChange={(e) => void set({ theme: e.target.value as ThemePreference })}
           >
             <option value="system">Follow the system</option>
@@ -61,7 +68,7 @@ export function SettingsDialog({
           <select
             id="week-start"
             className={selectClass}
-            value={settings.weekStartsOn}
+            value={current.weekStartsOn}
             onChange={(e) => void set({ weekStartsOn: Number(e.target.value) as 0 | 1 | 6 })}
           >
             <option value={1}>Monday</option>
@@ -74,7 +81,7 @@ export function SettingsDialog({
           <select
             id="second-zone"
             className={selectClass}
-            value={settings.secondZone ?? ''}
+            value={current.secondZone ?? ''}
             onChange={(e) => void set({ secondZone: e.target.value || null })}
           >
             <option value="">None</option>
@@ -84,6 +91,42 @@ export function SettingsDialog({
               </option>
             ))}
           </select>
+          <span className="text-sm text-muted">In the background</span>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={current.keepInTray}
+                onChange={(e) => void set({ keepInTray: e.target.checked })}
+              />
+              Keep running in the tray when the window is closed
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={current.startAtLogin}
+                onChange={(e) => void set({ startAtLogin: e.target.checked })}
+              />
+              Start when I log in (in the tray)
+            </label>
+          </div>
+          <span className="text-sm text-muted">Drawing</span>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={current.hardwareAcceleration}
+              onChange={(e) => void set({ hardwareAcceleration: e.target.checked })}
+            />
+            Use graphics acceleration (after a restart)
+          </label>
+          <p className="col-span-2 text-xs text-faint">
+            Off, the calendar uses less memory; on, scrolling and dragging can be smoother on very
+            large screens.
+          </p>
+          <p className="col-span-2 text-xs text-faint">
+            In the tray the calendar still syncs (every 5 minutes) and notifies you. On GNOME, the
+            tray icon needs the AppIndicator extension (Ubuntu has it).
+          </p>
           <p className="col-span-2 text-xs text-faint">
             Workspace dates have no time zone: an event at 10:00 shows at 10:00 wherever you are.
             The second column shows what the clock says in another zone at each hour.

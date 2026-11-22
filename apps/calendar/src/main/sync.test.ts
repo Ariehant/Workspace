@@ -112,7 +112,7 @@ describe('the cache', () => {
 
   it('migrates a new file and opens it again', () => {
     const cache = new Cache(':memory:');
-    expect(cache.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
+    expect(cache.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 });
   });
 });
 

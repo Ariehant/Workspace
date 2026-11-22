@@ -24,6 +24,7 @@
 | [Phase 7](PHASE7.md)                            | Polish and release: performance, accessibility, languages, packaging, v1.0  |
 | [Phase 8](PHASE8.md)                            | What Notion has that Workspace didn't: the gap list, and adding it          |
 | [Ideas](ideas/desktop-integration.md)           | Parked: the desktop app as a native productivity app                        |
+| [Calendar app guide](calendar-app/README.md)    | Workspace Calendar: install, connect, use, notifications, troubleshooting   |
 | [Calendar app handoff](calendar-app/HANDOFF.md) | A build plan for Workspace Calendar, which uses the API                     |
 | [Calendar app context](calendar-app/CONTEXT.md) | What a new chat needs to start building Workspace Calendar in this repo     |
 | [Docs app handoff](docs-app/HANDOFF.md)         | A build plan for Workspace Write, a document editor (AI in v2)              |

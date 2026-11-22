@@ -92,7 +92,10 @@ const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
-type Selection = { kind: 'event'; event: CalEvent } | { kind: 'draft'; draft: Draft } | null;
+type Selection =
+  | { kind: 'event'; event: CalEvent; fromNotification?: boolean }
+  | { kind: 'draft'; draft: Draft }
+  | null;
 
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -146,6 +149,19 @@ export function App() {
       : null;
 
   const report = useCallback((e: unknown) => setError((e as Error).message), []);
+
+  // A notification or the tray asked for an event: go to its day and open it.
+  useEffect(
+    () =>
+      api.onShowEvent(({ eventId, fromNotification }) => {
+        unwrap(api.events.get(eventId)).then((event) => {
+          if (!event) return;
+          setAnchor(dayOf(event.start));
+          setSelection({ kind: 'event', event, fromNotification });
+        }, report);
+      }),
+    [report],
+  );
 
   const move = useCallback(
     (step: number) =>
@@ -499,6 +515,14 @@ export function App() {
               onDelete={() => deleteEvent(openEvent)}
               onOpenLink={(url) => void unwrap(api.openLink(url)).catch(report)}
               onDismissConflict={() => void api.events.dismissConflict(openEvent.id)}
+              onSnooze={
+                selection?.kind === 'event' && selection.fromNotification
+                  ? () => {
+                      void unwrap(api.events.snooze(openEvent.id)).catch(report);
+                      setSelection(null);
+                    }
+                  : undefined
+              }
             />
           )}
           {selection?.kind === 'draft' && (
