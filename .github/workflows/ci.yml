@@ -97,11 +97,13 @@ jobs:
       - name: Compare with the budgets and the base branch
         if: always()
         run: node --experimental-strip-types packages/perf/src/report.ts perf-results.json perf-baseline.json
+      # Every run on main becomes the next baseline, passed or not: saving only on a pass kept a
+      # fast runner's results as the baseline for good, and every slower runner after it failed.
       - name: Keep these results as the baseline
-        if: github.event_name == 'push'
+        if: always() && github.event_name == 'push' && hashFiles('perf-results.json') != ''
         run: cp perf-results.json perf-baseline.json
       - uses: actions/cache/save@v4
-        if: github.event_name == 'push'
+        if: always() && github.event_name == 'push' && hashFiles('perf-results.json') != ''
         with:
           path: perf-baseline.json
           key: perf-${{ github.ref_name }}-${{ github.sha }}
