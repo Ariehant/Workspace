@@ -1,0 +1,44 @@
+@import '@workspace/ui/styles.css';
+
+/* Class names used by the calendar's own components. */
+@source './';
+
+/*
+ * Calendar colours (Workspace's option colour names). Events use a light tint of the colour
+ * with the colour itself as an edge, readable in both themes.
+ */
+:root {
+  --cal-blue: #337ea9;
+  --cal-green: #448361;
+  --cal-orange: #d9730d;
+  --cal-purple: #9065b0;
+  --cal-pink: #c14c8a;
+  --cal-red: #d44c47;
+  --cal-yellow: #b7811f;
+  --cal-brown: #9f6b53;
+  --cal-gray: #787774;
+  --cal-tint: 16%;
+}
+
+[data-theme='dark'] {
+  --cal-blue: #529cca;
+  --cal-green: #4dab9a;
+  --cal-orange: #ffa344;
+  --cal-purple: #9a6dd7;
+  --cal-pink: #e255a1;
+  --cal-red: #ff7369;
+  --cal-yellow: #ffdc49;
+  --cal-brown: #b48a76;
+  --cal-gray: #979a9b;
+  --cal-tint: 24%;
+}
+
+.cal-event {
+  background: color-mix(in srgb, var(--cal-colour) var(--cal-tint), var(--ws-bg));
+  border-left: 3px solid var(--cal-colour);
+  color: var(--ws-fg);
+}
+
+.cal-swatch {
+  background: var(--cal-colour);
+}

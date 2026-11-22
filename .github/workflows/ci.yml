@@ -64,6 +64,33 @@ jobs:
             apps/web/test-results
           retention-days: 7
 
+  e2e-calendar:
+    name: End-to-end (Calendar)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # As in the e2e job: Chromium's sandbox needs unprivileged user namespaces.
+      - name: Allow user namespaces for the Chromium sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: pnpm --filter @workspace/calendar build
+      # The tests start a real Workspace server (built from apps/server, on a throwaway
+      # Postgres from the runner's PostgreSQL).
+      - run: xvfb-run -a pnpm --filter @workspace/calendar test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-calendar
+          path: |
+            apps/calendar/playwright-report
+            apps/calendar/test-results
+          retention-days: 7
+
   perf:
     name: Performance budgets
     runs-on: ubuntu-24.04
