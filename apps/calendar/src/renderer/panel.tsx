@@ -167,7 +167,12 @@ export function EventPanel(props: Props) {
           </p>
           <p className="text-muted">
             While your edit was waiting to be saved, this was changed in{' '}
-            {calendar?.kind === 'google' ? 'Google Calendar' : 'Workspace'} to &ldquo;
+            {calendar?.kind === 'google'
+              ? 'Google Calendar'
+              : calendar?.kind === 'caldav'
+                ? 'the server'
+                : 'Workspace'}{' '}
+            to &ldquo;
             {titleOf(event.conflict)}&rdquo;, {formatFullDay(dayOf(event.conflict.start))},{' '}
             {timeLabel(event.conflict)}. Your edit was saved over it.
           </p>
@@ -251,7 +256,13 @@ export function EventPanel(props: Props) {
       {event?.pending && (
         <p className="flex items-center gap-1.5 text-xs text-muted" role="status">
           <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          Saving to {calendar?.kind === 'google' ? 'Google Calendar' : 'Workspace'}…
+          Saving to{' '}
+          {calendar?.kind === 'google'
+            ? 'Google Calendar'
+            : calendar?.kind === 'caldav'
+              ? 'the server'
+              : 'Workspace'}
+          …
         </p>
       )}
 

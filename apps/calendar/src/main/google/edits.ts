@@ -20,7 +20,7 @@ import { GoogleApiError, type GoogleEngine } from './client';
 const DAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 
 /** A rule's BYDAY moved by whole days (a weekly Monday series moved to Tuesday). */
-function shiftWeekdays(rule: string, days: number): string {
+export function shiftWeekdays(rule: string, days: number): string {
   const shift = ((days % 7) + 7) % 7;
   if (!shift) return rule;
   return rule.replace(

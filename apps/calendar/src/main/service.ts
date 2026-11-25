@@ -9,6 +9,7 @@ import {
   type CalendarDraft,
   type CalendarPatch,
   type ConnectSession,
+  type CalDavConnect,
   type DatabaseChoice,
   type GoogleConnect,
   type GoogleSetup,
@@ -20,8 +21,11 @@ import type { EventTime } from '../shared/dates';
 import { DEFAULT_REMINDER, REMINDER_CHOICES } from '../shared/reminders';
 import {
   COLOURS,
+  isCalDavAccount,
   isGoogleAccount,
   isIcsAccount,
+  type CalDavAccount,
+  type CalDavCalendar,
   isWorkspaceAccount,
   type IcsCalendar,
   type CalEvent,
@@ -31,7 +35,7 @@ import {
   type WorkspaceAccount,
   type WorkspaceCalendar,
 } from '../shared/types';
-import { localZone, wallAt } from '../shared/zones';
+import { isZone, localZone, wallAt } from '../shared/zones';
 import type { Cache } from './cache';
 import type { Log } from './log';
 import { GoogleClient, GoogleEngine } from './google/client';
@@ -48,6 +52,14 @@ import {
 import { GoogleEditTarget } from './google/edits';
 import { GoogleCalendarSync } from './google/sync';
 import { feedUrl, IcsCalendarSync, probeFeed } from './ics/sync';
+import {
+  CalDavClient,
+  normaliseServer as normaliseCalDav,
+  sameUrl,
+  type RemoteCalendar,
+} from './caldav/dav';
+import { CalDavEditTarget } from './caldav/edits';
+import { CalDavCalendarSync } from './caldav/sync';
 import { Outbox, type EditTarget } from './outbox';
 import { SyncService } from './sync';
 import { normaliseServer, WorkspaceClient, type ClientOptions } from './workspace/client';
@@ -107,6 +119,14 @@ export class CalendarService {
   private googleSigningIn: AbortController | null = null;
   /** Feeds subscribed to by URL: one reader for them all. */
   private readonly ics: IcsCalendarSync;
+  private readonly caldavs = new Map<
+    string,
+    { client: CalDavClient; sync: CalDavCalendarSync; edits: CalDavEditTarget }
+  >();
+  private readonly caldavSessions = new Map<
+    string,
+    { client: CalDavClient; accountId: string | null; calendars: RemoteCalendar[] }
+  >();
   private readonly endpoints: GoogleEndpoints;
   private readonly zone: () => string;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -125,7 +145,11 @@ export class CalendarService {
       cache: this.cache,
       engineFor: (account) => this.engineFor(account),
       sourceFor: (account) =>
-        isGoogleAccount(account) ? (this.googleFor(account)?.sync ?? null) : this.ics,
+        isGoogleAccount(account)
+          ? (this.googleFor(account)?.sync ?? null)
+          : isCalDavAccount(account)
+            ? (this.caldavFor(account)?.sync ?? null)
+            : this.ics,
       onChange: options.onChange,
       log: options.log,
     });
@@ -135,6 +159,7 @@ export class CalendarService {
         const account = this.cache.account(calendar.accountId);
         if (!account) return null;
         if (isGoogleAccount(account)) return this.googleFor(account)?.edits ?? null;
+        if (isCalDavAccount(account)) return this.caldavFor(account)?.edits ?? null;
         if (!isWorkspaceAccount(account)) return null; // Read-only (ICS).
         const engine = this.engineFor(account);
         return engine && workspaceTarget(engine);
@@ -148,7 +173,15 @@ export class CalendarService {
         this.cache.setCursor(calendarId, null);
         void this.sync.syncAll();
       },
-      onSeriesChanged: () => void this.sync.syncAll(),
+      onSeriesChanged: (calendarId) => {
+        // A CalDAV calendar's objects were changed here: show them now (the edit is no longer
+        // waiting), then read the server.
+        const calendar = this.cache.calendar(calendarId);
+        const account = calendar && this.cache.account(calendar.accountId);
+        if (calendar?.kind === 'caldav' && account && isCalDavAccount(account))
+          this.caldavFor(account)?.sync.rederive(calendar);
+        void this.sync.syncAll();
+      },
     });
   }
 
@@ -402,6 +435,145 @@ export class CalendarService {
       }
     });
     this.googleSessions.delete(sessionId);
+    this.options.onChange?.();
+    await this.sync.syncAll();
+  }
+
+  // --- CalDAV -------------------------------------------------------------------------
+
+  private caldavClient(server: string, username: string, password: string) {
+    return new CalDavClient({ server, username, password }, this.options.clientOptions?.fetch);
+  }
+
+  /** One client, sync and edit target per CalDAV account; null if its password can't be read. */
+  caldavFor(account: CalDavAccount) {
+    const cached = this.caldavs.get(account.id);
+    if (cached) return cached;
+    const sealed = this.cache.sealedToken(account.id);
+    const password = sealed && this.options.unseal(sealed);
+    if (!password) return null;
+    const client = this.caldavClient(account.server, account.username, password);
+    const sync = new CalDavCalendarSync({ cache: this.cache, client, zone: this.zone });
+    const edits = new CalDavEditTarget({
+      cache: this.cache,
+      client,
+      zone: this.zone,
+      rederive: (calendar) => {
+        sync.rederive(calendar);
+        this.options.onChange?.();
+      },
+    });
+    const source = { client, sync, edits };
+    this.caldavs.set(account.id, source);
+    return source;
+  }
+
+  private startCalDavSession(
+    client: CalDavClient,
+    accountId: string | null,
+    calendars: RemoteCalendar[],
+  ): CalDavConnect {
+    const sessionId = randomUUID();
+    this.caldavSessions.set(sessionId, { client, accountId, calendars });
+    const added = this.cache
+      .calendars()
+      .filter((c): c is CalDavCalendar => c.kind === 'caldav' && c.accountId === accountId);
+    const { server, username } = client.credentials;
+    return {
+      sessionId,
+      name: `${username} · ${new URL(server).host}`,
+      calendars: calendars.map((c) => ({
+        url: c.url,
+        name: c.name,
+        colour: c.colour,
+        added: added.some((a) => sameUrl(a.url, c.url)),
+      })),
+    };
+  }
+
+  /** Connect to a CalDAV server and list its calendars (nothing is saved yet). */
+  async caldavConnect(
+    serverInput: string,
+    username: string,
+    password: string,
+  ): Promise<CalDavConnect> {
+    const server = normaliseCalDav(serverInput);
+    const client = this.caldavClient(server, username.trim(), password);
+    const calendars = await client.calendars();
+    const existing = this.cache
+      .accounts()
+      .find(
+        (a): a is CalDavAccount =>
+          isCalDavAccount(a) && a.server === server && a.username === username.trim(),
+      );
+    return this.startCalDavSession(client, existing?.id ?? null, calendars);
+  }
+
+  /** An added CalDAV account's calendars, to add more of them. */
+  async caldavAccount(accountId: string): Promise<CalDavConnect> {
+    const account = this.cache.account(accountId);
+    if (!account || !isCalDavAccount(account)) throw new Error('That account is gone.');
+    const source = this.caldavFor(account);
+    if (!source) throw new Error("This account's password can't be read. Connect it again.");
+    return this.startCalDavSession(source.client, accountId, await source.client.calendars());
+  }
+
+  cancelCalDav(sessionId: string) {
+    this.caldavSessions.delete(sessionId);
+  }
+
+  /** Save the account (new, or with a new password) and the chosen calendars, then sync. */
+  async caldavSave(sessionId: string, urls: string[]): Promise<void> {
+    const session = this.caldavSessions.get(sessionId);
+    if (!session) throw new Error('This setup has ended. Start again.');
+    const { server, username, password } = session.client.credentials;
+    let accountId = session.accountId;
+    this.cache.transaction(() => {
+      if (!accountId) {
+        accountId = randomUUID();
+        this.cache.addAccount(
+          {
+            id: accountId,
+            kind: 'caldav',
+            name: `${username} · ${new URL(server).host}`,
+            server,
+            username,
+            error: null,
+          },
+          this.options.seal(password),
+        );
+      } else {
+        this.cache.setSealedToken(accountId, this.options.seal(password));
+        const account = this.cache.account(accountId);
+        if (account) this.cache.updateAccount({ ...account, error: null });
+        this.caldavs.delete(accountId);
+      }
+      const have = this.cache
+        .calendars()
+        .filter((c): c is CalDavCalendar => c.kind === 'caldav' && c.accountId === accountId);
+      const used = this.cache.calendars().length;
+      session.calendars
+        .filter(
+          (c) => urls.some((u) => sameUrl(u, c.url)) && !have.some((h) => sameUrl(h.url, c.url)),
+        )
+        .forEach((c, i) => {
+          this.cache.addCalendar({
+            id: randomUUID(),
+            kind: 'caldav',
+            accountId: accountId!,
+            url: c.url,
+            accessRole: 'owner',
+            timeZone: c.timeZone && isZone(c.timeZone) ? c.timeZone : this.zone(),
+            name: c.name,
+            colour: c.colour ?? COLOURS[(used + i) % COLOURS.length]!,
+            visible: true,
+            reminder: DEFAULT_REMINDER,
+            status: 'ok',
+            statusMessage: null,
+          });
+        });
+    });
+    this.caldavSessions.delete(sessionId);
     this.options.onChange?.();
     await this.sync.syncAll();
   }
@@ -716,6 +888,7 @@ export class CalendarService {
     this.cache.removeAccount(id);
     this.engines.delete(id);
     this.googleSyncs.delete(id);
+    this.caldavs.delete(id);
     this.options.onChange?.();
     // Tell Google to forget the sign-in (best effort).
     const refreshToken = sealed && this.options.unseal(sealed);

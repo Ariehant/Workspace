@@ -41,7 +41,7 @@ interface Props {
   shown: string[];
   today: string;
   onPickDay: (day: string) => void;
-  onAddCalendars: (accountId?: string, kind?: 'workspace' | 'google' | 'ics') => void;
+  onAddCalendars: (accountId?: string, kind?: 'workspace' | 'google' | 'ics' | 'caldav') => void;
   onError: (message: string) => void;
 }
 
@@ -93,7 +93,7 @@ export function Sidebar({
                     onSelect={() => onAddCalendars(account.id, account.kind ?? 'workspace')}
                     icon={<Plus className="size-4" />}
                   >
-                    {account.kind === 'google'
+                    {account.kind === 'google' || account.kind === 'caldav'
                       ? 'Add calendars'
                       : account.kind === 'ics'
                         ? 'Subscribe to another'
@@ -156,6 +156,14 @@ export function Sidebar({
         >
           <Plus className="size-4" aria-hidden />
           Subscribe to a calendar
+        </button>
+        <button
+          type="button"
+          onClick={() => onAddCalendars(undefined, 'caldav')}
+          className="flex items-center gap-2 rounded px-1 py-1 text-left text-sm text-muted hover:bg-hover hover:text-fg"
+        >
+          <Plus className="size-4" aria-hidden />
+          Connect CalDAV
         </button>
       </div>
       <div className="mt-auto flex flex-col gap-2">

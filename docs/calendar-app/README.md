@@ -7,8 +7,8 @@ API, so it shows what's on the server.
 
 Version 1.0 works with Workspace databases. Version 1.1 adds Google Calendar: its calendars show
 beside Workspace's and can be changed here, recurring events included. Version 1.2 adds
-calendars subscribed to by address (ICS feeds, such as public holidays); CalDAV is next: see
-[the build plan](HANDOFF.md).
+CalDAV accounts (Nextcloud, Fastmail, Radicale, iCloud), shown and changed here, and calendars
+subscribed to by address (ICS feeds, such as public holidays). See [the build plan](HANDOFF.md).
 
 ## Install
 
@@ -85,6 +85,27 @@ still goes and the panel shows **Changed elsewhere** with what Google had.
 reminder notification has a **Join** button too; on Linux, click the notification to open the
 event.
 
+## Connect a CalDAV account
+
+CalDAV is how Nextcloud, Fastmail, Radicale, iCloud, mailbox.org and many other services share
+calendars. Choose **Connect CalDAV** (in the sidebar), and enter:
+
+- **Server address:** your service's address, such as `https://cloud.example.com` for
+  Nextcloud, `https://caldav.fastmail.com` for Fastmail, or `https://caldav.icloud.com` for
+  iCloud. The calendar finds the account's calendars from there.
+- **Username**, and an **app password**: make one for this calendar in your account's security
+  settings (Nextcloud: Settings → Security → Devices & sessions; Fastmail: Settings → Privacy &
+  Security → App passwords; iCloud: appleid.apple.com → App-Specific Passwords). The calendar
+  keeps it encrypted like the other accounts' sign-ins; addresses must be `https://` (except on
+  this computer), because the password goes with every request.
+
+Then choose the calendars to show. Their events can be changed here as anywhere: drag, resize,
+the panel, Delete with Undo, and for recurring events **This event**, **This and following
+events** or **All events**. Changes reach the server at once (or when it's back, if you're
+offline); changes made elsewhere show within a minute, or at once with **Sync now**. If an event
+changed on the server while your change waited, your change still goes, and the panel shows
+**Changed elsewhere** with what the server had.
+
 ## Subscribe to a calendar (ICS)
 
 Many calendars are published as an address: public holidays, sports fixtures, a school's terms,
@@ -149,17 +170,18 @@ another column of hours.
 
 ## When something's wrong
 
-| What you see                                     | What to do                                                                                            |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| "The token was not accepted"                     | The integration was deleted or its token renewed. Remove the account (its ⋯ menu) and connect again.  |
-| A calendar with ⚠ "no longer connected"          | In Workspace, add the integration to the database again (Share → Connections).                        |
-| A calendar with ⚠ about its date property        | The property was renamed to another type or deleted. Remove the calendar and add it again.            |
-| "No databases are connected to this integration" | Do step 2 above, then **Look again**.                                                                 |
-| No tray icon on GNOME                            | Install and turn on the AppIndicator extension (`gnome-shell-extension-appindicator`).                |
-| An edit "couldn't be saved to Workspace"         | Workspace refused it five times (the message says why); the calendar shows Workspace's version again. |
-| "Google signed this account out"                 | The access was removed in your Google account, or the client changed. Sign in with Google again.      |
-| A Google calendar with ⚠ "can no longer see"     | The calendar was deleted or unshared in Google. Remove it here.                                       |
-| A subscribed calendar with ⚠                     | The feed moved, went away or isn't a calendar any more. Remove it and subscribe to its new address.   |
+| What you see                                      | What to do                                                                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| "The token was not accepted"                      | The integration was deleted or its token renewed. Remove the account (its ⋯ menu) and connect again.  |
+| A calendar with ⚠ "no longer connected"           | In Workspace, add the integration to the database again (Share → Connections).                        |
+| A calendar with ⚠ about its date property         | The property was renamed to another type or deleted. Remove the calendar and add it again.            |
+| "No databases are connected to this integration"  | Do step 2 above, then **Look again**.                                                                 |
+| No tray icon on GNOME                             | Install and turn on the AppIndicator extension (`gnome-shell-extension-appindicator`).                |
+| An edit "couldn't be saved to Workspace"          | Workspace refused it five times (the message says why); the calendar shows Workspace's version again. |
+| "Google signed this account out"                  | The access was removed in your Google account, or the client changed. Sign in with Google again.      |
+| A Google calendar with ⚠ "can no longer see"      | The calendar was deleted or unshared in Google. Remove it here.                                       |
+| A subscribed calendar with ⚠                      | The feed moved, went away or isn't a calendar any more. Remove it and subscribe to its new address.   |
+| "The server refused the username or app password" | The app password was revoked or mistyped. Make a new one, then Connect CalDAV again with it.          |
 
 **Logs** are in the calendar's data folder, in `logs/` (`~/.config/Workspace Calendar/logs` on
 Linux, `%APPDATA%\Workspace Calendar\logs` on Windows). They have what the calendar did and what
@@ -168,8 +190,10 @@ failed, never tokens or event contents.
 ## For developers
 
 The code is in [`apps/calendar`](../../apps/calendar/README.md). Its integration and end-to-end
-tests start a real Workspace server themselves (from `apps/server`, on a throwaway Postgres), so
-`pnpm --filter @workspace/calendar test` and `test:e2e` need only PostgreSQL installed.
+tests start a real Workspace server themselves (from `apps/server`, on a throwaway Postgres), and
+a real CalDAV server (Radicale) for the CalDAV tests, so `pnpm --filter @workspace/calendar test`
+and `test:e2e` need PostgreSQL and Radicale installed (`pip install radicale==3.9.2`, or set
+`RADICALE_PYTHON` to a Python that has it).
 
 To try it against a server of your own:
 

@@ -118,7 +118,7 @@ const wallOf = (t: ICAL.Time) =>
 const dayOf = (t: ICAL.Time) => `${pad(t.year, 4)}-${pad(t.month)}-${pad(t.day)}`;
 
 /** A date or date-time property as a source time. */
-function timeOf(prop: ICAL.Property | null): GoogleTime | null {
+export function timeOf(prop: ICAL.Property | null): GoogleTime | null {
   if (!prop) return null;
   const value = prop.getFirstValue();
   if (!(value instanceof ICAL.Time)) return null;
@@ -264,4 +264,10 @@ function readEvents(calendar: ICAL.Component): ParsedFeed {
     timeZone: typeof zone === 'string' ? ianaZone(zone) : null,
     items,
   };
+}
+
+/** The resource's event id: its `UID`, as `safeId` makes it (what its items are known by). */
+export function resourceIdOf(ics: string): string | null {
+  const uid = /^UID:(.+)$/im.exec(ics.replace(/\r?\n[ \t]/g, ''))?.[1]?.trim();
+  return uid ? safeId(uid) : null;
 }

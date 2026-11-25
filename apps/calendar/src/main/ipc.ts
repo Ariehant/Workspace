@@ -191,6 +191,42 @@ export function registerIpc(service: CalendarService, hooks: IpcHooks) {
     }),
   );
 
+  ipcMain.handle(IPC.caldavConnect, (_e, server: unknown, username: unknown, password: unknown) =>
+    result(() => {
+      check(
+        isString(server, 500) &&
+          isString(username, 300) &&
+          isString(password, 500) &&
+          server.trim() !== '' &&
+          username.trim() !== '' &&
+          password !== '',
+      );
+      return service.caldavConnect(server, username, password);
+    }),
+  );
+  ipcMain.handle(IPC.caldavAccount, (_e, accountId: unknown) =>
+    result(() => {
+      check(isId(accountId));
+      return service.caldavAccount(accountId);
+    }),
+  );
+  ipcMain.handle(IPC.caldavSave, (_e, sessionId: unknown, urls: unknown) =>
+    result(() => {
+      check(
+        isId(sessionId) &&
+          Array.isArray(urls) &&
+          urls.length <= 100 &&
+          urls.every((u) => isString(u, 2000)),
+      );
+      return service.caldavSave(sessionId, urls as string[]);
+    }),
+  );
+  ipcMain.handle(IPC.caldavCancel, (_e, sessionId: unknown) =>
+    result(() => {
+      check(isId(sessionId));
+      service.cancelCalDav(sessionId);
+    }),
+  );
   ipcMain.handle(IPC.icsSubscribe, (_e, url: unknown, name: unknown) =>
     result(() => {
       check(isString(url, 2000) && url.trim() !== '' && (name === null || isString(name, 200)));

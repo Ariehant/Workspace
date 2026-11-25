@@ -33,12 +33,25 @@ export interface IcsAccount {
   error: string | null;
 }
 
-export type Account = WorkspaceAccount | GoogleAccount | IcsAccount;
+/** A CalDAV server account (Nextcloud, Fastmail, Radicale, iCloud), with an app password. */
+export interface CalDavAccount {
+  id: string;
+  kind: 'caldav';
+  /** `user · host`, shown in the sidebar. */
+  name: string;
+  /** The address it was connected with. */
+  server: string;
+  username: string;
+  error: string | null;
+}
+
+export type Account = WorkspaceAccount | GoogleAccount | IcsAccount | CalDavAccount;
 
 export const isWorkspaceAccount = (a: Account): a is WorkspaceAccount =>
   !a.kind || a.kind === 'workspace';
 export const isGoogleAccount = (a: Account): a is GoogleAccount => a.kind === 'google';
 export const isIcsAccount = (a: Account): a is IcsAccount => a.kind === 'ics';
+export const isCalDavAccount = (a: Account): a is CalDavAccount => a.kind === 'caldav';
 
 export type CalendarStatus = 'ok' | 'needs-setup' | 'no-access';
 
@@ -93,12 +106,24 @@ export interface IcsCalendar extends CalendarBase {
   accessRole: 'reader';
 }
 
-export type Calendar = WorkspaceCalendar | GoogleCalendar | IcsCalendar;
+/** One of a CalDAV account's calendars (a collection on the server). */
+export interface CalDavCalendar extends CalendarBase {
+  kind: 'caldav';
+  /** The collection's address. */
+  url: string;
+  /** The calendar's zone, or this machine's, for floating recurring events. */
+  timeZone: string;
+  /** `owner` (can change events) or `reader`. */
+  accessRole: string;
+}
+
+export type Calendar = WorkspaceCalendar | GoogleCalendar | IcsCalendar | CalDavCalendar;
 
 export const isWorkspaceCalendar = (c: Calendar): c is WorkspaceCalendar =>
   !c.kind || c.kind === 'workspace';
 export const isGoogleCalendar = (c: Calendar): c is GoogleCalendar => c.kind === 'google';
 export const isIcsCalendar = (c: Calendar): c is IcsCalendar => c.kind === 'ics';
+export const isCalDavCalendar = (c: Calendar): c is CalDavCalendar => c.kind === 'caldav';
 
 /**
  * Whether events in the calendar can be changed here: not one that lost access, nor a Google
@@ -108,7 +133,7 @@ export const canEdit = (calendar: Calendar | null | undefined): boolean =>
   !!calendar &&
   calendar.status !== 'no-access' &&
   !isIcsCalendar(calendar) &&
-  (!isGoogleCalendar(calendar) || ['owner', 'writer'].includes(calendar.accessRole));
+  (isWorkspaceCalendar(calendar) || ['owner', 'writer'].includes(calendar.accessRole));
 
 /** Why a calendar's events can't be changed here. */
 export const READ_ONLY_MESSAGE = 'This calendar is view-only for your account.';

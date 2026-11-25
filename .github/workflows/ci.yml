@@ -25,6 +25,14 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The calendar's CalDAV tests run against a real CalDAV server, Radicale (in a venv: the
+      # runner's Python refuses system-wide installs). On PATH first, so `python3` has it (turbo
+      # passes PATH through; test/radicale.ts runs `python3 -m radicale`).
+      - name: Install Radicale (a CalDAV server for the calendar's tests)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/radicale"
+          "$RUNNER_TEMP/radicale/bin/pip" install --quiet radicale==3.9.2
+          echo "$RUNNER_TEMP/radicale/bin" >> "$GITHUB_PATH"
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
@@ -78,6 +86,14 @@ jobs:
       # As in the e2e job: Chromium's sandbox needs unprivileged user namespaces.
       - name: Allow user namespaces for the Chromium sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # The calendar's CalDAV tests run against a real CalDAV server, Radicale (in a venv: the
+      # runner's Python refuses system-wide installs). On PATH first, so `python3` has it (turbo
+      # passes PATH through; test/radicale.ts runs `python3 -m radicale`).
+      - name: Install Radicale (a CalDAV server for the calendar's tests)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/radicale"
+          "$RUNNER_TEMP/radicale/bin/pip" install --quiet radicale==3.9.2
+          echo "$RUNNER_TEMP/radicale/bin" >> "$GITHUB_PATH"
       - run: pnpm --filter @workspace/calendar build
       # The tests start a real Workspace server (built from apps/server, on a throwaway
       # Postgres from the runner's PostgreSQL).
