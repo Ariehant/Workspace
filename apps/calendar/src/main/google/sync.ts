@@ -38,6 +38,7 @@ export class GoogleCalendarSync implements GoogleSync {
     const zone = this.zone();
     const window = syncWindow(new Date(this.now()));
     const cursor = full ? null : cache.cursor(calendar.id);
+    const readAt = new Date(this.now()).toISOString();
     let read: { items: GoogleEvent[]; nextSyncToken: string | null } | null = null;
     if (cursor) {
       try {
@@ -71,7 +72,7 @@ export class GoogleCalendarSync implements GoogleSync {
       cache.setCursor(calendar.id, read.nextSyncToken);
       if (fromScratch || read.items.length || this.derivedFor.get(calendar.id) !== key) {
         const items = cache.items<GoogleEvent>(calendar.id).map((i) => i.data);
-        cache.setDerivedEvents(calendar.id, deriveEvents(calendar, items, window, zone));
+        cache.setDerivedEvents(calendar.id, deriveEvents(calendar, items, window, zone), readAt);
         this.derivedFor.set(calendar.id, key);
       }
     });

@@ -202,6 +202,42 @@ export class GoogleEngine {
     return out;
   }
 
+  private eventPath(calendarId: string, eventId?: string) {
+    const base = `/calendars/${encodeURIComponent(calendarId)}/events`;
+    return eventId ? `${base}/${encodeURIComponent(eventId)}` : base;
+  }
+
+  get(calendarId: string, eventId: string): Promise<GoogleEvent> {
+    return this.client.request('GET', this.eventPath(calendarId, eventId), {
+      query: { fields: EVENT_FIELDS },
+    });
+  }
+
+  insert(calendarId: string, body: Partial<GoogleEvent>): Promise<GoogleEvent> {
+    return this.client.request('POST', this.eventPath(calendarId), {
+      query: { fields: EVENT_FIELDS },
+      body,
+    });
+  }
+
+  /** Change an event (or an occurrence, by its id); with an etag, only if it's still that one. */
+  patch(
+    calendarId: string,
+    eventId: string,
+    body: Partial<GoogleEvent>,
+    etag?: string,
+  ): Promise<GoogleEvent> {
+    return this.client.request('PATCH', this.eventPath(calendarId, eventId), {
+      query: { fields: EVENT_FIELDS },
+      body,
+      ...(etag && { headers: { 'if-match': etag } }),
+    });
+  }
+
+  async remove(calendarId: string, eventId: string): Promise<void> {
+    await this.client.request('DELETE', this.eventPath(calendarId, eventId));
+  }
+
   /**
    * A calendar's events: every one ending after `timeMin` (a first sync), or the changes since a
    * sync token (deleted events come back `cancelled`). Series come once, not expanded.

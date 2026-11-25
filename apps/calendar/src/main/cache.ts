@@ -7,7 +7,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import type { EventTime } from '../shared/dates';
-import type { Account, CalEvent, Calendar } from '../shared/types';
+import type { Account, CalEvent, Calendar, EditScope } from '../shared/types';
 
 /** Each entry upgrades the schema by one version (`PRAGMA user_version`). */
 export const MIGRATIONS: string[] = [
@@ -83,6 +83,10 @@ export interface OpPayload {
   title?: string;
   time?: EventTime;
   snapshot?: CalEvent;
+  /** A recurring event's occurrences the edit is for (absent: this one). */
+  scope?: EditScope;
+  /** The other occurrences a series delete took away here, for Undo. */
+  others?: CalEvent[];
 }
 
 export interface OutboxOp {
@@ -418,6 +422,15 @@ export class Cache {
     return row ? (JSON.parse(row.json) as CalEvent) : null;
   }
 
+  /** The occurrences of a series shown here. */
+  seriesEvents(calendarId: string, seriesId: string): CalEvent[] {
+    return (
+      this.db
+        .prepare('SELECT json FROM events WHERE calendar_id = ? AND series_id = ?')
+        .all(calendarId, seriesId) as { json: string }[]
+    ).map((r) => JSON.parse(r.json) as CalEvent);
+  }
+
   eventCount(calendarId: string): number {
     return (
       this.db.prepare('SELECT COUNT(*) AS n FROM events WHERE calendar_id = ?').get(calendarId) as {
@@ -486,9 +499,10 @@ export class Cache {
 
   /**
    * A calendar's events as worked out from its items (Google): only what changed is written.
-   * Events with edits waiting are kept as they are here; a newer copy here isn't replaced.
+   * Events with edits waiting are kept as they are here; a newer copy here isn't replaced, nor
+   * dropped if it was edited here after the read started (`readAt`, UTC ISO).
    */
-  setDerivedEvents(calendarId: string, events: CalEvent[]) {
+  setDerivedEvents(calendarId: string, events: CalEvent[], readAt: string | null = null) {
     this.transaction(() => {
       const pending = this.pendingByEvent(calendarId);
       const cached = new Map(
@@ -500,8 +514,10 @@ export class Cache {
         ).map((r) => [r.id, r.json]),
       );
       const incoming = new Set(events.map((e) => e.id));
-      for (const id of cached.keys()) {
-        if (!incoming.has(id) && !pending.has(id)) this.deleteEvent(id);
+      for (const [id, json] of cached) {
+        if (incoming.has(id) || pending.has(id)) continue;
+        if (readAt && (JSON.parse(json) as CalEvent).lastEdited >= readAt) continue;
+        this.deleteEvent(id);
       }
       for (const event of events) {
         const json = cached.get(event.id);

@@ -6,7 +6,7 @@ change them, and notifies you before they start. It talks to your Workspace serv
 API, so it shows what's on the server.
 
 Version 1.0 works with Workspace databases. Version 1.1 adds Google Calendar: its calendars show
-beside Workspace's, recurring events included (changing Google events here comes next). ICS feeds
+beside Workspace's and can be changed here, recurring events included. ICS feeds
 and CalDAV (1.2) are planned: see [the build plan](HANDOFF.md).
 
 ## Install
@@ -65,8 +65,24 @@ Google to forget it.
 
 Google events happen at a real moment, so they show at your computer's clock time for it (a
 10:00 meeting in Berlin shows at 14:30 in India), and move if you change time zone. Workspace
-dates have no zone and stay as written. In this version, Google events open read-only, with
-**Open in Google Calendar**.
+dates have no zone and stay as written.
+
+**Changing Google events** works as for Workspace rows: drag, resize, the panel, Delete with
+Undo. Calendars your account may only see (shared as "See all event details" or "See only
+free/busy") show without editing. A recurring event asks which occurrences a change or delete is
+for:
+
+- **This event:** only this one (Google keeps it as an exception of the series).
+- **This and following events:** the series ends before this one, and a new series with the
+  change goes on from it.
+- **All events:** the whole series, moved by as much as you moved this one.
+
+If someone changed the event in Google while your change waited (offline, say), your change
+still goes and the panel shows **Changed elsewhere** with what Google had.
+
+**Google Meet:** an event with a Meet call has **Join Google Meet** in its panel. On Windows the
+reminder notification has a **Join** button too; on Linux, click the notification to open the
+event.
 
 ## Use it
 

@@ -4,7 +4,7 @@
  * Delete; for a new event: the same fields and a calendar to put it in, until it's saved.
  */
 import { Button, cn, IconButton } from '@workspace/ui';
-import { AlertTriangle, BellRing, ExternalLink, Loader2, Trash2, X } from 'lucide-react';
+import { AlertTriangle, BellRing, ExternalLink, Loader2, Trash2, Video, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { dayOf, type EventTime } from '../shared/dates';
 import type { CalEvent, Calendar } from '../shared/types';
@@ -166,7 +166,8 @@ export function EventPanel(props: Props) {
             Changed elsewhere
           </p>
           <p className="text-muted">
-            While your edit was waiting to be saved, this was changed in Workspace to &ldquo;
+            While your edit was waiting to be saved, this was changed in{' '}
+            {calendar?.kind === 'google' ? 'Google Calendar' : 'Workspace'} to &ldquo;
             {titleOf(event.conflict)}&rdquo;, {formatFullDay(dayOf(event.conflict.start))},{' '}
             {timeLabel(event.conflict)}. Your edit was saved over it.
           </p>
@@ -250,7 +251,7 @@ export function EventPanel(props: Props) {
       {event?.pending && (
         <p className="flex items-center gap-1.5 text-xs text-muted" role="status">
           <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          Saving to Workspace…
+          Saving to {calendar?.kind === 'google' ? 'Google Calendar' : 'Workspace'}…
         </p>
       )}
 
@@ -268,6 +269,12 @@ export function EventPanel(props: Props) {
               <Button onClick={props.onSnooze} className="border border-line">
                 <BellRing className="size-4" aria-hidden />
                 Remind me in 5 minutes
+              </Button>
+            )}
+            {props.event.meetLink && (
+              <Button variant="primary" onClick={() => props.onOpenLink(props.event.meetLink!)}>
+                <Video className="size-4" aria-hidden />
+                Join Google Meet
               </Button>
             )}
             {props.event.url && (

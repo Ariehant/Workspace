@@ -32,11 +32,12 @@ import {
   type EventTime,
 } from '../shared/dates';
 import { DEFAULT_SETTINGS, type AppState } from '../shared/ipc';
-import type { CalEvent, Calendar } from '../shared/types';
+import type { CalEvent, Calendar, EditScope } from '../shared/types';
 import { api, unwrap } from './api';
 import { CommandBar, ShortcutsSheet, type Command } from './command';
 import { ConnectDialog } from './connect';
 import { GoogleDialog } from './google';
+import { ScopeDialog } from './scope';
 import { NEW_EVENT_MINUTES } from './edits';
 import { formatFullDay, formatMonthYear, formatRange } from './format';
 import { daysFrom } from './layout';
@@ -202,7 +203,7 @@ export function App() {
   const startDraft = useCallback(
     (time: EventTime) => {
       const calendar = defaultCalendar();
-      if (!calendar) return setError('Connect a Workspace database to add events to.');
+      if (!calendar) return setError('Connect a calendar you can change to add events to.');
       setSelection({ kind: 'draft', draft: { time, calendarId: calendar.id, title: '' } });
     },
     [defaultCalendar],
@@ -229,8 +230,16 @@ export function App() {
     [report],
   );
 
+  /** A change or delete of a recurring event's occurrence, waiting for which occurrences. */
+  const [askScope, setAskScope] = useState<
+    | { action: 'change'; event: CalEvent; change: { title?: string; time?: EventTime } }
+    | { action: 'delete'; event: CalEvent }
+    | null
+  >(null);
+
   const changeEvent = useCallback(
-    (event: CalEvent, change: { title?: string; time?: EventTime }) => {
+    (event: CalEvent, change: { title?: string; time?: EventTime }, scope?: EditScope) => {
+      if (event.series && !scope) return setAskScope({ action: 'change', event, change });
       // Shown at once (the main process sends a change notice too).
       setEvents((list) =>
         list.map((e) =>
@@ -244,17 +253,30 @@ export function App() {
             : e,
         ),
       );
-      unwrap(api.events.update(event.id, change)).catch(report);
+      unwrap(api.events.update(event.id, change, scope)).catch(report);
     },
     [report],
   );
 
   const deleteEvent = useCallback(
-    (event: CalEvent) => {
+    (event: CalEvent, scope?: EditScope) => {
+      if (event.series && !scope) return setAskScope({ action: 'delete', event });
       setSelection((s) => (s?.kind === 'event' && s.event.id === event.id ? null : s));
-      setEvents((list) => list.filter((e) => e.id !== event.id));
+      setEvents((list) =>
+        list.filter(
+          (e) =>
+            e.id !== event.id &&
+            !(
+              scope &&
+              scope !== 'this' &&
+              e.series?.id === event.series?.id &&
+              e.calendarId === event.calendarId &&
+              (scope === 'all' || (e.series?.originalStart ?? '') >= event.series!.originalStart)
+            ),
+        ),
+      );
       setToast({ eventId: event.id, title: titleOf(event) });
-      unwrap(api.events.remove(event.id)).catch(report);
+      unwrap(api.events.remove(event.id, scope)).catch(report);
     },
     [report],
   );
@@ -263,7 +285,7 @@ export function App() {
     if (!toast) return;
     setToast(null);
     unwrap(api.events.undoRemove(toast.eventId)).then((back) => {
-      if (!back) setError('Too late to undo: the event was already deleted in Workspace.');
+      if (!back) setError('Too late to undo: the event was already deleted.');
     }, report);
   }, [toast, report]);
 
@@ -571,6 +593,17 @@ export function App() {
             Undo
           </Button>
         </div>
+      )}
+      {askScope && (
+        <ScopeDialog
+          action={askScope.action}
+          onCancel={() => setAskScope(null)}
+          onChoose={(scope) => {
+            setAskScope(null);
+            if (askScope.action === 'change') changeEvent(askScope.event, askScope.change, scope);
+            else deleteEvent(askScope.event, scope);
+          }}
+        />
       )}
       {connecting?.kind === 'workspace' && (
         <ConnectDialog accountId={connecting.accountId} onClose={() => setConnecting(null)} />

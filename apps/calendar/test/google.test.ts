@@ -397,6 +397,12 @@ describe('the service', () => {
       accessRole: 'reader',
       timeZone: 'UTC',
     });
+    fake.put('holidays@group.v.calendar.google.com', {
+      id: 'diwali',
+      summary: 'Diwali',
+      start: { date: d(2) },
+      end: { date: d(3) },
+    });
     fake.put('service@lab.io', {
       id: 'svc',
       summary: 'Service event',
@@ -438,11 +444,15 @@ describe('the service', () => {
       ['Ada', '#7bd148', 'owner'],
       ['Holidays', 'blue', 'reader'],
     ]);
-    expect(service.events(d(0), d(3)).map((e) => e.title)).toEqual(['Service event']);
-    // Read-only until editing Google events arrives.
-    expect(() => service.deleteEvent(service.events(d(0), d(3))[0]!.id)).toThrow(
-      /can’t be changed/,
-    );
+    expect(
+      service
+        .events(d(0), d(3))
+        .map((e) => e.title)
+        .sort(),
+    ).toEqual(['Diwali', 'Service event']);
+    // A calendar the account may only see can't be changed here.
+    const holiday = service.events(d(0), d(3)).find((e) => e.title === 'Diwali')!;
+    expect(() => service.deleteEvent(holiday.id)).toThrow(/view-only/);
 
     // Signing in again with the same account adds to it rather than making another.
     const again = await service.googleSignIn();

@@ -12,6 +12,7 @@ import {
 } from '../shared/ipc';
 import { isDay, type EventTime } from '../shared/dates';
 import { REMINDER_CHOICES } from '../shared/reminders';
+import type { EditScope } from '../shared/types';
 import type { CalendarService } from './service';
 
 const isString = (v: unknown, max = 2048): v is string => typeof v === 'string' && v.length <= max;
@@ -65,6 +66,9 @@ function isEventTime(v: unknown): v is EventTime {
 }
 
 const isEventId = (v: unknown): v is string => isString(v, 200) && /^[\w-]+:[\w-]+$/.test(v);
+
+const isScope = (v: unknown): v is EditScope | null | undefined =>
+  v === undefined || v === null || v === 'this' || v === 'following' || v === 'all';
 
 function isTimeZone(zone: string): boolean {
   try {
@@ -229,22 +233,26 @@ export function registerIpc(service: CalendarService, hooks: IpcHooks) {
       return service.createEvent(calendarId, title, time);
     }),
   );
-  ipcMain.handle(IPC.eventUpdate, (_e, id: unknown, change: unknown) =>
+  ipcMain.handle(IPC.eventUpdate, (_e, id: unknown, change: unknown, scope: unknown) =>
     result(() => {
-      check(isEventId(id) && !!change && typeof change === 'object');
+      check(isEventId(id) && !!change && typeof change === 'object' && isScope(scope));
       const c = change as Record<string, unknown>;
       check(c.title === undefined || isString(c.title, 2000));
       check(c.time === undefined || isEventTime(c.time));
-      return service.updateEvent(id, {
-        ...(c.title !== undefined && { title: c.title as string }),
-        ...(c.time !== undefined && { time: c.time as EventTime }),
-      });
+      return service.updateEvent(
+        id,
+        {
+          ...(c.title !== undefined && { title: c.title as string }),
+          ...(c.time !== undefined && { time: c.time as EventTime }),
+        },
+        scope ?? undefined,
+      );
     }),
   );
-  ipcMain.handle(IPC.eventDelete, (_e, id: unknown) =>
+  ipcMain.handle(IPC.eventDelete, (_e, id: unknown, scope: unknown) =>
     result(() => {
-      check(isEventId(id));
-      service.deleteEvent(id);
+      check(isEventId(id) && isScope(scope));
+      service.deleteEvent(id, scope ?? undefined);
     }),
   );
   ipcMain.handle(IPC.eventUndoDelete, (_e, id: unknown) =>

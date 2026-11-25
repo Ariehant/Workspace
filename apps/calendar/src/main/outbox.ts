@@ -10,9 +10,29 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { EventTime } from '../shared/dates';
-import { isGoogleCalendar, READ_ONLY_MESSAGE, type CalEvent, type Calendar } from '../shared/types';
+import {
+  canEdit,
+  isGoogleCalendar,
+  READ_ONLY_MESSAGE,
+  type CalEvent,
+  type Calendar,
+  type EditScope,
+} from '../shared/types';
 import type { Cache, OpPayload, OutboxOp } from './cache';
+import { GoogleApiError } from './google/client';
 import { WorkspaceApiError } from './workspace/client';
+
+/** What an edit knows when it's sent: the event as shown here, and the occurrences it's for. */
+export interface EditContext {
+  base: CalEvent | null;
+  scope?: EditScope;
+}
+
+/**
+ * What a change sent gives back: the event as the source has it now, null if it left the
+ * calendar, or `{ series: true }` when a whole series changed (read again at the next sync).
+ */
+export type UpdateResult = CalEvent | null | { series: true };
 
 /** What the outbox needs from a source to send edits. */
 export interface EditTarget {
@@ -25,8 +45,29 @@ export interface EditTarget {
     calendar: Calendar,
     sourceId: string,
     change: { title?: string; time?: EventTime },
-  ): Promise<CalEvent | null>;
-  trash(calendar: Calendar, sourceId: string): Promise<void>;
+    context: EditContext,
+  ): Promise<UpdateResult>;
+  trash(calendar: Calendar, sourceId: string, context: EditContext): Promise<void>;
+}
+
+/** How a failed send is handled, whichever source it came from. */
+type Failure = 'offline' | 'busy' | 'unauthorized' | 'gone' | 'refused';
+
+function failureOf(error: unknown): Failure {
+  if (error instanceof WorkspaceApiError) {
+    if (error.code === 'network') return 'offline';
+    if (error.code === 'rate_limited') return 'busy';
+    if (error.code === 'unauthorized') return 'unauthorized';
+    if (error.code === 'object_not_found' || error.code === 'restricted_resource') return 'gone';
+  }
+  if (error instanceof GoogleApiError) {
+    if (error.code === 'network') return 'offline';
+    if (error.code === 'rate_limited') return 'busy';
+    if (error.code === 'unauthorized') return 'unauthorized';
+    if (error.code === 'not_found' || error.code === 'gone' || error.code === 'forbidden')
+      return 'gone';
+  }
+  return 'refused';
 }
 
 /** How long a delete waits for Undo. */
@@ -52,6 +93,8 @@ export interface OutboxOptions {
   onDue?: (at: number | null) => void;
   /** Edits refused for good: their calendar is read again from the source. */
   onRefused?: (calendarId: string) => void;
+  /** A whole series changed at the source: its calendar is read again. */
+  onSeriesChanged?: (calendarId: string) => void;
 }
 
 const sourceIdOf = (eventId: string) => eventId.slice(eventId.indexOf(':') + 1);
@@ -84,7 +127,7 @@ export class Outbox {
   private calendar(id: string): Calendar {
     const calendar = this.cache.calendar(id);
     if (!calendar) throw new Error('That calendar is gone.');
-    if (isGoogleCalendar(calendar)) throw new Error(READ_ONLY_MESSAGE);
+    if (isGoogleCalendar(calendar) && !canEdit(calendar)) throw new Error(READ_ONLY_MESSAGE);
     return calendar;
   }
 
@@ -132,27 +175,42 @@ export class Outbox {
     return event;
   }
 
-  /** Change an event's title and/or time. */
-  update(eventId: string, change: { title?: string; time?: EventTime }): CalEvent {
+  /**
+   * Change an event's title and/or time; for an occurrence of a recurring event, `scope` says
+   * which occurrences (this one when absent).
+   */
+  update(
+    eventId: string,
+    change: { title?: string; time?: EventTime },
+    scope?: EditScope,
+  ): CalEvent {
     const event = this.cache.event(eventId);
     if (!event) throw new Error('That event is gone.');
     this.calendar(event.calendarId);
+    const series = event.series && scope && scope !== 'this' ? scope : undefined;
     const next: CalEvent = {
       ...event,
       ...(change.title !== undefined && { title: change.title }),
-      ...(change.time && { ...change.time, floating: !change.time.allDay }),
+      // A new time is this machine's clock time until the source answers (a Google event's
+      // instant is worked out again then): not one to move if the time zone changes meanwhile.
+      ...(change.time && {
+        ...change.time,
+        floating: !change.time.allDay && !event.instant,
+        instant: undefined,
+      }),
       pending: true,
     };
     this.cache.transaction(() => {
       this.cache.putEvent(next);
-      // Not sent yet: fold this edit into the waiting one.
+      // Not sent yet: fold this edit into the waiting one (for the same occurrences).
       const waiting = this.cache
         .opsFor(eventId)
         .find(
           (o) =>
             (o.kind === 'create' || o.kind === 'update') &&
             o.attempts === 0 &&
-            o.id !== this.sendingOp,
+            o.id !== this.sendingOp &&
+            o.payload.scope === series,
         );
       if (waiting) {
         this.cache.updateOp({
@@ -164,7 +222,7 @@ export class Outbox {
           eventId,
           calendarId: event.calendarId,
           kind: 'update',
-          payload: stripUndefined(change),
+          payload: { ...stripUndefined(change), ...(series && { scope: series }) },
           notBefore: this.now(),
           baseEdited: event.lastEdited || null,
         });
@@ -174,18 +232,34 @@ export class Outbox {
     return next;
   }
 
-  /** Delete an event: gone at once, sent to the source after `UNDO_MS` unless undone. */
-  remove(eventId: string) {
+  /**
+   * Delete an event: gone at once, sent to the source after `UNDO_MS` unless undone. For an
+   * occurrence, `scope` can take the series' other occurrences (all, or the following ones).
+   */
+  remove(eventId: string, scope?: EditScope) {
     const event = this.cache.event(eventId);
     if (!event) return;
     this.calendar(event.calendarId);
+    const series = event.series && scope && scope !== 'this' ? scope : undefined;
+    const others =
+      series && event.series
+        ? this.cache
+            .seriesEvents(event.calendarId, event.series.id)
+            .filter(
+              (e) =>
+                e.id !== eventId &&
+                (series === 'all' ||
+                  (e.series?.originalStart ?? '') >= event.series!.originalStart),
+            )
+        : [];
     this.cache.transaction(() => {
       this.cache.deleteEvent(eventId);
+      for (const other of others) this.cache.deleteEvent(other.id);
       this.cache.addOp({
         eventId,
         calendarId: event.calendarId,
         kind: 'trash',
-        payload: { snapshot: event },
+        payload: { snapshot: event, ...(series && { scope: series, others }) },
         notBefore: this.now() + UNDO_MS,
         baseEdited: event.lastEdited || null,
       });
@@ -203,6 +277,7 @@ export class Outbox {
     this.cache.transaction(() => {
       this.cache.removeOp(op.id);
       this.cache.putEvent(event);
+      for (const other of op.payload.others ?? []) this.cache.putEvent(other);
     });
     this.markPending(event.id);
     this.afterEdit();
@@ -271,27 +346,18 @@ export class Outbox {
         this.offlineFailures = 0;
         this.error = null;
       } catch (error) {
-        if (!(error instanceof WorkspaceApiError)) {
-          this.backOff(op, error instanceof Error ? error.message : String(error));
-          continue;
-        }
-        if (
-          error.code === 'network' ||
-          error.code === 'rate_limited' ||
-          error.code === 'unauthorized'
-        ) {
-          // Everything waits (offline, busy, or a token to fix): nothing counts as a failed
+        const failure = failureOf(error);
+        const message = error instanceof Error ? error.message : String(error);
+        if (failure === 'offline' || failure === 'busy' || failure === 'unauthorized') {
+          // Everything waits (offline, busy, or a sign-in to fix): nothing counts as a failed
           // try, so no edit is dropped for it.
           this.offlineFailures++;
           this.offlineUntil =
             this.now() + Math.min(MAX_BACKOFF_MS, 5_000 * 2 ** (this.offlineFailures - 1));
-          if (error.code === 'unauthorized') this.error = error.message;
+          if (failure === 'unauthorized') this.error = message;
           return;
         }
-        if (
-          (error.code === 'object_not_found' || error.code === 'restricted_resource') &&
-          op.kind !== 'create'
-        ) {
+        if (failure === 'gone' && op.kind !== 'create') {
           // The row is gone (or out of reach): there's nothing to change.
           this.cache.transaction(() => {
             this.cache.removeOp(op.id);
@@ -300,7 +366,7 @@ export class Outbox {
           this.changed();
           continue;
         }
-        this.backOff(op, error.message);
+        this.backOff(op, message);
       } finally {
         this.sendingOp = null;
         this.changed();
@@ -313,7 +379,7 @@ export class Outbox {
     const attempts = op.attempts + 1;
     if (attempts >= MAX_ATTEMPTS) {
       this.cache.removeOp(op.id);
-      this.error = `An edit couldn't be saved to Workspace and was dropped: ${message}`;
+      this.error = `An edit couldn't be saved and was dropped: ${message}`;
       this.markPending(op.eventId);
       // Show the source's version again.
       this.options.onRefused?.(op.calendarId);
@@ -366,10 +432,20 @@ export class Outbox {
       return;
     }
     if (op.kind === 'update') {
-      const event = await engine.update(calendar, sourceId, {
-        title: op.payload.title,
-        time: op.payload.time,
-      });
+      const result = await engine.update(
+        calendar,
+        sourceId,
+        { title: op.payload.title, time: op.payload.time },
+        { base: this.cache.event(op.eventId), scope: op.payload.scope },
+      );
+      if (result && 'series' in result) {
+        // The series changed: its occurrences are read again (this one shows the edit till then).
+        this.cache.removeOp(op.id);
+        this.markPending(op.eventId);
+        this.options.onSeriesChanged?.(calendar.id);
+        return;
+      }
+      const event = result;
       this.cache.transaction(() => {
         const local = this.cache.event(op.eventId);
         this.cache.removeOp(op.id);
@@ -383,15 +459,23 @@ export class Outbox {
           return;
         }
         if (event) {
-          this.cache.putEvent({ ...event, pending: false, conflict: local?.conflict ?? null });
+          this.cache.putEvent({
+            ...event,
+            pending: false,
+            conflict: event.conflict ?? local?.conflict ?? null,
+          });
         } else {
           this.cache.deleteEvent(op.eventId); // it left the calendar (e.g. no longer "mine")
         }
       });
       return;
     }
-    await engine.trash(calendar, sourceId);
+    await engine.trash(calendar, sourceId, {
+      base: op.payload.snapshot ?? null,
+      scope: op.payload.scope,
+    });
     this.cache.removeOp(op.id);
+    if (op.payload.scope) this.options.onSeriesChanged?.(calendar.id);
   }
 }
 

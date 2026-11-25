@@ -255,7 +255,41 @@ export async function startFakeGoogle(): Promise<FakeGoogle> {
         return json(200, created);
       }
 
-      const found = eventId ? calendar.events.get(eventId) : undefined;
+      let found = eventId ? calendar.events.get(eventId) : undefined;
+      // An occurrence of a series, by Google's id for it (`<series>_<start>`), not changed yet.
+      const occurrence = !found && eventId && /^(.+)_(\d{8})(T\d{6}Z)?$/.exec(eventId);
+      const master = occurrence ? calendar.events.get(occurrence[1]!)?.event : undefined;
+      if (occurrence && master?.recurrence && master.status !== 'cancelled') {
+        const d = occurrence[2]!;
+        const day = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+        const t = occurrence[3];
+        const start = t ? `${day}T${t.slice(1, 3)}:${t.slice(3, 5)}:${t.slice(5, 7)}Z` : undefined;
+        const length = master.start?.dateTime
+          ? Date.parse(master.end!.dateTime!) - Date.parse(master.start.dateTime)
+          : 0;
+        const { recurrence: _r, ...rest } = master;
+        found = {
+          seq: 0,
+          event: {
+            ...rest,
+            id: eventId!,
+            recurringEventId: master.id,
+            originalStartTime: start
+              ? { dateTime: start, timeZone: master.start?.timeZone }
+              : { date: day },
+            start: start ? { dateTime: start, timeZone: master.start?.timeZone } : { date: day },
+            end: start
+              ? {
+                  dateTime: new Date(Date.parse(start) + length).toISOString(),
+                  timeZone: master.start?.timeZone,
+                }
+              : master.end,
+            etag: undefined,
+          },
+        };
+        // Patched or deleted, it becomes an exception of the series.
+        if (req.method !== 'GET') calendar.events.set(eventId!, found);
+      }
       if (!found || found.event.status === 'cancelled') return apiError(404, 'notFound');
       const ifMatch = req.headers['if-match'];
       if (ifMatch && ifMatch !== found.event.etag)

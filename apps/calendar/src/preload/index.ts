@@ -15,7 +15,7 @@ import {
   type ShowEvent,
 } from '../shared/ipc';
 import type { EventTime } from '../shared/dates';
-import type { CalEvent, Calendar } from '../shared/types';
+import type { CalEvent, Calendar, EditScope } from '../shared/types';
 
 const call = <T>(channel: string, ...args: unknown[]) =>
   ipcRenderer.invoke(channel, ...args) as Promise<Result<T>>;
@@ -61,9 +61,9 @@ const api = {
     range: (from: string, to: string) => call<CalEvent[]>(IPC.events, from, to),
     create: (calendarId: string, title: string, time: EventTime) =>
       call<CalEvent>(IPC.eventCreate, calendarId, title, time),
-    update: (id: string, change: { title?: string; time?: EventTime }) =>
-      call<CalEvent>(IPC.eventUpdate, id, change),
-    remove: (id: string) => call<void>(IPC.eventDelete, id),
+    update: (id: string, change: { title?: string; time?: EventTime }, scope?: EditScope) =>
+      call<CalEvent>(IPC.eventUpdate, id, change, scope ?? null),
+    remove: (id: string, scope?: EditScope) => call<void>(IPC.eventDelete, id, scope ?? null),
     undoRemove: (id: string) => call<CalEvent | null>(IPC.eventUndoDelete, id),
     dismissConflict: (id: string) => call<void>(IPC.eventDismissConflict, id),
     search: (query: string) => call<CalEvent[]>(IPC.search, query),

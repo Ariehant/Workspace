@@ -23,6 +23,7 @@ import {
   isGoogleAccount,
   type CalEvent,
   type Calendar,
+  type EditScope,
   type GoogleAccount,
   type WorkspaceAccount,
   type WorkspaceCalendar,
@@ -41,6 +42,7 @@ import {
   type GoogleEndpoints,
   type TokenSet,
 } from './google/oauth';
+import { GoogleEditTarget } from './google/edits';
 import { GoogleCalendarSync } from './google/sync';
 import { Outbox, type EditTarget } from './outbox';
 import { SyncService } from './sync';
@@ -93,7 +95,10 @@ export class CalendarService {
   readonly outbox: Outbox;
   private readonly engines = new Map<string, WorkspaceEngine>();
   private readonly sessions = new Map<string, Session>();
-  private readonly googleSyncs = new Map<string, GoogleCalendarSync>();
+  private readonly googleSyncs = new Map<
+    string,
+    { sync: GoogleCalendarSync; edits: GoogleEditTarget }
+  >();
   private readonly googleSessions = new Map<string, GoogleSession>();
   private googleSigningIn: AbortController | null = null;
   private readonly endpoints: GoogleEndpoints;
@@ -108,7 +113,7 @@ export class CalendarService {
     this.sync = new SyncService({
       cache: this.cache,
       engineFor: (account) => this.engineFor(account),
-      googleFor: (account) => this.googleFor(account),
+      googleFor: (account) => this.googleFor(account)?.sync ?? null,
       onChange: options.onChange,
       log: options.log,
     });
@@ -116,7 +121,8 @@ export class CalendarService {
       cache: this.cache,
       engineFor: (calendar) => {
         const account = this.cache.account(calendar.accountId);
-        if (!account || isGoogleAccount(account)) return null;
+        if (!account) return null;
+        if (isGoogleAccount(account)) return this.googleFor(account)?.edits ?? null;
         const engine = this.engineFor(account);
         return engine && workspaceTarget(engine);
       },
@@ -124,10 +130,12 @@ export class CalendarService {
       onDue: (at) => this.scheduleFlush(at),
       onRefused: (calendarId) => {
         options.log?.('warn', `outbox: an edit to calendar ${calendarId} was refused and dropped`);
-        // Read it again from the source, so it shows what Workspace has.
+        // Read it again from the source, so it shows what the source has.
         this.cache.setSyncState(calendarId, { sweptAt: null });
+        this.cache.setCursor(calendarId, null);
         void this.sync.syncAll();
       },
+      onSeriesChanged: () => void this.sync.syncAll(),
     });
   }
 
@@ -235,20 +243,23 @@ export class CalendarService {
     );
   }
 
-  /** One sync (and one token) per Google account; null if its sign-in can't be read. */
-  googleFor(account: GoogleAccount): GoogleCalendarSync | null {
+  /**
+   * One sync and edit target (sharing one token) per Google account; null if its sign-in can't
+   * be read.
+   */
+  googleFor(account: GoogleAccount): { sync: GoogleCalendarSync; edits: GoogleEditTarget } | null {
     const cached = this.googleSyncs.get(account.id);
     if (cached) return cached;
     const sealed = this.cache.sealedToken(account.id);
     const refreshToken = sealed && this.options.unseal(sealed);
     if (!refreshToken) return null;
-    const sync = new GoogleCalendarSync({
-      cache: this.cache,
-      engine: this.googleEngine(this.googleTokens(refreshToken)),
-      zone: this.zone,
-    });
-    this.googleSyncs.set(account.id, sync);
-    return sync;
+    const engine = this.googleEngine(this.googleTokens(refreshToken));
+    const source = {
+      sync: new GoogleCalendarSync({ cache: this.cache, engine, zone: this.zone }),
+      edits: new GoogleEditTarget(engine, this.zone),
+    };
+    this.googleSyncs.set(account.id, source);
+    return source;
   }
 
   private startGoogleSession(session: GoogleSession): GoogleConnect {
@@ -440,12 +451,16 @@ export class CalendarService {
     return this.outbox.create(calendarId, title, time);
   }
 
-  updateEvent(eventId: string, change: { title?: string; time?: EventTime }): CalEvent {
-    return this.outbox.update(eventId, change);
+  updateEvent(
+    eventId: string,
+    change: { title?: string; time?: EventTime },
+    scope?: EditScope,
+  ): CalEvent {
+    return this.outbox.update(eventId, change, scope);
   }
 
-  deleteEvent(eventId: string) {
-    this.outbox.remove(eventId);
+  deleteEvent(eventId: string, scope?: EditScope) {
+    this.outbox.remove(eventId, scope);
   }
 
   undoDelete(eventId: string): CalEvent | null {
@@ -661,4 +676,5 @@ const workspaceTarget = (engine: WorkspaceEngine): EditTarget => ({
   update: (calendar, sourceId, change) =>
     engine.update(calendar as WorkspaceCalendar, sourceId, change),
   trash: (_calendar, sourceId) => engine.trash(sourceId),
+  // (Workspace has no recurring rows: the context isn't needed.)
 });
