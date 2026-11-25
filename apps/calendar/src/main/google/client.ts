@@ -81,10 +81,15 @@ export class GoogleClient {
   async request<T>(
     method: string,
     path: string,
-    init: { query?: Record<string, string | undefined>; body?: unknown; headers?: Record<string, string> } = {},
+    init: {
+      query?: Record<string, string | undefined>;
+      body?: unknown;
+      headers?: Record<string, string>;
+    } = {},
   ): Promise<T> {
     const url = new URL(`${this.options.base.replace(/\/$/, '')}/calendar/v3${path}`);
-    for (const [k, v] of Object.entries(init.query ?? {})) if (v !== undefined) url.searchParams.set(k, v);
+    for (const [k, v] of Object.entries(init.query ?? {}))
+      if (v !== undefined) url.searchParams.set(k, v);
     let refreshed = false;
     for (let attempt = 0; ; attempt++) {
       let token: string;
@@ -140,17 +145,30 @@ export class GoogleClient {
 function errorFor(status: number, reason: string, message: string | undefined): GoogleApiError {
   const said = message ? ` (${message})` : '';
   if (status === 401)
-    return new GoogleApiError('unauthorized', 'Google signed this account out. Sign in again.', status);
+    return new GoogleApiError(
+      'unauthorized',
+      'Google signed this account out. Sign in again.',
+      status,
+    );
   if (status === 410) return new GoogleApiError('gone', 'Sync from scratch.', status);
-  if (status === 404) return new GoogleApiError('not_found', 'Google has no such calendar or event.', status);
+  if (status === 404)
+    return new GoogleApiError('not_found', 'Google has no such calendar or event.', status);
   if (status === 412)
     return new GoogleApiError('precondition_failed', 'The event changed in Google.', status);
   if (status === 429 || /rateLimitExceeded/i.test(reason))
-    return new GoogleApiError('rate_limited', 'Google is limiting requests; trying again later.', status);
+    return new GoogleApiError(
+      'rate_limited',
+      'Google is limiting requests; trying again later.',
+      status,
+    );
   if (status === 403)
     return new GoogleApiError('forbidden', `Google didn't allow this${said}.`, status);
   if (status >= 500)
-    return new GoogleApiError('server', `Google had a problem (${status}); trying again later.`, status);
+    return new GoogleApiError(
+      'server',
+      `Google had a problem (${status}); trying again later.`,
+      status,
+    );
   return new GoogleApiError('bad_request', `Google refused the request${said}.`, status);
 }
 
@@ -166,19 +184,18 @@ export class GoogleEngine {
     const out: GoogleCalendarEntry[] = [];
     let pageToken: string | undefined;
     do {
-      const page = await this.client.request<{ items?: GoogleCalendarEntry[]; nextPageToken?: string }>(
-        'GET',
-        '/users/me/calendarList',
-        {
-          query: {
-            maxResults: '250',
-            showHidden: 'true',
-            pageToken,
-            fields:
-              'nextPageToken,items(id,summary,summaryOverride,backgroundColor,accessRole,timeZone,primary,hidden,selected)',
-          },
+      const page = await this.client.request<{
+        items?: GoogleCalendarEntry[];
+        nextPageToken?: string;
+      }>('GET', '/users/me/calendarList', {
+        query: {
+          maxResults: '250',
+          showHidden: 'true',
+          pageToken,
+          fields:
+            'nextPageToken,items(id,summary,summaryOverride,backgroundColor,accessRole,timeZone,primary,hidden,selected)',
         },
-      );
+      });
       out.push(...(page.items ?? []));
       pageToken = page.nextPageToken;
     } while (pageToken);

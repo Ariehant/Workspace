@@ -156,6 +156,37 @@ export function registerIpc(service: CalendarService, hooks: IpcHooks) {
     }),
   );
 
+  ipcMain.handle(IPC.googleSetClient, (_e, clientId: unknown, clientSecret: unknown) =>
+    result(() => {
+      check(isString(clientId, 300) && isString(clientSecret, 300));
+      return service.setGoogleClient(clientId, clientSecret);
+    }),
+  );
+  ipcMain.handle(IPC.googleSignIn, () => result(() => service.googleSignIn()));
+  ipcMain.handle(IPC.googleAccount, (_e, accountId: unknown) =>
+    result(() => {
+      check(isId(accountId));
+      return service.googleAccount(accountId);
+    }),
+  );
+  ipcMain.handle(IPC.googleSave, (_e, sessionId: unknown, googleIds: unknown) =>
+    result(() => {
+      check(
+        isId(sessionId) &&
+          Array.isArray(googleIds) &&
+          googleIds.length <= 100 &&
+          googleIds.every((id) => isString(id, 300)),
+      );
+      return service.googleSave(sessionId, googleIds as string[]);
+    }),
+  );
+  ipcMain.handle(IPC.googleCancel, (_e, sessionId: unknown) =>
+    result(() => {
+      check(sessionId === undefined || sessionId === null || isId(sessionId));
+      service.cancelGoogle(sessionId ?? undefined);
+    }),
+  );
+
   ipcMain.handle(IPC.calendarUpdate, (_e, id: unknown, patch: unknown) =>
     result(() => {
       check(isId(id) && !!patch && typeof patch === 'object');

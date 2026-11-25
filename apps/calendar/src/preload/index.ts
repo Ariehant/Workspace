@@ -7,6 +7,8 @@ import {
   type CalendarPatch,
   type ConnectSession,
   type DatabaseChoice,
+  type GoogleConnect,
+  type GoogleSetup,
   type Result,
   type SchemaChoice,
   type Settings,
@@ -34,6 +36,16 @@ const api = {
     save: (sessionId: string, drafts: CalendarDraft[]) =>
       call<void>(IPC.connectSave, sessionId, drafts),
     cancel: (sessionId: string) => call<void>(IPC.connectCancel, sessionId),
+  },
+  google: {
+    setClient: (clientId: string, clientSecret: string) =>
+      call<GoogleSetup>(IPC.googleSetClient, clientId, clientSecret),
+    signIn: () => call<GoogleConnect>(IPC.googleSignIn),
+    account: (accountId: string) => call<GoogleConnect>(IPC.googleAccount, accountId),
+    save: (sessionId: string, googleIds: string[]) =>
+      call<void>(IPC.googleSave, sessionId, googleIds),
+    /** Cancels a sign-in waiting for the browser, or a setup (with its id). */
+    cancel: (sessionId?: string) => call<void>(IPC.googleCancel, sessionId ?? null),
   },
   calendars: {
     update: (id: string, patch: CalendarPatch) => call<Calendar>(IPC.calendarUpdate, id, patch),

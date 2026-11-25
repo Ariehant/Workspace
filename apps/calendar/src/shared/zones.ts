@@ -94,5 +94,8 @@ export function instantAt(wall: WallTime | Day, zone: string): Date {
 
 /** An instant as Google writes ids and `UNTIL`: `YYYYMMDDTHHMMSSZ`. */
 export function basicUtc(instant: Date | number | string): string {
-  return new Date(instant).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  return new Date(instant)
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d{3}/, '');
 }

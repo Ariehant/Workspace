@@ -21,7 +21,7 @@ const derive = (items: GoogleEvent[], zone = 'Asia/Kolkata', cal = calendar) =>
   deriveEvents(cal, items, window, zone);
 
 describe('Google events', () => {
-  it('shows a timed event at this machine\'s clock time for it', () => {
+  it("shows a timed event at this machine's clock time for it", () => {
     const [event] = derive([
       {
         id: 'e1',
@@ -120,7 +120,7 @@ describe('recurring Google events', () => {
     updated: '2026-11-20T00:00:00.000Z',
   };
 
-  it('expands a series into occurrences with ids like Google\'s', () => {
+  it("expands a series into occurrences with ids like Google's", () => {
     const events = derive([master], 'Europe/Berlin');
     expect(events.map((e) => [e.sourceId, e.start, e.end])).toEqual([
       ['standup_20261123T080000Z', '2026-11-23T09:00', '2026-11-23T09:15'],
@@ -158,7 +158,7 @@ describe('recurring Google events', () => {
     });
   });
 
-  it('shows an occurrence whose series it doesn\'t have', () => {
+  it("shows an occurrence whose series it doesn't have", () => {
     const [event] = derive(
       [
         {
@@ -175,7 +175,7 @@ describe('recurring Google events', () => {
     expect(event).toMatchObject({ title: 'Invited once', series: { id: 'theirs' } });
   });
 
-  it('repeats in the series\' zone and shows at this machine\'s clock', () => {
+  it("repeats in the series' zone and shows at this machine's clock", () => {
     // 09:00 in Berlin; Berlin moves its clocks on 2026-10-25, India doesn't.
     const series: GoogleEvent = {
       ...master,
@@ -183,7 +183,12 @@ describe('recurring Google events', () => {
       end: { dateTime: '2026-10-19T10:00:00+02:00', timeZone: 'Europe/Berlin' },
       recurrence: ['RRULE:FREQ=WEEKLY;COUNT=4'],
     };
-    const events = deriveEvents(calendar, [series], { from: '2026-10-01', to: '2026-11-30' }, 'Asia/Kolkata');
+    const events = deriveEvents(
+      calendar,
+      [series],
+      { from: '2026-10-01', to: '2026-11-30' },
+      'Asia/Kolkata',
+    );
     expect(events.map((e) => e.start)).toEqual([
       '2026-10-19T12:30',
       '2026-10-26T13:30',

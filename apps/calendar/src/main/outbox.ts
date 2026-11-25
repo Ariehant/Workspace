@@ -10,7 +10,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { EventTime } from '../shared/dates';
-import type { CalEvent, Calendar } from '../shared/types';
+import { isGoogleCalendar, READ_ONLY_MESSAGE, type CalEvent, type Calendar } from '../shared/types';
 import type { Cache, OpPayload, OutboxOp } from './cache';
 import { WorkspaceApiError } from './workspace/client';
 
@@ -84,6 +84,7 @@ export class Outbox {
   private calendar(id: string): Calendar {
     const calendar = this.cache.calendar(id);
     if (!calendar) throw new Error('That calendar is gone.');
+    if (isGoogleCalendar(calendar)) throw new Error(READ_ONLY_MESSAGE);
     return calendar;
   }
 
@@ -135,6 +136,7 @@ export class Outbox {
   update(eventId: string, change: { title?: string; time?: EventTime }): CalEvent {
     const event = this.cache.event(eventId);
     if (!event) throw new Error('That event is gone.');
+    this.calendar(event.calendarId);
     const next: CalEvent = {
       ...event,
       ...(change.title !== undefined && { title: change.title }),
@@ -176,6 +178,7 @@ export class Outbox {
   remove(eventId: string) {
     const event = this.cache.event(eventId);
     if (!event) return;
+    this.calendar(event.calendarId);
     this.cache.transaction(() => {
       this.cache.deleteEvent(eventId);
       this.cache.addOp({

@@ -1,8 +1,12 @@
-/** Settings: theme, the day weeks start on, a second time zone, and running in the background. */
+/**
+ * Settings: theme, the day weeks start on, a second time zone, running in the background, and
+ * the Google OAuth client.
+ */
 import { Dialog, DialogContent } from '@workspace/ui';
 import { useMemo, useState } from 'react';
-import type { Settings, ThemePreference } from '../shared/ipc';
+import type { GoogleSetup, Settings, ThemePreference } from '../shared/ipc';
 import { api, unwrap } from './api';
+import { ClientForm } from './google';
 
 /** ICU still lists some zones by old names: show (and save) the names people use today. */
 const RENAMED: Record<string, string> = {
@@ -20,13 +24,16 @@ const selectClass =
 
 export function SettingsDialog({
   settings,
+  google,
   onClose,
   onError,
 }: {
   settings: Settings;
+  google: GoogleSetup | null;
   onClose: () => void;
   onError: (message: string) => void;
 }) {
+  const [savedClient, setSavedClient] = useState(false);
   const zones = useMemo(() => {
     try {
       const names = Intl.supportedValuesOf('timeZone').map((z) => RENAMED[z] ?? z);
@@ -129,9 +136,27 @@ export function SettingsDialog({
           </p>
           <p className="col-span-2 text-xs text-faint">
             Workspace dates have no time zone: an event at 10:00 shows at 10:00 wherever you are.
-            The second column shows what the clock says in another zone at each hour.
+            Google events happen at a real moment: they show at this computer&apos;s clock time for
+            it. The second column shows what the clock says in another zone at each hour.
           </p>
         </div>
+        {google && (
+          <section aria-label="Google Calendar" className="border-t border-line p-4">
+            <h3 className="mb-2 text-sm font-semibold">Google Calendar</h3>
+            {google.fromEnvironment ? (
+              <p className="text-sm text-muted">This build brings its own Google OAuth client.</p>
+            ) : (
+              <>
+                <ClientForm setup={google} onSaved={() => setSavedClient(true)} onError={onError} />
+                {savedClient && (
+                  <p role="status" className="mt-2 text-xs text-muted">
+                    Saved.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -68,7 +68,9 @@ function datesOf(line: string, series: Series): Date[] {
     const parsed = parseBasic(raw.split('/')[0]!); // A PERIOD's start.
     if (!parsed) continue;
     if (series.allDay || !parsed.wall) {
-      out.push(floating(series.allDay ? parsed.day : `${parsed.day}T${series.start.slice(11, 16)}`));
+      out.push(
+        floating(series.allDay ? parsed.day : `${parsed.day}T${series.start.slice(11, 16)}`),
+      );
       continue;
     }
     let wall = parsed.wall;
@@ -140,8 +142,6 @@ export function expand(series: Series, from: Day, to: Day): Occurrence[] {
   const after = floating(from);
   const before = new Date(floating(addDays(to, 1)).getTime() - 1);
   return set.between(after, before, true).map((d) => ({
-    start: series.allDay
-      ? dayOfDate(d)
-      : instantAt(wallOf(d), series.timeZone).toISOString(),
+    start: series.allDay ? dayOfDate(d) : instantAt(wallOf(d), series.timeZone).toISOString(),
   }));
 }

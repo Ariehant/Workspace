@@ -247,6 +247,10 @@ export class Cache {
       .run(account.id, JSON.stringify(account), sealedToken, n);
   }
 
+  setSealedToken(id: string, sealedToken: string) {
+    this.db.prepare('UPDATE accounts SET token = ? WHERE id = ?').run(sealedToken, id);
+  }
+
   updateAccount(account: Account) {
     this.db
       .prepare('UPDATE accounts SET json = ? WHERE id = ?')

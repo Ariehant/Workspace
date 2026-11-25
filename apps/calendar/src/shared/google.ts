@@ -140,8 +140,7 @@ export function toCalEvent(
   };
 }
 
-const overlaps = (e: CalEvent, from: Day, to: Day) =>
-  dayOf(e.start) <= to && dayOf(e.end) >= from;
+const overlaps = (e: CalEvent, from: Day, to: Day) => dayOf(e.start) <= to && dayOf(e.end) >= from;
 
 /**
  * A Google calendar's events in the window (days on this machine's clock, inclusive), from the
@@ -180,7 +179,10 @@ export function deriveEvents(
     for (const [key, item] of of) {
       if (item.status === 'cancelled' || !item.start) continue;
       const times = timesOf(item.start, item.end, zone);
-      push(times && toCalEvent(calendar, item, times, { series: { id: seriesId, originalStart: key } }));
+      push(
+        times &&
+          toCalEvent(calendar, item, times, { series: { id: seriesId, originalStart: key } }),
+      );
     }
   }
 

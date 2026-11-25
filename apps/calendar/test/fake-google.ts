@@ -140,15 +140,26 @@ export async function startFakeGoogle(): Promise<FakeGoogle> {
       }
       if (url.pathname === '/token' && req.method === 'POST') {
         const form = new URLSearchParams(await read(req));
-        if (form.get('client_id') !== fake.clientId || form.get('client_secret') !== fake.clientSecret)
+        if (
+          form.get('client_id') !== fake.clientId ||
+          form.get('client_secret') !== fake.clientSecret
+        )
           return json(401, { error: 'invalid_client' });
         fake.grants.push(form.get('grant_type') ?? '');
         const token = `at-${++n}`;
         if (form.get('grant_type') === 'authorization_code') {
           const issued = codes.get(form.get('code') ?? '');
           codes.delete(form.get('code') ?? '');
-          const challenge = b64url(createHash('sha256').update(form.get('code_verifier') ?? '').digest());
-          if (!issued || issued.challenge !== challenge || issued.redirect !== form.get('redirect_uri'))
+          const challenge = b64url(
+            createHash('sha256')
+              .update(form.get('code_verifier') ?? '')
+              .digest(),
+          );
+          if (
+            !issued ||
+            issued.challenge !== challenge ||
+            issued.redirect !== form.get('redirect_uri')
+          )
             return json(400, { error: 'invalid_grant' });
           access.add(token);
           const idToken = `${b64url('{"alg":"none"}')}.${b64url(JSON.stringify({ email: fake.email }))}.x`;
@@ -186,7 +197,11 @@ export async function startFakeGoogle(): Promise<FakeGoogle> {
         });
         return res.end(
           JSON.stringify({
-            error: { code: failure.status, message: 'fake failure', errors: [{ reason: failure.reason ?? 'backendError' }] },
+            error: {
+              code: failure.status,
+              message: 'fake failure',
+              errors: [{ reason: failure.reason ?? 'backendError' }],
+            },
           }),
         );
       }
@@ -208,7 +223,8 @@ export async function startFakeGoogle(): Promise<FakeGoogle> {
         const syncToken = q.get('syncToken');
         if (syncToken) {
           const [g, s] = syncToken.split(':').map(Number);
-          if (g !== generation) return apiError(410, 'fullSyncRequired', 'Sync token is no longer valid');
+          if (g !== generation)
+            return apiError(410, 'fullSyncRequired', 'Sync token is no longer valid');
           since = s!;
         }
         const timeMin = q.get('timeMin') ? Date.parse(q.get('timeMin')!) : -Infinity;
@@ -227,7 +243,9 @@ export async function startFakeGoogle(): Promise<FakeGoogle> {
         const more = offset + size < all.length;
         return json(200, {
           items,
-          ...(more ? { nextPageToken: String(offset + size) } : { nextSyncToken: `${generation}:${seq}` }),
+          ...(more
+            ? { nextPageToken: String(offset + size) }
+            : { nextSyncToken: `${generation}:${seq}` }),
         });
       }
 
@@ -240,11 +258,15 @@ export async function startFakeGoogle(): Promise<FakeGoogle> {
       const found = eventId ? calendar.events.get(eventId) : undefined;
       if (!found || found.event.status === 'cancelled') return apiError(404, 'notFound');
       const ifMatch = req.headers['if-match'];
-      if (ifMatch && ifMatch !== found.event.etag) return apiError(412, 'conditionNotMet', 'Precondition Failed');
+      if (ifMatch && ifMatch !== found.event.etag)
+        return apiError(412, 'conditionNotMet', 'Precondition Failed');
       if (req.method === 'GET') return json(200, found.event);
       if (req.method === 'PATCH') {
         const patch = JSON.parse(await read(req)) as Partial<GoogleEvent>;
-        return json(200, fake.put(calendar.entry.id, { ...found.event, ...patch, id: found.event.id }));
+        return json(
+          200,
+          fake.put(calendar.entry.id, { ...found.event, ...patch, id: found.event.id }),
+        );
       }
       if (req.method === 'DELETE') {
         fake.remove(calendar.entry.id, found.event.id);

@@ -11,6 +11,8 @@ export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
   return result.value;
 }
 
-/** The CSS variable for a calendar colour name. */
+/** The CSS variable for a calendar colour: a colour name, or a hex colour (Google's). */
 export const colourVar = (colour: string) =>
-  ({ '--cal-colour': `var(--cal-${colour})` }) as CSSProperties;
+  ({
+    '--cal-colour': /^#[0-9a-f]{6}$/i.test(colour) ? colour : `var(--cal-${colour})`,
+  }) as CSSProperties;

@@ -13,6 +13,11 @@ export const IPC = {
   connectPeople: 'connect:people',
   connectSave: 'connect:save',
   connectCancel: 'connect:cancel',
+  googleSetClient: 'google:set-client',
+  googleSignIn: 'google:sign-in',
+  googleAccount: 'google:account',
+  googleSave: 'google:save',
+  googleCancel: 'google:cancel',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
   accountRemove: 'account:remove',
@@ -77,6 +82,34 @@ export interface AppState {
   settings: Settings;
   /** Whether tokens are encrypted by the system's keyring. */
   secureStorage: boolean;
+  google: GoogleSetup;
+}
+
+/** The Google OAuth client (the secret stays in the main process). */
+export interface GoogleSetup {
+  configured: boolean;
+  /** This build or run brings its own client (Settings can't change it). */
+  fromEnvironment: boolean;
+  clientId: string;
+  hasSecret: boolean;
+}
+
+/** A Google account signed in (or already added), and its calendars to choose from. */
+export interface GoogleConnect {
+  sessionId: string;
+  email: string;
+  calendars: GoogleCalendarChoice[];
+}
+
+export interface GoogleCalendarChoice {
+  googleId: string;
+  name: string;
+  /** Google's colour for it (`#rrggbb`), or null. */
+  colour: string | null;
+  accessRole: string;
+  primary: boolean;
+  /** Already shown here. */
+  added: boolean;
 }
 
 /** A connection being set up (the token stays in the main process). */

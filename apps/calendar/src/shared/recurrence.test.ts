@@ -49,15 +49,16 @@ describe('expanding series', () => {
   it('repeats daily, with COUNT', () => {
     expect(
       starts(
-        { allDay: false, start: '2026-11-02T09:00', timeZone: 'UTC', rules: ['RRULE:FREQ=DAILY;COUNT=3'] },
+        {
+          allDay: false,
+          start: '2026-11-02T09:00',
+          timeZone: 'UTC',
+          rules: ['RRULE:FREQ=DAILY;COUNT=3'],
+        },
         '2026-10-01',
         '2027-01-01',
       ),
-    ).toEqual([
-      '2026-11-02T09:00:00.000Z',
-      '2026-11-03T09:00:00.000Z',
-      '2026-11-04T09:00:00.000Z',
-    ]);
+    ).toEqual(['2026-11-02T09:00:00.000Z', '2026-11-03T09:00:00.000Z', '2026-11-04T09:00:00.000Z']);
   });
 
   it('repeats weekly on days, only within the range asked for', () => {
@@ -67,7 +68,7 @@ describe('expanding series', () => {
     ]);
   });
 
-  it('keeps the wall time across a daylight-saving change in the series\' zone', () => {
+  it("keeps the wall time across a daylight-saving change in the series' zone", () => {
     const series: Series = { ...weekly, start: '2026-10-19T09:00', rules: ['RRULE:FREQ=WEEKLY'] };
     expect(starts(series, '2026-10-19', '2026-11-01')).toEqual([
       '2026-10-19T07:00:00.000Z', // CEST
@@ -87,7 +88,11 @@ describe('expanding series', () => {
       '2026-12-08T14:00:00.000Z',
       '2027-01-12T14:00:00.000Z',
     ]);
-    const thirtyFirst: Series = { ...second, start: '2026-10-31T14:00', rules: ['RRULE:FREQ=MONTHLY'] };
+    const thirtyFirst: Series = {
+      ...second,
+      start: '2026-10-31T14:00',
+      rules: ['RRULE:FREQ=MONTHLY'],
+    };
     // Months without a 31st are skipped (RFC 5545).
     expect(starts(thirtyFirst, '2026-10-01', '2027-01-31')).toEqual([
       '2026-10-31T14:00:00.000Z',
@@ -96,7 +101,7 @@ describe('expanding series', () => {
     ]);
   });
 
-  it('stops at a UTC UNTIL, read on the series\' clock', () => {
+  it("stops at a UTC UNTIL, read on the series' clock", () => {
     // 08:00Z is 09:00 in Berlin: the occurrence at UNTIL is included.
     const series = { ...weekly, rules: ['RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20261116T080000Z'] };
     expect(starts(series, '2026-11-01', '2026-12-31')).toEqual([
@@ -127,7 +132,11 @@ describe('expanding series', () => {
 
   it('always includes the first occurrence, even off the rule', () => {
     // Starts on a Tuesday, repeats on Mondays.
-    const series = { ...weekly, start: '2026-11-03T09:00', rules: ['RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=2'] };
+    const series = {
+      ...weekly,
+      start: '2026-11-03T09:00',
+      rules: ['RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=2'],
+    };
     expect(starts(series, '2026-11-01', '2026-11-30')).toEqual([
       '2026-11-03T08:00:00.000Z',
       '2026-11-09T08:00:00.000Z',
@@ -146,7 +155,11 @@ describe('expanding series', () => {
 
   it('ignores rules it cannot read rather than failing', () => {
     expect(
-      starts({ ...weekly, rules: ['RRULE:FREQ=NONSENSE', 'X-THING:1'] }, '2026-11-01', '2026-11-30'),
+      starts(
+        { ...weekly, rules: ['RRULE:FREQ=NONSENSE', 'X-THING:1'] },
+        '2026-11-01',
+        '2026-11-30',
+      ),
     ).toEqual(['2026-11-02T08:00:00.000Z']);
   });
 });

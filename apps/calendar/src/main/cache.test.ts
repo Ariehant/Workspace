@@ -73,7 +73,10 @@ describe('the cache', () => {
 
   it('keeps source items and a cursor per calendar, dropped with the calendar', () => {
     const cache = new Cache(':memory:');
-    cache.addAccount({ id: 'acc', kind: 'google', name: 'Ada', email: 'ada@lab.io', error: null }, 's');
+    cache.addAccount(
+      { id: 'acc', kind: 'google', name: 'Ada', email: 'ada@lab.io', error: null },
+      's',
+    );
     cache.addCalendar(calendar);
     cache.putItem('g', { sourceId: 'series', seriesId: null, data: { id: 'series' } });
     cache.putItem('g', { sourceId: 'series_1', seriesId: 'series', data: { id: 'series_1' } });
@@ -91,10 +94,20 @@ describe('the cache', () => {
 
   it('writes only the derived events that changed, and keeps ones with edits waiting', () => {
     const cache = new Cache(':memory:');
-    cache.addAccount({ id: 'acc', kind: 'google', name: 'Ada', email: 'ada@lab.io', error: null }, 's');
+    cache.addAccount(
+      { id: 'acc', kind: 'google', name: 'Ada', email: 'ada@lab.io', error: null },
+      's',
+    );
     cache.addCalendar(calendar);
     cache.setDerivedEvents('g', [event('a'), event('b'), event('c')]);
-    cache.addOp({ eventId: 'g:c', calendarId: 'g', kind: 'update', payload: { title: 'C2' }, notBefore: 0, baseEdited: null });
+    cache.addOp({
+      eventId: 'g:c',
+      calendarId: 'g',
+      kind: 'update',
+      payload: { title: 'C2' },
+      notBefore: 0,
+      baseEdited: null,
+    });
 
     let writes = 0;
     const put = cache.putEvent.bind(cache);
@@ -104,23 +117,32 @@ describe('the cache', () => {
     };
     cache.setDerivedEvents('g', [event('a'), event('b', { title: 'B2' })]);
     expect(writes).toBe(1);
-    expect(cache.eventsBetween('2026-11-01', '2026-11-30').map((e) => e.title).sort()).toEqual([
-      'B2',
-      'a',
-      'c',
-    ]);
+    expect(
+      cache
+        .eventsBetween('2026-11-01', '2026-11-30')
+        .map((e) => e.title)
+        .sort(),
+    ).toEqual(['B2', 'a', 'c']);
   });
 
   it('works out clock times again for events at real instants', () => {
     const cache = new Cache(':memory:');
-    cache.addAccount({ id: 'acc', kind: 'google', name: 'Ada', email: 'ada@lab.io', error: null }, 's');
+    cache.addAccount(
+      { id: 'acc', kind: 'google', name: 'Ada', email: 'ada@lab.io', error: null },
+      's',
+    );
     cache.addCalendar(calendar);
     cache.setDerivedEvents('g', [
-      event('timed', { instant: { start: '2026-11-24T09:00:00.000Z', end: '2026-11-24T10:00:00.000Z' } }),
+      event('timed', {
+        instant: { start: '2026-11-24T09:00:00.000Z', end: '2026-11-24T10:00:00.000Z' },
+      }),
       event('floating', { floating: true }),
     ]);
     cache.relocalize((t) => wallAt(t, 'America/New_York'));
-    expect(cache.event('g:timed')).toMatchObject({ start: '2026-11-24T04:00', end: '2026-11-24T05:00' });
+    expect(cache.event('g:timed')).toMatchObject({
+      start: '2026-11-24T04:00',
+      end: '2026-11-24T05:00',
+    });
     expect(cache.event('g:floating')).toMatchObject({ start: '2026-11-24T10:00' });
   });
 });

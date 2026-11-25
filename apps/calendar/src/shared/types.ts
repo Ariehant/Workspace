@@ -77,6 +77,16 @@ export type Calendar = WorkspaceCalendar | GoogleCalendar;
 export const isGoogleCalendar = (c: Calendar): c is GoogleCalendar => c.kind === 'google';
 
 /**
+ * Whether events in the calendar can be changed here: not one that lost access, and (until
+ * editing Google events arrives) not a Google calendar.
+ */
+export const canEdit = (calendar: Calendar | null | undefined): boolean =>
+  !!calendar && calendar.status !== 'no-access' && !isGoogleCalendar(calendar);
+
+/** Why a calendar's events can't be changed here. */
+export const READ_ONLY_MESSAGE = 'Events in this calendar can’t be changed here yet.';
+
+/**
  * An event. Times are wall-clock strings: Workspace's dates have no time zone, so a row at
  * 10:00 shows at 10:00 wherever the user is (`floating`).
  */

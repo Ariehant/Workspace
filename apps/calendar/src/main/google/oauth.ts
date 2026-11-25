@@ -41,7 +41,9 @@ export function clientFromEnvironment(
   env: NodeJS.ProcessEnv = process.env,
 ): GoogleClientConfig | null {
   const clientId = env.CALENDAR_GOOGLE_CLIENT_ID?.trim();
-  return clientId ? { clientId, clientSecret: env.CALENDAR_GOOGLE_CLIENT_SECRET?.trim() ?? '' } : null;
+  return clientId
+    ? { clientId, clientSecret: env.CALENDAR_GOOGLE_CLIENT_SECRET?.trim() ?? '' }
+    : null;
 }
 
 /** Who the person is, their calendars, and their events (read and, from v1.1 B, written). */
@@ -174,11 +176,19 @@ export async function signIn(options: SignInOptions): Promise<SignedIn> {
       return send(res, 400, page('Workspace Calendar', 'This sign-in link is out of date.'));
     const code = url.searchParams.get('code');
     if (code) {
-      send(res, 200, page('Signed in', 'You can close this tab and go back to Workspace Calendar.'));
+      send(
+        res,
+        200,
+        page('Signed in', 'You can close this tab and go back to Workspace Calendar.'),
+      );
       settle({ code });
     } else {
       const error = url.searchParams.get('error') ?? 'cancelled';
-      send(res, 200, page('Not signed in', 'Google Calendar wasn’t connected. You can close this tab.'));
+      send(
+        res,
+        200,
+        page('Not signed in', 'Google Calendar wasn’t connected. You can close this tab.'),
+      );
       settle({
         error: new GoogleAuthError(
           error,

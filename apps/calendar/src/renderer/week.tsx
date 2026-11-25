@@ -8,7 +8,7 @@
 import { cn } from '@workspace/ui';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { dayOf, instantOf, minutesOf, type EventTime } from '../shared/dates';
-import type { CalEvent, Calendar } from '../shared/types';
+import { canEdit, type CalEvent, type Calendar } from '../shared/types';
 import { colourVar } from './api';
 import { dayNumber, formatFullDay, formatHour, formatTime, formatWeekday } from './format';
 import { draggedRange, moved, resized, snap, timeOf, toAllDay, toTimed } from './edits';
@@ -58,8 +58,7 @@ export function timeLabel(event: Pick<CalEvent, 'allDay' | 'start' | 'end'>): st
 }
 
 /** Whether events in this calendar can be changed here. */
-export const editable = (calendar: Calendar | undefined) =>
-  !!calendar && calendar.status !== 'no-access';
+export const editable = canEdit;
 
 type Drag =
   | { kind: 'create'; zone: 'grid' | 'allday'; day: string; minutes: number }
