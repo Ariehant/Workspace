@@ -291,7 +291,9 @@ steps: six milestones and the release check. If time runs short, cut these, in t
   base branch's last run (more than 20% slower fails), in the job summary. Since November
   2026 the base branch's run is first scaled by the runner's speed: the median ratio of the
   pure-code benchmarks, which run the same code on both. `sync.first` is held to its limit only;
-  the same code took 5.5 s to 10.7 s on shared runners.
+  the same code took 5.5 s to 10.7 s on shared runners. A regression must also be over 10 ms
+  (`pure.database.edit` measured 13–35 ms on unchanged code), the pure-code benchmarks run three
+  times with each metric's fastest kept, and `pure.page.decode` is the median of five decodes.
 
 **Results** (this machine, 4 cores; ranges are across runs, and this machine is noisy):
 

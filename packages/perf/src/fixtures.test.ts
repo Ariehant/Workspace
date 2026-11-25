@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,7 @@ import {
   buildWorkspace,
   writeWorkspace,
 } from './index';
-import { judge, p95, report, runnerFactor } from './budgets';
+import { judge, p95, recordResults, report, runnerFactor } from './budgets';
 
 describe('fixtures', () => {
   it('builds the same database every time, with computed values', () => {
@@ -192,6 +192,35 @@ describe('budgets', () => {
     expect(judge({ 'sync.first': 46_000 }, base)[0]!.problem).toBe('over the limit (45000 ms)');
   });
 
+  it('passes the runs that failed on small timings alone (PRs #9 and #10, November 2026)', () => {
+    // pure.database.edit, same code as the base branch: 18.6 ms against 13.5 ms (×1.08 runner).
+    const base = {
+      'pure.database.decode': 1014,
+      'pure.database.snapshot': 202,
+      'pure.database.computed': 167,
+      'pure.database.filter': 17,
+      'pure.database.sort': 49.4,
+      'pure.database.group': 12,
+      'pure.database.edit': 13.5,
+      'pure.search': 20.8,
+    };
+    const run = {
+      'pure.database.decode': 1090,
+      'pure.database.snapshot': 196,
+      'pure.database.computed': 185,
+      'pure.database.filter': 17.8,
+      'pure.database.sort': 56.8,
+      'pure.database.group': 13.3,
+      'pure.database.edit': 18.6,
+      'pure.search': 21.5,
+    };
+    expect(judge(run, base).filter((v) => v.problem)).toEqual([]);
+    // Twice as slow is still a regression.
+    expect(judge({ ...run, 'pure.database.edit': 32 }, base).map((v) => v.problem)).toContainEqual(
+      expect.stringMatching(/^\d+% slower/),
+    );
+  });
+
   it("doesn't calibrate without enough pure-code results, and keeps the factor in bounds", () => {
     expect(runnerFactor({ 'pure.search': 40 }, { 'pure.search': 20 })).toBe(1);
     const tenTimes = Object.fromEntries(
@@ -201,6 +230,22 @@ describe('budgets', () => {
       ['filter', 'sort', 'group'].map((m) => [`pure.database.${m}`, 100]),
     );
     expect(runnerFactor(tenTimes, base)).toBe(4);
+  });
+
+  it('keeps the fastest of repeated runs in the results file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'perf-results-'));
+    try {
+      const file = join(dir, 'results.json');
+      recordResults(file, { 'pure.search': 30, 'pure.database.edit': 20 });
+      recordResults(file, { 'pure.search': 25, 'pure.database.edit': 24, 'page.open': 12 });
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
+        'pure.search': 25,
+        'pure.database.edit': 20,
+        'page.open': 12,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('takes the 95th percentile', () => {

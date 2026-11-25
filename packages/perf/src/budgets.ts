@@ -53,12 +53,28 @@ export const REGRESSION_LIMIT = 0.2;
  */
 const NOISE_FLOOR_MS = 10;
 
-/** Add results to a JSON file (several suites write to the same one). */
+/**
+ * A regression must also be this much slower in absolute terms: on shared runners the same code
+ * measured `pure.database.edit` between 13 and 35 ms, so 20% of a ~15 ms metric (3 ms) is
+ * noise, not a change anyone would notice. Doubling a 10 ms metric still fails.
+ */
+const MIN_REGRESSION_MS = 10;
+
+/**
+ * Add results to a JSON file (several suites write to the same one). A metric already in it
+ * keeps the faster of the two: CI runs the pure-code benchmarks more than once, and the fastest
+ * run is the closest to the code's own cost (a busy runner only ever adds time).
+ */
 export function recordResults(file: string | undefined, results: Results): void {
   if (!file) return;
   mkdirSync(dirname(file), { recursive: true });
   const existing: Results = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
-  writeFileSync(file, `${JSON.stringify({ ...existing, ...results }, null, 2)}\n`);
+  const merged: Results = { ...existing };
+  for (const [metric, value] of Object.entries(results) as [Metric, number][]) {
+    const before = existing[metric];
+    merged[metric] = before === undefined ? value : Math.min(before, value);
+  }
+  writeFileSync(file, `${JSON.stringify(merged, null, 2)}\n`);
 }
 
 export interface Verdict {
@@ -124,7 +140,8 @@ export function judge(
       base !== null &&
       budget.compare !== false &&
       base >= NOISE_FLOOR_MS &&
-      value > base * factor * (1 + REGRESSION_LIMIT)
+      value > base * factor * (1 + REGRESSION_LIMIT) &&
+      value - base * factor > MIN_REGRESSION_MS
     ) {
       problem = `${Math.round((value / (base * factor) - 1) * 100)}% slower than the base branch${
         factor === 1 ? '' : ` (allowing for this runner's speed, ×${factor.toFixed(2)})`
