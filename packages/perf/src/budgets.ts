@@ -11,12 +11,15 @@ import { dirname } from 'node:path';
 export const BUDGETS = {
   // UI cases (apps/desktop/e2e/perf.spec.ts).
   'page.open': { target: 1500, limit: 1500 },
-  'page.keystroke.p95': { target: 16, limit: 300 },
+  // Measured in whole frames (16.7 ms at 60 Hz, under xvfb too): one frame more is +40% of a
+  // 40 ms result, so a regression must be more than a frame (keystrokes: 40-74 ms on unchanged
+  // code across CI runs in November 2026).
+  'page.keystroke.p95': { target: 16, limit: 300, minRegressionMs: 17 },
   'database.open': { target: 2000, limit: 12_000 },
   'database.filter': { target: 300, limit: 2000 },
   'database.sort': { target: 300, limit: 2000 },
   'database.group': { target: 300, limit: 2000 },
-  'scroll.frame.max': { target: 50, limit: 250 },
+  'scroll.frame.max': { target: 50, limit: 250, minRegressionMs: 17 },
   quickFind: { target: 150, limit: 250 },
   // First sync over a real server, disk and two processes: on shared runners the same code
   // took 5.5 s to 10.7 s (CI runs of November 2026), a spread no CPU measurement explains, so
@@ -39,6 +42,8 @@ interface Budget {
   limit: number;
   /** False: too noisy between runs to compare with the base branch (the limit still holds). */
   compare?: false;
+  /** A regression must be at least this much slower (ms), when that's more than the default. */
+  minRegressionMs?: number;
 }
 
 export type Metric = keyof typeof BUDGETS;
@@ -141,7 +146,7 @@ export function judge(
       budget.compare !== false &&
       base >= NOISE_FLOOR_MS &&
       value > base * factor * (1 + REGRESSION_LIMIT) &&
-      value - base * factor > MIN_REGRESSION_MS
+      value - base * factor > Math.max(MIN_REGRESSION_MS, budget.minRegressionMs ?? 0)
     ) {
       problem = `${Math.round((value / (base * factor) - 1) * 100)}% slower than the base branch${
         factor === 1 ? '' : ` (allowing for this runner's speed, ×${factor.toFixed(2)})`
