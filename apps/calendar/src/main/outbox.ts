@@ -13,7 +13,21 @@ import type { EventTime } from '../shared/dates';
 import type { CalEvent, Calendar } from '../shared/types';
 import type { Cache, OpPayload, OutboxOp } from './cache';
 import { WorkspaceApiError } from './workspace/client';
-import type { WorkspaceEngine } from './workspace/engine';
+
+/** What the outbox needs from a source to send edits. */
+export interface EditTarget {
+  create(
+    calendar: Calendar,
+    title: string,
+    time: EventTime,
+  ): Promise<{ sourceId: string; event: CalEvent | null }>;
+  update(
+    calendar: Calendar,
+    sourceId: string,
+    change: { title?: string; time?: EventTime },
+  ): Promise<CalEvent | null>;
+  trash(calendar: Calendar, sourceId: string): Promise<void>;
+}
 
 /** How long a delete waits for Undo. */
 export const UNDO_MS = 5_000;
@@ -30,7 +44,8 @@ export interface OutboxStatus {
 
 export interface OutboxOptions {
   cache: Cache;
-  engineFor: (calendar: Calendar) => WorkspaceEngine | null;
+  /** Where a calendar's edits go (its source), or null if its sign-in can't be read. */
+  engineFor: (calendar: Calendar) => EditTarget | null;
   now?: () => number;
   onChange?: () => void;
   /** Called with the next time a send is due (ms), or null; the main process sets a timer. */
@@ -311,7 +326,7 @@ export class Outbox {
     this.changed();
   }
 
-  private async send(engine: WorkspaceEngine, calendar: Calendar, op: OutboxOp) {
+  private async send(engine: EditTarget, calendar: Calendar, op: OutboxOp) {
     const sourceId = sourceIdOf(op.eventId);
     if (op.kind === 'create') {
       const { title = '', time } = op.payload;
@@ -372,7 +387,7 @@ export class Outbox {
       });
       return;
     }
-    await engine.trash(sourceId);
+    await engine.trash(calendar, sourceId);
     this.cache.removeOp(op.id);
   }
 }

@@ -72,7 +72,7 @@ export function Sidebar({
             <div className="group flex items-center gap-1 px-1 py-0.5">
               <h2
                 className="min-w-0 flex-1 truncate text-xs font-semibold text-muted"
-                title={account.server}
+                title={account.kind === 'google' ? account.email : account.server}
               >
                 {account.name}
               </h2>

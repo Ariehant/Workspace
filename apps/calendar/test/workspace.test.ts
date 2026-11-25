@@ -10,7 +10,7 @@ import {
 } from '@workspace/server/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { addDays, syncWindow, today } from '../src/shared/dates';
-import type { Calendar } from '../src/shared/types';
+import type { WorkspaceCalendar as Calendar } from '../src/shared/types';
 import { WorkspaceClient } from '../src/main/workspace/client';
 import { calendarProblem, WorkspaceEngine } from '../src/main/workspace/engine';
 

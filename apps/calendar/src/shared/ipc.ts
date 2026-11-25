@@ -1,5 +1,5 @@
 /** The bridge between the window and the main process: channel names and the types they carry. */
-import type { Account, Calendar } from './types';
+import type { Account, Calendar, WorkspaceCalendar } from './types';
 
 export const IPC = {
   state: 'state:get',
@@ -100,7 +100,7 @@ export interface SchemaChoice {
 
 /** A calendar the user set up in the connect dialog. */
 export type CalendarDraft = Pick<
-  Calendar,
+  WorkspaceCalendar,
   | 'databaseId'
   | 'viewId'
   | 'name'

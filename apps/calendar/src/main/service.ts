@@ -15,10 +15,17 @@ import {
 } from '../shared/ipc';
 import type { EventTime } from '../shared/dates';
 import { DEFAULT_REMINDER, REMINDER_CHOICES } from '../shared/reminders';
-import { COLOURS, type Account, type CalEvent, type Calendar } from '../shared/types';
+import {
+  COLOURS,
+  isGoogleAccount,
+  type CalEvent,
+  type Calendar,
+  type WorkspaceAccount,
+  type WorkspaceCalendar,
+} from '../shared/types';
 import type { Cache } from './cache';
 import type { Log } from './log';
-import { Outbox } from './outbox';
+import { Outbox, type EditTarget } from './outbox';
 import { SyncService } from './sync';
 import { normaliseServer, WorkspaceClient, type ClientOptions } from './workspace/client';
 import { WorkspaceEngine, type Person, type ViewInfo } from './workspace/engine';
@@ -64,7 +71,9 @@ export class CalendarService {
       cache: this.cache,
       engineFor: (calendar) => {
         const account = this.cache.account(calendar.accountId);
-        return account ? this.engineFor(account) : null;
+        if (!account || isGoogleAccount(account)) return null;
+        const engine = this.engineFor(account);
+        return engine && workspaceTarget(engine);
       },
       onChange: options.onChange,
       onDue: (at) => this.scheduleFlush(at),
@@ -100,7 +109,7 @@ export class CalendarService {
   }
 
   /** One source (and so one rate limiter) per account. */
-  engineFor(account: Account): WorkspaceEngine | null {
+  engineFor(account: WorkspaceAccount): WorkspaceEngine | null {
     const cached = this.engines.get(account.id);
     if (cached) return cached;
     const sealed = this.cache.sealedToken(account.id);
@@ -193,7 +202,15 @@ export class CalendarService {
       return false;
     }
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
-    return this.cache.accounts().some((a) => {
+    const accounts = this.cache.accounts();
+    if (
+      parsed.protocol === 'https:' &&
+      accounts.some(isGoogleAccount) &&
+      GOOGLE_LINK_ORIGINS.includes(parsed.origin)
+    )
+      return true;
+    return accounts.some((a) => {
+      if (isGoogleAccount(a)) return false;
       const server = new URL(a.server);
       return parsed.origin === server.origin && parsed.pathname.startsWith(server.pathname);
     });
@@ -222,6 +239,7 @@ export class CalendarService {
   async connectExisting(accountId: string): Promise<ConnectSession> {
     const account = this.cache.account(accountId);
     if (!account) throw new Error('That account is gone.');
+    if (isGoogleAccount(account)) throw new Error('Add Google calendars with Google sign-in.');
     const engine = this.engineFor(account);
     if (!engine) throw new Error("This account's token can't be read. Connect it again.");
     const me = await engine.connect();
@@ -283,7 +301,9 @@ export class CalendarService {
         // The same integration on the same server is one account.
         const existing = this.cache
           .accounts()
-          .find((a) => a.server === session.server && a.botId === session.botId);
+          .find(
+            (a) => !isGoogleAccount(a) && a.server === session.server && a.botId === session.botId,
+          );
         if (existing) {
           accountId = existing.id;
         } else {
@@ -356,3 +376,18 @@ export class CalendarService {
 
 const isReminder = (v: unknown): v is number | null =>
   (REMINDER_CHOICES as readonly unknown[]).includes(v);
+
+/** Links opened for Google accounts: events in Google Calendar, and Meet calls. */
+const GOOGLE_LINK_ORIGINS = [
+  'https://www.google.com',
+  'https://calendar.google.com',
+  'https://meet.google.com',
+];
+
+/** The outbox's edits, sent to a Workspace server. */
+const workspaceTarget = (engine: WorkspaceEngine): EditTarget => ({
+  create: (calendar, title, time) => engine.create(calendar as WorkspaceCalendar, title, time),
+  update: (calendar, sourceId, change) =>
+    engine.update(calendar as WorkspaceCalendar, sourceId, change),
+  trash: (_calendar, sourceId) => engine.trash(sourceId),
+});

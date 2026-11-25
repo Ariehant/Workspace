@@ -11,7 +11,15 @@
  * schema), on the account (a token that stopped working), or as "offline".
  */
 import { syncWindow } from '../shared/dates';
-import type { Account, Calendar } from '../shared/types';
+import {
+  isGoogleAccount,
+  type Account,
+  type Calendar,
+  type GoogleAccount,
+  type GoogleCalendar,
+  type WorkspaceAccount,
+  type WorkspaceCalendar,
+} from '../shared/types';
 import type { Cache } from './cache';
 import type { Log } from './log';
 import { WorkspaceApiError } from './workspace/client';
@@ -32,13 +40,28 @@ export interface SyncStatus {
 export interface SyncOptions {
   cache: Cache;
   /** The account's source, or null if its token can't be read. */
-  engineFor: (account: Account) => WorkspaceEngine | null;
+  engineFor: (account: WorkspaceAccount) => WorkspaceEngine | null;
+  /** A Google account's source (v1.1), or null if its sign-in can't be read. */
+  googleFor?: (account: GoogleAccount) => GoogleSync | null;
   now?: () => number;
   sweepEveryMs?: number;
   /** Something the window shows changed (events, statuses). */
   onChange?: () => void;
   /** No tokens or event contents: counts, codes and messages from the server. */
   log?: Log;
+}
+
+/** How a failed sync of a calendar is shown. */
+export type SyncProblem =
+  | { kind: 'offline' }
+  | { kind: 'account'; message: string }
+  | { kind: 'calendar'; status: Calendar['status']; message: string }
+  | { kind: 'other'; message: string };
+
+/** A Google account's calendars, synced (see google/sync.ts). */
+export interface GoogleSync {
+  sync(calendar: GoogleCalendar, full: boolean): Promise<void>;
+  problem(error: unknown, calendar: GoogleCalendar): SyncProblem;
 }
 
 export class SyncService {
@@ -88,6 +111,13 @@ export class SyncService {
     let reached = false;
     let offline = false;
     for (const account of this.cache.accounts()) {
+      if (isGoogleAccount(account)) {
+        const result = await this.syncGoogleAccount(account, full);
+        reached ||= result.reached;
+        offline ||= result.offline;
+        error = result.error ?? error;
+        continue;
+      }
       const engine = this.options.engineFor(account);
       if (!engine) {
         this.setAccountError(
@@ -96,7 +126,10 @@ export class SyncService {
         );
         continue;
       }
-      for (const calendar of this.cache.calendars().filter((c) => c.accountId === account.id)) {
+      const calendars = this.cache
+        .calendars()
+        .filter((c): c is WorkspaceCalendar => c.accountId === account.id && !c.kind);
+      for (const calendar of calendars) {
         try {
           await this.syncCalendar(engine, calendar, full);
           reached = true;
@@ -134,8 +167,49 @@ export class SyncService {
     this.changed();
   }
 
+  /** A Google account's calendars (the source reads its changes with sync tokens). */
+  private async syncGoogleAccount(account: GoogleAccount, full: boolean) {
+    const result = { reached: false, offline: false, error: null as string | null };
+    const source = this.options.googleFor?.(account);
+    if (!source) {
+      this.setAccountError(
+        account,
+        "This Google account's sign-in can't be read on this computer. Remove it and sign in again.",
+      );
+      return result;
+    }
+    const calendars = this.cache
+      .calendars()
+      .filter((c): c is GoogleCalendar => c.accountId === account.id && c.kind === 'google');
+    for (const calendar of calendars) {
+      try {
+        await source.sync(calendar, full);
+        result.reached = true;
+        this.setAccountError(account, null);
+        this.setCalendarStatus(calendar.id, 'ok', null);
+      } catch (e) {
+        const problem = source.problem(e, calendar);
+        this.options.log?.('warn', `sync: google calendar ${calendar.id}: ${problem.kind}`);
+        if (problem.kind === 'offline') {
+          result.offline = true;
+          break;
+        }
+        result.reached = true;
+        if (problem.kind === 'account') {
+          this.setAccountError(account, problem.message);
+          break;
+        }
+        if (problem.kind === 'calendar')
+          this.setCalendarStatus(calendar.id, problem.status, problem.message);
+        else result.error = problem.message;
+      }
+    }
+    this.changed();
+    return result;
+  }
+
   /** Sync one calendar: the whole window when it's due a sweep, else its changes. */
-  async syncCalendar(engine: WorkspaceEngine, calendar: Calendar, full = false) {
+  async syncCalendar(engine: WorkspaceEngine, calendar: WorkspaceCalendar, full = false) {
     const state = this.cache.syncState(calendar.id);
     const window = syncWindow(new Date(this.now()));
     const startedAt = this.now();

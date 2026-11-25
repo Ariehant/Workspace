@@ -1,6 +1,6 @@
 /** Workspace rows (Notion page objects) to events, and edits back to page properties. */
 import { readApiDate, writeApiDate, type ApiDate, type EventTime } from './dates';
-import type { CalEvent, Calendar } from './types';
+import type { CalEvent, WorkspaceCalendar as Calendar } from './types';
 
 /** A page object, as much of it as the calendar reads. */
 export interface ApiPage {
