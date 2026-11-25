@@ -294,8 +294,9 @@ steps: six milestones and the release check. If time runs short, cut these, in t
   the same code took 5.5 s to 10.7 s on shared runners. A regression must also be over 10 ms
   (`pure.database.edit` measured 13–35 ms on unchanged code), the pure-code benchmarks run three
   times with each metric's fastest kept, and `pure.page.decode` is the median of five decodes.
-  Frame-timed metrics (`page.keystroke.p95`, `scroll.frame.max`) move in whole frames, so a
-  regression there must be more than one frame (17 ms); the keystroke p95 is over ~150 keys.
+  The keystroke p95 moves in whole frames, so a regression there must be more than one frame
+  (17 ms), and it's taken over ~150 keys. `scroll.frame.max` (the single longest frame: 17, 33
+  or 50 ms on unchanged code, as busy as the runner was) is held to its target and limit only.
 
 **Results** (this machine, 4 cores; ranges are across runs, and this machine is noisy):
 

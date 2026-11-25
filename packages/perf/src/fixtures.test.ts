@@ -234,6 +234,12 @@ describe('budgets', () => {
       'scroll.frame.max': 16.8,
     };
     expect(judge(run, { ...base, ...pure }).filter((v) => v.problem)).toEqual([]);
+    // The longest scroll frame (one sample) is held to its limit only: PR #9's run on a busy
+    // runner had 50.1 ms against 16.8 ms, on unchanged code.
+    expect(
+      judge({ ...run, 'scroll.frame.max': 50.1 }, { ...base, ...pure })[4]?.problem,
+    ).toBeNull();
+    expect(judge({ 'scroll.frame.max': 260 }, base)[0]?.problem).toBe('over the limit (250 ms)');
     // Two frames more is a regression.
     expect(
       judge({ ...run, 'page.keystroke.p95': 78 }, { ...base, ...pure }).find(
