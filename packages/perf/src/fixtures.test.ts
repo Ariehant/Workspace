@@ -97,7 +97,7 @@ describe('fixtures', () => {
 });
 
 describe('budgets', () => {
-  it('fails results over the limit and regressions from the base branch', () => {
+  it('fails results over the limit and pure-code regressions; warns of slower UI cases', () => {
     const verdicts = judge(
       {
         'database.filter': 2100,
@@ -105,19 +105,28 @@ describe('budgets', () => {
         'database.group': 100,
         'page.keystroke.p95': 5,
         'page.open': 900,
+        'pure.database.sort': 120,
       },
-      { 'database.sort': 300, 'database.group': 95, 'page.keystroke.p95': 3 },
+      {
+        'database.sort': 300,
+        'database.group': 95,
+        'page.keystroke.p95': 3,
+        'pure.database.sort': 90,
+      },
     );
-    expect(verdicts.map((v) => [v.metric, v.problem, v.overTarget])).toEqual([
-      ['database.filter', 'over the limit (2000 ms)', true],
-      ['database.sort', '33% slower than the base branch', true],
-      ['database.group', null, false],
+    expect(verdicts.map((v) => [v.metric, v.problem, v.warning, v.overTarget])).toEqual([
+      ['database.filter', 'over the limit (2000 ms)', null, true],
+      ['database.sort', null, '33% slower than the base branch', true],
+      ['database.group', null, null, false],
       // Under the noise floor: not compared with the base branch.
-      ['page.keystroke.p95', null, false],
-      ['page.open', null, false],
+      ['page.keystroke.p95', null, null, false],
+      ['page.open', null, null, false],
+      ['pure.database.sort', '33% slower than the base branch', null, false],
     ]);
-    expect(report(verdicts)).toContain(
-      '| database.group | 100 ms | 300 ms | 2000 ms | 95 ms | ✅ |',
+    const table = report(verdicts);
+    expect(table).toContain('| database.group | 100 ms | 300 ms | 2000 ms | 95 ms | ✅ |');
+    expect(table).toContain(
+      '| database.sort | 400 ms | 300 ms | 2000 ms | 300 ms | ⚠️ 33% slower than the base branch |',
     );
   });
 
@@ -142,15 +151,14 @@ describe('budgets', () => {
     expect(runnerFactor(slow, base)).toBe(2);
     expect(judge(slow, base).filter((v) => v.problem)).toEqual([]);
 
-    // On that runner, a real regression still fails: one pure benchmark, and one UI case.
+    // On that runner, a real regression still fails (a pure benchmark), or is shown (a UI case).
     const regressed = { ...slow, 'pure.database.group': 300, 'database.sort': 600 };
     expect(runnerFactor(regressed, base)).toBe(2);
-    expect(
-      judge(regressed, base)
-        .filter((v) => v.problem)
-        .map((v) => [v.metric, v.problem]),
-    ).toEqual([
+    const verdicts = judge(regressed, base);
+    expect(verdicts.filter((v) => v.problem).map((v) => [v.metric, v.problem])).toEqual([
       ['pure.database.group', expect.stringMatching(/^50% slower .*×2\.00/)],
+    ]);
+    expect(verdicts.filter((v) => v.warning).map((v) => [v.metric, v.warning])).toEqual([
       ['database.sort', expect.stringMatching(/^50% slower/)],
     ]);
     expect(report(judge(slow, base), runnerFactor(slow, base))).toContain('×2.00');
@@ -221,31 +229,36 @@ describe('budgets', () => {
     );
   });
 
-  it('judges frame-timed metrics at their resolution: more than a frame (PR #10, Nov 2026)', () => {
-    const base = { 'page.keystroke.p95': 40, 'scroll.frame.max': 16.8 };
-    // 52.5 ms against 40 ms (×1.05 runner): less than a frame more.
+  it('passes the UI runs that varied on unchanged code, showing them (PRs #9, #10, Nov 2026)', () => {
+    // PR #9 at 13eca1e (runner ×1.03): database.filter 61.6 ms against 47.6, group 99.6 against
+    // 79.9; PR #10: keystroke p95 52.5 against 40; a busy runner: the longest scroll frame 50.1.
     const pure = { 'pure.database.filter': 17, 'pure.database.sort': 49.4, 'pure.search': 20.8 };
-    const run = {
+    const base = {
       ...pure,
-      'pure.database.filter': 17.85,
-      'pure.database.sort': 51.9,
-      'pure.search': 21.84,
-      'page.keystroke.p95': 52.5,
+      'database.filter': 47.6,
+      'database.group': 79.9,
+      'page.keystroke.p95': 40,
       'scroll.frame.max': 16.8,
     };
-    expect(judge(run, { ...base, ...pure }).filter((v) => v.problem)).toEqual([]);
-    // The longest scroll frame (one sample) is held to its limit only: PR #9's run on a busy
-    // runner had 50.1 ms against 16.8 ms, on unchanged code.
-    expect(
-      judge({ ...run, 'scroll.frame.max': 50.1 }, { ...base, ...pure })[4]?.problem,
-    ).toBeNull();
+    const run = {
+      'pure.database.filter': 17,
+      'pure.database.sort': 53.1,
+      'pure.search': 21.5,
+      'database.filter': 61.6,
+      'database.group': 99.6,
+      'page.keystroke.p95': 52.5,
+      'scroll.frame.max': 50.1,
+    };
+    const verdicts = judge(run, base);
+    expect(verdicts.filter((v) => v.problem)).toEqual([]);
+    expect(verdicts.filter((v) => v.warning).map((v) => v.metric)).toEqual([
+      'database.filter',
+      'database.group',
+      'page.keystroke.p95',
+    ]);
+    // Over their limits, UI cases still fail.
     expect(judge({ 'scroll.frame.max': 260 }, base)[0]?.problem).toBe('over the limit (250 ms)');
-    // Two frames more is a regression.
-    expect(
-      judge({ ...run, 'page.keystroke.p95': 78 }, { ...base, ...pure }).find(
-        (v) => v.metric === 'page.keystroke.p95',
-      )?.problem,
-    ).toMatch(/slower than the base branch/);
+    expect(judge({ 'database.group': 2100 }, base)[0]?.problem).toBe('over the limit (2000 ms)');
   });
 
   it("doesn't calibrate without enough pure-code results, and keeps the factor in bounds", () => {
