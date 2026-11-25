@@ -97,12 +97,12 @@ test('signs in to Google and shows its events beside Workspace rows', async ({
     await expect(grid.getByRole('button', { name: /^Standup, 11:00/ })).toHaveCount(1);
     await expect(grid.getByRole('button', { name: 'Offsite, all day' })).toBeVisible();
 
-    // Google's events open read-only here (editing them comes next), with a link to Google.
+    // Google's events open with a link to Google (and can be changed: the account owns this one).
     await grid.getByRole('button', { name: /^Design review/ }).click();
     const panel = window.getByRole('complementary', { name: 'Event' });
     await expect(panel.getByRole('button', { name: 'Open in Google Calendar' })).toBeVisible();
     await expect(panel.getByText('Room 4')).toBeVisible();
-    await expect(panel.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: 'Delete' })).toBeVisible();
     await window.keyboard.press('Escape');
 
     // Changed in Google: it shows within a sync cycle (Google's sync token, not a full read).
@@ -142,6 +142,127 @@ test('signs in to Google and shows its events beside Workspace rows', async ({
       end: at(0, '21:00'),
     });
     await expect(grid2.getByRole('button', { name: /^Late one/ })).toBeVisible();
+  } finally {
+    await fake.close();
+  }
+});
+
+/** The grid's hour height (`HOUR_PX` in src/renderer/week.tsx). */
+const HOUR_PX = 48;
+
+test('changes Google events, recurring ones by the occurrences chosen, and joins Meet', async ({
+  launch,
+}) => {
+  const fake = await startFakeGoogle();
+  try {
+    fake.addCalendar({
+      id: 'bea@lab.io',
+      summary: 'Bea',
+      accessRole: 'owner',
+      timeZone: ZONE,
+      primary: true,
+    });
+    fake.addCalendar({ id: 'team@lab.io', summary: 'Team', accessRole: 'reader', timeZone: ZONE });
+    fake.put('bea@lab.io', {
+      id: 'sync',
+      summary: 'Sync',
+      start: at(1, '09:00'),
+      end: at(1, '10:00'),
+      hangoutLink: 'https://meet.google.com/abc-defg-hij',
+    });
+    fake.put('bea@lab.io', {
+      id: 'standup',
+      summary: 'Standup',
+      start: at(2, '09:00'),
+      end: at(2, '09:30'),
+      recurrence: ['RRULE:FREQ=DAILY;COUNT=3'],
+    });
+    fake.put('team@lab.io', {
+      id: 'all',
+      summary: 'All hands',
+      start: at(0, '16:00'),
+      end: at(0, '17:00'),
+    });
+    const events = () => [...fake.calendars.get('bea@lab.io')!.events.values()].map((s) => s.event);
+
+    const launched = await launch({ ...googleEnv(fake), TZ: ZONE });
+    const { app, window } = launched;
+    await window.getByRole('main').getByRole('button', { name: 'Connect Google Calendar' }).click();
+    const dialog = window.getByRole('dialog', { name: 'Connect Google Calendar' });
+    await dialog.getByRole('button', { name: 'Sign in with Google' }).click();
+    await dialog
+      .getByRole('list', { name: 'Google calendars' })
+      .getByRole('checkbox', { name: /Team/ })
+      .check();
+    await dialog.getByRole('button', { name: 'Add 2 calendars' }).click();
+    await expect(dialog).toBeHidden();
+    const grid = window.getByRole('region', { name: 'Calendar' });
+    await expect(grid.getByRole('button', { name: /^Sync, 9:00/ })).toBeVisible();
+    await window.getByTestId('time-grid').evaluate((el, px) => (el.scrollTop = px), 8 * HOUR_PX);
+
+    // Join Google Meet opens the call in the browser.
+    await app.evaluate(({ shell }) => {
+      shell.openExternal = async (url: string) => {
+        (globalThis as { __opened?: string }).__opened = url;
+      };
+    });
+    await grid.getByRole('button', { name: /^Sync, 9:00/ }).click();
+    const panel = window.getByRole('complementary', { name: 'Event' });
+    await panel.getByRole('button', { name: 'Join Google Meet' }).click();
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as { __opened?: string }).__opened))
+      .toBe('https://meet.google.com/abc-defg-hij');
+
+    // Rename and move in the panel: Google gets the instant shown here.
+    await panel.getByLabel('Title').fill('Weekly sync');
+    await window.keyboard.press('Enter');
+    await panel.getByLabel('Starts time').fill('11:00');
+    await expect(
+      grid.getByRole('button', { name: /^Weekly sync, 11:00 AM – 12:00 PM/ }),
+    ).toBeVisible();
+    await expect
+      .poll(() => events().find((e) => e.id === 'sync'))
+      .toMatchObject({ summary: 'Weekly sync', start: { dateTime: at(1, '11:00').dateTime } });
+    await window.keyboard.press('Escape');
+
+    // One occurrence of the series moved: "This event" changes only that one in Google.
+    const second = grid.getByRole('button', { name: /^Standup, 9:00/ }).nth(1);
+    const box = (await second.boundingBox())!;
+    await window.mouse.move(box.x + box.width / 2, box.y + 8);
+    await window.mouse.down();
+    await window.mouse.move(box.x + box.width / 2, box.y + 8 + HOUR_PX, { steps: 12 });
+    await window.mouse.up();
+    const scope = window.getByRole('dialog', { name: 'Change recurring event' });
+    await scope.getByRole('button', { name: 'This event' }).click();
+    await expect(grid.getByRole('button', { name: /^Standup, 10:00/ })).toHaveCount(1);
+    await expect(grid.getByRole('button', { name: /^Standup, 9:00/ })).toHaveCount(2);
+    await expect
+      .poll(() =>
+        events()
+          .filter((e) => e.recurringEventId === 'standup')
+          .map((e) => e.start?.dateTime),
+      )
+      .toEqual([at(3, '10:00').dateTime]);
+
+    // Delete the series ("All events"): gone here, and in Google once Undo's seconds are up.
+    await grid
+      .getByRole('button', { name: /^Standup, 9:00/ })
+      .first()
+      .click();
+    await panel.getByRole('button', { name: 'Delete' }).click();
+    await window
+      .getByRole('dialog', { name: 'Delete recurring event' })
+      .getByRole('button', { name: 'All events' })
+      .click();
+    await expect(grid.getByRole('button', { name: /^Standup/ })).toHaveCount(0);
+    await expect
+      .poll(() => events().find((e) => e.id === 'standup')?.status, { timeout: 15_000 })
+      .toBe('cancelled');
+
+    // A calendar the account may only see: no Delete, and the title can't be changed.
+    await grid.getByRole('button', { name: /^All hands/ }).click();
+    await expect(panel.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+    await expect(panel.getByLabel('Title')).toHaveAttribute('readonly', '');
   } finally {
     await fake.close();
   }

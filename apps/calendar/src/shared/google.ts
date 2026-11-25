@@ -12,7 +12,7 @@
 import { addDays, dayOf, diffDays, type Day } from './dates';
 import { expand } from './recurrence';
 import type { CalEvent, GoogleCalendar } from './types';
-import { basicUtc, wallAt } from './zones';
+import { basicUtc, instantAt, wallAt } from './zones';
 
 /** A start or end: a day for all-day events, else an RFC 3339 time and maybe a zone. */
 export interface GoogleTime {
@@ -218,15 +218,68 @@ export function deriveEvents(
               instant: { start: key, end: new Date(e).toISOString() },
             };
           })();
-      push(
-        toCalEvent(calendar, master, times, {
-          sourceId: `${master.id}_${allDay ? key.replace(/-/g, '') : basicUtc(key)}`,
-          series: { id: master.id, originalStart: key },
-        }),
-      );
+      // No etag: the series' isn't this occurrence's (Google gives it one once changed).
+      const { etag: _seriesEtag, ...instance } = toCalEvent(calendar, master, times, {
+        sourceId: occurrenceId(master.id, key),
+        series: { id: master.id, originalStart: key },
+      });
+      push(instance);
     }
   }
   return out;
+}
+
+/** The id Google gives an occurrence of a series: `<series>_<start, UTC or day>`. */
+export const occurrenceId = (seriesId: string, key: string) =>
+  `${seriesId}_${key.length === 10 ? key.replace(/-/g, '') : basicUtc(key)}`;
+
+/**
+ * A single event or one occurrence Google sent back (after an edit) as the calendar's event, or
+ * null for a series (its occurrences are worked out at the next sync) or a cancelled one.
+ */
+export function eventFromGoogle(
+  calendar: GoogleCalendar,
+  item: GoogleEvent,
+  zone: string,
+): CalEvent | null {
+  if (
+    item.status === 'cancelled' ||
+    !item.start ||
+    (item.recurrence?.length && !item.recurringEventId)
+  )
+    return null;
+  const times = timesOf(item.start, item.end, zone);
+  if (!times) return null;
+  const key =
+    item.recurringEventId && item.originalStartTime ? occurrenceKey(item.originalStartTime) : null;
+  return toCalEvent(
+    calendar,
+    item,
+    times,
+    item.recurringEventId && key
+      ? { series: { id: item.recurringEventId, originalStart: key } }
+      : {},
+  );
+}
+
+/**
+ * An event's time as Google takes it: days (Google's end is the day after), or real instants
+ * for the wall times on this machine's clock (`zone`), with the zone the event belongs to.
+ */
+export function googleTimes(
+  time: { allDay: boolean; start: string; end: string },
+  zone: string,
+  eventZone: string,
+): { start: GoogleTime; end: GoogleTime } {
+  if (time.allDay)
+    return {
+      start: { date: time.start.slice(0, 10) },
+      end: { date: addDays(time.end.slice(0, 10), 1) },
+    };
+  return {
+    start: { dateTime: instantAt(time.start, zone).toISOString(), timeZone: eventZone },
+    end: { dateTime: instantAt(time.end, zone).toISOString(), timeZone: eventZone },
+  };
 }
 
 /** A Google colour (`#9fe1e7`) or null if it isn't one. */

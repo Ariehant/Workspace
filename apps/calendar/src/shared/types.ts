@@ -77,14 +77,19 @@ export type Calendar = WorkspaceCalendar | GoogleCalendar;
 export const isGoogleCalendar = (c: Calendar): c is GoogleCalendar => c.kind === 'google';
 
 /**
- * Whether events in the calendar can be changed here: not one that lost access, and (until
- * editing Google events arrives) not a Google calendar.
+ * Whether events in the calendar can be changed here: not one that lost access, nor a Google
+ * calendar the account may only see (`reader`, `freeBusyReader`).
  */
 export const canEdit = (calendar: Calendar | null | undefined): boolean =>
-  !!calendar && calendar.status !== 'no-access' && !isGoogleCalendar(calendar);
+  !!calendar &&
+  calendar.status !== 'no-access' &&
+  (!isGoogleCalendar(calendar) || ['owner', 'writer'].includes(calendar.accessRole));
 
 /** Why a calendar's events can't be changed here. */
-export const READ_ONLY_MESSAGE = 'Events in this calendar can’t be changed here yet.';
+export const READ_ONLY_MESSAGE = 'This calendar is view-only for your account.';
+
+/** Which occurrences of a recurring event an edit is for. */
+export type EditScope = 'this' | 'following' | 'all';
 
 /**
  * An event. Times are wall-clock strings: Workspace's dates have no time zone, so a row at

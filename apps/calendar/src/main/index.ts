@@ -195,7 +195,7 @@ function main() {
 
   // Notifications (HANDOFF.md 1). Live ones are kept, or they're collected before a click.
   const live = new Set<Notification>();
-  const notifications: { title: string; body: string }[] = [];
+  const notifications: { title: string; body: string; meet?: string }[] = [];
   if (E2E)
     (globalThis as { __notifications?: typeof notifications }).__notifications = notifications;
   const show = (reminder: Reminder, calendar: Calendar | undefined, snoozed: boolean) => {
@@ -205,13 +205,22 @@ function main() {
       ? 'All day'
       : `${clock(event.start)} – ${clock(event.end)}${event.start.slice(0, 10) !== today() ? `, ${event.start.slice(0, 10)}` : ''}`;
     const body = calendar ? `${when} · ${calendar.name}` : when;
-    if (E2E) notifications.push({ title, body });
+    // A video call to join (Google Meet), if it's one the calendar opens.
+    const meet = event.meetLink && service.isAccountLink(event.meetLink) ? event.meetLink : null;
+    if (E2E) notifications.push({ title, body, ...(meet && { meet }) });
     if (!Notification.isSupported()) return;
     const notification = new Notification({
       title,
       body,
-      // Buttons in notifications exist on Windows (and macOS); on Linux, the panel offers snooze.
-      actions: process.platform === 'linux' ? [] : [{ type: 'button', text: 'Snooze 5 minutes' }],
+      // Buttons in notifications exist on Windows (and macOS); on Linux, the panel offers snooze
+      // and Join.
+      actions:
+        process.platform === 'linux'
+          ? []
+          : [
+              { type: 'button', text: 'Snooze 5 minutes' },
+              ...(meet ? [{ type: 'button' as const, text: 'Join' }] : []),
+            ],
     });
     live.add(notification);
     notification.on('close', () => live.delete(notification));
@@ -222,6 +231,7 @@ function main() {
     notification.on('action', (_e, index) => {
       live.delete(notification);
       if (index === 0) notifier.snooze(event.id);
+      if (index === 1 && meet) void shell.openExternal(meet);
     });
     notification.show();
   };
