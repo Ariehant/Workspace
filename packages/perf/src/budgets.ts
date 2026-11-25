@@ -18,7 +18,10 @@ export const BUDGETS = {
   'database.group': { target: 300, limit: 2000 },
   'scroll.frame.max': { target: 50, limit: 250 },
   quickFind: { target: 150, limit: 250 },
-  'sync.first': { target: 30_000, limit: 45_000 },
+  // First sync over a real server, disk and two processes: on shared runners the same code
+  // took 5.5 s to 10.7 s (CI runs of November 2026), a spread no CPU measurement explains, so
+  // it's held to its limit only, not compared with the base branch.
+  'sync.first': { target: 30_000, limit: 45_000, compare: false },
   // Pure code (src/budgets.bench.test.ts), on the 50,000-row database.
   'pure.database.decode': { target: 1000, limit: 5000 },
   'pure.database.snapshot': { target: 500, limit: 1200 },
@@ -29,7 +32,14 @@ export const BUDGETS = {
   'pure.database.edit': { target: 50, limit: 150 },
   'pure.page.decode': { target: 500, limit: 500 },
   'pure.search': { target: 50, limit: 150 },
-} as const satisfies Record<string, { target: number; limit: number }>;
+} as const satisfies Record<string, Budget>;
+
+interface Budget {
+  target: number;
+  limit: number;
+  /** False: too noisy between runs to compare with the base branch (the limit still holds). */
+  compare?: false;
+}
 
 export type Metric = keyof typeof BUDGETS;
 export type Results = Partial<Record<Metric, number>>;
@@ -63,21 +73,62 @@ export interface Verdict {
   overTarget: boolean;
 }
 
-/** Compare results with the budgets, and with a baseline run when there is one. */
+/** The runner's speed is only read from this many pure-code measurements or more. */
+const MIN_CALIBRATION_METRICS = 3;
+
+/**
+ * How much slower this run's machine is than the base branch's (2 = twice as slow), read from
+ * the pure-code benchmarks: they run the same code on both, so their median ratio is the
+ * runner's speed, not a change in the code (one slower benchmark among them doesn't move the
+ * median). 1 without enough of them; kept between 0.5 and 4.
+ *
+ * Shared CI runners differ by 30–60% from run to run, which alone used to fail the 20%
+ * regression check.
+ */
+export function runnerFactor(
+  results: Record<string, number>,
+  baseline: Record<string, number>,
+): number {
+  const ratios = Object.entries(results)
+    .filter(([metric]) => metric.startsWith('pure.'))
+    .map(([metric, value]) => [value, baseline[metric]] as const)
+    .filter((pair): pair is readonly [number, number] => {
+      const base = pair[1];
+      return base !== undefined && base >= NOISE_FLOOR_MS && pair[0] > 0;
+    })
+    .map(([value, base]) => value / base)
+    .sort((a, b) => a - b);
+  if (ratios.length < MIN_CALIBRATION_METRICS) return 1;
+  const mid = Math.floor(ratios.length / 2);
+  const median = ratios.length % 2 ? ratios[mid]! : (ratios[mid - 1]! + ratios[mid]!) / 2;
+  return Math.min(4, Math.max(0.5, median));
+}
+
+/**
+ * Compare results with the budgets, and with a baseline run when there is one. The baseline is
+ * first scaled by the runner's speed (`runnerFactor`), so a regression means slower code, not a
+ * slower machine. The absolute limits aren't scaled: they hold on any runner.
+ */
 export function judge(
   results: Record<string, number>,
   baseline: Record<string, number> = {},
 ): Verdict[] {
+  const factor = runnerFactor(results, baseline);
   return Object.entries(results).map(([metric, value]) => {
-    const budget = (BUDGETS as Record<string, { target: number; limit: number } | undefined>)[
-      metric
-    ];
+    const budget = (BUDGETS as Record<string, Budget | undefined>)[metric];
     const base = baseline[metric] ?? null;
     let problem: string | null = null;
     if (!budget) problem = 'no budget';
     else if (value > budget.limit) problem = `over the limit (${budget.limit} ms)`;
-    else if (base !== null && base >= NOISE_FLOOR_MS && value > base * (1 + REGRESSION_LIMIT)) {
-      problem = `${Math.round((value / base - 1) * 100)}% slower than the base branch`;
+    else if (
+      base !== null &&
+      budget.compare !== false &&
+      base >= NOISE_FLOOR_MS &&
+      value > base * factor * (1 + REGRESSION_LIMIT)
+    ) {
+      problem = `${Math.round((value / (base * factor) - 1) * 100)}% slower than the base branch${
+        factor === 1 ? '' : ` (allowing for this runner's speed, ×${factor.toFixed(2)})`
+      }`;
     }
     return {
       metric,
@@ -94,9 +145,15 @@ export function judge(
 const ms = (n: number | null) =>
   n === null ? '–' : `${Number.isInteger(n) ? n : n.toFixed(n < 100 ? 1 : 0)} ms`;
 
-/** A Markdown table of verdicts, for the CI summary. */
-export function report(verdicts: Verdict[]): string {
+/** A Markdown table of verdicts, for the CI summary (with the runner's speed, when known). */
+export function report(verdicts: Verdict[], factor = 1): string {
   const lines = [
+    ...(factor === 1
+      ? []
+      : [
+          `This runner ran the pure-code benchmarks ×${factor.toFixed(2)} as long as the base branch's run; its results are compared with the base branch's scaled by that.`,
+          '',
+        ]),
     '| Metric | Result | Target | Limit | Base branch | |',
     '| --- | ---: | ---: | ---: | ---: | --- |',
     ...verdicts.map(

@@ -288,7 +288,10 @@ steps: six milestones and the release check. If time runs short, cut these, in t
   parts that rebuild the same doc (in any order, and merged into a copy that has some of it),
   for a whole state and for a large paste while syncing.
 - **CI:** a `perf` job runs both suites and compares the results with the limits and with the
-  base branch's last run (more than 20% slower fails), in the job summary.
+  base branch's last run (more than 20% slower fails), in the job summary. Since November
+  2026 the base branch's run is first scaled by the runner's speed: the median ratio of the
+  pure-code benchmarks, which run the same code on both. `sync.first` is held to its limit only;
+  the same code took 5.5 s to 10.7 s on shared runners.
 
 **Results** (this machine, 4 cores; ranges are across runs, and this machine is noisy):
 
