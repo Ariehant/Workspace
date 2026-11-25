@@ -34,6 +34,8 @@ export interface Calendar {
   people: { id: string; name: string; personId: string } | null;
   /** Colour events by a `select` or `status` property's option colour. */
   colourBy: { id: string; name: string } | null;
+  /** Notify this many minutes before events (0 = at the start), or null for none. */
+  reminder?: number | null;
   status: CalendarStatus;
   /** Why the calendar needs attention (shown to the user). */
   statusMessage: string | null;

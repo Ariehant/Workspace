@@ -7,6 +7,7 @@ import { Button, cn, Dialog, DialogContent } from '@workspace/ui';
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { CalendarDraft, ConnectSession, DatabaseChoice, SchemaChoice } from '../shared/ipc';
+import { DEFAULT_REMINDER, REMINDER_CHOICES, reminderLabel } from '../shared/reminders';
 import { COLOURS } from '../shared/types';
 import { api, colourVar, unwrap } from './api';
 
@@ -306,6 +307,7 @@ function ConfigureStep({
                       titleProperty: { id: title.id, name: title.name },
                       people: null,
                       colourBy: null,
+                      reminder: DEFAULT_REMINDER,
                     }
                   : null,
             };
@@ -456,6 +458,21 @@ function DatabaseSetup({
           {colourProps.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Notify">
+        <select
+          className={selectClass}
+          value={String(draft.reminder ?? 'none')}
+          onChange={(e) =>
+            onChange({ reminder: e.target.value === 'none' ? null : Number(e.target.value) })
+          }
+        >
+          {REMINDER_CHOICES.map((minutes) => (
+            <option key={String(minutes)} value={String(minutes ?? 'none')}>
+              {reminderLabel(minutes)}
             </option>
           ))}
         </select>

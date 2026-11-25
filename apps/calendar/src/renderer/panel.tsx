@@ -4,7 +4,7 @@
  * Delete; for a new event: the same fields and a calendar to put it in, until it's saved.
  */
 import { Button, cn, IconButton } from '@workspace/ui';
-import { AlertTriangle, ExternalLink, Loader2, Trash2, X } from 'lucide-react';
+import { AlertTriangle, BellRing, ExternalLink, Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { dayOf, type EventTime } from '../shared/dates';
 import type { CalEvent, Calendar } from '../shared/types';
@@ -30,6 +30,8 @@ type Props = CommonProps &
         onDelete: () => void;
         onOpenLink: (url: string) => void;
         onDismissConflict: () => void;
+        /** Opened from a notification: offer to remind again in five minutes. */
+        onSnooze?: () => void;
       }
     | {
         mode: 'draft';
@@ -262,6 +264,12 @@ export function EventPanel(props: Props) {
           </>
         ) : (
           <>
+            {props.onSnooze && (
+              <Button onClick={props.onSnooze} className="border border-line">
+                <BellRing className="size-4" aria-hidden />
+                Remind me in 5 minutes
+              </Button>
+            )}
             {props.event.url && (
               <Button
                 onClick={() => props.onOpenLink(props.event.url!)}

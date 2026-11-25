@@ -5,6 +5,8 @@ import {
   Menu,
   MenuContent,
   MenuItem,
+  MenuRadioGroup,
+  MenuRadioItem,
   MenuSeparator,
   MenuTrigger,
 } from '@workspace/ui';
@@ -21,6 +23,7 @@ import {
 import { useState } from 'react';
 import { addDays, addMonths, startOfMonth, startOfWeek } from '../shared/dates';
 import type { AppState } from '../shared/ipc';
+import { REMINDER_CHOICES, reminderLabel } from '../shared/reminders';
 import { COLOURS, type Calendar } from '../shared/types';
 import { api, colourVar, unwrap } from './api';
 import {
@@ -204,6 +207,17 @@ function CalendarRow({ calendar, onError }: { calendar: Calendar; onError: (m: s
               </MenuItem>
             ))}
           </div>
+          <div className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted">Notify</div>
+          <MenuRadioGroup
+            value={String(calendar.reminder ?? 'none')}
+            onValueChange={(v) => update({ reminder: v === 'none' ? null : Number(v) })}
+          >
+            {REMINDER_CHOICES.map((minutes) => (
+              <MenuRadioItem key={String(minutes)} value={String(minutes ?? 'none')}>
+                {reminderLabel(minutes)}
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
           {calendar.statusMessage && (
             <p className="max-w-64 px-2 pb-2 text-xs text-muted">{calendar.statusMessage}</p>
           )}

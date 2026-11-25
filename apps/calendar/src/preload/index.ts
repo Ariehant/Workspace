@@ -10,6 +10,7 @@ import {
   type Result,
   type SchemaChoice,
   type Settings,
+  type ShowEvent,
 } from '../shared/ipc';
 import type { EventTime } from '../shared/dates';
 import type { CalEvent, Calendar } from '../shared/types';
@@ -54,8 +55,18 @@ const api = {
     undoRemove: (id: string) => call<CalEvent | null>(IPC.eventUndoDelete, id),
     dismissConflict: (id: string) => call<void>(IPC.eventDismissConflict, id),
     search: (query: string) => call<CalEvent[]>(IPC.search, query),
+    get: (id: string) => call<CalEvent | null>(IPC.eventGet, id),
+    snooze: (id: string) => call<void>(IPC.snooze, id),
   },
   openLink: (url: string) => call<void>(IPC.openLink, url),
+  /** The main process asks to show an event (a notification or the tray was clicked). */
+  onShowEvent: (listener: (show: ShowEvent) => void) => {
+    const handler = (_e: unknown, show: ShowEvent) => listener(show);
+    ipcRenderer.on(IPC.showEvent, handler);
+    return () => {
+      ipcRenderer.off(IPC.showEvent, handler);
+    };
+  },
   /** Something shown changed; returns a function that stops listening. */
   onChanged: (listener: () => void) => {
     const handler = () => listener();
