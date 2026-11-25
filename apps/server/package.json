@@ -4,6 +4,9 @@
   "private": true,
   "description": "Self-hosted sync server for Workspace",
   "type": "module",
+  "exports": {
+    "./testing": "./src/testing.ts"
+  },
   "scripts": {
     "build": "node build.mjs",
     "start": "node dist/main.js",

@@ -4,7 +4,7 @@
 //   node scripts/version.mjs set 1.2.3    set it in each app's package.json
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const APPS = ['apps/desktop', 'apps/server', 'apps/web'];
+const APPS = ['apps/calendar', 'apps/desktop', 'apps/server', 'apps/web'];
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 const file = (app) => new URL(`../${app}/package.json`, import.meta.url);
