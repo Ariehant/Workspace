@@ -221,6 +221,27 @@ describe('budgets', () => {
     );
   });
 
+  it('judges frame-timed metrics at their resolution: more than a frame (PR #10, Nov 2026)', () => {
+    const base = { 'page.keystroke.p95': 40, 'scroll.frame.max': 16.8 };
+    // 52.5 ms against 40 ms (×1.05 runner): less than a frame more.
+    const pure = { 'pure.database.filter': 17, 'pure.database.sort': 49.4, 'pure.search': 20.8 };
+    const run = {
+      ...pure,
+      'pure.database.filter': 17.85,
+      'pure.database.sort': 51.9,
+      'pure.search': 21.84,
+      'page.keystroke.p95': 52.5,
+      'scroll.frame.max': 16.8,
+    };
+    expect(judge(run, { ...base, ...pure }).filter((v) => v.problem)).toEqual([]);
+    // Two frames more is a regression.
+    expect(
+      judge({ ...run, 'page.keystroke.p95': 78 }, { ...base, ...pure }).find(
+        (v) => v.metric === 'page.keystroke.p95',
+      )?.problem,
+    ).toMatch(/slower than the base branch/);
+  });
+
   it("doesn't calibrate without enough pure-code results, and keeps the factor in bounds", () => {
     expect(runnerFactor({ 'pure.search': 40 }, { 'pure.search': 20 })).toBe(1);
     const tenTimes = Object.fromEntries(
