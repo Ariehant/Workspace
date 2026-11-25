@@ -19,7 +19,10 @@ export const BUDGETS = {
   'database.filter': { target: 300, limit: 2000 },
   'database.sort': { target: 300, limit: 2000 },
   'database.group': { target: 300, limit: 2000 },
-  'scroll.frame.max': { target: 50, limit: 250, minRegressionMs: 17 },
+  // The single longest frame of a scroll: one frame (16.8 ms) on most runs, but 33 and 50 ms on
+  // busy runners with unchanged code. A maximum of one sample isn't comparable run to run, so
+  // it's held to its target and limit only.
+  'scroll.frame.max': { target: 50, limit: 250, compare: false },
   quickFind: { target: 150, limit: 250 },
   // First sync over a real server, disk and two processes: on shared runners the same code
   // took 5.5 s to 10.7 s (CI runs of November 2026), a spread no CPU measurement explains, so
