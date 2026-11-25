@@ -142,11 +142,16 @@ describe(`a database with ${ROWS.toLocaleString('en-US')} rows`, () => {
 describe(`a page with ${BLOCKS.toLocaleString('en-US')} blocks`, () => {
   it('decodes and reads its blocks', () => {
     const update = Y.encodeStateAsUpdate(buildBigPage(BLOCKS));
-    const start = performance.now();
-    const doc = new Y.Doc();
-    Y.applyUpdate(doc, update);
-    const blocks = readBlocks(doc);
-    measure('pure.page.decode', performance.now() - start);
+    let blocks: unknown[] = [];
+    // The median of a few fresh decodes (one alone varied by half between CI runs).
+    measure(
+      'pure.page.decode',
+      median(5, () => {
+        const doc = new Y.Doc();
+        Y.applyUpdate(doc, update);
+        blocks = readBlocks(doc);
+      }),
+    );
     expect(blocks).toHaveLength(BLOCKS);
   });
 });

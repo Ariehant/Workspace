@@ -5,7 +5,7 @@
  *   node --experimental-strip-types packages/perf/src/report.ts results.json [baseline.json]
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
-import { judge, report } from './budgets.ts';
+import { judge, report, runnerFactor } from './budgets.ts';
 
 const [resultsFile, baselineFile] = process.argv.slice(2);
 if (!resultsFile) {
@@ -17,8 +17,10 @@ const read = (file: string | undefined) =>
     ? (JSON.parse(readFileSync(file, 'utf8')) as Record<string, number>)
     : {};
 
-const verdicts = judge(read(resultsFile), read(baselineFile));
-const table = report(verdicts);
+const results = read(resultsFile);
+const baseline = read(baselineFile);
+const verdicts = judge(results, baseline);
+const table = report(verdicts, runnerFactor(results, baseline));
 console.log(table);
 if (process.env.GITHUB_STEP_SUMMARY) {
   appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Performance budgets\n\n${table}\n`);
