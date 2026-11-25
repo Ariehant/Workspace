@@ -72,7 +72,7 @@ another column of hours.
   Workspace's own date reminders aren't available to the calendar (the API doesn't have them), so
   set the calendar's own.
 - **The tray icon** shows the next event and today's list. On GNOME it needs the AppIndicator
-  extension (Ubuntu has it; the `.deb` recommends it). Without it, everything else works.
+  extension (Ubuntu has it; the `.deb` suggests it). Without it, everything else works.
 - **In the background:** in Settings, "Keep running in the tray when the window is closed" keeps
   notifications coming with the window closed. "Start when I log in" starts the calendar in the
   tray.

@@ -53,8 +53,14 @@ deb:
     - libuuid1
     - libsecret-1-0
     - libasound2t64 | libasound2
-  # The tray icon on GNOME needs the AppIndicator extension (Ubuntu ships it).
-  recommends:
+  # The tray icon on GNOME needs the AppIndicator extension (Ubuntu's GNOME has it). Suggested,
+  # not recommended: apt installs recommends, and this one depends on GNOME Shell, which would
+  # pull the whole of GNOME onto KDE, Xfce or a minimal install.
+  # (electron-builder has no `suggests`: it goes to fpm. An empty `recommends` also drops its
+  # default, libappindicator3-1: Electron's tray talks to the desktop over D-Bus itself.)
+  recommends: []
+  fpm:
+    - --deb-suggests
     - gnome-shell-extension-appindicator
 
 appImage:
