@@ -288,15 +288,14 @@ steps: six milestones and the release check. If time runs short, cut these, in t
   parts that rebuild the same doc (in any order, and merged into a copy that has some of it),
   for a whole state and for a large paste while syncing.
 - **CI:** a `perf` job runs both suites and compares the results with the limits and with the
-  base branch's last run (more than 20% slower fails), in the job summary. Since November
-  2026 the base branch's run is first scaled by the runner's speed: the median ratio of the
-  pure-code benchmarks, which run the same code on both. `sync.first` is held to its limit only;
-  the same code took 5.5 s to 10.7 s on shared runners. A regression must also be over 10 ms
-  (`pure.database.edit` measured 13–35 ms on unchanged code), the pure-code benchmarks run three
-  times with each metric's fastest kept, and `pure.page.decode` is the median of five decodes.
-  The keystroke p95 moves in whole frames, so a regression there must be more than one frame
-  (17 ms), and it's taken over ~150 keys. `scroll.frame.max` (the single longest frame: 17, 33
-  or 50 ms on unchanged code, as busy as the runner was) is held to its target and limit only.
+  base branch's last run, in the job summary. Since November 2026: the base branch's run is
+  first scaled by the runner's speed (the median ratio of the pure-code benchmarks, which run the
+  same code on both); the pure-code benchmarks run three times with each metric's fastest kept
+  (`pure.page.decode` is the median of five decodes); and a regression must be more than 20%
+  and more than 10 ms. Only pure-code regressions fail the job: the UI cases varied 1.5–2.4×
+  between runs of unchanged code on shared runners (`database.group` 80–195 ms), so their
+  slowdowns are shown as warnings, and their limits fail it. `scroll.frame.max` (the single
+  longest frame) and `sync.first` (a server, disk and two processes) aren't compared at all.
 
 **Results** (this machine, 4 cores; ranges are across runs, and this machine is noisy):
 
