@@ -6,8 +6,9 @@ change them, and notifies you before they start. It talks to your Workspace serv
 API, so it shows what's on the server.
 
 Version 1.0 works with Workspace databases. Version 1.1 adds Google Calendar: its calendars show
-beside Workspace's and can be changed here, recurring events included. ICS feeds
-and CalDAV (1.2) are planned: see [the build plan](HANDOFF.md).
+beside Workspace's and can be changed here, recurring events included. Version 1.2 adds
+calendars subscribed to by address (ICS feeds, such as public holidays); CalDAV is next: see
+[the build plan](HANDOFF.md).
 
 ## Install
 
@@ -84,6 +85,22 @@ still goes and the panel shows **Changed elsewhere** with what Google had.
 reminder notification has a **Join** button too; on Linux, click the notification to open the
 event.
 
+## Subscribe to a calendar (ICS)
+
+Many calendars are published as an address: public holidays, sports fixtures, a school's terms,
+a team's schedule, or another calendar app's "secret address in iCal format". Choose
+**Subscribe to a calendar** (in the sidebar), paste the address (`https://…`, `http://…` or
+`webcal://…`), and optionally give it a name (otherwise the feed's own name is used).
+
+- Subscribed calendars are **read-only** here, and have **no reminders** until you choose some
+  in the calendar's ⋯ menu.
+- They're checked for changes **every 30 minutes**, and at once with **Sync now** (the
+  sidebar's ↻). A feed that hasn't changed costs almost nothing to check.
+- Recurring events, exceptions and time zones in the feed are followed, including Outlook's
+  zone names. Times a feed gives without a zone show at the same clock time wherever you are.
+- If the feed moves away (its address answers "not found"), the calendar shows ⚠ and keeps the
+  events it had; remove it (its ⋯ menu) or subscribe to the new address.
+
 ## Use it
 
 - **Views:** day, week, 2–6 days, month and agenda (the next 30 days). The mini month in the
@@ -142,6 +159,7 @@ another column of hours.
 | An edit "couldn't be saved to Workspace"         | Workspace refused it five times (the message says why); the calendar shows Workspace's version again. |
 | "Google signed this account out"                 | The access was removed in your Google account, or the client changed. Sign in with Google again.      |
 | A Google calendar with ⚠ "can no longer see"     | The calendar was deleted or unshared in Google. Remove it here.                                       |
+| A subscribed calendar with ⚠                     | The feed moved, went away or isn't a calendar any more. Remove it and subscribe to its new address.   |
 
 **Logs** are in the calendar's data folder, in `logs/` (`~/.config/Workspace Calendar/logs` on
 Linux, `%APPDATA%\Workspace Calendar\logs` on Windows). They have what the calendar did and what

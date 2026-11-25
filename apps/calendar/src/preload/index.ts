@@ -47,6 +47,9 @@ const api = {
     /** Cancels a sign-in waiting for the browser, or a setup (with its id). */
     cancel: (sessionId?: string) => call<void>(IPC.googleCancel, sessionId ?? null),
   },
+  ics: {
+    subscribe: (url: string, name?: string) => call<Calendar>(IPC.icsSubscribe, url, name ?? null),
+  },
   calendars: {
     update: (id: string, patch: CalendarPatch) => call<Calendar>(IPC.calendarUpdate, id, patch),
     remove: (id: string) => call<void>(IPC.calendarRemove, id),

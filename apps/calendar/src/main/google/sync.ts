@@ -12,10 +12,10 @@ import { deriveEvents, type GoogleEvent } from '../../shared/google';
 import type { GoogleCalendar } from '../../shared/types';
 import { instantAt, localZone } from '../../shared/zones';
 import type { Cache } from '../cache';
-import type { GoogleSync, SyncProblem } from '../sync';
+import type { SourceSync, SyncProblem } from '../sync';
 import { GoogleApiError, type GoogleEngine } from './client';
 
-export class GoogleCalendarSync implements GoogleSync {
+export class GoogleCalendarSync implements SourceSync {
   /** What each calendar's events were last worked out for (the window's start and zone). */
   private derivedFor = new Map<string, string>();
   private readonly now: () => number;
