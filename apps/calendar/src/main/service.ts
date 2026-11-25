@@ -13,8 +13,10 @@ import {
   type SchemaChoice,
   type Settings,
 } from '../shared/ipc';
+import type { EventTime } from '../shared/dates';
 import { COLOURS, type Account, type CalEvent, type Calendar } from '../shared/types';
 import type { Cache } from './cache';
+import { Outbox } from './outbox';
 import { SyncService } from './sync';
 import { normaliseServer, WorkspaceClient, type ClientOptions } from './workspace/client';
 import { WorkspaceEngine, type Person, type ViewInfo } from './workspace/engine';
@@ -42,8 +44,10 @@ interface Session {
 export class CalendarService {
   readonly cache: Cache;
   readonly sync: SyncService;
+  readonly outbox: Outbox;
   private readonly engines = new Map<string, WorkspaceEngine>();
   private readonly sessions = new Map<string, Session>();
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly options: ServiceOptions) {
     this.cache = options.cache;
@@ -52,6 +56,38 @@ export class CalendarService {
       engineFor: (account) => this.engineFor(account),
       onChange: options.onChange,
     });
+    this.outbox = new Outbox({
+      cache: this.cache,
+      engineFor: (calendar) => {
+        const account = this.cache.account(calendar.accountId);
+        return account ? this.engineFor(account) : null;
+      },
+      onChange: options.onChange,
+      onDue: (at) => this.scheduleFlush(at),
+      onRefused: (calendarId) => {
+        // Read it again from the source, so it shows what Workspace has.
+        this.cache.setSyncState(calendarId, { sweptAt: null });
+        void this.sync.syncAll();
+      },
+    });
+  }
+
+  /** Send waiting edits, then read changes (so a sync reads back what was just sent). */
+  async syncNow(full = false) {
+    await this.outbox.flush();
+    await this.sync.syncAll({ full });
+  }
+
+  private scheduleFlush(at: number | null) {
+    if (this.flushTimer) clearTimeout(this.flushTimer);
+    this.flushTimer = null;
+    if (at === null) return;
+    this.flushTimer = setTimeout(() => void this.outbox.flush(), Math.max(0, at - Date.now()) + 50);
+    this.flushTimer.unref?.();
+  }
+
+  stop() {
+    if (this.flushTimer) clearTimeout(this.flushTimer);
   }
 
   private client(server: string, token: string) {
@@ -85,7 +121,11 @@ export class CalendarService {
     return {
       accounts: this.cache.accounts(),
       calendars: this.cache.calendars(),
-      status: this.sync.status,
+      status: {
+        ...this.sync.status,
+        pending: this.outbox.status().pending,
+        editError: this.outbox.error,
+      },
       settings: this.settings(),
       secureStorage: this.options.secureStorage(),
     };
@@ -100,6 +140,54 @@ export class CalendarService {
         .map((c) => c.id),
     );
     return this.cache.eventsBetween(from, to).filter((e) => visible.has(e.calendarId));
+  }
+
+  /** Events whose title has `query` (case-insensitive), in visible calendars, soonest first. */
+  search(query: string): CalEvent[] {
+    const visible = new Set(
+      this.cache
+        .calendars()
+        .filter((c) => c.visible)
+        .map((c) => c.id),
+    );
+    return this.cache.search(query).filter((e) => visible.has(e.calendarId));
+  }
+
+  // --- Editing -------------------------------------------------------------------------
+
+  createEvent(calendarId: string, title: string, time: EventTime): CalEvent {
+    return this.outbox.create(calendarId, title, time);
+  }
+
+  updateEvent(eventId: string, change: { title?: string; time?: EventTime }): CalEvent {
+    return this.outbox.update(eventId, change);
+  }
+
+  deleteEvent(eventId: string) {
+    this.outbox.remove(eventId);
+  }
+
+  undoDelete(eventId: string): CalEvent | null {
+    return this.outbox.undoRemove(eventId);
+  }
+
+  dismissConflict(eventId: string) {
+    this.outbox.dismissConflict(eventId);
+  }
+
+  /** Whether a link is a page on one of the connected servers (the only links opened). */
+  isAccountLink(url: string): boolean {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return false;
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    return this.cache.accounts().some((a) => {
+      const server = new URL(a.server);
+      return parsed.origin === server.origin && parsed.pathname.startsWith(server.pathname);
+    });
   }
 
   // --- Connecting ----------------------------------------------------------------------

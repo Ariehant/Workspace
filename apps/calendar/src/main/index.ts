@@ -86,7 +86,7 @@ void app.whenReady().then(() => {
     onChange: broadcast,
   });
   applyTheme(service.settings());
-  const scheduler = new Scheduler((full) => service.sync.syncAll({ full }), SYNC_INTERVAL_MS);
+  const scheduler = new Scheduler((full) => service.syncNow(full), SYNC_INTERVAL_MS);
   // Asking to sync also sweeps for rows deleted in Workspace (HANDOFF.md 3.5).
   registerIpc(service, { syncNow: () => scheduler.poke(true) });
 
@@ -104,6 +104,7 @@ void app.whenReady().then(() => {
   app.on('window-all-closed', () => app.quit());
   app.on('will-quit', () => {
     scheduler.stop();
+    service.stop();
     cache.close();
   });
 });

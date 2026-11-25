@@ -2,7 +2,7 @@
  * The window's requests, checked and passed to the service. Every handler answers a `Result`,
  * so a failure reaches the window as a message to show (never a token: errors don't carry one).
  */
-import { ipcMain, nativeTheme } from 'electron';
+import { ipcMain, nativeTheme, shell } from 'electron';
 import {
   IPC,
   type CalendarDraft,
@@ -10,7 +10,7 @@ import {
   type Result,
   type Settings,
 } from '../shared/ipc';
-import { isDay } from '../shared/dates';
+import { isDay, type EventTime } from '../shared/dates';
 import type { CalendarService } from './service';
 
 const isString = (v: unknown, max = 2048): v is string => typeof v === 'string' && v.length <= max;
@@ -48,6 +48,30 @@ function isDraft(v: unknown): v is CalendarDraft {
       (isRef(d.people) && isId((d.people as unknown as { personId: unknown }).personId))) &&
     (d.colourBy === null || isRef(d.colourBy))
   );
+}
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+
+/** A well-formed event time: days for all-day, minutes otherwise, the end not before the start. */
+function isEventTime(v: unknown): v is EventTime {
+  if (!v || typeof v !== 'object') return false;
+  const t = v as Record<string, unknown>;
+  if (typeof t.allDay !== 'boolean' || typeof t.endSet !== 'boolean') return false;
+  if (typeof t.start !== 'string' || typeof t.end !== 'string') return false;
+  const shape = t.allDay ? DAY : TIME;
+  return shape.test(t.start) && shape.test(t.end) && t.end >= t.start;
+}
+
+const isEventId = (v: unknown): v is string => isString(v, 200) && /^[\w-]+:[\w-]+$/.test(v);
+
+function isTimeZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function applyTheme(settings: Settings) {
@@ -156,6 +180,55 @@ export function registerIpc(service: CalendarService, hooks: { syncNow: () => vo
       service.removeAccount(id);
     }),
   );
+  ipcMain.handle(IPC.eventCreate, (_e, calendarId: unknown, title: unknown, time: unknown) =>
+    result(() => {
+      check(isId(calendarId) && isString(title, 2000) && isEventTime(time));
+      return service.createEvent(calendarId, title, time);
+    }),
+  );
+  ipcMain.handle(IPC.eventUpdate, (_e, id: unknown, change: unknown) =>
+    result(() => {
+      check(isEventId(id) && !!change && typeof change === 'object');
+      const c = change as Record<string, unknown>;
+      check(c.title === undefined || isString(c.title, 2000));
+      check(c.time === undefined || isEventTime(c.time));
+      return service.updateEvent(id, {
+        ...(c.title !== undefined && { title: c.title as string }),
+        ...(c.time !== undefined && { time: c.time as EventTime }),
+      });
+    }),
+  );
+  ipcMain.handle(IPC.eventDelete, (_e, id: unknown) =>
+    result(() => {
+      check(isEventId(id));
+      service.deleteEvent(id);
+    }),
+  );
+  ipcMain.handle(IPC.eventUndoDelete, (_e, id: unknown) =>
+    result(() => {
+      check(isEventId(id));
+      return service.undoDelete(id);
+    }),
+  );
+  ipcMain.handle(IPC.eventDismissConflict, (_e, id: unknown) =>
+    result(() => {
+      check(isEventId(id));
+      service.dismissConflict(id);
+    }),
+  );
+  ipcMain.handle(IPC.search, (_e, query: unknown) =>
+    result(() => {
+      check(isString(query, 200));
+      return service.search(query);
+    }),
+  );
+  ipcMain.handle(IPC.openLink, (_e, url: unknown) =>
+    result(async () => {
+      // Only pages on a connected Workspace server, in the system's browser.
+      check(isString(url, 2000) && service.isAccountLink(url));
+      await shell.openExternal(url);
+    }),
+  );
   ipcMain.handle(IPC.settingsSet, (_e, patch: unknown) =>
     result(() => {
       check(!!patch && typeof patch === 'object');
@@ -168,6 +241,10 @@ export function registerIpc(service: CalendarService, hooks: { syncNow: () => vo
       if (p.weekStartsOn !== undefined) {
         check(p.weekStartsOn === 0 || p.weekStartsOn === 1 || p.weekStartsOn === 6);
         clean.weekStartsOn = p.weekStartsOn;
+      }
+      if (p.secondZone !== undefined) {
+        check(p.secondZone === null || (isString(p.secondZone, 64) && isTimeZone(p.secondZone)));
+        clean.secondZone = p.secondZone;
       }
       const next = service.setSettings(clean);
       applyTheme(next);

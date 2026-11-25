@@ -4,23 +4,10 @@
  */
 import { addDays, startOfWeek, today } from '../src/shared/dates';
 import { seedWorkspace, startTestServer } from '@workspace/server/testing';
-import { closeApp, expect, test, V1, type Launched } from './helpers';
+import { closeApp, connect, expect, test, V1 } from './helpers';
 
 const week = startOfWeek(today(), 1);
 const day = (i: number) => addDays(week, i);
-
-async function connect({ window }: Launched, server: string, token: string, database: string) {
-  await window.getByRole('main').getByRole('button', { name: 'Connect Workspace' }).click();
-  const dialog = window.getByRole('dialog', { name: 'Connect Workspace' });
-  await dialog.getByLabel('Server address').fill(server);
-  await dialog.getByLabel('Integration token').fill(token);
-  await dialog.getByRole('button', { name: 'Connect' }).click();
-  await dialog.getByRole('checkbox', { name: database }).check();
-  await dialog.getByRole('button', { name: 'Next' }).click();
-  await expect(dialog.getByLabel('Date property')).toHaveValue(/.+/);
-  await dialog.getByRole('button', { name: 'Add calendar' }).click();
-  await expect(dialog).toBeHidden();
-}
 
 test('connects to Workspace and shows its rows in the week', async ({ launch, seed, v1 }) => {
   const db = await v1.database('Team plans');
@@ -133,7 +120,7 @@ test('moves between weeks with the toolbar, the mini calendar and the keyboard',
   const grid = window.getByRole('region', { name: 'Calendar' });
   await expect(grid.getByRole('button', { name: /^Next week thing/ })).toHaveCount(0);
 
-  await window.getByRole('button', { name: 'Next week' }).click();
+  await window.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(grid.getByRole('button', { name: /^Next week thing, 12:00/ })).toBeVisible();
   await window.keyboard.press('k');
   await expect(grid.getByRole('button', { name: /^Next week thing/ })).toHaveCount(0);

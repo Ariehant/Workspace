@@ -64,8 +64,15 @@ export interface CalEvent {
   colour: string | null;
   /** The row's other properties as text, for the event panel (read-only). */
   extra: { name: string; value: string }[];
-  /** Real UTC (`last_edited_time`). */
+  /** Real UTC (`last_edited_time`); '' for an event not yet created at its source. */
   lastEdited: string;
+  /** Edits made here are waiting to be sent. */
+  pending?: boolean;
+  /**
+   * The event changed at its source while an edit made here was waiting: the source's version,
+   * shown in the panel as "Changed elsewhere" (the edit made here still went; last write wins).
+   */
+  conflict?: { title: string; allDay: boolean; start: string; end: string } | null;
 }
 
 /** Colour names, as Workspace (and Notion) name option colours. */

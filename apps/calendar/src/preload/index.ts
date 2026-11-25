@@ -11,6 +11,7 @@ import {
   type SchemaChoice,
   type Settings,
 } from '../shared/ipc';
+import type { EventTime } from '../shared/dates';
 import type { CalEvent, Calendar } from '../shared/types';
 
 const call = <T>(channel: string, ...args: unknown[]) =>
@@ -18,7 +19,6 @@ const call = <T>(channel: string, ...args: unknown[]) =>
 
 const api = {
   state: () => call<AppState>(IPC.state),
-  events: (from: string, to: string) => call<CalEvent[]>(IPC.events, from, to),
   syncNow: () => call<void>(IPC.syncNow),
   connect: {
     check: (server: string, token: string) => call<ConnectSession>(IPC.connectCheck, server, token),
@@ -44,6 +44,18 @@ const api = {
   settings: {
     set: (patch: Partial<Settings>) => call<Settings>(IPC.settingsSet, patch),
   },
+  events: {
+    range: (from: string, to: string) => call<CalEvent[]>(IPC.events, from, to),
+    create: (calendarId: string, title: string, time: EventTime) =>
+      call<CalEvent>(IPC.eventCreate, calendarId, title, time),
+    update: (id: string, change: { title?: string; time?: EventTime }) =>
+      call<CalEvent>(IPC.eventUpdate, id, change),
+    remove: (id: string) => call<void>(IPC.eventDelete, id),
+    undoRemove: (id: string) => call<CalEvent | null>(IPC.eventUndoDelete, id),
+    dismissConflict: (id: string) => call<void>(IPC.eventDismissConflict, id),
+    search: (query: string) => call<CalEvent[]>(IPC.search, query),
+  },
+  openLink: (url: string) => call<void>(IPC.openLink, url),
   /** Something shown changed; returns a function that stops listening. */
   onChanged: (listener: () => void) => {
     const handler = () => listener();

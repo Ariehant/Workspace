@@ -142,7 +142,11 @@ export class SyncService {
       // Removed while its rows were being read: nothing to keep.
       if (!this.cache.calendar(calendar.id)) return;
       this.cache.transaction(() => {
-        this.cache.replaceEvents(calendar.id, events);
+        this.cache.replaceEvents(
+          calendar.id,
+          events,
+          new Date(serverTime ?? startedAt).toISOString(),
+        );
         this.cache.setSyncState(calendar.id, {
           syncedAt: serverTime ?? startedAt,
           sweptAt: startedAt,

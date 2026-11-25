@@ -165,3 +165,22 @@ export async function launchApp(
   await expect(window.getByRole('navigation', { name: 'Sidebar' })).toBeVisible();
   return { app, window };
 }
+
+/** Connect the app to a server and add one database as a calendar, through the dialog. */
+export async function connect(
+  { window }: Launched,
+  server: string,
+  token: string,
+  database: string,
+) {
+  await window.getByRole('main').getByRole('button', { name: 'Connect Workspace' }).click();
+  const dialog = window.getByRole('dialog', { name: 'Connect Workspace' });
+  await dialog.getByLabel('Server address').fill(server);
+  await dialog.getByLabel('Integration token').fill(token);
+  await dialog.getByRole('button', { name: 'Connect' }).click();
+  await dialog.getByRole('checkbox', { name: database }).check();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await expect(dialog.getByLabel('Date property')).toHaveValue(/.+/);
+  await dialog.getByRole('button', { name: 'Add calendar' }).click();
+  await expect(dialog).toBeHidden();
+}
