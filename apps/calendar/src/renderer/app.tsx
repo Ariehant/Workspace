@@ -36,6 +36,7 @@ import type { CalEvent, Calendar } from '../shared/types';
 import { api, unwrap } from './api';
 import { CommandBar, ShortcutsSheet, type Command } from './command';
 import { ConnectDialog } from './connect';
+import { GoogleDialog } from './google';
 import { NEW_EVENT_MINUTES } from './edits';
 import { formatFullDay, formatMonthYear, formatRange } from './format';
 import { daysFrom } from './layout';
@@ -103,7 +104,10 @@ export function App() {
   const [view, setView] = useState<View>({ kind: 'week' });
   const [anchor, setAnchor] = useState(() => todayOf());
   const [selection, setSelection] = useState<Selection>(null);
-  const [connecting, setConnecting] = useState<{ accountId: string | null } | null>(null);
+  const [connecting, setConnecting] = useState<{
+    kind: 'workspace' | 'google';
+    accountId: string | null;
+  } | null>(null);
   const [dialog, setDialog] = useState<'command' | 'shortcuts' | 'settings' | null>(null);
   const [toast, setToast] = useState<{ eventId: string; title: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -293,7 +297,16 @@ export function App() {
         shortcut: '?',
         run: () => setDialog('shortcuts'),
       },
-      { id: 'connect', label: 'Connect Workspace', run: () => setConnecting({ accountId: null }) },
+      {
+        id: 'connect',
+        label: 'Connect Workspace',
+        run: () => setConnecting({ kind: 'workspace', accountId: null }),
+      },
+      {
+        id: 'connect-google',
+        label: 'Connect Google Calendar',
+        run: () => setConnecting({ kind: 'google', accountId: null }),
+      },
     ],
     [move, createAtNextHour],
   );
@@ -387,7 +400,9 @@ export function App() {
         shown={view.kind === 'month' || view.kind === 'agenda' ? [] : days}
         today={today}
         onPickDay={goTo}
-        onAddCalendars={(accountId) => setConnecting({ accountId: accountId ?? null })}
+        onAddCalendars={(accountId, kind) =>
+          setConnecting({ kind: kind ?? 'workspace', accountId: accountId ?? null })
+        }
         onError={setError}
       />
       <main className="flex min-w-0 flex-1 flex-col">
@@ -465,9 +480,17 @@ export function App() {
                 Connect a Workspace server to see tasks, meetings and deadlines from its databases
                 here.
               </p>
-              <Button variant="primary" onClick={() => setConnecting({ accountId: null })}>
-                Connect Workspace
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="primary"
+                  onClick={() => setConnecting({ kind: 'workspace', accountId: null })}
+                >
+                  Connect Workspace
+                </Button>
+                <Button onClick={() => setConnecting({ kind: 'google', accountId: null })}>
+                  Connect Google Calendar
+                </Button>
+              </div>
             </div>
           ) : view.kind === 'month' ? (
             <MonthView
@@ -549,8 +572,15 @@ export function App() {
           </Button>
         </div>
       )}
-      {connecting && (
+      {connecting?.kind === 'workspace' && (
         <ConnectDialog accountId={connecting.accountId} onClose={() => setConnecting(null)} />
+      )}
+      {connecting?.kind === 'google' && state && (
+        <GoogleDialog
+          setup={state.google}
+          accountId={connecting.accountId}
+          onClose={() => setConnecting(null)}
+        />
       )}
       {dialog === 'command' && (
         <CommandBar
@@ -566,7 +596,12 @@ export function App() {
       )}
       {dialog === 'shortcuts' && <ShortcutsSheet onClose={() => setDialog(null)} />}
       {dialog === 'settings' && (
-        <SettingsDialog settings={settings} onClose={() => setDialog(null)} onError={setError} />
+        <SettingsDialog
+          settings={settings}
+          google={state?.google ?? null}
+          onClose={() => setDialog(null)}
+          onError={setError}
+        />
       )}
     </div>
   );

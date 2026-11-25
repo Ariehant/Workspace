@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { EventTime } from '../shared/dates';
 import type { Account, CalEvent, Calendar } from '../shared/types';
 import { Cache } from './cache';
-import { MAX_ATTEMPTS, Outbox, UNDO_MS } from './outbox';
+import { MAX_ATTEMPTS, Outbox, UNDO_MS, type EditTarget } from './outbox';
 import { WorkspaceApiError } from './workspace/client';
-import type { WorkspaceEngine } from './workspace/engine';
 
 const account: Account = {
   id: 'acc',
@@ -81,13 +80,13 @@ function fakeEngine() {
         stamp(),
       );
     },
-    async trash(sourceId: string) {
+    async trash(_c: Calendar, sourceId: string) {
       requests.push(`trash ${sourceId}`);
       const error = engine.fail.shift();
       if (error) throw error;
     },
   };
-  return { engine, requests, asEngine: engine as unknown as WorkspaceEngine };
+  return { engine, requests, asEngine: engine as unknown as EditTarget };
 }
 
 function setup() {

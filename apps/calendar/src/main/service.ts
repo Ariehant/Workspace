@@ -10,15 +10,39 @@ import {
   type CalendarPatch,
   type ConnectSession,
   type DatabaseChoice,
+  type GoogleConnect,
+  type GoogleSetup,
   type SchemaChoice,
   type Settings,
 } from '../shared/ipc';
+import { hexColour, type GoogleCalendarEntry } from '../shared/google';
 import type { EventTime } from '../shared/dates';
 import { DEFAULT_REMINDER, REMINDER_CHOICES } from '../shared/reminders';
-import { COLOURS, type Account, type CalEvent, type Calendar } from '../shared/types';
+import {
+  COLOURS,
+  isGoogleAccount,
+  type CalEvent,
+  type Calendar,
+  type GoogleAccount,
+  type WorkspaceAccount,
+  type WorkspaceCalendar,
+} from '../shared/types';
+import { localZone, wallAt } from '../shared/zones';
 import type { Cache } from './cache';
 import type { Log } from './log';
-import { Outbox } from './outbox';
+import { GoogleClient, GoogleEngine } from './google/client';
+import {
+  clientFromEnvironment,
+  googleEndpoints,
+  GoogleTokens,
+  revoke,
+  signIn,
+  type GoogleClientConfig,
+  type GoogleEndpoints,
+  type TokenSet,
+} from './google/oauth';
+import { GoogleCalendarSync } from './google/sync';
+import { Outbox, type EditTarget } from './outbox';
 import { SyncService } from './sync';
 import { normaliseServer, WorkspaceClient, type ClientOptions } from './workspace/client';
 import { WorkspaceEngine, type Person, type ViewInfo } from './workspace/engine';
@@ -30,9 +54,28 @@ export interface ServiceOptions {
   secureStorage: () => boolean;
   /** For tests: how clients are made (a fake fetch, limits). */
   clientOptions?: Partial<ClientOptions>;
+  /** Opens Google's sign-in page in the system browser. */
+  openBrowser?: (url: string) => Promise<void>;
+  /** Google's endpoints and client from the environment (tests point them at a fake). */
+  env?: NodeJS.ProcessEnv;
+  /** This machine's time zone (tests set one). */
+  zone?: () => string;
   onChange?: () => void;
   log?: Log;
 }
+
+/** A Google sign-in waiting for its calendars to be chosen. */
+interface GoogleSession {
+  email: string;
+  refreshToken: string;
+  tokens: GoogleTokens;
+  /** The account it's for, if already added (adding calendars, or signed in again). */
+  accountId: string | null;
+  entries: GoogleCalendarEntry[];
+}
+
+const GOOGLE_CLIENT = 'google.client';
+const ZONE = 'zone';
 
 interface Session {
   engine: WorkspaceEngine;
@@ -50,13 +93,22 @@ export class CalendarService {
   readonly outbox: Outbox;
   private readonly engines = new Map<string, WorkspaceEngine>();
   private readonly sessions = new Map<string, Session>();
+  private readonly googleSyncs = new Map<string, GoogleCalendarSync>();
+  private readonly googleSessions = new Map<string, GoogleSession>();
+  private googleSigningIn: AbortController | null = null;
+  private readonly endpoints: GoogleEndpoints;
+  private readonly zone: () => string;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly options: ServiceOptions) {
     this.cache = options.cache;
+    this.endpoints = googleEndpoints(options.env);
+    this.zone = options.zone ?? localZone;
+    this.relocalize();
     this.sync = new SyncService({
       cache: this.cache,
       engineFor: (account) => this.engineFor(account),
+      googleFor: (account) => this.googleFor(account),
       onChange: options.onChange,
       log: options.log,
     });
@@ -64,7 +116,9 @@ export class CalendarService {
       cache: this.cache,
       engineFor: (calendar) => {
         const account = this.cache.account(calendar.accountId);
-        return account ? this.engineFor(account) : null;
+        if (!account || isGoogleAccount(account)) return null;
+        const engine = this.engineFor(account);
+        return engine && workspaceTarget(engine);
       },
       onChange: options.onChange,
       onDue: (at) => this.scheduleFlush(at),
@@ -100,7 +154,7 @@ export class CalendarService {
   }
 
   /** One source (and so one rate limiter) per account. */
-  engineFor(account: Account): WorkspaceEngine | null {
+  engineFor(account: WorkspaceAccount): WorkspaceEngine | null {
     const cached = this.engines.get(account.id);
     if (cached) return cached;
     const sealed = this.cache.sealedToken(account.id);
@@ -109,6 +163,223 @@ export class CalendarService {
     const engine = new WorkspaceEngine(this.client(account.server, token));
     this.engines.set(account.id, engine);
     return engine;
+  }
+
+  /**
+   * After the time zone changed (since the last run, or while running): events at real instants
+   * show at the new clock times. Google's are also worked out again at the next sync.
+   */
+  relocalize() {
+    const zone = this.zone();
+    if (this.cache.setting<string | null>(ZONE, null) === zone) return;
+    this.cache.relocalize((instant) => wallAt(instant, zone));
+    this.cache.setSetting(ZONE, zone);
+    this.options.onChange?.();
+  }
+
+  // --- Google --------------------------------------------------------------------------
+
+  private googleConfig(): GoogleClientConfig | null {
+    const fromEnv = clientFromEnvironment(this.options.env);
+    if (fromEnv) return fromEnv;
+    const saved = this.cache.setting<Partial<GoogleClientConfig> | null>(GOOGLE_CLIENT, null);
+    return saved?.clientId
+      ? { clientId: saved.clientId, clientSecret: saved.clientSecret ?? '' }
+      : null;
+  }
+
+  googleSetup(): GoogleSetup {
+    const config = this.googleConfig();
+    return {
+      configured: !!config,
+      fromEnvironment: !!clientFromEnvironment(this.options.env),
+      clientId: config?.clientId ?? '',
+      hasSecret: !!config?.clientSecret,
+    };
+  }
+
+  /** Save the OAuth client; an empty secret keeps the one saved (it isn't shown again). */
+  setGoogleClient(clientId: string, clientSecret: string): GoogleSetup {
+    if (clientFromEnvironment(this.options.env))
+      throw new Error('This build brings its own Google client.');
+    const id = clientId.trim();
+    if (!/^[\w.-]+$/.test(id)) throw new Error('Enter the OAuth client ID.');
+    const before = this.cache.setting<Partial<GoogleClientConfig> | null>(GOOGLE_CLIENT, null);
+    this.cache.setSetting(GOOGLE_CLIENT, {
+      clientId: id,
+      clientSecret:
+        clientSecret.trim() || (before?.clientId === id ? before.clientSecret : '') || '',
+    });
+    this.options.onChange?.();
+    return this.googleSetup();
+  }
+
+  private googleTokens(refreshToken: string, initial: TokenSet | null = null) {
+    return new GoogleTokens({
+      config: () => this.googleConfig(),
+      endpoints: this.endpoints,
+      refreshToken,
+      initial,
+      fetch: this.options.clientOptions?.fetch,
+    });
+  }
+
+  private googleEngine(tokens: GoogleTokens) {
+    return new GoogleEngine(
+      new GoogleClient({
+        tokens,
+        base: this.endpoints.api,
+        fetch: this.options.clientOptions?.fetch,
+        sleep: this.options.clientOptions?.sleep,
+      }),
+    );
+  }
+
+  /** One sync (and one token) per Google account; null if its sign-in can't be read. */
+  googleFor(account: GoogleAccount): GoogleCalendarSync | null {
+    const cached = this.googleSyncs.get(account.id);
+    if (cached) return cached;
+    const sealed = this.cache.sealedToken(account.id);
+    const refreshToken = sealed && this.options.unseal(sealed);
+    if (!refreshToken) return null;
+    const sync = new GoogleCalendarSync({
+      cache: this.cache,
+      engine: this.googleEngine(this.googleTokens(refreshToken)),
+      zone: this.zone,
+    });
+    this.googleSyncs.set(account.id, sync);
+    return sync;
+  }
+
+  private startGoogleSession(session: GoogleSession): GoogleConnect {
+    const sessionId = randomUUID();
+    this.googleSessions.set(sessionId, session);
+    const added = new Set(
+      this.cache
+        .calendars()
+        .filter((c) => c.kind === 'google' && c.accountId === session.accountId)
+        .map((c) => (c.kind === 'google' ? c.googleId : '')),
+    );
+    return {
+      sessionId,
+      email: session.email,
+      calendars: session.entries
+        .map((e) => ({
+          googleId: e.id,
+          name: e.summaryOverride || e.summary || e.id,
+          colour: hexColour(e.backgroundColor),
+          accessRole: e.accessRole ?? 'reader',
+          primary: !!e.primary,
+          added: added.has(e.id),
+        }))
+        // The account's own calendar first, then as Google lists them.
+        .sort((a, b) => Number(b.primary) - Number(a.primary)),
+    };
+  }
+
+  /** Sign in with Google in the browser, then list the account's calendars. */
+  async googleSignIn(): Promise<GoogleConnect> {
+    const config = this.googleConfig();
+    if (!config) throw new Error('Set up the Google client in Settings first.');
+    this.googleSigningIn?.abort();
+    const controller = new AbortController();
+    this.googleSigningIn = controller;
+    try {
+      const signedIn = await signIn({
+        config,
+        endpoints: this.endpoints,
+        open: this.options.openBrowser ?? (() => Promise.reject(new Error('No browser.'))),
+        fetch: this.options.clientOptions?.fetch,
+        signal: controller.signal,
+      });
+      const tokens = this.googleTokens(signedIn.refreshToken, signedIn);
+      const entries = await this.googleEngine(tokens).calendars();
+      const email = signedIn.email ?? entries.find((e) => e.primary)?.id ?? 'Google';
+      const existing = this.cache
+        .accounts()
+        .find((a): a is GoogleAccount => isGoogleAccount(a) && a.email === email);
+      return this.startGoogleSession({
+        email,
+        refreshToken: signedIn.refreshToken,
+        tokens,
+        accountId: existing?.id ?? null,
+        entries,
+      });
+    } finally {
+      if (this.googleSigningIn === controller) this.googleSigningIn = null;
+    }
+  }
+
+  cancelGoogle(sessionId?: string) {
+    if (sessionId) this.googleSessions.delete(sessionId);
+    else this.googleSigningIn?.abort();
+  }
+
+  /** An added Google account's calendars, to add more of them. */
+  async googleAccount(accountId: string): Promise<GoogleConnect> {
+    const account = this.cache.account(accountId);
+    if (!account || !isGoogleAccount(account)) throw new Error('That account is gone.');
+    const sealed = this.cache.sealedToken(accountId);
+    const refreshToken = sealed && this.options.unseal(sealed);
+    if (!refreshToken) throw new Error("This account's sign-in can't be read. Sign in again.");
+    const tokens = this.googleTokens(refreshToken);
+    const entries = await this.googleEngine(tokens).calendars();
+    return this.startGoogleSession({
+      email: account.email,
+      refreshToken,
+      tokens,
+      accountId,
+      entries,
+    });
+  }
+
+  /** Save the account (new, or signed in again) and the chosen calendars, then sync. */
+  async googleSave(sessionId: string, googleIds: string[]): Promise<void> {
+    const session = this.googleSessions.get(sessionId);
+    if (!session) throw new Error('This setup has ended. Start again.');
+    const chosen = session.entries.filter((e) => googleIds.includes(e.id));
+    let accountId = session.accountId;
+    this.cache.transaction(() => {
+      if (!accountId) {
+        accountId = randomUUID();
+        this.cache.addAccount(
+          { id: accountId, kind: 'google', name: session.email, email: session.email, error: null },
+          this.options.seal(session.refreshToken),
+        );
+      } else {
+        // Signed in again: the new refresh token, and no error.
+        this.cache.setSealedToken(accountId, this.options.seal(session.refreshToken));
+        const account = this.cache.account(accountId);
+        if (account) this.cache.updateAccount({ ...account, error: null });
+        this.googleSyncs.delete(accountId);
+      }
+      const have = new Set(
+        this.cache
+          .calendars()
+          .filter((c) => c.accountId === accountId)
+          .map((c) => (c.kind === 'google' ? c.googleId : '')),
+      );
+      for (const entry of chosen) {
+        if (have.has(entry.id)) continue;
+        this.cache.addCalendar({
+          id: randomUUID(),
+          kind: 'google',
+          accountId: accountId!,
+          googleId: entry.id,
+          accessRole: entry.accessRole ?? 'reader',
+          timeZone: entry.timeZone ?? this.zone(),
+          name: entry.summaryOverride || entry.summary || entry.id,
+          colour: hexColour(entry.backgroundColor) ?? 'blue',
+          visible: true,
+          reminder: DEFAULT_REMINDER,
+          status: 'ok',
+          statusMessage: null,
+        });
+      }
+    });
+    this.googleSessions.delete(sessionId);
+    this.options.onChange?.();
+    await this.sync.syncAll();
   }
 
   settings(): Settings {
@@ -133,6 +404,7 @@ export class CalendarService {
       },
       settings: this.settings(),
       secureStorage: this.options.secureStorage(),
+      google: this.googleSetup(),
     };
   }
 
@@ -193,7 +465,15 @@ export class CalendarService {
       return false;
     }
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
-    return this.cache.accounts().some((a) => {
+    const accounts = this.cache.accounts();
+    if (
+      parsed.protocol === 'https:' &&
+      accounts.some(isGoogleAccount) &&
+      GOOGLE_LINK_ORIGINS.includes(parsed.origin)
+    )
+      return true;
+    return accounts.some((a) => {
+      if (isGoogleAccount(a)) return false;
       const server = new URL(a.server);
       return parsed.origin === server.origin && parsed.pathname.startsWith(server.pathname);
     });
@@ -222,6 +502,7 @@ export class CalendarService {
   async connectExisting(accountId: string): Promise<ConnectSession> {
     const account = this.cache.account(accountId);
     if (!account) throw new Error('That account is gone.');
+    if (isGoogleAccount(account)) throw new Error('Add Google calendars with Google sign-in.');
     const engine = this.engineFor(account);
     if (!engine) throw new Error("This account's token can't be read. Connect it again.");
     const me = await engine.connect();
@@ -283,7 +564,9 @@ export class CalendarService {
         // The same integration on the same server is one account.
         const existing = this.cache
           .accounts()
-          .find((a) => a.server === session.server && a.botId === session.botId);
+          .find(
+            (a) => !isGoogleAccount(a) && a.server === session.server && a.botId === session.botId,
+          );
         if (existing) {
           accountId = existing.id;
         } else {
@@ -332,7 +615,9 @@ export class CalendarService {
       ...calendar,
       ...(patch.name !== undefined && { name: patch.name.trim() || calendar.name }),
       ...(patch.colour !== undefined &&
-        COLOURS.includes(patch.colour as never) && { colour: patch.colour }),
+        (COLOURS.includes(patch.colour as never) || hexColour(patch.colour)) && {
+          colour: hexColour(patch.colour) ?? patch.colour,
+        }),
       ...(patch.visible !== undefined && { visible: !!patch.visible }),
       ...(patch.reminder !== undefined &&
         isReminder(patch.reminder) && { reminder: patch.reminder }),
@@ -348,11 +633,32 @@ export class CalendarService {
   }
 
   removeAccount(id: string) {
+    const account = this.cache.account(id);
+    const sealed = account && isGoogleAccount(account) ? this.cache.sealedToken(id) : null;
     this.cache.removeAccount(id);
     this.engines.delete(id);
+    this.googleSyncs.delete(id);
     this.options.onChange?.();
+    // Tell Google to forget the sign-in (best effort).
+    const refreshToken = sealed && this.options.unseal(sealed);
+    if (refreshToken) void revoke(this.endpoints, refreshToken, this.options.clientOptions?.fetch);
   }
 }
 
 const isReminder = (v: unknown): v is number | null =>
   (REMINDER_CHOICES as readonly unknown[]).includes(v);
+
+/** Links opened for Google accounts: events in Google Calendar, and Meet calls. */
+const GOOGLE_LINK_ORIGINS = [
+  'https://www.google.com',
+  'https://calendar.google.com',
+  'https://meet.google.com',
+];
+
+/** The outbox's edits, sent to a Workspace server. */
+const workspaceTarget = (engine: WorkspaceEngine): EditTarget => ({
+  create: (calendar, title, time) => engine.create(calendar as WorkspaceCalendar, title, time),
+  update: (calendar, sourceId, change) =>
+    engine.update(calendar as WorkspaceCalendar, sourceId, change),
+  trash: (_calendar, sourceId) => engine.trash(sourceId),
+});

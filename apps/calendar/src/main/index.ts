@@ -168,6 +168,12 @@ function main() {
     seal,
     unseal,
     secureStorage,
+    // Google's sign-in page, in the system browser (in E2E, followed here: no browser).
+    openBrowser: E2E
+      ? async (url) => {
+          await fetch(url);
+        }
+      : (url) => shell.openExternal(url),
     onChange: changed,
     log,
   });

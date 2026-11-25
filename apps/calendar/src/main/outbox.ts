@@ -10,10 +10,24 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { EventTime } from '../shared/dates';
-import type { CalEvent, Calendar } from '../shared/types';
+import { isGoogleCalendar, READ_ONLY_MESSAGE, type CalEvent, type Calendar } from '../shared/types';
 import type { Cache, OpPayload, OutboxOp } from './cache';
 import { WorkspaceApiError } from './workspace/client';
-import type { WorkspaceEngine } from './workspace/engine';
+
+/** What the outbox needs from a source to send edits. */
+export interface EditTarget {
+  create(
+    calendar: Calendar,
+    title: string,
+    time: EventTime,
+  ): Promise<{ sourceId: string; event: CalEvent | null }>;
+  update(
+    calendar: Calendar,
+    sourceId: string,
+    change: { title?: string; time?: EventTime },
+  ): Promise<CalEvent | null>;
+  trash(calendar: Calendar, sourceId: string): Promise<void>;
+}
 
 /** How long a delete waits for Undo. */
 export const UNDO_MS = 5_000;
@@ -30,7 +44,8 @@ export interface OutboxStatus {
 
 export interface OutboxOptions {
   cache: Cache;
-  engineFor: (calendar: Calendar) => WorkspaceEngine | null;
+  /** Where a calendar's edits go (its source), or null if its sign-in can't be read. */
+  engineFor: (calendar: Calendar) => EditTarget | null;
   now?: () => number;
   onChange?: () => void;
   /** Called with the next time a send is due (ms), or null; the main process sets a timer. */
@@ -69,6 +84,7 @@ export class Outbox {
   private calendar(id: string): Calendar {
     const calendar = this.cache.calendar(id);
     if (!calendar) throw new Error('That calendar is gone.');
+    if (isGoogleCalendar(calendar)) throw new Error(READ_ONLY_MESSAGE);
     return calendar;
   }
 
@@ -120,6 +136,7 @@ export class Outbox {
   update(eventId: string, change: { title?: string; time?: EventTime }): CalEvent {
     const event = this.cache.event(eventId);
     if (!event) throw new Error('That event is gone.');
+    this.calendar(event.calendarId);
     const next: CalEvent = {
       ...event,
       ...(change.title !== undefined && { title: change.title }),
@@ -161,6 +178,7 @@ export class Outbox {
   remove(eventId: string) {
     const event = this.cache.event(eventId);
     if (!event) return;
+    this.calendar(event.calendarId);
     this.cache.transaction(() => {
       this.cache.deleteEvent(eventId);
       this.cache.addOp({
@@ -311,7 +329,7 @@ export class Outbox {
     this.changed();
   }
 
-  private async send(engine: WorkspaceEngine, calendar: Calendar, op: OutboxOp) {
+  private async send(engine: EditTarget, calendar: Calendar, op: OutboxOp) {
     const sourceId = sourceIdOf(op.eventId);
     if (op.kind === 'create') {
       const { title = '', time } = op.payload;
@@ -372,7 +390,7 @@ export class Outbox {
       });
       return;
     }
-    await engine.trash(sourceId);
+    await engine.trash(calendar, sourceId);
     this.cache.removeOp(op.id);
   }
 }

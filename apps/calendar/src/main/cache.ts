@@ -52,7 +52,29 @@ export const MIGRATIONS: string[] = [
    CREATE INDEX outbox_by_event ON outbox(event_id);`,
   // Reminders already shown (so a restart doesn't show them again).
   `CREATE TABLE notified (key TEXT PRIMARY KEY, at INTEGER NOT NULL);`,
+  // v1.1: sources whose events are worked out here (Google): their items as read (series,
+  // their changed or cancelled occurrences, single events), a sync cursor per calendar, and
+  // the series each event belongs to.
+  `CREATE TABLE items (
+     id TEXT PRIMARY KEY,
+     calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+     source_id TEXT NOT NULL,
+     series_id TEXT,
+     json TEXT NOT NULL
+   );
+   CREATE INDEX items_by_calendar ON items(calendar_id, series_id);
+   ALTER TABLE calendars ADD COLUMN cursor TEXT;
+   ALTER TABLE events ADD COLUMN series_id TEXT;
+   CREATE INDEX events_by_series ON events(calendar_id, series_id);`,
 ];
+
+/** An item as a source sent it (Google's event resource), kept to work out events from. */
+export interface SourceItem<T = unknown> {
+  sourceId: string;
+  /** The series it's an occurrence of (Google's `recurringEventId`), if any. */
+  seriesId: string | null;
+  data: T;
+}
 
 export type OpKind = 'create' | 'update' | 'trash';
 
@@ -225,6 +247,10 @@ export class Cache {
       .run(account.id, JSON.stringify(account), sealedToken, n);
   }
 
+  setSealedToken(id: string, sealedToken: string) {
+    this.db.prepare('UPDATE accounts SET token = ? WHERE id = ?').run(sealedToken, id);
+  }
+
   updateAccount(account: Account) {
     this.db
       .prepare('UPDATE accounts SET json = ? WHERE id = ?')
@@ -286,16 +312,64 @@ export class Cache {
         .run(state.sweptAt, calendarId);
   }
 
+  /** The source's sync cursor for the calendar (Google's `nextSyncToken`). */
+  cursor(calendarId: string): string | null {
+    const row = this.db.prepare('SELECT cursor FROM calendars WHERE id = ?').get(calendarId) as
+      { cursor: string | null } | undefined;
+    return row?.cursor ?? null;
+  }
+
+  setCursor(calendarId: string, cursor: string | null) {
+    this.db.prepare('UPDATE calendars SET cursor = ? WHERE id = ?').run(cursor, calendarId);
+  }
+
+  // --- Source items ----------------------------------------------------------------------
+
+  items<T>(calendarId: string): SourceItem<T>[] {
+    return (
+      this.db
+        .prepare('SELECT source_id, series_id, json FROM items WHERE calendar_id = ?')
+        .all(calendarId) as { source_id: string; series_id: string | null; json: string }[]
+    ).map((r) => ({ sourceId: r.source_id, seriesId: r.series_id, data: JSON.parse(r.json) as T }));
+  }
+
+  putItem(calendarId: string, item: SourceItem) {
+    this.db
+      .prepare(
+        `INSERT INTO items (id, calendar_id, source_id, series_id, json) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET series_id = excluded.series_id, json = excluded.json`,
+      )
+      .run(
+        `${calendarId}:${item.sourceId}`,
+        calendarId,
+        item.sourceId,
+        item.seriesId,
+        JSON.stringify(item.data),
+      );
+  }
+
+  /** Removes an item, and the occurrences kept for it if it's a series. */
+  removeItem(calendarId: string, sourceId: string) {
+    this.db
+      .prepare('DELETE FROM items WHERE calendar_id = ? AND (source_id = ? OR series_id = ?)')
+      .run(calendarId, sourceId, sourceId);
+  }
+
+  clearItems(calendarId: string) {
+    this.db.prepare('DELETE FROM items WHERE calendar_id = ?').run(calendarId);
+  }
+
   // --- Events --------------------------------------------------------------------------
 
   putEvent(event: CalEvent) {
     this.db
       .prepare(
-        `INSERT INTO events (id, calendar_id, source_id, first_day, last_day, title, json)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO events (id, calendar_id, source_id, first_day, last_day, title, json,
+           series_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET source_id = excluded.source_id,
            first_day = excluded.first_day, last_day = excluded.last_day,
-           title = excluded.title, json = excluded.json`,
+           title = excluded.title, json = excluded.json, series_id = excluded.series_id`,
       )
       .run(
         event.id,
@@ -305,6 +379,7 @@ export class Cache {
         lastDayOf(event),
         event.title,
         JSON.stringify(event),
+        event.series?.id ?? null,
       );
   }
 
@@ -406,6 +481,52 @@ export class Cache {
         this.deleteEvent(row.id);
       }
       for (const event of events) this.mergeIncoming(event, pending);
+    });
+  }
+
+  /**
+   * A calendar's events as worked out from its items (Google): only what changed is written.
+   * Events with edits waiting are kept as they are here; a newer copy here isn't replaced.
+   */
+  setDerivedEvents(calendarId: string, events: CalEvent[]) {
+    this.transaction(() => {
+      const pending = this.pendingByEvent(calendarId);
+      const cached = new Map(
+        (
+          this.db.prepare('SELECT id, json FROM events WHERE calendar_id = ?').all(calendarId) as {
+            id: string;
+            json: string;
+          }[]
+        ).map((r) => [r.id, r.json]),
+      );
+      const incoming = new Set(events.map((e) => e.id));
+      for (const id of cached.keys()) {
+        if (!incoming.has(id) && !pending.has(id)) this.deleteEvent(id);
+      }
+      for (const event of events) {
+        const json = cached.get(event.id);
+        if (json === JSON.stringify(event)) continue;
+        if (json === undefined && !pending.has(event.id)) this.putEvent(event);
+        else this.mergeIncoming(event, pending);
+      }
+    });
+  }
+
+  /**
+   * Work out the clock times of events at real instants again (after the time zone changed).
+   */
+  relocalize(toWall: (instant: string) => string) {
+    this.transaction(() => {
+      const rows = this.db
+        .prepare(`SELECT json FROM events WHERE json LIKE '%"instant":%'`)
+        .all() as { json: string }[];
+      for (const row of rows) {
+        const event = JSON.parse(row.json) as CalEvent;
+        if (!event.instant) continue;
+        const start = toWall(event.instant.start);
+        const end = toWall(event.instant.end);
+        if (start !== event.start || end !== event.end) this.putEvent({ ...event, start, end });
+      }
     });
   }
 

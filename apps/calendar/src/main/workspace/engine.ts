@@ -18,7 +18,7 @@ import {
   titleProperties,
   type ApiPage,
 } from '../../shared/mapping';
-import type { CalEvent, Calendar, CalendarStatus } from '../../shared/types';
+import type { CalEvent, CalendarStatus, WorkspaceCalendar as Calendar } from '../../shared/types';
 import { WorkspaceApiError, type WorkspaceClient } from './client';
 
 export interface DatabaseInfo {

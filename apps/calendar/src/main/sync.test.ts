@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Account, CalEvent, Calendar } from '../shared/types';
-import { Cache, lastDayOf } from './cache';
+import { Cache, lastDayOf, MIGRATIONS } from './cache';
 import { SyncService } from './sync';
 import { WorkspaceApiError } from './workspace/client';
 import type { WorkspaceEngine } from './workspace/engine';
@@ -112,7 +112,9 @@ describe('the cache', () => {
 
   it('migrates a new file and opens it again', () => {
     const cache = new Cache(':memory:');
-    expect(cache.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 });
+    expect(cache.db.prepare('PRAGMA user_version').get()).toEqual({
+      user_version: MIGRATIONS.length,
+    });
   });
 });
 

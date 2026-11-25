@@ -5,8 +5,9 @@ Workspace databases (tasks, meetings, deadlines, plans) as events, lets you crea
 change them, and notifies you before they start. It talks to your Workspace server through its
 API, so it shows what's on the server.
 
-Version 1.0 works with Workspace databases. Google Calendar (1.1) and ICS feeds and CalDAV (1.2)
-are planned: see [the build plan](HANDOFF.md).
+Version 1.0 works with Workspace databases. Version 1.1 adds Google Calendar: its calendars show
+beside Workspace's, recurring events included (changing Google events here comes next). ICS feeds
+and CalDAV (1.2) are planned: see [the build plan](HANDOFF.md).
 
 ## Install
 
@@ -41,6 +42,31 @@ a Workspace owner or admin for the first step.
 
 The token is kept encrypted with your system's keyring (GNOME Keyring, KWallet, Windows' DPAPI).
 If the system has none, the sidebar says so, and the token is stored as is on this computer.
+
+## Connect Google Calendar
+
+The calendar signs in to Google with **your own Google Cloud project's OAuth client**, so no one
+else's app sees your calendar.
+
+1. **Make the client** (once). In the [Google Cloud console](https://console.cloud.google.com/),
+   make or pick a project, turn on the **Google Calendar API**, set up the **OAuth consent screen**
+   (for yourself, "External" in testing mode with your address as a test user is enough), then
+   under **Credentials** make an **OAuth client ID** of type **Desktop app**. Keep its ID and
+   secret.
+2. **In the calendar,** choose **Connect Google Calendar** (in the sidebar). The first time, paste
+   the client ID and secret (they can be changed later in **Settings**).
+3. **Sign in with Google.** Your browser opens Google's page; allow access, then go back to the
+   calendar. It asks to see your calendars and to read and change their events.
+4. **Choose calendars** to show. Each keeps its Google colour (change it in the calendar's ⋯
+   menu).
+
+The sign-in is kept encrypted like Workspace tokens. Removing the account (its ⋯ menu) also tells
+Google to forget it.
+
+Google events happen at a real moment, so they show at your computer's clock time for it (a
+10:00 meeting in Berlin shows at 14:30 in India), and move if you change time zone. Workspace
+dates have no zone and stay as written. In this version, Google events open read-only, with
+**Open in Google Calendar**.
 
 ## Use it
 
@@ -98,6 +124,8 @@ another column of hours.
 | "No databases are connected to this integration" | Do step 2 above, then **Look again**.                                                                 |
 | No tray icon on GNOME                            | Install and turn on the AppIndicator extension (`gnome-shell-extension-appindicator`).                |
 | An edit "couldn't be saved to Workspace"         | Workspace refused it five times (the message says why); the calendar shows Workspace's version again. |
+| "Google signed this account out"                 | The access was removed in your Google account, or the client changed. Sign in with Google again.      |
+| A Google calendar with ⚠ "can no longer see"     | The calendar was deleted or unshared in Google. Remove it here.                                       |
 
 **Logs** are in the calendar's data folder, in `logs/` (`~/.config/Workspace Calendar/logs` on
 Linux, `%APPDATA%\Workspace Calendar\logs` on Windows). They have what the calendar did and what

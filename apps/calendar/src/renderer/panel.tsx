@@ -276,7 +276,7 @@ export function EventPanel(props: Props) {
                 className="border border-line"
               >
                 <ExternalLink className="size-4" aria-hidden />
-                Open in Workspace
+                {calendar?.kind === 'google' ? 'Open in Google Calendar' : 'Open in Workspace'}
               </Button>
             )}
             {canEdit && (

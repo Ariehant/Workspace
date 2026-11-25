@@ -41,7 +41,7 @@ interface Props {
   shown: string[];
   today: string;
   onPickDay: (day: string) => void;
-  onAddCalendars: (accountId?: string) => void;
+  onAddCalendars: (accountId?: string, kind?: 'workspace' | 'google') => void;
   onError: (message: string) => void;
 }
 
@@ -72,7 +72,7 @@ export function Sidebar({
             <div className="group flex items-center gap-1 px-1 py-0.5">
               <h2
                 className="min-w-0 flex-1 truncate text-xs font-semibold text-muted"
-                title={account.server}
+                title={account.kind === 'google' ? account.email : account.server}
               >
                 {account.name}
               </h2>
@@ -84,10 +84,10 @@ export function Sidebar({
                 </MenuTrigger>
                 <MenuContent align="end">
                   <MenuItem
-                    onSelect={() => onAddCalendars(account.id)}
+                    onSelect={() => onAddCalendars(account.id, account.kind ?? 'workspace')}
                     icon={<Plus className="size-4" />}
                   >
-                    Add databases
+                    {account.kind === 'google' ? 'Add calendars' : 'Add databases'}
                   </MenuItem>
                   <MenuSeparator />
                   <MenuItem
@@ -127,7 +127,17 @@ export function Sidebar({
           className="flex items-center gap-2 rounded px-1 py-1 text-left text-sm text-muted hover:bg-hover hover:text-fg"
         >
           <Plus className="size-4" aria-hidden />
-          {state.accounts.length ? 'Connect another Workspace' : 'Connect Workspace'}
+          {state.accounts.some((a) => a.kind !== 'google')
+            ? 'Connect another Workspace'
+            : 'Connect Workspace'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onAddCalendars(undefined, 'google')}
+          className="flex items-center gap-2 rounded px-1 py-1 text-left text-sm text-muted hover:bg-hover hover:text-fg"
+        >
+          <Plus className="size-4" aria-hidden />
+          Connect Google Calendar
         </button>
       </div>
       <div className="mt-auto flex flex-col gap-2">
