@@ -12,6 +12,10 @@ import { UPDATE_FEED, updateChannel } from './update-channel';
 
 const { autoUpdater } = electronUpdater;
 
+/** The feed has no file for this channel (yet): electron-updater's code for a 404. */
+const noFeed = (error: unknown) =>
+  (error as { code?: string } | null)?.code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND';
+
 /** Look for an update this long after starting, then this often. */
 const FIRST_CHECK_MS = 30_000;
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -77,6 +81,8 @@ export class Updates {
       this.set({ status: 'ready', version: info.version, progress: 100 });
     });
     autoUpdater.on('error', (error) => {
+      // No feed for this channel yet (before the first release of its kind): nothing to update to.
+      if (noFeed(error)) return this.set({ status: 'none', error: null });
       options.log('warn', `update: ${error.message}`);
       this.set({ status: 'error', error: error.message });
     });
@@ -109,7 +115,11 @@ export class Updates {
     if (this.state.status === 'ready') return this.state;
     autoUpdater
       .checkForUpdates()
-      ?.catch((error: unknown) => this.set({ status: 'error', error: String(error) }));
+      ?.catch((error: unknown) =>
+        noFeed(error)
+          ? this.set({ status: 'none', error: null })
+          : this.set({ status: 'error', error: String(error) }),
+      );
     return this.state;
   }
 

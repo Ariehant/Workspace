@@ -6,6 +6,10 @@ import { UPDATE_FEED, updateChannel } from './update-channel';
 
 const { autoUpdater } = electronUpdater;
 
+/** The feed has no file for this channel (yet): electron-updater's code for a 404. */
+const noFeed = (error: unknown) =>
+  (error as { code?: string } | null)?.code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND';
+
 /** Look for an update at start (after a short wait) and then this often. */
 const FIRST_CHECK_MS = 15_000;
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -41,7 +45,11 @@ export function registerUpdates(store: SqliteStore): void {
     if (!supported || state.status === 'checking' || state.status === 'downloading') return;
     autoUpdater
       .checkForUpdates()
-      ?.catch((error: unknown) => set({ status: 'error', error: String(error) }));
+      ?.catch((error: unknown) =>
+        noFeed(error)
+          ? set({ status: 'none', error: null })
+          : set({ status: 'error', error: String(error) }),
+      );
   };
 
   ipcMain.handle(IPC.updateGet, () => state);
@@ -74,7 +82,11 @@ export function registerUpdates(store: SqliteStore): void {
   autoUpdater.on('update-downloaded', (info) =>
     set({ status: 'ready', version: info.version, progress: 100 }),
   );
-  autoUpdater.on('error', (error) => set({ status: 'error', error: error.message }));
+  autoUpdater.on('error', (error) => {
+    // No feed for this channel yet (before the first release of its kind): nothing to update to.
+    if (noFeed(error)) set({ status: 'none', error: null });
+    else set({ status: 'error', error: error.message });
+  });
 
   // `--update-check` (the release tests): check now, install what's found on quit, and
   // exit; the outcome is printed.

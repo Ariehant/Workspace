@@ -27,6 +27,12 @@ const TRAY_SYNC_INTERVAL_MS = Math.max(SYNC_INTERVAL_MS, 5 * 60_000);
 const E2E = !!process.env.CALENDAR_E2E;
 
 /** `--smoke-test`: start, open a throwaway cache and the window, then quit (packaging checks). */
+// `--print-version`: print the version and exit (install and update checks).
+if (process.argv.includes('--print-version')) {
+  process.stdout.write(`${app.getVersion()}\n`);
+  process.exit(0);
+}
+
 const smokeTest = process.argv.includes('--smoke-test');
 /** `--update-check`: look for an update, install it if there's one, and exit (release tests). */
 const updateCheck = process.argv.includes('--update-check');
