@@ -369,13 +369,13 @@ describe('calendars and events', () => {
     const service = new SyncService({
       cache,
       engineFor: () => null,
-      googleFor: () => sync,
+      sourceFor: () => sync,
     });
     await service.syncAll();
     expect(titles()).toEqual([`A ${d(1)}`]);
     expect(service.status).toMatchObject({ online: true, error: null });
 
-    const signedOut = new SyncService({ cache, engineFor: () => null, googleFor: () => null });
+    const signedOut = new SyncService({ cache, engineFor: () => null, sourceFor: () => null });
     await signedOut.syncAll();
     expect(cache.account(account.id)?.error).toMatch(/sign in again/);
   });

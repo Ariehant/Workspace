@@ -38,6 +38,7 @@ import { CommandBar, ShortcutsSheet, type Command } from './command';
 import { ConnectDialog } from './connect';
 import { GoogleDialog } from './google';
 import { ScopeDialog } from './scope';
+import { SubscribeDialog } from './subscribe';
 import { NEW_EVENT_MINUTES } from './edits';
 import { formatFullDay, formatMonthYear, formatRange } from './format';
 import { daysFrom } from './layout';
@@ -106,7 +107,7 @@ export function App() {
   const [anchor, setAnchor] = useState(() => todayOf());
   const [selection, setSelection] = useState<Selection>(null);
   const [connecting, setConnecting] = useState<{
-    kind: 'workspace' | 'google';
+    kind: 'workspace' | 'google' | 'ics';
     accountId: string | null;
   } | null>(null);
   const [dialog, setDialog] = useState<'command' | 'shortcuts' | 'settings' | null>(null);
@@ -329,6 +330,11 @@ export function App() {
         label: 'Connect Google Calendar',
         run: () => setConnecting({ kind: 'google', accountId: null }),
       },
+      {
+        id: 'subscribe',
+        label: 'Subscribe to a calendar (ICS)',
+        run: () => setConnecting({ kind: 'ics', accountId: null }),
+      },
     ],
     [move, createAtNextHour],
   );
@@ -512,6 +518,9 @@ export function App() {
                 <Button onClick={() => setConnecting({ kind: 'google', accountId: null })}>
                   Connect Google Calendar
                 </Button>
+                <Button onClick={() => setConnecting({ kind: 'ics', accountId: null })}>
+                  Subscribe to a calendar
+                </Button>
               </div>
             </div>
           ) : view.kind === 'month' ? (
@@ -608,6 +617,7 @@ export function App() {
       {connecting?.kind === 'workspace' && (
         <ConnectDialog accountId={connecting.accountId} onClose={() => setConnecting(null)} />
       )}
+      {connecting?.kind === 'ics' && <SubscribeDialog onClose={() => setConnecting(null)} />}
       {connecting?.kind === 'google' && state && (
         <GoogleDialog
           setup={state.google}

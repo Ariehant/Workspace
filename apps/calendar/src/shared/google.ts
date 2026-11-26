@@ -8,8 +8,11 @@
  *
  * Timed events are real instants: they show at this machine's clock time for them (so not
  * `floating`), worked out again when the time zone changes.
+ *
+ * The same model carries iCalendar's events (ics.ts maps VEVENTs into it), which adds one thing
+ * Google doesn't have: floating times (`wall`), the same clock time wherever the machine is.
  */
-import { addDays, dayOf, diffDays, type Day } from './dates';
+import { addDays, dayOf, diffDays, diffMinutes, type Day } from './dates';
 import { expand } from './recurrence';
 import type { CalEvent, GoogleCalendar } from './types';
 import { basicUtc, instantAt, wallAt } from './zones';
@@ -19,6 +22,16 @@ export interface GoogleTime {
   date?: string;
   dateTime?: string;
   timeZone?: string;
+  /** iCalendar only: a floating time (`YYYY-MM-DDTHH:mm`), the same clock time anywhere. */
+  wall?: string;
+}
+
+/** What deriving events needs from a calendar (Google's, or an ICS feed). */
+export interface SourceCalendarInfo {
+  id: string;
+  /** For series whose start names no zone. */
+  timeZone: string;
+  accessRole: string;
 }
 
 /** The parts of Google's event resource the calendar uses. */
@@ -57,6 +70,7 @@ export interface GoogleCalendarEntry {
 /** An occurrence's key: its original start as a day, or as UTC `YYYY-MM-DDTHH:mm:ss.sssZ`. */
 export function occurrenceKey(time: GoogleTime): string | null {
   if (time.date) return time.date;
+  if (time.wall) return time.wall;
   if (time.dateTime) {
     const t = Date.parse(time.dateTime);
     return Number.isNaN(t) ? null : new Date(t).toISOString();
@@ -76,6 +90,7 @@ interface Times {
   start: string;
   end: string;
   instant?: { start: string; end: string };
+  floating?: boolean;
 }
 
 /** An event's times on this machine's clock (`zone`), or null if they can't be read. */
@@ -84,6 +99,15 @@ function timesOf(start: GoogleTime, end: GoogleTime | undefined, zone: string): 
     // Google's all-day end is exclusive; the calendar's is the last day.
     const last = end?.date ? addDays(end.date, -1) : start.date;
     return { allDay: true, start: start.date, end: last > start.date ? last : start.date };
+  }
+  if (start.wall) {
+    const end_ = end?.wall ?? (end?.dateTime ? wallAt(end.dateTime, zone) : start.wall);
+    return {
+      allDay: false,
+      start: start.wall,
+      end: end_ > start.wall ? end_ : start.wall,
+      floating: true,
+    };
   }
   const s = start.dateTime ? Date.parse(start.dateTime) : NaN;
   if (Number.isNaN(s)) return null;
@@ -107,7 +131,7 @@ const plain = (html: string) =>
 
 /** One Google event (a single event or one occurrence) as the calendar's event. */
 export function toCalEvent(
-  calendar: GoogleCalendar,
+  calendar: SourceCalendarInfo,
   event: GoogleEvent,
   times: Times,
   extra: { sourceId?: string; series?: CalEvent['series'] } = {},
@@ -127,7 +151,7 @@ export function toCalEvent(
     start: times.start,
     end: times.end,
     endSet: !event.endTimeUnspecified,
-    floating: false,
+    floating: !!times.floating,
     url: event.htmlLink ?? null,
     colour: null,
     extra: details,
@@ -147,7 +171,7 @@ const overlaps = (e: CalEvent, from: Day, to: Day) => dayOf(e.start) <= to && da
  * items kept for it.
  */
 export function deriveEvents(
-  calendar: GoogleCalendar,
+  calendar: SourceCalendarInfo,
   items: GoogleEvent[],
   window: { from: Day; to: Day },
   zone: string,
@@ -191,12 +215,20 @@ export function deriveEvents(
     const first = timesOf(master.start, master.end, zone);
     if (!first) continue;
     const allDay = first.allDay;
-    const seriesZone = master.start.timeZone ?? calendar.timeZone;
+    const floating = !!first.floating;
+    // A floating series repeats on this machine's clock.
+    const seriesZone = floating ? zone : (master.start.timeZone ?? calendar.timeZone);
     const durationMs = first.instant
       ? Date.parse(first.instant.end) - Date.parse(first.instant.start)
-      : 0;
+      : floating
+        ? diffMinutes(first.start, first.end) * 60_000
+        : 0;
     const lengthDays = allDay ? diffDays(first.start, first.end) : 0;
-    const start = allDay ? master.start.date! : wallAt(master.start.dateTime!, seriesZone);
+    const start = allDay
+      ? master.start.date!
+      : floating
+        ? master.start.wall!
+        : wallAt(master.start.dateTime!, seriesZone);
     const changed = occurrences.get(master.id);
     // A day either side: the series' clock and this machine's can be a day apart.
     for (const occurrence of expand(
@@ -204,20 +236,28 @@ export function deriveEvents(
       addDays(window.from, -2),
       addDays(window.to, 1),
     )) {
-      if (changed?.has(occurrence.start)) continue;
-      const key = occurrence.start;
+      // A floating occurrence is known by its clock time (as its RECURRENCE-ID names it).
+      const key = floating ? wallAt(occurrence.start, zone) : occurrence.start;
+      if (changed?.has(key)) continue;
       const times: Times = allDay
         ? { allDay, start: key, end: addDays(key, lengthDays) }
-        : (() => {
-            const s = Date.parse(key);
-            const e = s + durationMs;
-            return {
+        : floating
+          ? {
               allDay,
-              start: wallAt(s, zone),
-              end: wallAt(e, zone),
-              instant: { start: key, end: new Date(e).toISOString() },
-            };
-          })();
+              start: key,
+              end: wallAt(Date.parse(occurrence.start) + durationMs, zone),
+              floating,
+            }
+          : (() => {
+              const s = Date.parse(key);
+              const e = s + durationMs;
+              return {
+                allDay,
+                start: wallAt(s, zone),
+                end: wallAt(e, zone),
+                instant: { start: key, end: new Date(e).toISOString() },
+              };
+            })();
       // No etag: the series' isn't this occurrence's (Google gives it one once changed).
       const { etag: _seriesEtag, ...instance } = toCalEvent(calendar, master, times, {
         sourceId: occurrenceId(master.id, key),
@@ -231,7 +271,13 @@ export function deriveEvents(
 
 /** The id Google gives an occurrence of a series: `<series>_<start, UTC or day>`. */
 export const occurrenceId = (seriesId: string, key: string) =>
-  `${seriesId}_${key.length === 10 ? key.replace(/-/g, '') : basicUtc(key)}`;
+  `${seriesId}_${
+    key.length === 10
+      ? key.replace(/-/g, '')
+      : key.length === 16
+        ? `${key.replace(/[-:]/g, '')}00` // A floating clock time.
+        : basicUtc(key)
+  }`;
 
 /**
  * A single event or one occurrence Google sent back (after an edit) as the calendar's event, or

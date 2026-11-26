@@ -38,6 +38,7 @@
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "ical.js": "^2.2.1",
     "lucide-react": "^1.49.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

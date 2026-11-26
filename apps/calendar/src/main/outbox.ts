@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import type { EventTime } from '../shared/dates';
 import {
   canEdit,
-  isGoogleCalendar,
+  isWorkspaceCalendar,
   READ_ONLY_MESSAGE,
   type CalEvent,
   type Calendar,
@@ -127,7 +127,7 @@ export class Outbox {
   private calendar(id: string): Calendar {
     const calendar = this.cache.calendar(id);
     if (!calendar) throw new Error('That calendar is gone.');
-    if (isGoogleCalendar(calendar) && !canEdit(calendar)) throw new Error(READ_ONLY_MESSAGE);
+    if (!isWorkspaceCalendar(calendar) && !canEdit(calendar)) throw new Error(READ_ONLY_MESSAGE);
     return calendar;
   }
 

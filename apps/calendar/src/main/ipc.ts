@@ -191,6 +191,13 @@ export function registerIpc(service: CalendarService, hooks: IpcHooks) {
     }),
   );
 
+  ipcMain.handle(IPC.icsSubscribe, (_e, url: unknown, name: unknown) =>
+    result(() => {
+      check(isString(url, 2000) && url.trim() !== '' && (name === null || isString(name, 200)));
+      return service.subscribe(url, name ?? undefined);
+    }),
+  );
+
   ipcMain.handle(IPC.calendarUpdate, (_e, id: unknown, patch: unknown) =>
     result(() => {
       check(isId(id) && !!patch && typeof patch === 'object');

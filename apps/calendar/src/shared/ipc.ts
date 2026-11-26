@@ -18,6 +18,7 @@ export const IPC = {
   googleAccount: 'google:account',
   googleSave: 'google:save',
   googleCancel: 'google:cancel',
+  icsSubscribe: 'ics:subscribe',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
   accountRemove: 'account:remove',

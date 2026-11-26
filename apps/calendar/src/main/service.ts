@@ -21,6 +21,9 @@ import { DEFAULT_REMINDER, REMINDER_CHOICES } from '../shared/reminders';
 import {
   COLOURS,
   isGoogleAccount,
+  isIcsAccount,
+  isWorkspaceAccount,
+  type IcsCalendar,
   type CalEvent,
   type Calendar,
   type EditScope,
@@ -44,6 +47,7 @@ import {
 } from './google/oauth';
 import { GoogleEditTarget } from './google/edits';
 import { GoogleCalendarSync } from './google/sync';
+import { feedUrl, IcsCalendarSync, probeFeed } from './ics/sync';
 import { Outbox, type EditTarget } from './outbox';
 import { SyncService } from './sync';
 import { normaliseServer, WorkspaceClient, type ClientOptions } from './workspace/client';
@@ -101,6 +105,8 @@ export class CalendarService {
   >();
   private readonly googleSessions = new Map<string, GoogleSession>();
   private googleSigningIn: AbortController | null = null;
+  /** Feeds subscribed to by URL: one reader for them all. */
+  private readonly ics: IcsCalendarSync;
   private readonly endpoints: GoogleEndpoints;
   private readonly zone: () => string;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -109,11 +115,17 @@ export class CalendarService {
     this.cache = options.cache;
     this.endpoints = googleEndpoints(options.env);
     this.zone = options.zone ?? localZone;
+    this.ics = new IcsCalendarSync({
+      cache: this.cache,
+      fetch: options.clientOptions?.fetch,
+      zone: this.zone,
+    });
     this.relocalize();
     this.sync = new SyncService({
       cache: this.cache,
       engineFor: (account) => this.engineFor(account),
-      googleFor: (account) => this.googleFor(account)?.sync ?? null,
+      sourceFor: (account) =>
+        isGoogleAccount(account) ? (this.googleFor(account)?.sync ?? null) : this.ics,
       onChange: options.onChange,
       log: options.log,
     });
@@ -123,6 +135,7 @@ export class CalendarService {
         const account = this.cache.account(calendar.accountId);
         if (!account) return null;
         if (isGoogleAccount(account)) return this.googleFor(account)?.edits ?? null;
+        if (!isWorkspaceAccount(account)) return null; // Read-only (ICS).
         const engine = this.engineFor(account);
         return engine && workspaceTarget(engine);
       },
@@ -393,6 +406,55 @@ export class CalendarService {
     await this.sync.syncAll();
   }
 
+  // --- Subscriptions (ICS) ------------------------------------------------------------
+
+  /**
+   * Subscribe to an iCalendar feed: it's read once (to check it's a calendar, and for its name
+   * and zone), then added under the Subscriptions account, and synced.
+   */
+  async subscribe(input: string, name?: string): Promise<Calendar> {
+    let url: string;
+    try {
+      url = feedUrl(input);
+    } catch (error) {
+      throw new Error(
+        error instanceof TypeError ? "That isn't a web address." : (error as Error).message,
+        { cause: error },
+      );
+    }
+    if (this.cache.calendars().some((c) => c.kind === 'ics' && c.url === url))
+      throw new Error("You're already subscribed to this feed.");
+    const feed = await probeFeed(url, this.options.clientOptions?.fetch);
+    const calendar = this.cache.transaction(() => {
+      let account = this.cache.accounts().find(isIcsAccount);
+      if (!account) {
+        account = { id: randomUUID(), kind: 'ics', name: 'Subscriptions', error: null };
+        this.cache.addAccount(account, this.options.seal(''));
+      }
+      const used = this.cache.calendars().length;
+      const added: IcsCalendar = {
+        id: randomUUID(),
+        kind: 'ics',
+        accountId: account.id,
+        url,
+        accessRole: 'reader',
+        timeZone: feed.timeZone ?? this.zone(),
+        name: name?.trim() || feed.name || new URL(url).host,
+        colour: COLOURS[used % COLOURS.length]!,
+        visible: true,
+        // Feeds are often holidays or schedules: no reminders unless asked for.
+        reminder: null,
+        status: 'ok',
+        statusMessage: null,
+      };
+      this.cache.addCalendar(added);
+      return added;
+    });
+    this.options.onChange?.();
+    await this.sync.syncAll();
+    return this.cache.calendar(calendar.id) ?? calendar;
+  }
+
   settings(): Settings {
     return { ...DEFAULT_SETTINGS, ...this.cache.setting<Partial<Settings>>('settings', {}) };
   }
@@ -488,7 +550,7 @@ export class CalendarService {
     )
       return true;
     return accounts.some((a) => {
-      if (isGoogleAccount(a)) return false;
+      if (!isWorkspaceAccount(a)) return false;
       const server = new URL(a.server);
       return parsed.origin === server.origin && parsed.pathname.startsWith(server.pathname);
     });
@@ -517,7 +579,7 @@ export class CalendarService {
   async connectExisting(accountId: string): Promise<ConnectSession> {
     const account = this.cache.account(accountId);
     if (!account) throw new Error('That account is gone.');
-    if (isGoogleAccount(account)) throw new Error('Add Google calendars with Google sign-in.');
+    if (!isWorkspaceAccount(account)) throw new Error('This account adds calendars another way.');
     const engine = this.engineFor(account);
     if (!engine) throw new Error("This account's token can't be read. Connect it again.");
     const me = await engine.connect();
@@ -580,7 +642,8 @@ export class CalendarService {
         const existing = this.cache
           .accounts()
           .find(
-            (a) => !isGoogleAccount(a) && a.server === session.server && a.botId === session.botId,
+            (a) =>
+              isWorkspaceAccount(a) && a.server === session.server && a.botId === session.botId,
           );
         if (existing) {
           accountId = existing.id;

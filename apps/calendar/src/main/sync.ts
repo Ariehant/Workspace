@@ -12,11 +12,11 @@
  */
 import { syncWindow } from '../shared/dates';
 import {
-  isGoogleAccount,
+  isWorkspaceAccount,
   type Account,
   type Calendar,
-  type GoogleAccount,
   type GoogleCalendar,
+  type IcsCalendar,
   type WorkspaceAccount,
   type WorkspaceCalendar,
 } from '../shared/types';
@@ -41,8 +41,8 @@ export interface SyncOptions {
   cache: Cache;
   /** The account's source, or null if its token can't be read. */
   engineFor: (account: WorkspaceAccount) => WorkspaceEngine | null;
-  /** A Google account's source (v1.1), or null if its sign-in can't be read. */
-  googleFor?: (account: GoogleAccount) => GoogleSync | null;
+  /** Another kind of account's source (Google, ICS), or null if its sign-in can't be read. */
+  sourceFor?: (account: SourceAccount) => SourceSync | null;
   now?: () => number;
   sweepEveryMs?: number;
   /** Something the window shows changed (events, statuses). */
@@ -58,10 +58,14 @@ export type SyncProblem =
   | { kind: 'calendar'; status: Calendar['status']; message: string }
   | { kind: 'other'; message: string };
 
-/** A Google account's calendars, synced (see google/sync.ts). */
-export interface GoogleSync {
-  sync(calendar: GoogleCalendar, full: boolean): Promise<void>;
-  problem(error: unknown, calendar: GoogleCalendar): SyncProblem;
+/** Accounts whose calendars sync through a `SourceSync` (not Workspace's engine). */
+export type SourceAccount = Exclude<Account, WorkspaceAccount>;
+export type SourceCalendar = GoogleCalendar | IcsCalendar;
+
+/** A kind of source's calendars, synced (see google/sync.ts, ics/sync.ts). */
+export interface SourceSync {
+  sync(calendar: SourceCalendar, full: boolean): Promise<void>;
+  problem(error: unknown, calendar: SourceCalendar): SyncProblem;
 }
 
 export class SyncService {
@@ -111,8 +115,8 @@ export class SyncService {
     let reached = false;
     let offline = false;
     for (const account of this.cache.accounts()) {
-      if (isGoogleAccount(account)) {
-        const result = await this.syncGoogleAccount(account, full);
+      if (!isWorkspaceAccount(account)) {
+        const result = await this.syncSourceAccount(account, full);
         reached ||= result.reached;
         offline ||= result.offline;
         error = result.error ?? error;
@@ -167,20 +171,20 @@ export class SyncService {
     this.changed();
   }
 
-  /** A Google account's calendars (the source reads its changes with sync tokens). */
-  private async syncGoogleAccount(account: GoogleAccount, full: boolean) {
+  /** Another kind of account's calendars (each source reads its own changes). */
+  private async syncSourceAccount(account: SourceAccount, full: boolean) {
     const result = { reached: false, offline: false, error: null as string | null };
-    const source = this.options.googleFor?.(account);
+    const source = this.options.sourceFor?.(account);
     if (!source) {
       this.setAccountError(
         account,
-        "This Google account's sign-in can't be read on this computer. Remove it and sign in again.",
+        "This account's sign-in can't be read on this computer. Remove it and sign in again.",
       );
       return result;
     }
     const calendars = this.cache
       .calendars()
-      .filter((c): c is GoogleCalendar => c.accountId === account.id && c.kind === 'google');
+      .filter((c): c is SourceCalendar => c.accountId === account.id && c.kind === account.kind);
     for (const calendar of calendars) {
       try {
         await source.sync(calendar, full);
@@ -189,7 +193,10 @@ export class SyncService {
         this.setCalendarStatus(calendar.id, 'ok', null);
       } catch (e) {
         const problem = source.problem(e, calendar);
-        this.options.log?.('warn', `sync: google calendar ${calendar.id}: ${problem.kind}`);
+        this.options.log?.(
+          'warn',
+          `sync: ${account.kind} calendar ${calendar.id}: ${problem.kind}`,
+        );
         if (problem.kind === 'offline') {
           result.offline = true;
           break;

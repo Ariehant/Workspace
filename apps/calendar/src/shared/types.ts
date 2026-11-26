@@ -25,9 +25,20 @@ export interface GoogleAccount {
   error: string | null;
 }
 
-export type Account = WorkspaceAccount | GoogleAccount;
+/** The calendar's subscriptions to iCalendar feeds by URL (v1.2): one account holds them all. */
+export interface IcsAccount {
+  id: string;
+  kind: 'ics';
+  name: string;
+  error: string | null;
+}
 
+export type Account = WorkspaceAccount | GoogleAccount | IcsAccount;
+
+export const isWorkspaceAccount = (a: Account): a is WorkspaceAccount =>
+  !a.kind || a.kind === 'workspace';
 export const isGoogleAccount = (a: Account): a is GoogleAccount => a.kind === 'google';
+export const isIcsAccount = (a: Account): a is IcsAccount => a.kind === 'ics';
 
 export type CalendarStatus = 'ok' | 'needs-setup' | 'no-access';
 
@@ -72,9 +83,22 @@ export interface GoogleCalendar extends CalendarBase {
   timeZone: string;
 }
 
-export type Calendar = WorkspaceCalendar | GoogleCalendar;
+/** An iCalendar feed subscribed to by URL: read-only. */
+export interface IcsCalendar extends CalendarBase {
+  kind: 'ics';
+  /** The feed's address (`https://`, `http://`; `webcal://` is stored as `https://`). */
+  url: string;
+  /** The feed's zone (`X-WR-TIMEZONE`), or this machine's, for floating recurring events. */
+  timeZone: string;
+  accessRole: 'reader';
+}
 
+export type Calendar = WorkspaceCalendar | GoogleCalendar | IcsCalendar;
+
+export const isWorkspaceCalendar = (c: Calendar): c is WorkspaceCalendar =>
+  !c.kind || c.kind === 'workspace';
 export const isGoogleCalendar = (c: Calendar): c is GoogleCalendar => c.kind === 'google';
+export const isIcsCalendar = (c: Calendar): c is IcsCalendar => c.kind === 'ics';
 
 /**
  * Whether events in the calendar can be changed here: not one that lost access, nor a Google
@@ -83,6 +107,7 @@ export const isGoogleCalendar = (c: Calendar): c is GoogleCalendar => c.kind ===
 export const canEdit = (calendar: Calendar | null | undefined): boolean =>
   !!calendar &&
   calendar.status !== 'no-access' &&
+  !isIcsCalendar(calendar) &&
   (!isGoogleCalendar(calendar) || ['owner', 'writer'].includes(calendar.accessRole));
 
 /** Why a calendar's events can't be changed here. */
