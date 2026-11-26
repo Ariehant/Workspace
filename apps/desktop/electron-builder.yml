@@ -110,10 +110,10 @@ flatpak:
     - --talk-name=org.freedesktop.Notifications
     - --talk-name=org.freedesktop.secrets
 
-# Where the AppImage looks for updates (electron-updater; the release workflow uploads
-# latest-linux.yml with each release). Nothing is uploaded from a local `pnpm package`.
+# Where the AppImage and the Windows installer look for updates (electron-updater): the
+# `updates` release, which the Release workflow fills with each release's latest*.yml (and rc*.yml
+# for release candidates; src/main/update-channel.ts). Nothing is uploaded from `pnpm package`.
 publish:
-  provider: github
-  owner: ariehant
-  repo: workspace
-  releaseType: release
+  provider: generic
+  url: https://github.com/Ariehant/Workspace/releases/download/updates/
+  channel: latest
