@@ -10,6 +10,7 @@ without the AI.**
 
 [![CI](https://github.com/Ariehant/Workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/Ariehant/Workspace/actions/workflows/ci.yml)
 ![Ubuntu 24.04+](https://img.shields.io/badge/Ubuntu-24.04%2B-E95420?logo=ubuntu&logoColor=white)
+![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Notion API](https://img.shields.io/badge/Notion%20API-2022--06--28%20%7C%202025--09--03-000000?logo=notion&logoColor=white)
 
@@ -125,7 +126,24 @@ The full inventory, block by block, is in [docs/features.md](docs/features.md).
 
 ### The desktop app
 
-Workspace runs on Ubuntu 24.04 and later (x86-64). Download it from the repository's
+Workspace runs on **Windows 10 and 11** and on **Ubuntu 24.04 and later** (x86-64).
+
+#### Windows
+
+1. Open the [latest build](https://github.com/Ariehant/Workspace/releases/tag/latest-build) and,
+   under **Assets**, download `Workspace-Setup-<version>.exe`.
+2. Run it. It installs for your user (no administrator rights needed) and adds **Workspace** to
+   the Start menu.
+3. The installer isn't signed yet, so SmartScreen may say "Windows protected your PC": choose
+   **More info**, then **Run anyway**.
+
+Your workspace is kept in `%APPDATA%\workspace-app`. To update, install a newer build the same
+way; your data stays. [Workspace Calendar](docs/calendar-app/README.md) has its own installer
+in the same place, `Workspace-Calendar-Setup-<version>.exe`.
+
+#### Ubuntu
+
+Download it from the repository's
 [Releases](https://github.com/Ariehant/Workspace/releases) page: each release has a `.deb`, an
 AppImage, a Snap and a Flatpak, with `SHA256SUMS`. The first one will be a release candidate,
 `v1.0.0-rc.1`.
@@ -228,8 +246,9 @@ pnpm dev               # the desktop app with hot reload
 | `pnpm package`      | Build the `.deb` and AppImage into `apps/desktop/dist/`                        |
 | `pnpm bench`        | The performance budgets' pure-code suite ([more](CONTRIBUTING.md#performance)) |
 
-End-to-end tests need a display: on a headless machine, run `pnpm --filter @workspace/desktop
-build`, then `xvfb-run -a pnpm test:e2e`. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the
+The Windows installer is built on Windows: `pnpm --filter @workspace/desktop package:win` (into
+`apps/desktop/dist/`). End-to-end tests need a display: on a headless machine, run
+`pnpm --filter @workspace/desktop build`, then `xvfb-run -a pnpm test:e2e`. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the
 repo is organised and what a change needs before it's merged.
 
 ## Architecture

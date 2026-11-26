@@ -56,6 +56,10 @@ if (process.env.WORKSPACE_DATA_DIR) {
   app.setPath('userData', join(dataDir, 'chromium'));
 }
 
+// Windows shows notifications (automations, reminders) under the app's AppUserModelID, which must
+// match the one the installer gives its Start menu shortcut: the appId in electron-builder.yml.
+if (process.platform === 'win32') app.setAppUserModelId('io.github.ariehant.workspace');
+
 // One process owns the database; a second launch focuses the existing window.
 if (!app.requestSingleInstanceLock()) {
   app.quit();

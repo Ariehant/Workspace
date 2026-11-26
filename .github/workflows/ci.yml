@@ -253,6 +253,37 @@ jobs:
           path: apps/calendar/dist/*.exe
           retention-days: 14
 
+  package-windows:
+    name: Package Workspace (Windows)
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @workspace/desktop package:win
+      # The app is a GUI program: wait for it, and check how it ended. Its data goes to a
+      # throwaway folder.
+      - name: Smoke-test the app
+        shell: pwsh
+        run: |
+          $env:WORKSPACE_DATA_DIR = Join-Path $env:RUNNER_TEMP 'workspace-smoke'
+          $app = Start-Process -FilePath "apps/desktop/dist/win-unpacked/workspace-app.exe" `
+            -ArgumentList '--smoke-test' -Wait -PassThru
+          if ($app.ExitCode -ne 0) { throw "The smoke test failed (exit code $($app.ExitCode))" }
+          if (-not (Test-Path (Join-Path $env:WORKSPACE_DATA_DIR 'workspace.db'))) {
+            throw "The app didn't create its database"
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: apps/desktop/dist/*.exe
+          retention-days: 14
+
   server:
     name: Server image and Compose stack
     needs: check
@@ -292,14 +323,25 @@ jobs:
         working-directory: infra
         run: docker compose -f docker-compose.yml -f docker-compose.s3.yml logs
 
-  # The latest build of main, as a pre-release anyone can download without building: the .deb
-  # and AppImage the package job built and smoke-tested, published after the tests pass and
-  # replaced on every push to main. Until there are real releases. (Its tag isn't a version, so
+  # The latest build of main, as a pre-release anyone can download without building: the .deb,
+  # AppImage and Windows installer of Workspace and of Workspace Calendar, as the package jobs
+  # built and smoke-tested them, published after the tests pass and replaced on
+  # every push to main. Until there are real releases. (Its tag isn't a version, so
   # the Release workflow doesn't run for it.)
   latest-build:
     name: Publish the latest build (main)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [check, e2e, package, server]
+    needs:
+      [
+        check,
+        e2e,
+        e2e-calendar,
+        package,
+        package-windows,
+        package-calendar,
+        package-calendar-windows,
+        server,
+      ]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -308,13 +350,26 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: latest-build
     steps:
+      # All four artifacts' files go into packages/ (their names don't overlap).
       - uses: actions/download-artifact@v4
         with:
           name: linux-packages
           path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: calendar-linux-packages
+          path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: calendar-windows-installer
+          path: packages
       - name: Checksums
         working-directory: packages
-        run: sha256sum *.deb *.AppImage > SHA256SUMS
+        run: sha256sum *.deb *.AppImage *.exe > SHA256SUMS
       - name: The latest-build pre-release
         run: |
           set -euo pipefail
@@ -324,9 +379,16 @@ jobs:
           It's replaced whenever `main` changes. It isn't signed, and it doesn't update itself:
           install a newer one the same way (or a release, once there is one).
 
-          **Install** (Ubuntu 24.04 or later): download the `.deb` below, then
+          **Windows 10 or 11:** download `Workspace-Setup-*.exe` (and, for the calendar,
+          `Workspace-Calendar-Setup-*.exe`) below and run it. It installs for your user, without
+          administrator rights, and adds a Start menu shortcut. The installers aren't signed yet,
+          so SmartScreen may say "Windows protected your PC": choose **More info**, then
+          **Run anyway**.
+
+          **Ubuntu 24.04 or later:** download `workspace-app_*_amd64.deb` below, then
           `sudo apt install ~/Downloads/workspace-app_*_amd64.deb`. Or the AppImage: make it
-          executable (`chmod +x Workspace-*.AppImage`) and run it.
+          executable (`chmod +x Workspace-[0-9]*.AppImage`) and run it. The calendar is
+          `workspace-calendar_*_amd64.deb` or `Workspace-Calendar-*.AppImage`, installed the same way.
 
           Check a download against `SHA256SUMS`.
           EOF

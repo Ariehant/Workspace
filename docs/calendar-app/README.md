@@ -17,8 +17,11 @@ subscribed to by address (ICS feeds, such as public holidays). See [the build pl
 - **Windows:** run `Workspace-Calendar-Setup-*.exe`. It installs for your user, with a Start menu
   shortcut.
 
-Until there's a release, CI builds the packages for every change: they're the
-`calendar-linux-packages` and `calendar-windows-installer` artifacts of a CI run.
+Until there's a release, download them from the
+[latest build](https://github.com/Ariehant/Workspace/releases/tag/latest-build): a pre-release of
+`main` that CI publishes after its tests pass and replaces with every change (unsigned, and it
+doesn't update itself). CI also builds them for every pull request, as the
+`calendar-linux-packages` and `calendar-windows-installer` artifacts of its run.
 
 ## Connect Workspace
 
