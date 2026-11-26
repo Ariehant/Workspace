@@ -22,8 +22,10 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
     "test:e2e": "playwright test",
-    "package": "electron-vite build && electron-builder --linux --publish never"
+    "package": "electron-vite build && electron-builder --linux --publish never",
+    "package:win": "electron-vite build && electron-builder --win --publish never"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

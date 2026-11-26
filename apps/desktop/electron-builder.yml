@@ -1,4 +1,5 @@
-# Linux packages for Ubuntu 24.04 and later. Build with `pnpm package`.
+# Linux packages for Ubuntu 24.04 and later (`pnpm package`), and a Windows installer
+# (`pnpm --filter @workspace/desktop package:win`, on Windows).
 appId: io.github.ariehant.workspace
 productName: Workspace
 executableName: workspace-app
@@ -60,6 +61,19 @@ deb:
 
 appImage:
   artifactName: ${productName}-${version}-${arch}.AppImage
+
+# Windows 10 and 11 (x64): a per-user installer that needs no administrator rights, with a Start
+# menu shortcut. The app registers workspace:// links itself when it starts.
+win:
+  target:
+    - nsis
+  icon: build/icon.png
+
+nsis:
+  artifactName: ${productName}-Setup-${version}.${ext}
+  oneClick: true
+  perMachine: false
+  shortcutName: Workspace
 
 # The Snap Store build (`--linux snap`, in the release workflow). Strict confinement: the
 # home folder, the network, the desktop, sound, the keyring (sync's session token) and

@@ -11,7 +11,23 @@ it to a server.
 
 ## Install
 
-Workspace runs on Ubuntu 24.04 and later (x86-64); other modern Linux desktops should work too.
+Workspace runs on Windows 10 and 11 (x64), and on Ubuntu 24.04 and later (x86-64); other modern
+Linux desktops should work too.
+
+### Windows
+
+Download `Workspace-Setup-<version>.exe` from the Assets of the
+[latest-build](https://github.com/Ariehant/Workspace/releases/tag/latest-build) pre-release and
+run it. It installs for your user, without administrator rights, adds Workspace to the Start
+menu, and registers `workspace://` links the first time the app starts. Uninstall it from
+**Settings → Apps**; that leaves your data in place.
+
+The installer isn't signed yet, so SmartScreen may say "Windows protected your PC": choose
+**More info**, then **Run anyway**. The app doesn't update itself on Windows yet: to update,
+download and run a newer installer, which keeps your data.
+
+### Ubuntu and other Linux desktops
+
 Each release on the repository's [Releases](https://github.com/Ariehant/Workspace/releases) page
 has a `.deb`, an AppImage, a Snap and a Flatpak, with `SHA256SUMS` (signed, `.asc`, once the
 project's key is set up). The first will be a release candidate, `v1.0.0-rc.1`: download the
@@ -75,6 +91,10 @@ sudo apt install ./apps/desktop/dist/workspace-app_*_amd64.deb
 | The workspace (pages, content)       | `~/.local/share/workspace-app/workspace.db` (honours `$XDG_DATA_HOME`) |
 | Attachments (images, PDFs, files)    | `~/.local/share/workspace-app/files/`                                  |
 | Chromium profile (caches, GPU state) | `~/.config/Workspace/`                                                 |
+
+On Windows, the workspace and its attachments are in `%APPDATA%\workspace-app\` (`workspace.db`
+and `files\`), and Chromium's profile is in `%APPDATA%\Workspace\`. Paste
+`%APPDATA%\workspace-app` into File Explorer's address bar to open the folder.
 
 With sync on, the database also holds the changes waiting to be sent, and the sign-in
 (encrypted with the system keyring when there is one).
@@ -248,3 +268,7 @@ with its own date or number format keeps it.
 - **The AppImage closes at once:** install `libfuse2t64`, or use the `.deb` (see
   [Install](#install)).
 - **Main-process errors:** run `workspace-app` from a terminal to see its log.
+- **Windows: "Windows protected your PC"** when installing: the installer isn't signed yet.
+  Choose **More info**, then **Run anyway**.
+- **Windows: no notifications** from automations or reminders: check **Settings → System →
+  Notifications** for Workspace, and that Focus (Do not disturb) is off.
