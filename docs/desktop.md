@@ -159,7 +159,12 @@ Each becomes a card with its name, kind, size and date, kept current while Drive
 it can see the files you pick and nothing else in your Drive. The sign-in stays on this
 computer (encrypted by the system keyring where there is one).
 
-It needs your own Google Cloud project, once:
+**Connect it:** Settings → Connections → **Connect Google Drive…**, and allow it in the
+browser. The packages CI and releases make have Workspace's own Google client built in
+([how it's set up](google-oauth.md)).
+
+**Your own Google client (optional,** and needed in a build without one, such as a local
+`pnpm package`): Settings → Connections → **Use my own Google client…**, after this, once:
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), create a project (or use
    one) and note its **project number** (Dashboard → Project info).
@@ -173,9 +178,10 @@ It needs your own Google Cloud project, once:
    client ID and client secret (for a desktop app it isn't kept secret).
 5. **Credentials → Create credentials → API key**, restricted to the Google Picker API.
 6. In Workspace: **Settings → Connections**, enter the four, **Save**, then **Connect Google
-   Drive…** and allow it in the browser.
+   Drive…** and allow it in the browser. **Use Workspace's client** goes back to the built-in
+   one (you then connect again).
 
-A build can bring the client instead (`WORKSPACE_GOOGLE_CLIENT_ID`,
+A test run can bring the client by environment instead (`WORKSPACE_GOOGLE_CLIENT_ID`,
 `WORKSPACE_GOOGLE_CLIENT_SECRET`, `WORKSPACE_GOOGLE_API_KEY`, `WORKSPACE_GOOGLE_APP_ID`).
 **Disconnect** in Settings signs out and tells Google; the cards keep what they last knew.
 On the web app and on computers not connected, a card shows that and links to Drive.

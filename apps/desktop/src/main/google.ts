@@ -8,8 +8,9 @@
  *   session), on a page served from 127.0.0.1 for one pick; the page posts back the ids.
  * - The app asks only for `drive.file`: Drive lets it see the files picked, nothing else.
  *
- * The OAuth client (and the Picker's API key and app id) is the owner's own Google Cloud
- * project: set in Settings → Connections, or by environment for a build that brings one.
+ * The OAuth client (and the Picker's API key and app id) is, first to last: one given by
+ * environment (tests), the person's own Google Cloud project's (Settings → Connections), or
+ * Workspace's own, built in (google-client.ts, docs/google-oauth.md).
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -29,6 +30,11 @@ import {
 import type { SqliteStore } from '@workspace/storage-local';
 import { BrowserWindow, ipcMain, net, safeStorage, shell } from 'electron';
 import { IPC, type Result } from '../shared/ipc';
+import {
+  builtInGoogleClient,
+  chooseGoogleClient,
+  googleClientFromEnvironment,
+} from './google-client';
 
 /** Settings kept here only (not readable or writable through the settings IPC). */
 export const GOOGLE_SETTING_PREFIX = 'google.';
@@ -53,17 +59,6 @@ interface StoredAccount {
 }
 
 const base64url = (bytes: Buffer) => bytes.toString('base64url');
-
-function fromEnvironment(): GoogleClientConfig | null {
-  const { WORKSPACE_GOOGLE_CLIENT_ID: clientId, WORKSPACE_GOOGLE_CLIENT_SECRET: secret } = env;
-  if (!clientId) return null;
-  return {
-    clientId,
-    clientSecret: secret ?? '',
-    apiKey: env.WORKSPACE_GOOGLE_API_KEY ?? '',
-    appId: env.WORKSPACE_GOOGLE_APP_ID ?? '',
-  };
-}
 
 function cleanConfig(raw: unknown): GoogleClientConfig | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -122,8 +117,16 @@ export class GoogleDrive {
 
   // --- Settings --------------------------------------------------------------------------
 
+  private get chosen() {
+    return chooseGoogleClient({
+      environment: googleClientFromEnvironment(),
+      own: cleanConfig(this.store.getSetting(CLIENT)),
+      builtIn: builtInGoogleClient(),
+    });
+  }
+
   private get config(): GoogleClientConfig | null {
-    return fromEnvironment() ?? cleanConfig(this.store.getSetting(CLIENT));
+    return this.chosen?.config ?? null;
   }
 
   private get account(): StoredAccount | null {
@@ -149,21 +152,24 @@ export class GoogleDrive {
   }
 
   state(): GoogleState {
-    const config = this.config;
+    const chosen = this.chosen;
+    // Only the person's own client is shown (the app's isn't theirs to edit).
+    const own = chosen?.source === 'own' ? chosen.config : null;
     return {
-      configured: !!config,
-      fromEnvironment: !!fromEnvironment(),
-      clientId: config?.clientId ?? '',
-      appId: config?.appId ?? '',
-      hasSecret: !!config?.clientSecret,
-      hasApiKey: !!config?.apiKey,
+      configured: !!chosen,
+      source: chosen?.source ?? null,
+      builtInAvailable: !!builtInGoogleClient(),
+      clientId: own?.clientId ?? '',
+      appId: own?.appId ?? '',
+      hasSecret: !!own?.clientSecret,
+      hasApiKey: !!own?.apiKey,
       email: this.account ? (this.account.email ?? '') : null,
       secure: this.secureStorage(),
     };
   }
 
   configure(raw: unknown): Result {
-    if (fromEnvironment()) return { error: 'This build brings its own Google client.' };
+    if (googleClientFromEnvironment()) return { error: 'This run brings its own Google client.' };
     const next = cleanConfig(raw);
     if (!next) return { error: 'Enter the OAuth client ID.' };
     // An empty secret or key keeps the one saved (they aren't shown again).
@@ -173,8 +179,19 @@ export class GoogleDrive {
       clientSecret: next.clientSecret || before?.clientSecret || '',
       apiKey: next.apiKey || before?.apiKey || '',
     };
-    if (before?.clientId && before.clientId !== merged.clientId) this.forget();
+    // A sign-in belongs to the client it was made with.
+    const signedInWith = this.config?.clientId;
+    if (signedInWith && signedInWith !== merged.clientId) this.forget();
     this.store.setSetting(CLIENT, merged);
+    return { ok: true };
+  }
+
+  /** Stop using the person's own client and go back to Workspace's. */
+  useBuiltIn(): Result {
+    const builtIn = builtInGoogleClient();
+    if (!builtIn) return { error: 'This build has no Google client of its own.' };
+    if (this.config?.clientId !== builtIn.clientId) this.forget();
+    this.store.setSetting(CLIENT, null);
     return { ok: true };
   }
 
@@ -554,6 +571,11 @@ export function registerGoogle(store: SqliteStore): GoogleDrive {
   ipcMain.handle(IPC.googleState, () => google.state());
   ipcMain.handle(IPC.googleConfigure, (_event, config: unknown) => {
     const result = google.configure(config);
+    changed();
+    return result;
+  });
+  ipcMain.handle(IPC.googleUseBuiltIn, () => {
+    const result = google.useBuiltIn();
     changed();
     return result;
   });

@@ -143,9 +143,10 @@ export function ClientForm({
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       <p className="text-sm text-muted">
-        The calendar signs in with your own Google Cloud project&apos;s OAuth client. In the Google
-        Cloud console, turn on the Google Calendar API, set up the consent screen, and make an OAuth
-        client of type <em>Desktop app</em>; then paste its ID and secret here.
+        {setup?.builtInAvailable ? 'To sign in with' : 'The calendar signs in with'} your own Google
+        Cloud project&apos;s OAuth client: in the Google Cloud console, turn on the Google Calendar
+        API, set up the consent screen, and make an OAuth client of type <em>Desktop app</em>; then
+        paste its ID and secret here.
       </p>
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-muted">OAuth client ID</span>

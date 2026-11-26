@@ -49,20 +49,21 @@ If the system has none, the sidebar says so, and the token is stored as is on th
 
 ## Connect Google Calendar
 
-The calendar signs in to Google with **your own Google Cloud project's OAuth client**, so no one
-else's app sees your calendar.
-
-1. **Make the client** (once). In the [Google Cloud console](https://console.cloud.google.com/),
-   make or pick a project, turn on the **Google Calendar API**, set up the **OAuth consent screen**
-   (for yourself, "External" in testing mode with your address as a test user is enough), then
-   under **Credentials** make an **OAuth client ID** of type **Desktop app**. Keep its ID and
-   secret.
-2. **In the calendar,** choose **Connect Google Calendar** (in the sidebar). The first time, paste
-   the client ID and secret (they can be changed later in **Settings**).
-3. **Sign in with Google.** Your browser opens Google's page; allow access, then go back to the
+1. **In the calendar,** choose **Connect Google Calendar** (in the sidebar).
+2. **Sign in with Google.** Your browser opens Google's page; allow access, then go back to the
    calendar. It asks to see your calendars and to read and change their events.
-4. **Choose calendars** to show. Each keeps its Google colour (change it in the calendar's ⋯
+3. **Choose calendars** to show. Each keeps its Google colour (change it in the calendar's ⋯
    menu).
+
+The packages CI and releases make have the calendar's own Google client built in
+([how it's set up](../google-oauth.md)). **Your own client (optional,** and needed in a build
+without one, such as a local `pnpm package`): in the
+[Google Cloud console](https://console.cloud.google.com/), make or pick a project, turn on the
+**Google Calendar API**, set up the **OAuth consent screen** (for yourself, "External" in testing
+mode with your address as a test user is enough), and make an **OAuth client ID** of type
+**Desktop app**. Then in **Settings → Google Calendar**, **Use my own client** and paste its ID
+and secret. **Use the calendar's client** goes back to the built-in one. A sign-in belongs to the
+client it was made with: after changing it, sign in with Google again.
 
 The sign-in is kept encrypted like Workspace tokens. Removing the account (its ⋯ menu) also tells
 Google to forget it.

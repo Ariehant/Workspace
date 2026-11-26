@@ -166,6 +166,7 @@ export function registerIpc(service: CalendarService, hooks: IpcHooks) {
       return service.setGoogleClient(clientId, clientSecret);
     }),
   );
+  ipcMain.handle(IPC.googleUseBuiltIn, () => result(() => service.useBuiltInGoogleClient()));
   ipcMain.handle(IPC.googleSignIn, () => result(() => service.googleSignIn()));
   ipcMain.handle(IPC.googleAccount, (_e, accountId: unknown) =>
     result(() => {

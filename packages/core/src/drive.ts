@@ -43,8 +43,14 @@ export interface GoogleClientConfig {
 export interface GoogleState {
   /** A client is set (here, or by the build). */
   configured: boolean;
-  /** The build brings it (it can't be changed here). */
-  fromEnvironment: boolean;
+  /**
+   * Whose client signs in: the environment's (a test run; it can't be changed here), the
+   * person's own (Settings), or the app's built-in one.
+   */
+  source: 'environment' | 'own' | 'built-in' | null;
+  /** The build has a client of its own to go back to. */
+  builtInAvailable: boolean;
+  /** The person's own client's ID and project number (empty otherwise). */
   clientId: string;
   appId: string;
   hasSecret: boolean;

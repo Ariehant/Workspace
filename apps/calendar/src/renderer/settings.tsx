@@ -2,7 +2,7 @@
  * Settings: theme, the day weeks start on, a second time zone, running in the background, and
  * the Google OAuth client.
  */
-import { Dialog, DialogContent } from '@workspace/ui';
+import { Button, Dialog, DialogContent } from '@workspace/ui';
 import { useMemo, useState } from 'react';
 import type { GoogleSetup, Settings, ThemePreference } from '../shared/ipc';
 import { api, unwrap } from './api';
@@ -34,6 +34,7 @@ export function SettingsDialog({
   onError: (message: string) => void;
 }) {
   const [savedClient, setSavedClient] = useState(false);
+  const [ownClient, setOwnClient] = useState(false);
   const zones = useMemo(() => {
     try {
       const names = Intl.supportedValuesOf('timeZone').map((z) => RENAMED[z] ?? z);
@@ -143,8 +144,15 @@ export function SettingsDialog({
         {google && (
           <section aria-label="Google Calendar" className="border-t border-line p-4">
             <h3 className="mb-2 text-sm font-semibold">Google Calendar</h3>
-            {google.fromEnvironment ? (
-              <p className="text-sm text-muted">This build brings its own Google OAuth client.</p>
+            {google.source === 'environment' ? (
+              <p className="text-sm text-muted">This run brings its own Google OAuth client.</p>
+            ) : google.source === 'built-in' && !ownClient ? (
+              <div className="flex flex-col items-start gap-2">
+                <p className="text-sm text-muted">
+                  Signing in uses the calendar&apos;s own Google client: nothing to set up.
+                </p>
+                <Button onClick={() => setOwnClient(true)}>Use my own client</Button>
+              </div>
             ) : (
               <>
                 <ClientForm setup={google} onSaved={() => setSavedClient(true)} onError={onError} />
@@ -152,6 +160,22 @@ export function SettingsDialog({
                   <p role="status" className="mt-2 text-xs text-muted">
                     Saved.
                   </p>
+                )}
+                {google.builtInAvailable && (
+                  <Button
+                    className="mt-2"
+                    onClick={() =>
+                      void unwrap(api.google.useBuiltIn()).then(
+                        () => {
+                          setOwnClient(false);
+                          setSavedClient(false);
+                        },
+                        (e: Error) => onError(e.message),
+                      )
+                    }
+                  >
+                    Use the calendar&apos;s client
+                  </Button>
                 )}
               </>
             )}

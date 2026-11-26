@@ -40,6 +40,7 @@ import type { Cache } from './cache';
 import type { Log } from './log';
 import { GoogleClient, GoogleEngine } from './google/client';
 import {
+  builtInClient,
   clientFromEnvironment,
   googleEndpoints,
   GoogleTokens,
@@ -76,6 +77,8 @@ export interface ServiceOptions {
   openBrowser?: (url: string) => Promise<void>;
   /** Google's endpoints and client from the environment (tests point them at a fake). */
   env?: NodeJS.ProcessEnv;
+  /** The app's own Google client (default: the one built in, if any). */
+  builtInGoogle?: GoogleClientConfig | null;
   /** This machine's time zone (tests set one). */
   zone?: () => string;
   onChange?: () => void;
@@ -233,29 +236,55 @@ export class CalendarService {
 
   // --- Google --------------------------------------------------------------------------
 
-  private googleConfig(): GoogleClientConfig | null {
-    const fromEnv = clientFromEnvironment(this.options.env);
-    if (fromEnv) return fromEnv;
+  private get builtInGoogle(): GoogleClientConfig | null {
+    return this.options.builtInGoogle === undefined ? builtInClient() : this.options.builtInGoogle;
+  }
+
+  private ownGoogleClient(): GoogleClientConfig | null {
     const saved = this.cache.setting<Partial<GoogleClientConfig> | null>(GOOGLE_CLIENT, null);
     return saved?.clientId
       ? { clientId: saved.clientId, clientSecret: saved.clientSecret ?? '' }
       : null;
   }
 
+  /** The environment's client (tests), else the person's own, else the app's built-in one. */
+  private googleConfig(): GoogleClientConfig | null {
+    return clientFromEnvironment(this.options.env) ?? this.ownGoogleClient() ?? this.builtInGoogle;
+  }
+
   googleSetup(): GoogleSetup {
     const config = this.googleConfig();
+    const source = clientFromEnvironment(this.options.env)
+      ? 'environment'
+      : this.ownGoogleClient()
+        ? 'own'
+        : this.builtInGoogle
+          ? 'built-in'
+          : null;
     return {
       configured: !!config,
-      fromEnvironment: !!clientFromEnvironment(this.options.env),
-      clientId: config?.clientId ?? '',
-      hasSecret: !!config?.clientSecret,
+      source,
+      builtInAvailable: !!this.builtInGoogle,
+      clientId: source === 'own' ? (config?.clientId ?? '') : '',
+      hasSecret: source === 'own' && !!config?.clientSecret,
     };
+  }
+
+  /**
+   * Go back to the app's own client. Google accounts signed in with the person's client then ask
+   * to sign in again (a sign-in belongs to the client it was made with).
+   */
+  useBuiltInGoogleClient(): GoogleSetup {
+    if (!this.builtInGoogle) throw new Error('This build has no Google client of its own.');
+    this.cache.setSetting(GOOGLE_CLIENT, null);
+    this.options.onChange?.();
+    return this.googleSetup();
   }
 
   /** Save the OAuth client; an empty secret keeps the one saved (it isn't shown again). */
   setGoogleClient(clientId: string, clientSecret: string): GoogleSetup {
     if (clientFromEnvironment(this.options.env))
-      throw new Error('This build brings its own Google client.');
+      throw new Error('This run brings its own Google client.');
     const id = clientId.trim();
     if (!/^[\w.-]+$/.test(id)) throw new Error('Enter the OAuth client ID.');
     const before = this.cache.setting<Partial<GoogleClientConfig> | null>(GOOGLE_CLIENT, null);

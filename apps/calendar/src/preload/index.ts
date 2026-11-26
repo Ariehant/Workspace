@@ -41,6 +41,8 @@ const api = {
   google: {
     setClient: (clientId: string, clientSecret: string) =>
       call<GoogleSetup>(IPC.googleSetClient, clientId, clientSecret),
+    /** Stop using the person's own client and go back to the app's. */
+    useBuiltIn: () => call<GoogleSetup>(IPC.googleUseBuiltIn),
     signIn: () => call<GoogleConnect>(IPC.googleSignIn),
     account: (accountId: string) => call<GoogleConnect>(IPC.googleAccount, accountId),
     save: (sessionId: string, googleIds: string[]) =>

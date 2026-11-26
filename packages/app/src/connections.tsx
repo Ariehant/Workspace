@@ -43,7 +43,7 @@ export function ConnectionsPanel({ google }: { google: Google }) {
   }, [google, load]);
 
   if (!state) return <div data-testid="connections" />;
-  const showForm = !state.fromEnvironment && (!state.configured || editing);
+  const showForm = state.source !== 'environment' && (!state.configured || editing);
 
   const save = async () => {
     setBusy(true);
@@ -86,8 +86,9 @@ export function ConnectionsPanel({ google }: { google: Google }) {
             }}
           >
             <p className="text-muted">
-              From your Google Cloud project (see “Google Drive” in the desktop guide): an OAuth
-              client of type Desktop app, an API key for the Picker, and the project number.
+              {state.builtInAvailable ? 'To use your own' : 'From your'} Google Cloud project (see
+              “Google Drive” in the desktop guide): an OAuth client of type Desktop app, an API key
+              for the Picker, and the project number.
             </p>
             <label className="flex flex-col gap-1">
               <span className="text-xs text-muted">OAuth client ID</span>
@@ -139,6 +140,21 @@ export function ConnectionsPanel({ google }: { google: Google }) {
                   Cancel
                 </Button>
               )}
+              {state.source === 'own' && state.builtInAvailable && google.useBuiltIn && (
+                <Button
+                  onClick={() => {
+                    setBusy(true);
+                    void google.useBuiltIn!().then((result) => {
+                      setBusy(false);
+                      setEditing(false);
+                      if ('error' in result) setMessage(result.error);
+                    });
+                  }}
+                  disabled={busy}
+                >
+                  Use Workspace’s client
+                </Button>
+              )}
             </div>
           </form>
         ) : state.email === null ? (
@@ -146,9 +162,11 @@ export function ConnectionsPanel({ google }: { google: Google }) {
             <Button variant="primary" onClick={() => void connect()} disabled={busy}>
               Connect Google Drive…
             </Button>
-            {!state.fromEnvironment && (
+            {state.source !== 'environment' && (
               <Button onClick={() => setEditing(true)} disabled={busy}>
-                Change the Google client…
+                {state.source === 'built-in'
+                  ? 'Use my own Google client…'
+                  : 'Change the Google client…'}
               </Button>
             )}
           </div>

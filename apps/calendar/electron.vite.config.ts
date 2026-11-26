@@ -32,8 +32,19 @@ const csp = (): Plugin => ({
   ],
 });
 
+/**
+ * The app's own Google OAuth client (docs/google-oauth.md), from the build's environment (the
+ * GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets in CI). Empty without them: people then use
+ * their own client.
+ */
+const googleClient = {
+  __GOOGLE_CLIENT_ID__: JSON.stringify(process.env.GOOGLE_CLIENT_ID ?? ''),
+  __GOOGLE_CLIENT_SECRET__: JSON.stringify(process.env.GOOGLE_CLIENT_SECRET ?? ''),
+};
+
 export default defineConfig({
   main: {
+    define: googleClient,
     build: { rollupOptions: { external: ['node:sqlite'] } },
   },
   preload: {

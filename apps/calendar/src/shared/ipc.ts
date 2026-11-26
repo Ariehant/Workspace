@@ -14,6 +14,7 @@ export const IPC = {
   connectSave: 'connect:save',
   connectCancel: 'connect:cancel',
   googleSetClient: 'google:set-client',
+  googleUseBuiltIn: 'google:use-built-in',
   googleSignIn: 'google:sign-in',
   googleAccount: 'google:account',
   googleSave: 'google:save',
@@ -93,8 +94,14 @@ export interface AppState {
 /** The Google OAuth client (the secret stays in the main process). */
 export interface GoogleSetup {
   configured: boolean;
-  /** This build or run brings its own client (Settings can't change it). */
-  fromEnvironment: boolean;
+  /**
+   * Whose client signs in: the environment's (a test run; Settings can't change it), the
+   * person's own (Settings), or the app's built-in one.
+   */
+  source: 'environment' | 'own' | 'built-in' | null;
+  /** This build has a client of its own to go back to. */
+  builtInAvailable: boolean;
+  /** The person's own client's ID (empty otherwise). */
   clientId: string;
   hasSecret: boolean;
 }
