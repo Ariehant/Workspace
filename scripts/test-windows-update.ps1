@@ -8,9 +8,9 @@ param([ValidateSet('desktop', 'calendar')][string]$App = 'desktop')
 $ErrorActionPreference = 'Stop'
 
 $config = @{
-  desktop  = @{ Dir = 'apps/desktop'; Filter = '@workspace/desktop'; Exe = 'workspace-app.exe'
+  desktop  = @{ Dir = 'apps/desktop'; Filter = '@workspace/desktop'; Exe = 'workspace-app.exe'; Folder = 'workspace-app'
                 FeedVar = 'WORKSPACE_UPDATE_URL'; DataVar = 'WORKSPACE_DATA_DIR'; Channel = 'latest' }
-  calendar = @{ Dir = 'apps/calendar'; Filter = '@workspace/calendar'; Exe = 'workspace-calendar.exe'
+  calendar = @{ Dir = 'apps/calendar'; Filter = '@workspace/calendar'; Exe = 'workspace-calendar.exe'; Folder = 'workspace-calendar'
                 FeedVar = 'CALENDAR_UPDATE_URL'; DataVar = 'CALENDAR_DATA_DIR'; Channel = 'calendar' }
 }[$App]
 
@@ -22,11 +22,16 @@ New-Item -ItemType Directory -Force "$work/feed", "$work/data" | Out-Null
 $current = node -p "require('./$($config.Dir)/package.json').version"
 $newer = node -p "const [a, b, c] = '$current'.split('-')[0].split('.').map(Number); [a, b, c + 1].join('.')"
 
+# Windows file versions have four parts (1.0.1.0): compare the first three.
+function Short([string]$version) { (($version -split '\.') | Select-Object -First 3) -join '.' }
+
 function Build([string]$out) {
   pnpm --filter $config.Filter exec electron-vite build | Out-Null
   Push-Location $config.Dir
   try {
-    npx electron-builder --win nsis --publish never "--config.directories.output=$out" | Out-Null
+    # The install folder's name, as the package:win scripts set it.
+    npx electron-builder --win nsis --publish never "--config.directories.output=$out" `
+      "--config.extraMetadata.name=$($config.Folder)" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "electron-builder failed ($LASTEXITCODE)" }
   } finally { Pop-Location }
 }
@@ -58,6 +63,9 @@ try {
   $exe = Get-ChildItem -Recurse -Filter $config.Exe "$env:LOCALAPPDATA\Programs" | Select-Object -First 1
   if (-not $exe) { throw "$($config.Exe) wasn't installed under $env:LOCALAPPDATA\Programs" }
   Write-Host "Installed: $($exe.FullName), version $($exe.VersionInfo.ProductVersion)"
+  if ($exe.Directory.Name -ne $config.Folder) {
+    throw "Installed in $($exe.Directory.Name), expected a folder named $($config.Folder)"
+  }
 
   Write-Host "Running $current with an update feed…"
   Set-Item "env:$($config.FeedVar)" "http://127.0.0.1:$port/"
@@ -70,9 +78,9 @@ try {
   do {
     Start-Sleep -Seconds 3
     $got = (Get-Item $exe.FullName -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
-  } until ($got -eq $newer -or (Get-Date) -gt $deadline)
+  } until ((Short $got) -eq $newer -or (Get-Date) -gt $deadline)
   Write-Host "Installed now: version $got"
-  if ($got -ne $newer) { throw "Expected $newer after the update, found $got" }
+  if ((Short $got) -ne $newer) { throw "Expected $newer after the update, found $got" }
   Write-Host "${App}: Windows update ok"
 } finally {
   Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
