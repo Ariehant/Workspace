@@ -14,6 +14,7 @@ import { syncWindow } from '../shared/dates';
 import {
   isWorkspaceAccount,
   type Account,
+  type CalDavCalendar,
   type Calendar,
   type GoogleCalendar,
   type IcsCalendar,
@@ -60,7 +61,7 @@ export type SyncProblem =
 
 /** Accounts whose calendars sync through a `SourceSync` (not Workspace's engine). */
 export type SourceAccount = Exclude<Account, WorkspaceAccount>;
-export type SourceCalendar = GoogleCalendar | IcsCalendar;
+export type SourceCalendar = GoogleCalendar | IcsCalendar | CalDavCalendar;
 
 /** A kind of source's calendars, synced (see google/sync.ts, ics/sync.ts). */
 export interface SourceSync {

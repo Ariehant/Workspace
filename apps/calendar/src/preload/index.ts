@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import {
   IPC,
   type AppState,
+  type CalDavConnect,
   type CalendarDraft,
   type CalendarPatch,
   type ConnectSession,
@@ -46,6 +47,13 @@ const api = {
       call<void>(IPC.googleSave, sessionId, googleIds),
     /** Cancels a sign-in waiting for the browser, or a setup (with its id). */
     cancel: (sessionId?: string) => call<void>(IPC.googleCancel, sessionId ?? null),
+  },
+  caldav: {
+    connect: (server: string, username: string, password: string) =>
+      call<CalDavConnect>(IPC.caldavConnect, server, username, password),
+    account: (accountId: string) => call<CalDavConnect>(IPC.caldavAccount, accountId),
+    save: (sessionId: string, urls: string[]) => call<void>(IPC.caldavSave, sessionId, urls),
+    cancel: (sessionId: string) => call<void>(IPC.caldavCancel, sessionId),
   },
   ics: {
     subscribe: (url: string, name?: string) => call<Calendar>(IPC.icsSubscribe, url, name ?? null),

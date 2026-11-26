@@ -39,6 +39,7 @@ import { ConnectDialog } from './connect';
 import { GoogleDialog } from './google';
 import { ScopeDialog } from './scope';
 import { SubscribeDialog } from './subscribe';
+import { CalDavDialog } from './caldav';
 import { NEW_EVENT_MINUTES } from './edits';
 import { formatFullDay, formatMonthYear, formatRange } from './format';
 import { daysFrom } from './layout';
@@ -107,7 +108,7 @@ export function App() {
   const [anchor, setAnchor] = useState(() => todayOf());
   const [selection, setSelection] = useState<Selection>(null);
   const [connecting, setConnecting] = useState<{
-    kind: 'workspace' | 'google' | 'ics';
+    kind: 'workspace' | 'google' | 'ics' | 'caldav';
     accountId: string | null;
   } | null>(null);
   const [dialog, setDialog] = useState<'command' | 'shortcuts' | 'settings' | null>(null);
@@ -331,6 +332,11 @@ export function App() {
         run: () => setConnecting({ kind: 'google', accountId: null }),
       },
       {
+        id: 'connect-caldav',
+        label: 'Connect CalDAV (Nextcloud, Fastmail, …)',
+        run: () => setConnecting({ kind: 'caldav', accountId: null }),
+      },
+      {
         id: 'subscribe',
         label: 'Subscribe to a calendar (ICS)',
         run: () => setConnecting({ kind: 'ics', accountId: null }),
@@ -506,9 +512,9 @@ export function App() {
               <h2 className="text-lg font-semibold">Your Workspace dates, on a calendar</h2>
               <p className="max-w-md text-sm text-muted">
                 Connect a Workspace server to see tasks, meetings and deadlines from its databases
-                here.
+                here, beside your Google, CalDAV and subscribed calendars.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-center gap-2">
                 <Button
                   variant="primary"
                   onClick={() => setConnecting({ kind: 'workspace', accountId: null })}
@@ -517,6 +523,9 @@ export function App() {
                 </Button>
                 <Button onClick={() => setConnecting({ kind: 'google', accountId: null })}>
                   Connect Google Calendar
+                </Button>
+                <Button onClick={() => setConnecting({ kind: 'caldav', accountId: null })}>
+                  Connect CalDAV
                 </Button>
                 <Button onClick={() => setConnecting({ kind: 'ics', accountId: null })}>
                   Subscribe to a calendar
@@ -618,6 +627,9 @@ export function App() {
         <ConnectDialog accountId={connecting.accountId} onClose={() => setConnecting(null)} />
       )}
       {connecting?.kind === 'ics' && <SubscribeDialog onClose={() => setConnecting(null)} />}
+      {connecting?.kind === 'caldav' && (
+        <CalDavDialog accountId={connecting.accountId} onClose={() => setConnecting(null)} />
+      )}
       {connecting?.kind === 'google' && state && (
         <GoogleDialog
           setup={state.google}

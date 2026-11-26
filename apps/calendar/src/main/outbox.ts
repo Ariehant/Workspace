@@ -19,6 +19,7 @@ import {
   type EditScope,
 } from '../shared/types';
 import type { Cache, OpPayload, OutboxOp } from './cache';
+import { CalDavError } from './caldav/dav';
 import { GoogleApiError } from './google/client';
 import { WorkspaceApiError } from './workspace/client';
 
@@ -59,6 +60,11 @@ function failureOf(error: unknown): Failure {
     if (error.code === 'rate_limited') return 'busy';
     if (error.code === 'unauthorized') return 'unauthorized';
     if (error.code === 'object_not_found' || error.code === 'restricted_resource') return 'gone';
+  }
+  if (error instanceof CalDavError) {
+    if (error.code === 'network') return 'offline';
+    if (error.code === 'unauthorized') return 'unauthorized';
+    if (error.code === 'not_found' || error.code === 'forbidden') return 'gone';
   }
   if (error instanceof GoogleApiError) {
     if (error.code === 'network') return 'offline';

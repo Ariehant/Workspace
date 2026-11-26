@@ -19,6 +19,10 @@ export const IPC = {
   googleSave: 'google:save',
   googleCancel: 'google:cancel',
   icsSubscribe: 'ics:subscribe',
+  caldavConnect: 'caldav:connect',
+  caldavAccount: 'caldav:account',
+  caldavSave: 'caldav:save',
+  caldavCancel: 'caldav:cancel',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
   accountRemove: 'account:remove',
@@ -93,6 +97,14 @@ export interface GoogleSetup {
   fromEnvironment: boolean;
   clientId: string;
   hasSecret: boolean;
+}
+
+/** A CalDAV account connected (or already added), and its calendars to choose from. */
+export interface CalDavConnect {
+  sessionId: string;
+  /** `user · host`. */
+  name: string;
+  calendars: { url: string; name: string; colour: string | null; added: boolean }[];
 }
 
 /** A Google account signed in (or already added), and its calendars to choose from. */
