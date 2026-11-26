@@ -1,7 +1,7 @@
 {
   "name": "@workspace/calendar",
   "productName": "Workspace Calendar",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "description": "A fast, keyboard-first calendar for Workspace's dated database rows",
   "license": "AGPL-3.0-or-later",

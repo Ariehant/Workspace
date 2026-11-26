@@ -1,7 +1,7 @@
 {
   "name": "@workspace/desktop",
   "productName": "Workspace",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "description": "Offline-first workspace for notes, docs and databases",
   "license": "AGPL-3.0-or-later",

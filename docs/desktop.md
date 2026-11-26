@@ -23,8 +23,13 @@ menu, and registers `workspace://` links the first time the app starts. Uninstal
 **Settings → Apps**; that leaves your data in place.
 
 The installer isn't signed yet, so SmartScreen may say "Windows protected your PC": choose
-**More info**, then **Run anyway**. The app doesn't update itself on Windows yet: to update,
-download and run a newer installer, which keeps your data.
+**More info**, then **Run anyway**.
+
+**Updates:** the installed app updates itself, like the AppImage: it downloads a new version in
+the background and offers **Restart to update** in the sidebar (turn that off, or check now, in
+Workspace menu → About Workspace). Your data stays as it is. Installed from a release candidate
+(`1.0.0-rc.1`), it gets the next candidates and releases; installed from a release, releases
+only.
 
 ### Ubuntu and other Linux desktops
 
@@ -54,7 +59,8 @@ The `.deb` adds Workspace to the applications menu, registers `workspace://` lin
 an AppArmor profile so Chromium's sandbox works under Ubuntu 24.04's user-namespace rules. A
 downloaded `.deb` installs the same way: `sudo apt install ./workspace-app_*_amd64.deb`.
 
-**The AppImage** updates itself: it downloads a new release in the background and offers
+**The AppImage** updates itself (from a release candidate: the next candidates too): it downloads
+a new release in the background and offers
 **Restart to update** in the sidebar (turn that off, or check now, in Workspace menu → About
 Workspace). Ubuntu 24.04 needs FUSE 2 (`sudo apt install libfuse2t64`), and its AppArmor rules
 block the Chromium sandbox for programs without a profile. To give the AppImage one, save this

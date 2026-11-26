@@ -71,19 +71,36 @@ Set `PERF_RESULTS=<file>` to record the results as JSON, and compare two runs wi
 1. Pick the version (`1.2.3`, or `1.2.3-rc.1` for a release candidate) and tag the commit:
    `git tag v1.2.3 && git push origin v1.2.3`.
 2. The [release workflow](.github/workflows/release.yml) sets the version in every app from the
-   tag (`node scripts/version.mjs set`), builds the `.deb`, AppImage, Snap and Flatpak, checks
-   that the AppImage updates itself to a newer build, installs each package in a clean
-   system (the `.deb` on Ubuntu 24.04 and 25.04) and starts it, then publishes the GitHub
-   release with checksums and the apt repository on GitHub Pages (`gh-pages`, under `apt/`).
-   A release candidate is a GitHub pre-release only: no apt repository, no store.
-3. Secrets: `GPG_PRIVATE_KEY` (and `GPG_PASSPHRASE`) sign the checksums, the `.deb` and
-   AppImage and the apt repository; `SNAPCRAFT_STORE_CREDENTIALS` uploads the snap to the stable
-   channel. Without them those steps are skipped, and the workflow log says so.
-4. Flathub takes a manifest pull request to its own repository, made by hand for the first
+   tag (`node scripts/version.mjs set`), then:
+   - builds Workspace (`.deb`, AppImage, Snap, Flatpak) and Workspace Calendar (`.deb`,
+     AppImage) on Linux, and both apps' Windows installers;
+   - checks that the AppImages and the installed Windows apps update themselves to a newer
+     build;
+   - installs each package in a clean system (the `.deb`s on Ubuntu 24.04 and 26.04, the
+     installers silently on Windows) and starts it;
+   - publishes the GitHub release with checksums, then the update feed, then (releases only) the
+     apt repository on GitHub Pages (`gh-pages`, under `apt/`) with both `.deb`s.
+3. **The update feed** is the `updates` pre-release: small files the apps read
+   (`src/main/update-channel.ts` in each), pointing at the versioned release's packages
+   (`scripts/update-feed.mjs`). Each app has two channels: Workspace `latest` and `rc`, the
+   calendar `calendar` and `calendar-rc`. A release candidate updates only the candidates'
+   channels; a release updates both, so people on candidates move up to it.
+4. A release candidate is a GitHub pre-release only: no apt repository, no store.
+5. Secrets:
+   - `GPG_PRIVATE_KEY` (and `GPG_PASSPHRASE`) sign the checksums, the `.deb`, AppImage and `.exe`
+     files and the apt repository;
+   - `SNAPCRAFT_STORE_CREDENTIALS` uploads the snap to the stable channel;
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_API_KEY` and `GOOGLE_PROJECT_NUMBER` build
+     in the apps' own Google client ([how to make it](docs/google-oauth.md)).
+
+   Without them those steps are skipped, and the workflow log says so.
+
+6. Flathub takes a manifest pull request to its own repository, made by hand for the first
    release; after that, Flathub's bot proposes each update.
 
 Between releases the apps keep the version of the last one; `pnpm lint` checks that they agree.
-To try the update path locally: `bash scripts/test-appimage-update.sh` (needs `xvfb-run`).
+To try the update path locally: `bash scripts/test-appimage-update.sh desktop` (or `calendar`;
+needs `xvfb-run`), and on Windows `pwsh scripts/test-windows-update.ps1 -App desktop`.
 
 ## What a change needs
 

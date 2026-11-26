@@ -17,11 +17,19 @@ subscribed to by address (ICS feeds, such as public holidays). See [the build pl
 - **Windows:** run `Workspace-Calendar-Setup-*.exe`. It installs for your user, with a Start menu
   shortcut.
 
-Until there's a release, download them from the
-[latest build](https://github.com/Ariehant/Workspace/releases/tag/latest-build): a pre-release of
-`main` that CI publishes after its tests pass and replaces with every change (unsigned, and it
-doesn't update itself). CI also builds them for every pull request, as the
+Download them from the repository's [Releases](https://github.com/Ariehant/Workspace/releases)
+(each release has both apps, Workspace and Workspace Calendar), or the
+[latest build](https://github.com/Ariehant/Workspace/releases/tag/latest-build) of `main`, which CI
+publishes after its tests pass. CI also builds them for every pull request, as the
 `calendar-linux-packages` and `calendar-windows-installer` artifacts of its run.
+
+**Updates:** the AppImage and the Windows app update themselves: a new version downloads in the
+background, and **Settings → Updates** (or the tray menu) offers **Restart to update**; it's also
+installed the next time the calendar quits. Turn that off, or **Check now**, in Settings →
+Updates. Installed from a release candidate (`1.0.0-rc.1`), the calendar gets the next candidates
+and releases; from a release, releases only. The `.deb` updates with the system once it's in the
+project's apt repository (from 1.0.0; see [Install](../desktop.md#install) in the Workspace guide,
+then `sudo apt install workspace-calendar`).
 
 ## Connect Workspace
 

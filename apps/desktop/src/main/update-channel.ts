@@ -2,7 +2,7 @@
  * Where Workspace looks for updates: the project's `updates` release on GitHub, a fixed place
  * holding only the small feed files (`<channel>.yml` for Windows, `<channel>-linux.yml` for the
  * AppImage) that point at a versioned release's packages. The Release workflow writes them
- * (docs/releases/README.md).
+ * (CONTRIBUTING.md, "Making a release").
  */
 export const UPDATE_FEED = 'https://github.com/Ariehant/Workspace/releases/download/updates/';
 
