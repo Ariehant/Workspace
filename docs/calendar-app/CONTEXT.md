@@ -68,8 +68,8 @@ or `@workspace/core`. The calendar is an API client. Use `@notionhq/client` with
   - The `check` job (format, lint, typecheck, unit tests) covers the new package through turbo.
   - The `e2e`, `package` and `latest-build` jobs are written for `apps/desktop` paths. Add
     calendar steps or jobs for its E2E and packaging.
-  - Adding the calendar's packages to the `latest-build` pre-release and to
-    `.github/workflows/release.yml` needs the owner's OK.
+  - The calendar's packages are in the `latest-build` pre-release (the owner's OK, November
+    2026). Adding them to `.github/workflows/release.yml` still needs the owner's OK.
 
 ## 4. Workspace API facts, and where to check them
 

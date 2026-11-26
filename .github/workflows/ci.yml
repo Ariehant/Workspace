@@ -293,13 +293,14 @@ jobs:
         run: docker compose -f docker-compose.yml -f docker-compose.s3.yml logs
 
   # The latest build of main, as a pre-release anyone can download without building: the .deb
-  # and AppImage the package job built and smoke-tested, published after the tests pass and
-  # replaced on every push to main. Until there are real releases. (Its tag isn't a version, so
+  # and AppImage of Workspace and of Workspace Calendar, and the calendar's Windows installer, as
+  # the package jobs built and smoke-tested them, published after the tests pass and replaced on
+  # every push to main. Until there are real releases. (Its tag isn't a version, so
   # the Release workflow doesn't run for it.)
   latest-build:
     name: Publish the latest build (main)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [check, e2e, package, server]
+    needs: [check, e2e, e2e-calendar, package, package-calendar, package-calendar-windows, server]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -308,13 +309,22 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: latest-build
     steps:
+      # All three artifacts' files go into packages/ (their names don't overlap).
       - uses: actions/download-artifact@v4
         with:
           name: linux-packages
           path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: calendar-linux-packages
+          path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: calendar-windows-installer
+          path: packages
       - name: Checksums
         working-directory: packages
-        run: sha256sum *.deb *.AppImage > SHA256SUMS
+        run: sha256sum *.deb *.AppImage *.exe > SHA256SUMS
       - name: The latest-build pre-release
         run: |
           set -euo pipefail
@@ -324,9 +334,13 @@ jobs:
           It's replaced whenever `main` changes. It isn't signed, and it doesn't update itself:
           install a newer one the same way (or a release, once there is one).
 
-          **Install** (Ubuntu 24.04 or later): download the `.deb` below, then
+          **Workspace** (Ubuntu 24.04 or later): download `workspace-app_*_amd64.deb` below, then
           `sudo apt install ~/Downloads/workspace-app_*_amd64.deb`. Or the AppImage: make it
-          executable (`chmod +x Workspace-*.AppImage`) and run it.
+          executable (`chmod +x Workspace-[0-9]*.AppImage`) and run it.
+
+          **Workspace Calendar:** on Ubuntu, `sudo apt install ~/Downloads/workspace-calendar_*_amd64.deb`,
+          or the `Workspace-Calendar-*.AppImage`. On Windows, run `Workspace-Calendar-Setup-*.exe`
+          (it installs for your user; Windows may warn that it isn't signed).
 
           Check a download against `SHA256SUMS`.
           EOF
