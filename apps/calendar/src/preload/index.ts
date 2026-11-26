@@ -14,6 +14,7 @@ import {
   type SchemaChoice,
   type Settings,
   type ShowEvent,
+  type UpdateState,
 } from '../shared/ipc';
 import type { EventTime } from '../shared/dates';
 import type { CalEvent, Calendar, EditScope } from '../shared/types';
@@ -84,6 +85,18 @@ const api = {
     snooze: (id: string) => call<void>(IPC.snooze, id),
   },
   openLink: (url: string) => call<void>(IPC.openLink, url),
+  updates: {
+    get: () => ipcRenderer.invoke(IPC.updatesGet) as Promise<UpdateState>,
+    check: () => ipcRenderer.invoke(IPC.updatesCheck) as Promise<UpdateState>,
+    install: () => ipcRenderer.invoke(IPC.updatesInstall) as Promise<void>,
+    onChange: (listener: (state: UpdateState) => void) => {
+      const handler = (_e: unknown, state: UpdateState) => listener(state);
+      ipcRenderer.on(IPC.updatesChanged, handler);
+      return () => {
+        ipcRenderer.off(IPC.updatesChanged, handler);
+      };
+    },
+  },
   /** The main process asks to show an event (a notification or the tray was clicked). */
   onShowEvent: (listener: (show: ShowEvent) => void) => {
     const handler = (_e: unknown, show: ShowEvent) => listener(show);

@@ -39,6 +39,11 @@ export const IPC = {
   openLink: 'link:open',
   /** main → window: show this event (a notification or the tray was clicked). */
   showEvent: 'event:show',
+  updatesGet: 'updates:get',
+  updatesCheck: 'updates:check',
+  updatesInstall: 'updates:install',
+  /** main → window: the update state changed. */
+  updatesChanged: 'updates:changed',
   /** main → window: something shown changed (refetch). */
   changed: 'changed',
 } as const;
@@ -59,6 +64,8 @@ export interface Settings {
   startAtLogin: boolean;
   /** Draw with the GPU (smoother on large screens, more memory). Applies after a restart. */
   hardwareAcceleration: boolean;
+  /** Look for updates and download them on their own (installed on restart). */
+  autoUpdate: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -68,7 +75,20 @@ export const DEFAULT_SETTINGS: Settings = {
   keepInTray: false,
   startAtLogin: false,
   hardwareAcceleration: false,
+  autoUpdate: true,
 };
+
+/** Updates of the calendar itself (the AppImage and the Windows installer). */
+export interface UpdateState {
+  /** This copy updates itself (the .deb updates through apt). */
+  supported: boolean;
+  current: string;
+  status: 'idle' | 'checking' | 'none' | 'downloading' | 'ready' | 'error';
+  /** The version found, downloading or ready. */
+  version: string | null;
+  progress: number | null;
+  error: string | null;
+}
 
 export interface SyncStatusView {
   online: boolean;

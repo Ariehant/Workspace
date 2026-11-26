@@ -37,6 +37,7 @@
     "@workspace/ui": "workspace:*",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.11",
     "electron-vite": "^5.0.0",
     "ical.js": "^2.2.1",
     "lucide-react": "^1.49.0",

@@ -10,6 +10,9 @@ export interface TrayOptions {
   icon: string;
   /** Events touching today and tomorrow (visible calendars). */
   events: () => CalEvent[];
+  /** A downloaded update's version, ready to install on restart (else null). */
+  update?: () => string | null;
+  onInstallUpdate?: () => void;
   onOpen: () => void;
   onOpenEvent: (eventId: string) => void;
   onQuit: () => void;
@@ -49,6 +52,7 @@ export class CalendarTray {
 
   update() {
     const { next, todays } = trayContents(this.options.events());
+    const ready = this.options.update?.() ?? null;
     const nextLabel = next
       ? `Next: ${titleOf(next)} · ${dayOf(next.start) === today() ? clock(next.start) : `${dayOf(next.start)} ${clock(next.start)}`}`
       : 'Nothing else today';
@@ -69,6 +73,9 @@ export class CalendarTray {
           ]
         : [{ label: 'No events today', enabled: false }]),
       { type: 'separator' },
+      ...(ready
+        ? [{ label: `Restart to update (${ready})`, click: this.options.onInstallUpdate }]
+        : []),
       { label: 'Open Workspace Calendar', click: this.options.onOpen },
       { label: 'Quit', click: this.options.onQuit },
     ];

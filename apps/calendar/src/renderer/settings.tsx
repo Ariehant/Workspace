@@ -3,8 +3,8 @@
  * the Google OAuth client.
  */
 import { Button, Dialog, DialogContent } from '@workspace/ui';
-import { useMemo, useState } from 'react';
-import type { GoogleSetup, Settings, ThemePreference } from '../shared/ipc';
+import { useEffect, useMemo, useState } from 'react';
+import type { GoogleSetup, Settings, ThemePreference, UpdateState } from '../shared/ipc';
 import { api, unwrap } from './api';
 import { ClientForm } from './google';
 
@@ -141,6 +141,10 @@ export function SettingsDialog({
             it. The second column shows what the clock says in another zone at each hour.
           </p>
         </div>
+        <UpdatesSection
+          auto={current.autoUpdate}
+          onAuto={(autoUpdate) => void set({ autoUpdate })}
+        />
         {google && (
           <section aria-label="Google Calendar" className="border-t border-line p-4">
             <h3 className="mb-2 text-sm font-semibold">Google Calendar</h3>
@@ -183,5 +187,64 @@ export function SettingsDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The calendar's own updates: the version, the switch, Check now, and Restart to update. */
+function UpdatesSection({ auto, onAuto }: { auto: boolean; onAuto: (on: boolean) => void }) {
+  const [state, setState] = useState<UpdateState | null>(null);
+  useEffect(() => {
+    void api.updates.get().then(setState);
+    return api.updates.onChange(setState);
+  }, []);
+  if (!state) return null;
+
+  const status =
+    state.status === 'checking'
+      ? 'Looking for an update…'
+      : state.status === 'none'
+        ? 'This is the latest version.'
+        : state.status === 'downloading'
+          ? `Downloading ${state.version} (${state.progress ?? 0}%)…`
+          : state.status === 'ready'
+            ? `Version ${state.version} is ready.`
+            : state.status === 'error'
+              ? `Couldn't look for updates: ${state.error}`
+              : null;
+
+  return (
+    <section aria-label="Updates" className="border-t border-line p-4">
+      <h3 className="mb-2 text-sm font-semibold">Updates</h3>
+      <p className="text-sm text-muted">Workspace Calendar {state.current}</p>
+      {state.supported ? (
+        <div className="mt-2 flex flex-col items-start gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={auto} onChange={(e) => onAuto(e.target.checked)} />
+            Download updates on their own (installed when the calendar restarts)
+          </label>
+          {status && (
+            <p role="status" className="text-xs text-muted">
+              {status}
+            </p>
+          )}
+          {state.status === 'ready' ? (
+            <Button variant="primary" onClick={() => void api.updates.install()}>
+              Restart to update
+            </Button>
+          ) : (
+            <Button
+              disabled={state.status === 'checking' || state.status === 'downloading'}
+              onClick={() => void api.updates.check().then(setState)}
+            >
+              Check now
+            </Button>
+          )}
+        </div>
+      ) : (
+        <p className="mt-1 text-xs text-faint">
+          This copy updates with your system (apt, for the .deb), or by installing a newer version.
+        </p>
+      )}
+    </section>
   );
 }

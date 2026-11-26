@@ -353,7 +353,12 @@ export function registerIpc(service: CalendarService, hooks: IpcHooks) {
         check(p.secondZone === null || (isString(p.secondZone, 64) && isTimeZone(p.secondZone)));
         clean.secondZone = p.secondZone;
       }
-      for (const key of ['keepInTray', 'startAtLogin', 'hardwareAcceleration'] as const) {
+      for (const key of [
+        'keepInTray',
+        'startAtLogin',
+        'hardwareAcceleration',
+        'autoUpdate',
+      ] as const) {
         if (p[key] !== undefined) {
           check(typeof p[key] === 'boolean');
           clean[key] = p[key] as boolean;
