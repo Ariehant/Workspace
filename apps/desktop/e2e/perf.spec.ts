@@ -192,7 +192,9 @@ test(`a ${BLOCKS.toLocaleString('en-US')}-block page and a ${ROWS.toLocaleString
       { capture: true },
     );
   });
-  await window.keyboard.type(' the quick brown fox jumps over the lazy robot arm', { delay: 40 });
+  // About 150 keystrokes, so the 95th percentile rests on several slow ones, not two or three.
+  for (let i = 0; i < 3; i++)
+    await window.keyboard.type(' the quick brown fox jumps over the lazy robot arm', { delay: 40 });
   await window.waitForTimeout(200);
   const keys = await window.evaluate(
     () => (globalThis as typeof globalThis & { __keys?: number[] }).__keys!,

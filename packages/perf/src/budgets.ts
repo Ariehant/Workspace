@@ -9,16 +9,20 @@ import { dirname } from 'node:path';
  * parts of a UI case that need no window, so their targets leave room for rendering.
  */
 export const BUDGETS = {
-  // UI cases (apps/desktop/e2e/perf.spec.ts).
+  // UI cases (apps/desktop/e2e/perf.spec.ts). Compared with the base branch as a warning only
+  // (see `judge`); their limits fail the run.
   'page.open': { target: 1500, limit: 1500 },
   'page.keystroke.p95': { target: 16, limit: 300 },
   'database.open': { target: 2000, limit: 12_000 },
   'database.filter': { target: 300, limit: 2000 },
   'database.sort': { target: 300, limit: 2000 },
   'database.group': { target: 300, limit: 2000 },
-  'scroll.frame.max': { target: 50, limit: 250 },
+  // The single longest frame of a scroll: 17, 33 or 50 ms on unchanged code, as busy as the
+  // runner was. Not compared with the base branch at all.
+  'scroll.frame.max': { target: 50, limit: 250, compare: false },
   quickFind: { target: 150, limit: 250 },
-  'sync.first': { target: 30_000, limit: 45_000 },
+  // First sync over a real server, disk and two processes: 5.5 s to 10.7 s on unchanged code.
+  'sync.first': { target: 30_000, limit: 45_000, compare: false },
   // Pure code (src/budgets.bench.test.ts), on the 50,000-row database.
   'pure.database.decode': { target: 1000, limit: 5000 },
   'pure.database.snapshot': { target: 500, limit: 1200 },
@@ -29,7 +33,14 @@ export const BUDGETS = {
   'pure.database.edit': { target: 50, limit: 150 },
   'pure.page.decode': { target: 500, limit: 500 },
   'pure.search': { target: 50, limit: 150 },
-} as const satisfies Record<string, { target: number; limit: number }>;
+} as const satisfies Record<string, Budget>;
+
+interface Budget {
+  target: number;
+  limit: number;
+  /** False: too noisy between runs to compare with the base branch (the limit still holds). */
+  compare?: false;
+}
 
 export type Metric = keyof typeof BUDGETS;
 export type Results = Partial<Record<Metric, number>>;
@@ -43,12 +54,28 @@ export const REGRESSION_LIMIT = 0.2;
  */
 const NOISE_FLOOR_MS = 10;
 
-/** Add results to a JSON file (several suites write to the same one). */
+/**
+ * A regression must also be this much slower in absolute terms: on shared runners the same code
+ * measured `pure.database.edit` between 13 and 35 ms, so 20% of a ~15 ms metric (3 ms) is
+ * noise, not a change anyone would notice. Doubling a 10 ms metric still fails.
+ */
+const MIN_REGRESSION_MS = 10;
+
+/**
+ * Add results to a JSON file (several suites write to the same one). A metric already in it
+ * keeps the faster of the two: CI runs the pure-code benchmarks more than once, and the fastest
+ * run is the closest to the code's own cost (a busy runner only ever adds time).
+ */
 export function recordResults(file: string | undefined, results: Results): void {
   if (!file) return;
   mkdirSync(dirname(file), { recursive: true });
   const existing: Results = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
-  writeFileSync(file, `${JSON.stringify({ ...existing, ...results }, null, 2)}\n`);
+  const merged: Results = { ...existing };
+  for (const [metric, value] of Object.entries(results) as [Metric, number][]) {
+    const before = existing[metric];
+    merged[metric] = before === undefined ? value : Math.min(before, value);
+  }
+  writeFileSync(file, `${JSON.stringify(merged, null, 2)}\n`);
 }
 
 export interface Verdict {
@@ -57,27 +84,82 @@ export interface Verdict {
   target: number | null;
   limit: number | null;
   baseline: number | null;
-  /** Fails the run: over the limit, or a regression from the base branch. */
+  /** Fails the run: over the limit, or a pure-code regression from the base branch. */
   problem: string | null;
+  /** Shown, but doesn't fail the run: a UI case slower than the base branch. */
+  warning: string | null;
   /** Within the limit, but not yet the target. */
   overTarget: boolean;
 }
 
-/** Compare results with the budgets, and with a baseline run when there is one. */
+/** The runner's speed is only read from this many pure-code measurements or more. */
+const MIN_CALIBRATION_METRICS = 3;
+
+/**
+ * How much slower this run's machine is than the base branch's (2 = twice as slow), read from
+ * the pure-code benchmarks: they run the same code on both, so their median ratio is the
+ * runner's speed, not a change in the code (one slower benchmark among them doesn't move the
+ * median). 1 without enough of them; kept between 0.5 and 4.
+ *
+ * Shared CI runners differ by 30–60% from run to run, which alone used to fail the 20%
+ * regression check.
+ */
+export function runnerFactor(
+  results: Record<string, number>,
+  baseline: Record<string, number>,
+): number {
+  const ratios = Object.entries(results)
+    .filter(([metric]) => metric.startsWith('pure.'))
+    .map(([metric, value]) => [value, baseline[metric]] as const)
+    .filter((pair): pair is readonly [number, number] => {
+      const base = pair[1];
+      return base !== undefined && base >= NOISE_FLOOR_MS && pair[0] > 0;
+    })
+    .map(([value, base]) => value / base)
+    .sort((a, b) => a - b);
+  if (ratios.length < MIN_CALIBRATION_METRICS) return 1;
+  const mid = Math.floor(ratios.length / 2);
+  const median = ratios.length % 2 ? ratios[mid]! : (ratios[mid - 1]! + ratios[mid]!) / 2;
+  return Math.min(4, Math.max(0.5, median));
+}
+
+/**
+ * Compare results with the budgets, and with a baseline run when there is one. The baseline is
+ * first scaled by the runner's speed (`runnerFactor`), so a regression means slower code, not a
+ * slower machine. The absolute limits aren't scaled: they hold on any runner.
+ *
+ * Only the pure-code benchmarks fail the run on a regression from the base branch. The UI cases
+ * (an Electron window under xvfb, on a shared runner) varied 1.5-2.4x between runs of unchanged
+ * code in November 2026 (database.filter 48-87 ms, database.group 80-195 ms, keystroke p95
+ * 40-74 ms), a spread the runner's CPU speed doesn't explain; one run against one base run can't
+ * tell a 20% change from that. Their slowdowns are shown as warnings, and their limits fail the
+ * run. The pure-code benchmarks run the same engine code (decode, snapshot, computed values,
+ * filter, sort, group, edits, search) without a window, steadily enough to gate on.
+ */
 export function judge(
   results: Record<string, number>,
   baseline: Record<string, number> = {},
 ): Verdict[] {
+  const factor = runnerFactor(results, baseline);
   return Object.entries(results).map(([metric, value]) => {
-    const budget = (BUDGETS as Record<string, { target: number; limit: number } | undefined>)[
-      metric
-    ];
+    const budget = (BUDGETS as Record<string, Budget | undefined>)[metric];
     const base = baseline[metric] ?? null;
     let problem: string | null = null;
+    let warning: string | null = null;
     if (!budget) problem = 'no budget';
     else if (value > budget.limit) problem = `over the limit (${budget.limit} ms)`;
-    else if (base !== null && base >= NOISE_FLOOR_MS && value > base * (1 + REGRESSION_LIMIT)) {
-      problem = `${Math.round((value / base - 1) * 100)}% slower than the base branch`;
+    else if (
+      base !== null &&
+      budget.compare !== false &&
+      base >= NOISE_FLOOR_MS &&
+      value > base * factor * (1 + REGRESSION_LIMIT) &&
+      value - base * factor > MIN_REGRESSION_MS
+    ) {
+      const slower = `${Math.round((value / (base * factor) - 1) * 100)}% slower than the base branch${
+        factor === 1 ? '' : ` (allowing for this runner's speed, ×${factor.toFixed(2)})`
+      }`;
+      if (metric.startsWith('pure.')) problem = slower;
+      else warning = slower;
     }
     return {
       metric,
@@ -86,6 +168,7 @@ export function judge(
       limit: budget?.limit ?? null,
       baseline: base,
       problem,
+      warning,
       overTarget: budget !== undefined && value > budget.target,
     };
   });
@@ -94,15 +177,27 @@ export function judge(
 const ms = (n: number | null) =>
   n === null ? '–' : `${Number.isInteger(n) ? n : n.toFixed(n < 100 ? 1 : 0)} ms`;
 
-/** A Markdown table of verdicts, for the CI summary. */
-export function report(verdicts: Verdict[]): string {
+/** A Markdown table of verdicts, for the CI summary (with the runner's speed, when known). */
+export function report(verdicts: Verdict[], factor = 1): string {
   const lines = [
+    ...(factor === 1
+      ? []
+      : [
+          `This runner ran the pure-code benchmarks ×${factor.toFixed(2)} as long as the base branch's run; its results are compared with the base branch's scaled by that.`,
+          '',
+        ]),
     '| Metric | Result | Target | Limit | Base branch | |',
     '| --- | ---: | ---: | ---: | ---: | --- |',
     ...verdicts.map(
       (v) =>
         `| ${v.metric} | ${ms(v.value)} | ${ms(v.target)} | ${ms(v.limit)} | ${ms(v.baseline)} | ${
-          v.problem ? `❌ ${v.problem}` : v.overTarget ? '⚠️ over target' : '✅'
+          v.problem
+            ? `❌ ${v.problem}`
+            : v.warning
+              ? `⚠️ ${v.warning}`
+              : v.overTarget
+                ? '⚠️ over target'
+                : '✅'
         } |`,
     ),
   ];

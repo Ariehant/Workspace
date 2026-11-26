@@ -111,8 +111,10 @@ jobs:
           path: perf-baseline.json
           key: perf-${{ github.base_ref || github.ref_name }}-${{ github.sha }}
           restore-keys: perf-${{ github.base_ref || github.ref_name }}-
-      - name: Pure-code benchmarks (50,000 rows)
-        run: pnpm --filter @workspace/perf bench
+      # Three runs, each metric's fastest kept (recordResults): one run alone varied by a third
+      # or more between runners on unchanged code.
+      - name: Pure-code benchmarks (50,000 rows, fastest of three runs)
+        run: for run in 1 2 3; do pnpm --filter @workspace/perf bench; done
         env:
           PERF_RESULTS: ${{ github.workspace }}/perf-results.json
       - name: UI budgets (10,000-block page, 50,000-row database)
