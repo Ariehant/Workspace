@@ -207,6 +207,24 @@ password or single sign-on, then upload this workspace or use one from the serve
 working offline; changes and attachments sync when the connection is back. Setting up a server
 is covered in the [self-hosting guide](self-hosting.md).
 
+### Sharing and who's online
+
+On a synced workspace, **Share** in a page's header shares it: type emails, people or groups,
+separated by commas, choose a role and press **Invite**. Workspace members get the page right
+away; other addresses get an email invite (or, when the server can't send email, a link to copy
+and send yourself) and join as guests with access to that page. Pending invites are listed in
+the dialog, with **Revoke**.
+
+A shared page's header then shows who of the people with access is online, for example
+"1 online · 2 offline". Click it for the list and **Ping**:
+
+- After you share, or when you open the page, the app asks every 20 seconds for 5 minutes.
+- The other people's apps answer by themselves while they run and are connected to the server,
+  even with the page closed, and even minimized to the tray.
+- **Ping** asks again whenever you like (once per 10 seconds). The people asked see who's
+  checking, on which page, with **Open**.
+- While this computer is offline, it can't ask and says so.
+
 ## Keyboard shortcuts
 
 **Keyboard shortcuts** in the workspace menu (or `Ctrl+?`) lists these in the app.

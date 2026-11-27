@@ -343,6 +343,27 @@ export function scopeRoutes(app: FastifyInstance, ctx: ServerContext) {
     },
   );
 
+  // Everyone who can see a scope's pages (people only, not integrations): for the online
+  // check of a shared page, which asks their computers whether they're there.
+  app.get<{ Params: Params }>(
+    '/api/workspaces/:id/scopes/:scopeId/people',
+    {
+      preHandler: signedIn,
+      schema: { params: { type: 'object', properties: { id: uuid, scopeId: uuid } } },
+    },
+    async (request, reply) => {
+      const { id, scopeId } = request.params;
+      const found = await scopeWith(request, reply, scopeId, 'view');
+      if (!found) return reply;
+      const access = await ctx.access.workspace(id);
+      const people = (await store.teams.members(id))
+        .filter((m) => !m.disabled && m.role !== 'bot')
+        .filter((m) => atLeast(access.roles(m.userId).get(scopeId), 'view'))
+        .map((m) => ({ id: m.userId, name: m.name, avatar: m.avatar }));
+      return { people };
+    },
+  );
+
   app.put<{ Params: Params; Body: { principal: string; role: ScopeRole | null } }>(
     '/api/workspaces/:id/scopes/:scopeId/access',
     {

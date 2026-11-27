@@ -153,6 +153,10 @@ export function createWebPlatform(options: {
   void api('PATCH', '/api/auth/me', {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }).catch(() => {});
+  // The online check of shared pages (who's there), answered by the client itself.
+  type Pinged = { docId: string; fromId: string; fromName: string; manual: boolean };
+  const pingedListeners = new Set<(ping: Pinged) => void>();
+  const ackedListeners = new Set<(nonce: string, userId: string, name: string) => void>();
   const client = new PartialClient({
     deviceId: crypto.randomUUID(),
     onUpdate: (docId, update) => offline.received(docId, update),
@@ -176,6 +180,12 @@ export function createWebPlatform(options: {
     onAwareness: (docId, update) => presenceHandlers.get(docId)?.onUpdate(update),
     onPresenceRejoin: () => {
       for (const handlers of presenceHandlers.values()) handlers.onRejoin();
+    },
+    onPinged: (ping) => {
+      for (const listener of pingedListeners) listener(ping);
+    },
+    onAcked: (nonce, userId, name) => {
+      for (const listener of ackedListeners) listener(nonce, userId, name);
     },
     onNotify: (payload) => {
       const notification = parseNotification(payload);
@@ -223,6 +233,20 @@ export function createWebPlatform(options: {
             },
           };
         },
+      },
+    },
+    onlineCheck: {
+      ping: async (docId, manual) =>
+        client.state.state === 'live'
+          ? client.presence.ping(docId, manual)
+          : { error: 'offline' as const },
+      onAcked: (listener) => {
+        ackedListeners.add(listener);
+        return () => ackedListeners.delete(listener);
+      },
+      onPinged: (listener) => {
+        pingedListeners.add(listener);
+        return () => pingedListeners.delete(listener);
       },
     },
     getSetting: async <T>(key: string) => settings.get(keyOf(key)) as T | undefined,

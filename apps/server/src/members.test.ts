@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { MEMBERS_DOC_ID, listMembers } from '@workspace/core';
+import { MEMBERS_DOC_ID, createPage, listMembers } from '@workspace/core';
 import { PgStore } from '@workspace/storage-remote';
 import { createTestDatabase } from '@workspace/storage-remote/testing';
 import { CloseCode } from '@workspace/sync';
@@ -387,5 +387,127 @@ describe('the members doc', () => {
       ['Ada', 'owner', false],
       ['Bob B.', 'guest', true],
     ]);
+  });
+});
+
+describe('sharing a page by email', () => {
+  it('its sharers invite guests to it; members get it at once; accepting grants it', async () => {
+    const s = await setup();
+    const { ada, ws, join } = await team(s);
+    const bob = await join('bob@lab.io', 'member');
+    type Scopes = { scopes: { id: string; kind: string; treeDoc: string; role: string }[] };
+    const scopes = async (token: string) =>
+      ((await s.call('GET', `/api/workspaces/${ws}/scopes`, token)).body as Scopes).scopes;
+    const mine = (await scopes(ada.token)).find((x) => x.kind === 'private')!;
+    const device = s.device('ada-laptop', ada.token, ws);
+    device.client.start();
+    await until(() => device.client.state.state === 'live', 'live');
+    const tree = device.doc(mine.treeDoc);
+    const brief = createPage(tree, { title: 'Client brief', createdBy: ada.id });
+    const budget = createPage(tree, { title: 'Budget', createdBy: ada.id });
+    await until(() => device.outbox.length === 0, 'pages pushed');
+    const share = async (page: string) => {
+      const res = await s.call('POST', `/api/workspaces/${ws}/pages/${page}/share`, ada.token, {
+        scope: mine.id,
+      });
+      expect(res.status).toBe(201);
+      return res.body.scope.id as string;
+    };
+    const briefScope = await share(brief);
+    const invites = (token: string, body: object) =>
+      s.call('POST', `/api/workspaces/${ws}/invites`, token, body);
+
+    // Bob can't see the page, so he can't invite anyone to it.
+    const asBob = await invites(bob.token, {
+      emails: ['eve@else.io'],
+      role: 'guest',
+      page: { scopeId: briefScope, role: 'view' },
+    });
+    expect(asBob.status).toBe(403);
+
+    // Ada shares it with Carol (no account yet) and Bob (a member): Carol gets an invite
+    // email, Bob gets the page now.
+    s.mail.length = 0;
+    const sent = await invites(ada.token, {
+      emails: ['carol@else.io', 'bob@lab.io'],
+      role: 'guest',
+      page: { scopeId: briefScope, role: 'comment' },
+    });
+    expect(sent.status).toBe(201);
+    expect(sent.body.invites).toEqual([
+      expect.objectContaining({ email: 'carol@else.io', role: 'guest', emailed: true }),
+    ]);
+    expect(sent.body.added).toEqual(['bob@lab.io']);
+    expect(s.mail).toEqual([
+      expect.objectContaining({
+        to: 'carol@else.io',
+        subject: 'Ada shared a page with you in Lab',
+      }),
+    ]);
+    expect((await scopes(bob.token)).find((x) => x.id === briefScope)?.role).toBe('comment');
+    const people = await s.call(
+      'GET',
+      `/api/workspaces/${ws}/scopes/${briefScope}/people`,
+      bob.token,
+    );
+    expect(people.body.people.map((p: { name: string }) => p.name).sort()).toEqual(['Ada', 'Bob']);
+
+    // With full access, Bob (not an admin) invites guests to the page, sees and revokes its
+    // invites, but not the workspace's others, and can't invite members.
+    await s.call('PUT', `/api/workspaces/${ws}/scopes/${briefScope}/access`, ada.token, {
+      principal: `user:${bob.id}`,
+      role: 'full',
+    });
+    expect(
+      (
+        await invites(bob.token, {
+          emails: ['dan@else.io'],
+          role: 'member',
+          page: { scopeId: briefScope, role: 'view' },
+        })
+      ).status,
+    ).toBe(403);
+    const dan = await invites(bob.token, {
+      emails: ['dan@else.io'],
+      role: 'guest',
+      page: { scopeId: briefScope, role: 'view' },
+    });
+    expect(dan.status).toBe(201);
+    const pending = await s.call(
+      'GET',
+      `/api/workspaces/${ws}/invites?scopeId=${briefScope}`,
+      bob.token,
+    );
+    expect(pending.status).toBe(200);
+    expect(pending.body.invites.map((i: { email: string }) => i.email)).toEqual([
+      'carol@else.io',
+      'dan@else.io',
+    ]);
+    expect(pending.body.invites[0].page).toEqual({ scopeId: briefScope, role: 'comment' });
+    expect((await s.call('GET', `/api/workspaces/${ws}/invites`, bob.token)).status).toBe(403);
+    const revoke = await s.call(
+      'DELETE',
+      `/api/workspaces/${ws}/invites/${dan.body.invites[0].id}`,
+      bob.token,
+    );
+    expect(revoke.status).toBe(200);
+
+    // Another page shared with Carol keeps the first invite; accepting one gives her both.
+    const budgetScope = await share(budget);
+    const second = await invites(ada.token, {
+      emails: ['carol@else.io'],
+      role: 'guest',
+      page: { scopeId: budgetScope, role: 'edit' },
+    });
+    expect(second.status).toBe(201);
+    const carol = await s.signup('carol@else.io', s.tokenOf(sent.body.invites[0].link));
+    expect(carol.status).toBe(201);
+    const hers = await scopes(carol.token);
+    expect(hers.find((x) => x.id === briefScope)?.role).toBe('comment');
+    expect(hers.find((x) => x.id === budgetScope)?.role).toBe('edit');
+    expect(
+      (await s.call('GET', `/api/workspaces/${ws}/invites?scopeId=${budgetScope}`, ada.token)).body
+        .invites,
+    ).toEqual([]);
   });
 });

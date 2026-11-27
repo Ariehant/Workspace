@@ -470,6 +470,72 @@ describe('SyncHub', () => {
     hub.closeAll();
     expect(hub.connectionCount).toBe(0);
   });
+  it('online check: asks the devices of others who may read, passes answers back, limits askers', async () => {
+    let now = 1_000_000;
+    const { open } = setup({ now: () => now });
+    const policy = (readable: string[]): DocPolicy => ({
+      canRead: (d) => readable.includes(d),
+      canWrite: () => true,
+    });
+    const ada = open({ userId: 'u-ada', userName: 'Ada', policy: policy(['p']) });
+    const bob = open({ userId: 'u-bob', userName: 'Bob', policy: policy(['p']) });
+    const bobPhone = open({ userId: 'u-bob', userName: 'Bob', policy: policy(['p']) });
+    const adaLaptop = open({ userId: 'u-ada', userName: 'Ada', policy: policy(['p']) });
+    const gus = open({ userId: 'u-gus', userName: 'Gus', policy: policy(['q']) });
+    for (const [c, d] of [
+      [ada, 'A'],
+      [bob, 'B'],
+      [bobPhone, 'B2'],
+      [adaLaptop, 'A2'],
+      [gus, 'G'],
+    ] as const) {
+      c.hello(0, d);
+    }
+
+    ada.send({ type: 'ping', docId: 'p', nonce: 'n1', manual: true });
+    await until(() => ofType(bobPhone.received, 'pinged').length > 0);
+    const [pinged] = ofType(bob.received, 'pinged');
+    expect(pinged).toMatchObject({ docId: 'p', fromId: 'u-ada', fromName: 'Ada', manual: true });
+    expect(ofType(bobPhone.received, 'pinged')).toHaveLength(1);
+    // Not the asker's own devices, and not people who can't read the doc.
+    expect(ofType(adaLaptop.received, 'pinged')).toEqual([]);
+    expect(ofType(gus.received, 'pinged')).toEqual([]);
+
+    // Bob's devices answer; the asker hears who.
+    bob.send({ type: 'pong', ticket: pinged!.ticket });
+    bobPhone.send({ type: 'pong', ticket: pinged!.ticket });
+    await until(() => ofType(ada.received, 'acked').length === 2);
+    expect(ofType(ada.received, 'acked')[0]).toEqual({
+      type: 'acked',
+      nonce: 'n1',
+      userId: 'u-bob',
+      name: 'Bob',
+    });
+    // A made-up ticket goes nowhere.
+    gus.send({ type: 'pong', ticket: 'not-a-ticket' });
+
+    // The server lets one check through per 5 s (clients keep to 10 s).
+    ada.send({ type: 'ping', docId: 'p', nonce: 'n2', manual: false });
+    now += 3_000;
+    ada.send({ type: 'ping', docId: 'p', nonce: 'n3', manual: false });
+    now += 3_000;
+    ada.send({ type: 'ping', docId: 'p', nonce: 'n4', manual: false });
+    await until(() => ofType(bob.received, 'pinged').length === 2);
+    await sleep(20);
+    expect(ofType(bob.received, 'pinged').map((m) => m.manual)).toEqual([true, false]);
+
+    // An answer after 30 s isn't passed on.
+    const late = ofType(bob.received, 'pinged')[1]!;
+    now += 31_000;
+    bob.send({ type: 'pong', ticket: late.ticket });
+    await sleep(20);
+    expect(ofType(ada.received, 'acked')).toHaveLength(2);
+    // A doc the asker can't read: nobody is asked.
+    gus.send({ type: 'ping', docId: 'p', nonce: 'g', manual: true });
+    await sleep(20);
+    expect(ofType(bob.received, 'pinged')).toHaveLength(2);
+  });
+
   it('presence: stamps the account on each state, relays to readers watching, and cleans up', async () => {
     const { open } = setup();
     const policy = (readable: string[]): DocPolicy => ({

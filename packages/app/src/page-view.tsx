@@ -63,6 +63,7 @@ import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 import { useDisplayContext } from './database/hooks';
 import { uniquePeople, usePeers, usePresence, type Peer } from './presence';
+import { OnlineIndicator, useOnlineCheck, type OnlineCheck } from './online-check-ui';
 import type { BlockTarget } from './app';
 import { useApp } from './context';
 import { can } from './platform';
@@ -123,6 +124,8 @@ export interface PageHeaderProps {
   onShare?(): void;
   /** Others on the page now. */
   people?: Peer[];
+  /** Who of the people with access to a shared page is online. */
+  online?: OnlineCheck | null;
   /** The page's comments (the header's comments button). */
   comments?: PageComments | null;
   /** Favorite toggle (pages only). */
@@ -138,6 +141,7 @@ export function PageHeader({
   access,
   onShare,
   people = [],
+  online = null,
   comments = null,
   favorite,
   menu,
@@ -209,6 +213,7 @@ export function PageHeader({
                 : 'View only'}
         </span>
       )}
+      {online && <OnlineIndicator check={online} />}
       {people.length > 0 && (
         <div className="flex items-center -space-x-1.5 pr-1" data-testid="page-people">
           {people.slice(0, 5).map(({ state }) => (
@@ -655,6 +660,10 @@ export function PageView({
   const [presenting, setPresenting] = useState(false);
   const awareness = usePresence(isDatabase ? null : pageId, pageDoc);
   const people = uniquePeople(usePeers(awareness, user.id));
+  const online = useOnlineCheck(
+    pageId,
+    people.map((p) => p.state.user.id),
+  );
   const articleRef = useRef<HTMLElement>(null);
   useScrollToBlock(articleRef, pageDoc ? blockTarget : null);
   if (!model) return null;
@@ -674,6 +683,7 @@ export function PageView({
         access={role}
         onShare={onShare ? () => onShare(pageId) : undefined}
         people={people}
+        online={online}
         comments={isDatabase ? null : comments}
         favorite={{ on: isFavorite, toggle: onToggleFavorite }}
         menu={

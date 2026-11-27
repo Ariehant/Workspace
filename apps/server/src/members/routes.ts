@@ -10,7 +10,7 @@
  * Every change refreshes the members doc, and a changed role or removal closes the
  * person's sockets so their access is checked again.
  */
-import type { MemberRole } from '@workspace/storage-remote';
+import type { MemberRole, ScopeRole } from '@workspace/storage-remote';
 import { normalizeEmail } from '@workspace/storage-remote';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { fail, requireUser } from '../auth/context';
@@ -170,28 +170,58 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
 
   // --- Invites ---------------------------------------------------------------------------
 
-  app.get<{ Params: { id: string } }>(
+  /** Full access to a scope (a shared page), or null after replying. */
+  async function sharer(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+    scopeId: string,
+  ): Promise<MemberRole | null> {
+    const r = await roleIn(request, reply);
+    if (!r) return null;
+    const access = await ctx.access.workspace(request.params.id);
+    if (access.roles(request.auth!.user.id).get(scopeId) !== 'full') {
+      void fail(reply, 403, 'forbidden', 'Only people with full access can invite to a page.');
+      return null;
+    }
+    return r;
+  }
+
+  // Pending invites: all of them (owners and admins), or a page's (`scopeId`, its sharers).
+  app.get<{ Params: { id: string }; Querystring: { scopeId?: string } }>(
     '/api/workspaces/:id/invites',
-    { preHandler: signedIn, schema: { params: params() } },
+    {
+      preHandler: signedIn,
+      schema: { params: params(), querystring: { type: 'object', properties: { scopeId: uuid } } },
+    },
     async (request, reply) => {
-      if (!(await manager(request, reply))) return reply;
+      const { scopeId } = request.query;
+      if (scopeId) {
+        if (!(await sharer(request, reply, scopeId))) return reply;
+      } else if (!(await manager(request, reply))) return reply;
       const invites = await teams.pendingInvites(request.params.id);
       return {
-        invites: invites.map((i) => ({
-          id: i.id,
-          email: i.email,
-          role: i.role,
-          invitedBy: i.invitedBy,
-          createdAt: i.createdAt,
-          expiresAt: i.expiresAt,
-        })),
+        invites: invites
+          .filter((i) => !scopeId || i.page?.scopeId === scopeId)
+          .map((i) => ({
+            id: i.id,
+            email: i.email,
+            role: i.role,
+            invitedBy: i.invitedBy,
+            createdAt: i.createdAt,
+            expiresAt: i.expiresAt,
+            page: i.page,
+          })),
       };
     },
   );
 
   app.post<{
     Params: { id: string };
-    Body: { emails: string[]; role: Exclude<MemberRole, 'owner'> };
+    Body: {
+      emails: string[];
+      role: Exclude<MemberRole, 'owner'>;
+      page?: { scopeId: string; role: ScopeRole };
+    };
   }>(
     '/api/workspaces/:id/invites',
     {
@@ -209,22 +239,57 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
               items: email,
             },
             role: inviteRole,
+            page: {
+              type: 'object',
+              required: ['scopeId', 'role'],
+              additionalProperties: false,
+              properties: {
+                scopeId: { type: 'string', format: 'uuid' },
+                role: {
+                  type: 'string',
+                  enum: ['full', 'edit', 'content', 'create', 'comment', 'view'],
+                },
+              },
+            },
           },
         },
       },
     },
     async (request, reply) => {
-      if (!(await manager(request, reply))) return reply;
       const { id } = request.params;
+      const { page } = request.body;
+      if (page) {
+        // From a page's Share dialog: anyone with full access to the page may invite guests
+        // to it (owners and admins may invite as anything, as without a page).
+        const r = await sharer(request, reply, page.scopeId);
+        if (!r) return reply;
+        if (!manages(r) && request.body.role !== 'guest') {
+          return fail(reply, 403, 'forbidden', 'Only owners and admins can invite members.');
+        }
+      } else if (!(await manager(request, reply))) return reply;
       const workspace = (await store.getWorkspace(id))!;
       const inviter = request.auth!.user;
-      const memberEmails = new Set((await teams.members(id)).map((m) => m.email));
+      const members = new Map((await teams.members(id)).map((m) => [m.email, m]));
       const emails = [...new Set(request.body.emails.map(normalizeEmail))];
       const invites = [];
       const skipped = [];
+      const added = [];
       for (const address of emails) {
-        if (memberEmails.has(address)) {
-          skipped.push(address);
+        const member = members.get(address);
+        if (member) {
+          // Already in the workspace: a page's access is given at once (they're told).
+          if (page && !member.disabled) {
+            await ctx.sharing.grant(
+              id,
+              page.scopeId,
+              `user:${member.userId}`,
+              page.role,
+              inviter.id,
+            );
+            added.push(address);
+          } else {
+            skipped.push(address);
+          }
           continue;
         }
         const token = randomToken();
@@ -235,6 +300,7 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
           token,
           invitedBy: inviter.id,
           ttlMs: INVITE_TTL_MS,
+          page: page ?? null,
         });
         const link = `${ctx.config.publicUrl}/invite/${token}`;
         let emailed = false;
@@ -242,9 +308,13 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
           try {
             await ctx.mailer.send({
               to: address,
-              subject: `${inviter.name} invited you to ${workspace.name}`,
+              subject: page
+                ? `${inviter.name} shared a page with you in ${workspace.name}`
+                : `${inviter.name} invited you to ${workspace.name}`,
               text:
-                `${inviter.name} invited you to join the workspace “${workspace.name}”.\n\n` +
+                (page
+                  ? `${inviter.name} shared a page with you in the workspace “${workspace.name}”.\n\n`
+                  : `${inviter.name} invited you to join the workspace “${workspace.name}”.\n\n`) +
                 `Open this link to accept (it works once, for ${address}, ` +
                 `for the next 7 days):\n\n${link}\n`,
             });
@@ -264,7 +334,7 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
         });
       }
       request.log.info({ workspaceId: id, count: invites.length }, 'invited');
-      return reply.code(201).send({ invites, skipped });
+      return reply.code(201).send({ invites, skipped, added });
     },
   );
 
@@ -272,7 +342,15 @@ export function memberRoutes(app: FastifyInstance, ctx: ServerContext) {
     '/api/workspaces/:id/invites/:inviteId',
     { preHandler: signedIn, schema: { params: params('inviteId') } },
     async (request, reply) => {
-      if (!(await manager(request, reply))) return reply;
+      // Owners and admins, or (an invite to a page) that page's sharers.
+      const r = await roleIn(request, reply);
+      if (!r) return reply;
+      if (!manages(r)) {
+        const invite = await teams.pendingInvite(request.params.id, request.params.inviteId);
+        if (!invite?.page)
+          return fail(reply, 403, 'forbidden', 'Only owners and admins can do that.');
+        if (!(await sharer(request, reply, invite.page.scopeId))) return reply;
+      }
       if (!(await teams.revokeInvite(request.params.id, request.params.inviteId))) {
         return fail(reply, 404, 'not_found', 'No such pending invite.');
       }

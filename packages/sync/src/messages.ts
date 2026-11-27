@@ -35,11 +35,15 @@
  *
  * Version 6 adds the "create" role (a database's "can create pages": add rows, and edit only
  * one's own).
+ *
+ * Version 7 adds the online check: a client asks who's there for a doc (`ping`); the server
+ * passes it to the connected devices of everyone else who may read the doc (`pinged`, with a
+ * ticket), each answers (`pong`), and the server tells the asker who did (`acked`).
  */
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** Largest message a client may send (the server's WebSocket limit). */
 export const MAX_CLIENT_MESSAGE_BYTES = 16 * 1024 * 1024;
@@ -54,6 +58,9 @@ const DEVICE_ID_LENGTH = 128;
 export const MAX_AWARENESS_BYTES = 64 * 1024;
 /** Largest notification the server sends (JSON). */
 export const MAX_NOTIFY_BYTES = 64 * 1024;
+/** A ping's nonce (the asker's) and ticket (the server's). */
+export const MAX_PING_ID_LENGTH = 64;
+const MAX_NAME_LENGTH = 200;
 
 export type SyncMode = 'replica' | 'partial';
 
@@ -106,7 +113,11 @@ export type ClientMessage =
   | { type: 'watch'; docId: string }
   | { type: 'unwatch'; docId: string }
   /** A y-protocols awareness update for a watched doc. */
-  | { type: 'awareness'; docId: string; update: Uint8Array };
+  | { type: 'awareness'; docId: string; update: Uint8Array }
+  /** Who's there for this doc? `manual`: asked by hand (the others are told). */
+  | { type: 'ping'; docId: string; nonce: string; manual: boolean }
+  /** Here: the answer to a `pinged`. */
+  | { type: 'pong'; ticket: string };
 
 export type ServerMessage =
   | { type: 'updates'; cursor: number; items: { docId: string; update: Uint8Array }[] }
@@ -123,6 +134,17 @@ export type ServerMessage =
   | { type: 'awareness'; docId: string; update: Uint8Array }
   /** A notification for the signed-in user (JSON; see `@workspace/core` notifications). */
   | { type: 'notify'; payload: string }
+  /** Someone asks who's there for a doc (answer with `pong` and the ticket). */
+  | {
+      type: 'pinged';
+      docId: string;
+      ticket: string;
+      fromId: string;
+      fromName: string;
+      manual: boolean;
+    }
+  /** Someone answered this connection's `ping`. */
+  | { type: 'acked'; nonce: string; userId: string; name: string }
   | { type: 'error'; code: string; message: string };
 
 /** WebSocket close codes the server uses (4000–4999 are free for applications). */
@@ -160,6 +182,10 @@ const T = {
   awarenessIn: 7,
   awarenessOut: 19,
   notify: 20,
+  ping: 8,
+  pong: 9,
+  pinged: 21,
+  acked: 22,
 } as const;
 
 // --- Encoding ----------------------------------------------------------------------------
@@ -200,6 +226,16 @@ export function encodeClient(message: ClientMessage): Uint8Array {
       encoding.writeVarUint(e, T.awarenessIn);
       encoding.writeVarString(e, message.docId);
       encoding.writeVarUint8Array(e, message.update);
+      break;
+    case 'ping':
+      encoding.writeVarUint(e, T.ping);
+      encoding.writeVarString(e, message.docId);
+      encoding.writeVarString(e, message.nonce);
+      encoding.writeVarUint(e, message.manual ? 1 : 0);
+      break;
+    case 'pong':
+      encoding.writeVarUint(e, T.pong);
+      encoding.writeVarString(e, message.ticket);
       break;
   }
   return encoding.toUint8Array(e);
@@ -279,6 +315,20 @@ export function encodeServer(message: ServerMessage): Uint8Array {
     case 'notify':
       encoding.writeVarUint(e, T.notify);
       encoding.writeVarString(e, message.payload);
+      break;
+    case 'pinged':
+      encoding.writeVarUint(e, T.pinged);
+      encoding.writeVarString(e, message.docId);
+      encoding.writeVarString(e, message.ticket);
+      encoding.writeVarString(e, message.fromId);
+      encoding.writeVarString(e, message.fromName);
+      encoding.writeVarUint(e, message.manual ? 1 : 0);
+      break;
+    case 'acked':
+      encoding.writeVarUint(e, T.acked);
+      encoding.writeVarString(e, message.nonce);
+      encoding.writeVarString(e, message.userId);
+      encoding.writeVarString(e, message.name);
       break;
   }
   return encoding.toUint8Array(e);
@@ -383,6 +433,17 @@ export function decodeClient(data: Uint8Array): ClientMessage {
     case T.awarenessIn:
       message = { type: 'awareness', docId: r.docId(), update: r.bytes(MAX_AWARENESS_BYTES) };
       break;
+    case T.ping:
+      message = {
+        type: 'ping',
+        docId: r.docId(),
+        nonce: r.string(MAX_PING_ID_LENGTH),
+        manual: r.uint() === 1,
+      };
+      break;
+    case T.pong:
+      message = { type: 'pong', ticket: r.string(MAX_PING_ID_LENGTH) };
+      break;
     default:
       throw new ProtocolError('Unknown message type');
   }
@@ -471,6 +532,24 @@ export function decodeServer(data: Uint8Array): ServerMessage {
       break;
     case T.notify:
       message = { type: 'notify', payload: r.string(MAX_NOTIFY_BYTES) };
+      break;
+    case T.pinged:
+      message = {
+        type: 'pinged',
+        docId: r.docId(),
+        ticket: r.string(MAX_PING_ID_LENGTH),
+        fromId: r.string(MAX_DOC_ID_LENGTH),
+        fromName: r.string(MAX_NAME_LENGTH),
+        manual: r.uint() === 1,
+      };
+      break;
+    case T.acked:
+      message = {
+        type: 'acked',
+        nonce: r.string(MAX_PING_ID_LENGTH),
+        userId: r.string(MAX_DOC_ID_LENGTH),
+        name: r.string(MAX_NAME_LENGTH),
+      };
       break;
     default:
       throw new ProtocolError('Unknown message type');

@@ -10,6 +10,7 @@
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { ProtocolError } from './messages';
+import { CLIENT_PING_LIMITS, PingLimiter } from './ping-limits';
 
 export interface AwarenessEntry {
   clientID: number;
@@ -169,16 +170,29 @@ export interface PresenceHooks {
    * state again (the server dropped it when the last connection went).
    */
   onPresenceRejoin?(): void;
+  /** Someone asked who's there for a doc (answered already); `manual`: asked by hand. */
+  onPinged?(ping: { docId: string; fromId: string; fromName: string; manual: boolean }): void;
+  /** Someone answered an online check this client made (`ping`'s nonce). */
+  onAcked?(nonce: string, userId: string, name: string): void;
 }
 
 type PresenceMessage =
   | { type: 'watch'; docId: string }
   | { type: 'unwatch'; docId: string }
-  | { type: 'awareness'; docId: string; update: Uint8Array };
+  | { type: 'awareness'; docId: string; update: Uint8Array }
+  | { type: 'ping'; docId: string; nonce: string; manual: boolean }
+  | { type: 'pong'; ticket: string };
+
+let pingCount = 0;
+
+/** An online check made (its nonce), or not: offline, or over the limits for a while. */
+export type PingResult =
+  { nonce: string } | { error: 'offline' } | { error: 'limited'; retryInMs: number };
 
 /** A client's watched docs, kept across reconnects. */
 export class ClientPresence {
   private readonly watched = new Set<string>();
+  private readonly pingLimiter = new PingLimiter(CLIENT_PING_LIMITS);
 
   constructor(
     /** Send if connected (else drop: presence isn't queued). */
@@ -199,6 +213,37 @@ export class ClientPresence {
 
   awareness(docId: string, update: Uint8Array): void {
     if (this.watched.has(docId)) this.send({ type: 'awareness', docId, update });
+  }
+
+  /**
+   * Ask who's there for a doc: everyone else who may read it, on their connected devices,
+   * answers (`onAcked`). Returns the check's nonce, or how long until one may be made (the
+   * limits are the connection's: see `CLIENT_PING_LIMITS`). Dropped while offline.
+   */
+  ping(docId: string, manual = false): PingResult {
+    const wait = this.pingLimiter.take(Date.now());
+    if (wait > 0) return { error: 'limited', retryInMs: wait };
+    const nonce = `${Date.now().toString(36)}-${(++pingCount).toString(36)}`;
+    this.send({ type: 'ping', docId, nonce, manual });
+    return { nonce };
+  }
+
+  /** @internal Someone asks who's there: answer at once, then tell the app. */
+  pinged(message: {
+    docId: string;
+    ticket: string;
+    fromId: string;
+    fromName: string;
+    manual: boolean;
+  }): void {
+    this.send({ type: 'pong', ticket: message.ticket });
+    const { docId, fromId, fromName, manual } = message;
+    this.hooks.onPinged?.({ docId, fromId, fromName, manual });
+  }
+
+  /** @internal Someone answered this client's check. */
+  acked(nonce: string, userId: string, name: string): void {
+    this.hooks.onAcked?.(nonce, userId, name);
   }
 
   /** @internal Right after hello on a new connection. */

@@ -229,7 +229,7 @@ test('sharing a private page with a guest shows it under their Shared, and only 
   await openPage(A, 'Diary');
   await A.getByRole('button', { name: 'Share' }).click();
   dialog = A.getByTestId('share-dialog');
-  await dialog.getByLabel('Person or group').selectOption({ label: 'Gus (gus@lab.io) · guest' });
+  await dialog.getByLabel('Email or group').fill('gus@lab.io');
   await dialog.getByLabel('Role').selectOption('view');
   await dialog.getByRole('button', { name: 'Invite' }).click();
   await expect(dialog.getByTestId('access-row').filter({ hasText: 'Gus' })).toHaveCount(1, {
@@ -298,7 +298,10 @@ test('people: the owner sees everyone with their roles; a guest sees names only'
     .getByRole('button', { name: 'People' })
     .click();
   const theirs = G.getByTestId('people');
-  await expect(theirs.getByTestId('person').filter({ hasText: 'Ada' })).toHaveCount(1);
+  // As for Ada above: the list waits for the members doc (slower on a busy machine).
+  await expect(theirs.getByTestId('person').filter({ hasText: 'Ada' })).toHaveCount(1, {
+    timeout: 10_000,
+  });
   await expect(theirs.getByTestId('person-role')).toHaveCount(0);
   await expect(theirs).not.toContainText('@lab.io');
 });

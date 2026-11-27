@@ -69,6 +69,7 @@ import { PresenceHub, usePageViewers } from './presence';
 import { moveAcrossScopes, scopeOfDoc } from './scope-actions';
 import { buildSections } from './sections';
 import { ShareDialog } from './share-dialog';
+import { PingToasts } from './online-check-ui';
 import {
   BrowseTeamspacesDialog,
   NewTeamspaceDialog,
@@ -1099,6 +1100,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onClose={() => setSettings(null)}
           />
         )}
+        <PingToasts onOpen={(id) => showPage(id, null)} />
         {team && sharing && (
           <ShareDialog
             team={team}

@@ -97,6 +97,20 @@ export function registerPresence(sync: SyncService) {
 
   // Everyone else, from the server.
   sync.presence.onAwareness = (docId, update) => toOthers(docId, update, null);
+  // The online check: asked from a window, answered by others' devices; anyone asking is shown.
+  ipcMain.handle(IPC.presencePing, (_event, docId: unknown, manual: unknown) =>
+    typeof docId === 'string' && docId.length <= 128
+      ? sync.ping(docId, manual === true)
+      : { error: 'offline' },
+  );
+  const toAll = (channel: string, ...args: unknown[]) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(channel, ...args);
+    }
+  };
+  sync.presence.onAcked = (nonce, userId, name) => toAll(IPC.presenceAcked, nonce, userId, name);
+  sync.presence.onPinged = (ping) => toAll(IPC.presencePinged, ping);
+
   // Reconnected: every window says again where it is.
   sync.presence.onRejoin = () => {
     for (const window of BrowserWindow.getAllWindows()) {

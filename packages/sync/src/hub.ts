@@ -22,6 +22,7 @@ import {
   type SyncMode,
 } from './messages';
 import { PresenceRoom, decodeAwareness, presenceColor, type PresenceUser } from './presence';
+import { PingLimiter, SERVER_PING_LIMITS } from './ping-limits';
 
 /** The device the server's own updates are stored as coming from. */
 export const SERVER_DEVICE = 'server';
@@ -143,7 +144,12 @@ interface WorkspaceState {
   appending: Promise<unknown>;
   /** Presence per doc (only docs someone watches). */
   rooms: Map<string, PresenceRoom<SyncConnection>>;
+  /** Online checks in flight: a ticket (sent to those asked) → who asked. */
+  pings: Map<string, { asker: SyncConnection; nonce: string; at: number }>;
 }
+
+/** How long an online check's answers are passed on. */
+export const PING_ANSWER_MS = 30_000;
 
 const EMPTY_DOC_UPDATE = Y.encodeStateAsUpdate(new Y.Doc());
 
@@ -179,6 +185,7 @@ export class SyncHub {
         recent: [],
         appending: Promise.resolve(),
         rooms: new Map(),
+        pings: new Map(),
       };
       this.workspaces.set(workspaceId, workspace);
     }
@@ -341,6 +348,8 @@ export class SyncConnection {
   private pumping = false;
   private again = false;
   private closed = false;
+  /** When this connection last asked who's there (online checks, rate-limited). */
+  private readonly pingLimiter = new PingLimiter(SERVER_PING_LIMITS);
 
   constructor(
     private readonly hub: SyncHub,
@@ -444,6 +453,26 @@ export class SyncConnection {
   /** @internal A notification for this connection's user. */
   sendNotify(payload: string): void {
     this.send({ type: 'notify', payload });
+  }
+
+  /** @internal Whether this connection's user may read a doc. */
+  mayRead(docId: string): boolean {
+    return this.canRead(docId);
+  }
+
+  /** @internal Someone asks who's there for a doc this connection's user may read. */
+  sendPinged(message: Extract<ServerMessage, { type: 'pinged' }>): void {
+    this.send(message);
+  }
+
+  /** @internal Someone answered this connection's online check. */
+  sendAcked(nonce: string, userId: string, name: string): void {
+    this.send({ type: 'acked', nonce, userId, name });
+  }
+
+  /** Whether an online check now stays within the limits (and counts it if so). */
+  private mayPing(): boolean {
+    return this.pingLimiter.take(this.hub.options.now()) === 0;
   }
 
   /** @internal Another connection's presence on a doc this one watches. */
@@ -647,6 +676,40 @@ export class SyncConnection {
       case 'unwatch':
         this.unwatch(message.docId);
         return;
+      case 'ping': {
+        const asker = this.access.userId;
+        // Only signed-in people, for docs they may read, within the limits.
+        if (!asker || !this.canRead(message.docId) || !this.mayPing()) return;
+        const now = this.hub.options.now();
+        for (const [ticket, ping] of this.workspace.pings) {
+          if (now - ping.at > PING_ANSWER_MS) this.workspace.pings.delete(ticket);
+        }
+        const ticket = randomTicket();
+        this.workspace.pings.set(ticket, { asker: this, nonce: message.nonce, at: now });
+        for (const c of this.workspace.connections) {
+          if (c === this || !c.userId || c.userId === asker || !c.mayRead(message.docId)) continue;
+          c.sendPinged({
+            type: 'pinged',
+            docId: message.docId,
+            ticket,
+            fromId: asker,
+            fromName: this.access.userName ?? 'Someone',
+            manual: message.manual,
+          });
+        }
+        return;
+      }
+      case 'pong': {
+        const ping = this.workspace.pings.get(message.ticket);
+        const userId = this.access.userId;
+        if (!ping || !userId) return;
+        if (this.hub.options.now() - ping.at > PING_ANSWER_MS) {
+          this.workspace.pings.delete(message.ticket);
+          return;
+        }
+        ping.asker.sendAcked(ping.nonce, userId, this.access.userName ?? 'Someone');
+        return;
+      }
       case 'awareness': {
         const entries = decodeAwareness(message.update);
         // Presence for a doc it doesn't watch (or may no longer read) goes nowhere.
@@ -748,4 +811,11 @@ export class SyncConnection {
     const last = rows[rows.length - 1]!.seq;
     if (last > this.sent) flush(last);
   }
+}
+
+/** An online check's ticket: random, so answers can't be forged for someone else's check. */
+function randomTicket(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }

@@ -136,7 +136,7 @@ test('Ada shares her request tracker with Bob as "Can create pages"', async () =
   // Ada shares "Tasks" (a database, so "Can create pages" is offered).
   await A.getByRole('button', { name: 'Share', exact: true }).click();
   const share = A.getByTestId('share-dialog');
-  await share.getByLabel('Person or group').selectOption({ label: 'Bob (bob@lab.io)' });
+  await share.getByLabel('Email or group').fill('bob@lab.io');
   await share.getByLabel('Role').selectOption('create');
   await share.getByRole('button', { name: 'Invite' }).click();
   await expect(share.getByLabel('Access for Bob')).toHaveValue('create', { timeout: 10_000 });

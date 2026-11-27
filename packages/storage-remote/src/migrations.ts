@@ -625,6 +625,13 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE published_pages ADD COLUMN allow_duplicate boolean NOT NULL DEFAULT false;
   `,
+  // 20: an invite sent from a page's Share dialog carries the access to that page: accepting
+  // it grants the role on the page's scope.
+  `
+  ALTER TABLE workspace_invites ADD COLUMN page_scope_id uuid REFERENCES scopes ON DELETE SET NULL;
+  ALTER TABLE workspace_invites ADD COLUMN page_role text
+    CHECK (page_role IN ('full', 'edit', 'content', 'create', 'comment', 'view'));
+  `,
 ];
 
 /** Bring the schema up to date. Safe with several servers starting at once (a lock). */

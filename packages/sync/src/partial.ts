@@ -311,6 +311,12 @@ export class PartialClient {
       case 'awareness':
         this.presence.receive(message.docId, message.update);
         return;
+      case 'pinged':
+        this.presence.pinged(message);
+        return;
+      case 'acked':
+        this.presence.acked(message.nonce, message.userId, message.name);
+        return;
       case 'notify':
         this.o.onNotify?.(message.payload);
         return;
@@ -322,6 +328,8 @@ export class PartialClient {
     return {
       onAwareness: (docId, update) => this.o.onAwareness?.(docId, update),
       onPresenceRejoin: () => this.o.onPresenceRejoin?.(),
+      onPinged: (ping) => this.o.onPinged?.(ping),
+      onAcked: (nonce, userId, name) => this.o.onAcked?.(nonce, userId, name),
     };
   }
 

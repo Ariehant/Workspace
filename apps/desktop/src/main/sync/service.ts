@@ -20,7 +20,7 @@ import {
   type FileStore,
   type SqliteStore,
 } from '@workspace/storage-local';
-import { SyncClient, type SyncStatus } from '@workspace/sync';
+import { SyncClient, type PingResult, type SyncStatus } from '@workspace/sync';
 import { safeStorage } from 'electron';
 import WebSocket from 'ws';
 import type {
@@ -90,6 +90,10 @@ export class SyncService {
   readonly presence: {
     onAwareness?: (docId: string, update: Uint8Array) => void;
     onRejoin?: () => void;
+    /** Someone asked who's there (answered already); see `presence.ts`. */
+    onPinged?: (ping: { docId: string; fromId: string; fromName: string; manual: boolean }) => void;
+    /** Someone answered this device's online check. */
+    onAcked?: (nonce: string, userId: string, name: string) => void;
   } = {};
   /** Where the server's notifications go (the windows and the system); see `notifications.ts`. */
   onNotification?: (notification: NotificationData) => void;
@@ -345,6 +349,8 @@ export class SyncService {
       // Presence: others on the docs this device's windows show.
       onAwareness: (docId, update) => this.presence.onAwareness?.(docId, update),
       onPresenceRejoin: () => this.presence.onRejoin?.(),
+      onPinged: (ping) => this.presence.onPinged?.(ping),
+      onAcked: (nonce, userId, name) => this.presence.onAcked?.(nonce, userId, name),
       onNotify: (payload) => {
         const notification = parseNotification(payload);
         if (notification) this.onNotification?.(notification);
@@ -383,6 +389,12 @@ export class SyncService {
 
   sendPresence(docId: string, update: Uint8Array): void {
     this.client?.presence.awareness(docId, update);
+  }
+
+  /** Ask who's there for a doc (not while disconnected from the server). */
+  ping(docId: string, manual: boolean): PingResult {
+    if (!this.client || this.client.state.state !== 'live') return { error: 'offline' };
+    return this.client.presence.ping(docId, manual);
   }
 
   // --- Setup flows (from Settings → Sync) ----------------------------------------------
