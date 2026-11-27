@@ -96,6 +96,41 @@ test('favorites and sidebar width are kept after restart', async ({ launch }) =>
   await expect(window.getByRole('tree', { name: 'Favorites' })).toHaveCount(0);
 });
 
+test('sidebar: close, peek from the left edge, pin it open, and Ctrl+\\', async ({ launch }) => {
+  const { window } = await launch();
+  const sidebar = window.getByRole('navigation', { name: 'Sidebar' });
+  const peek = window.getByTestId('sidebar-peek');
+  await expect(sidebar).toBeVisible();
+
+  await sidebar.getByRole('button', { name: 'Close sidebar (Ctrl+\\)' }).click();
+  await expect(sidebar).toHaveCount(0);
+  await expect(window.getByRole('button', { name: 'Open sidebar (Ctrl+\\)' })).toBeVisible();
+
+  // The mouse on the left edge shows it over the page; moving away hides it again.
+  const size = window.viewportSize() ?? { width: 1200, height: 800 };
+  await window.mouse.move(400, 300);
+  await window.mouse.move(2, 300);
+  await expect(peek).toBeVisible();
+  await expect(peek.getByRole('navigation', { name: 'Sidebar' })).toBeVisible();
+  await window.mouse.move(size.width - 100, 300);
+  await expect(peek).toHaveCount(0);
+
+  // Peek again, then keep it open: it's back in the layout.
+  await window.mouse.move(2, 300);
+  await expect(peek).toBeVisible();
+  await peek.getByRole('button', { name: 'Keep sidebar open (Ctrl+\\)' }).click();
+  await expect(peek).toHaveCount(0);
+  await expect(sidebar).toBeVisible();
+  await window.mouse.move(size.width - 100, 300);
+  await expect(sidebar).toBeVisible();
+
+  // Ctrl+\ closes and opens it.
+  await window.keyboard.press('Control+Backslash');
+  await expect(sidebar).toHaveCount(0);
+  await window.keyboard.press('Control+Backslash');
+  await expect(sidebar).toBeVisible();
+});
+
 test('trash: open, restore, delete permanently', async ({ launch }) => {
   const { window } = await launch();
   await newPage(window, 'Old notes');

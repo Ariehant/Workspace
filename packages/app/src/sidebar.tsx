@@ -29,6 +29,7 @@ import {
   LogOut,
   ChevronRight,
   ChevronsLeft,
+  ChevronsRight,
   CircleArrowUp,
   CircleUser,
   Copy,
@@ -107,6 +108,9 @@ export interface SidebarProps {
   onBackup(): void;
   onRestore(): void;
   onResize(width: number): void;
+  /** Shown over the page while closed (the mouse on the window's edge); onPin keeps it open. */
+  peek?: boolean;
+  onPin?(): void;
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
   /** Open Settings (Ctrl+,). */
@@ -184,6 +188,15 @@ export function Sidebar(props: SidebarProps) {
       className="relative flex h-full shrink-0 flex-col border-r border-line bg-sidebar select-none"
     >
       <div className="group flex h-11 items-center gap-2 px-3">
+        {props.peek ? (
+          <IconButton label="Keep sidebar open (Ctrl+\)" size="sm" onClick={props.onPin}>
+            <ChevronsRight size={16} />
+          </IconButton>
+        ) : (
+          <IconButton label="Close sidebar (Ctrl+\)" size="sm" onClick={onCollapse}>
+            <ChevronsLeft size={16} />
+          </IconButton>
+        )}
         <Menu>
           <MenuTrigger asChild>
             <button
@@ -273,14 +286,6 @@ export function Sidebar(props: SidebarProps) {
             )}
           </MenuContent>
         </Menu>
-        <IconButton
-          label="Close sidebar (Ctrl+\)"
-          size="sm"
-          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
-          onClick={onCollapse}
-        >
-          <ChevronsLeft size={16} />
-        </IconButton>
       </div>
 
       <button type="button" onClick={onSearch} className={navButton}>

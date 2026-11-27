@@ -78,6 +78,7 @@ import { can, type AppCommand, type Platform } from './platform';
 import { QuickFind } from './quick-find';
 import { ButtonEditorHost } from './buttons/button-dialog';
 import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
+import { SidebarFrame } from './sidebar-frame';
 import { MoveDialog, type OtherWorkspaces } from './move-dialog';
 import { duplicatePage } from './page-actions';
 import { SyncDialog, useSyncInfo } from './sync-settings';
@@ -959,107 +960,114 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
 
   return (
     <NavigationContext.Provider value={navigation}>
-      <div className="flex h-full">
-        {sidebarOpen && (
-          <Sidebar
-            workspace={workspace}
-            sections={sections}
-            canEdit={(id) => roleAllows(pages.role(id), 'edit')}
-            viewers={viewers}
-            icons={teamspaceIcons}
-            favorites={favorites}
-            width={sidebarWidth}
-            currentPageId={screen ? null : currentPageId}
-            expanded={expanded}
-            theme={theme}
-            onSelect={navigate}
-            onToggle={toggle}
-            onCreate={create}
-            onTrash={trash}
-            onDuplicate={duplicate}
-            onMove={setMoving}
-            onDrop={drop}
-            onToggleFavorite={toggleFavorite}
-            onSearch={() => setFinding(true)}
-            onHome={() => {
-              setPeek(null);
-              setMissing(null);
-              setScreen('home');
-            }}
-            homeActive={screen === 'home'}
-            onPeople={() => {
-              setPeek(null);
-              setMissing(null);
-              setScreen('people');
-            }}
-            peopleActive={screen === 'people'}
-            onTemplates={() => setTemplates(true)}
-            onImport={() =>
-              void platform
-                .startImport(workspace.primary?.info.id)
-                .catch((error: unknown) => console.error('Import failed', error))
-            }
-            onExportAll={() => setExporting(null)}
-            onBackup={() =>
-              void platform
-                .startExport({ format: 'backup' })
-                .catch((error: unknown) => console.error('Backup failed', error))
-            }
-            onRestore={() =>
-              void platform
-                .restoreBackup()
-                .catch((error: unknown) => window.alert(`Restore failed: ${String(error)}`))
-            }
-            onResize={setSidebarWidth}
-            fileUrl={platform.fileUrl}
-            onThemeChange={changeTheme}
-            onSettings={() => setSettings('appearance')}
-            onRegion={() => setSettings('region')}
-            onEmoji={() => setSettings('emoji')}
-            onAbout={platform.about ? () => setSettings('about') : undefined}
-            onShortcuts={() => setSettings('shortcuts')}
-            updateReady={
-              updates?.status === 'ready' && updates.version
-                ? { version: updates.version, onRestart: () => platform.about?.updates?.install() }
-                : undefined
-            }
-            zoom={platform.zoom}
-            onCollapse={() => setSidebarOpen(false)}
-            sync={syncInfo}
-            onSync={() => setSettings('sync')}
-            can={{
-              export: can(platform, 'export'),
-              import: can(platform, 'import'),
-              backup: can(platform, 'backup'),
-            }}
-            account={platform.account}
-            inbox={
-              inbox
-                ? (className) => (
-                    <InboxButton inbox={inbox} className={className} onOpen={openNotification} />
-                  )
-                : undefined
-            }
-            team={
-              team
-                ? {
-                    onMembers: () => setSettings('members'),
-                    onProfile: () => setSettings('account'),
-                  }
-                : undefined
-            }
-            teamspaces={
-              team && scoped
-                ? {
-                    onNew: () => setTeamspaceDialog({ kind: 'new' }),
-                    onBrowse: () => setSettings('teamspaces'),
-                    onSettings: (scopeId) => setTeamspaceDialog({ kind: 'settings', scopeId }),
-                    onLeave: leaveTeamspace,
-                  }
-                : undefined
-            }
-          />
-        )}
+      <div className="relative flex h-full">
+        <SidebarFrame open={sidebarOpen} width={sidebarWidth}>
+          {(mode) => (
+            <Sidebar
+              peek={mode === 'peek'}
+              onPin={() => setSidebarOpen(true)}
+              workspace={workspace}
+              sections={sections}
+              canEdit={(id) => roleAllows(pages.role(id), 'edit')}
+              viewers={viewers}
+              icons={teamspaceIcons}
+              favorites={favorites}
+              width={sidebarWidth}
+              currentPageId={screen ? null : currentPageId}
+              expanded={expanded}
+              theme={theme}
+              onSelect={navigate}
+              onToggle={toggle}
+              onCreate={create}
+              onTrash={trash}
+              onDuplicate={duplicate}
+              onMove={setMoving}
+              onDrop={drop}
+              onToggleFavorite={toggleFavorite}
+              onSearch={() => setFinding(true)}
+              onHome={() => {
+                setPeek(null);
+                setMissing(null);
+                setScreen('home');
+              }}
+              homeActive={screen === 'home'}
+              onPeople={() => {
+                setPeek(null);
+                setMissing(null);
+                setScreen('people');
+              }}
+              peopleActive={screen === 'people'}
+              onTemplates={() => setTemplates(true)}
+              onImport={() =>
+                void platform
+                  .startImport(workspace.primary?.info.id)
+                  .catch((error: unknown) => console.error('Import failed', error))
+              }
+              onExportAll={() => setExporting(null)}
+              onBackup={() =>
+                void platform
+                  .startExport({ format: 'backup' })
+                  .catch((error: unknown) => console.error('Backup failed', error))
+              }
+              onRestore={() =>
+                void platform
+                  .restoreBackup()
+                  .catch((error: unknown) => window.alert(`Restore failed: ${String(error)}`))
+              }
+              onResize={setSidebarWidth}
+              fileUrl={platform.fileUrl}
+              onThemeChange={changeTheme}
+              onSettings={() => setSettings('appearance')}
+              onRegion={() => setSettings('region')}
+              onEmoji={() => setSettings('emoji')}
+              onAbout={platform.about ? () => setSettings('about') : undefined}
+              onShortcuts={() => setSettings('shortcuts')}
+              updateReady={
+                updates?.status === 'ready' && updates.version
+                  ? {
+                      version: updates.version,
+                      onRestart: () => platform.about?.updates?.install(),
+                    }
+                  : undefined
+              }
+              zoom={platform.zoom}
+              onCollapse={() => setSidebarOpen(false)}
+              sync={syncInfo}
+              onSync={() => setSettings('sync')}
+              can={{
+                export: can(platform, 'export'),
+                import: can(platform, 'import'),
+                backup: can(platform, 'backup'),
+              }}
+              account={platform.account}
+              inbox={
+                inbox
+                  ? (className) => (
+                      <InboxButton inbox={inbox} className={className} onOpen={openNotification} />
+                    )
+                  : undefined
+              }
+              team={
+                team
+                  ? {
+                      onMembers: () => setSettings('members'),
+                      onProfile: () => setSettings('account'),
+                    }
+                  : undefined
+              }
+              teamspaces={
+                team && scoped
+                  ? {
+                      onNew: () => setTeamspaceDialog({ kind: 'new' }),
+                      onBrowse: () => setSettings('teamspaces'),
+                      onSettings: (scopeId) => setTeamspaceDialog({ kind: 'settings', scopeId }),
+                      onLeave: leaveTeamspace,
+                    }
+                  : undefined
+              }
+            />
+          )}
+        </SidebarFrame>
         {settings && (
           <SettingsWindow
             panels={settingsPanels}
