@@ -8,6 +8,9 @@ name: Release
 # Store upload needs SNAPCRAFT_STORE_CREDENTIALS; the apps' own Google client needs the GOOGLE_*
 # secrets (docs/google-oauth.md). Without them, those steps are skipped and the release says so.
 # See CONTRIBUTING.md, "Making a release".
+#
+# Started by hand (Actions → Release → Run workflow, on main, with the version), it first makes the
+# tag on main's latest commit when the tag doesn't exist yet.
 
 on:
   push:
@@ -15,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (it must exist)'
+        description: 'Version to release, as its tag (v1.2.3 or v1.2.3-rc.1); made on main if missing'
         required: true
 
 permissions:
@@ -25,8 +28,46 @@ env:
   TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
+  tag:
+    name: The tag (made here when started by hand)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        if: github.event_name == 'workflow_dispatch'
+      # A tag pushed with this workflow's token doesn't start another run of it.
+      - name: Check the version, and make the tag if it's missing
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "Run the release from main (this run is on $GITHUB_REF)." >&2
+            exit 1
+          fi
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Not a version tag: $TAG (expected v1.2.3 or v1.2.3-rc.1)." >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            echo "$TAG exists: releasing it as it is."
+            exit 0
+          fi
+          node scripts/version.mjs check
+          version="$(node -p "require('./apps/desktop/package.json').version")"
+          if [ "v$version" != "$TAG" ]; then
+            echo "main's apps are at $version, not ${TAG#v}: set the version first." >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Workspace ${TAG#v}" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+          echo "Tagged $TAG on $GITHUB_SHA."
+
   build:
     name: Build the Linux packages
+    needs: tag
     runs-on: ubuntu-24.04
     env:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
@@ -79,6 +120,7 @@ jobs:
 
   build-windows:
     name: Build the Windows installers
+    needs: tag
     runs-on: windows-latest
     env:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
