@@ -55,6 +55,7 @@ export const IPC = {
   driveOpen: 'drive:open',
   backlinks: 'links:backlinks',
   remindersUpcoming: 'reminders:upcoming',
+  eventsUpcoming: 'events:upcoming',
   syncedPlaces: 'links:synced',
   historyList: 'history:list',
   historyGet: 'history:get',

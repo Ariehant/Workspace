@@ -60,6 +60,8 @@ import {
 } from './settings/settings-window';
 import { Home } from './home';
 import { PeopleView } from './people-view';
+import { MeetingsView } from './meetings-view';
+import { newMeetingNote } from './meetings';
 import { NoAccess } from './no-access';
 import { PageDirectory } from './pages';
 import { useForest } from './forest';
@@ -322,7 +324,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(initial.sidebarWidth);
   const [finding, setFinding] = useState(false);
   // Home and People are shown over the tab's page (they aren't pages in the history).
-  const [screen, setScreen] = useState<'home' | 'people' | null>(null);
+  const [screen, setScreen] = useState<'home' | 'people' | 'meetings' | null>(null);
   const [templates, setTemplates] = useState(false);
   // The export dialog: for a page, or (null) the whole workspace.
   const [exporting, setExporting] = useState<PageId | null | undefined>(undefined);
@@ -920,6 +922,21 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       <Home chrome={screenChrome} recent={recent} onOpen={showPage} />
     ) : screen === 'people' ? (
       <PeopleView chrome={screenChrome} onOpen={(id) => showPage(id, null)} />
+    ) : screen === 'meetings' ? (
+      <MeetingsView
+        chrome={screenChrome}
+        onOpen={(id) => showPage(id, null)}
+        onNewNote={async () => {
+          const { databaseId, rowId } = await newMeetingNote({
+            client,
+            workspace,
+            platform,
+            userId: user.id,
+          });
+          await databases.load(databaseId);
+          showPage(rowId, null);
+        }}
+      />
     ) : missing ? (
       <NoAccess
         key={`${missing}:${missingPage?.n}`}
@@ -997,6 +1014,12 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
                 setScreen('people');
               }}
               peopleActive={screen === 'people'}
+              onMeetings={() => {
+                setPeek(null);
+                setMissing(null);
+                setScreen('meetings');
+              }}
+              meetingsActive={screen === 'meetings'}
               onTemplates={() => setTemplates(true)}
               onImport={() =>
                 void platform

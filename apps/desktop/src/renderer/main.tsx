@@ -81,6 +81,7 @@ const platform: Platform = {
   },
   backlinks: (id) => api.links.backlinks(id),
   upcoming: () => api.links.upcoming(),
+  upcomingEvents: (from, to) => api.links.events(from, to),
   syncedPlaces: (id) => api.links.syncedPlaces(id),
   listVersions: (docId) => api.history.list(docId),
   getVersion: (id) => api.history.get(id),

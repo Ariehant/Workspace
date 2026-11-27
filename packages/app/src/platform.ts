@@ -123,6 +123,8 @@ export interface Platform {
   syncedPlaces(syncedId: string): Promise<number>;
   /** The next reminders, soonest first (Home's Upcoming; hosts that keep them). */
   upcoming?(): Promise<UpcomingReminder[]>;
+  /** Database rows dated from `from` to `to` (wall-clock times), soonest first. */
+  upcomingEvents?(from: string, to: string): Promise<UpcomingEvent[]>;
   /** Page history: saved versions of a doc, newest first. */
   listVersions(docId: string): Promise<DocVersionInfo[]>;
   /** The saved Yjs state of a version. */
@@ -427,6 +429,20 @@ export type ExportStatus =
   | { state: 'failed'; error: string };
 
 /** A reminder still to come: an `@remind` in a page, or on a date property of a row. */
+/** A database row's date in a range (Meetings' upcoming events). */
+export interface UpcomingEvent {
+  rowId: string;
+  title: string;
+  icon: string | null;
+  databaseId: string;
+  databaseTitle: string;
+  propertyId: string;
+  /** Wall-clock times: `YYYY-MM-DD` (a day) or `YYYY-MM-DDTHH:MM`. */
+  start: string;
+  end: string;
+  allDay: boolean;
+}
+
 export interface UpcomingReminder {
   pageId: string;
   /** The block it's in (null for a date property's). */

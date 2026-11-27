@@ -28,6 +28,7 @@ import {
   ArrowLeftRight,
   LogOut,
   ChevronRight,
+  CalendarDays,
   ChevronsLeft,
   ChevronsRight,
   CircleArrowUp,
@@ -157,6 +158,9 @@ export interface SidebarProps {
   homeActive?: boolean;
   /** Show People (everyone in the workspace, and their pages). */
   onPeople?(): void;
+  /** Meetings: upcoming events and meeting notes. */
+  onMeetings?(): void;
+  meetingsActive?: boolean;
   /** People is shown. */
   peopleActive?: boolean;
 }
@@ -302,6 +306,17 @@ export function Sidebar(props: SidebarProps) {
         >
           <House size={16} />
           Home
+        </button>
+      )}
+      {props.onMeetings && (
+        <button
+          type="button"
+          onClick={props.onMeetings}
+          aria-current={props.meetingsActive ? 'page' : undefined}
+          className={cn(navButton, props.meetingsActive && 'bg-active text-fg')}
+        >
+          <CalendarDays size={16} />
+          Meetings
         </button>
       )}
       {props.onPeople && (

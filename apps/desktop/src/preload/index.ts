@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { UpcomingEvent } from '@workspace/storage-local';
 import type {
   DriveFileRef,
   DriveFileStatus,
@@ -133,6 +134,8 @@ const api = {
         pageTitle: string;
       }[]
     > => ipcRenderer.invoke(IPC.remindersUpcoming),
+    events: (from: string, to: string): Promise<UpcomingEvent[]> =>
+      ipcRenderer.invoke(IPC.eventsUpcoming, from, to),
     syncedPlaces: (syncedId: string): Promise<number> =>
       ipcRenderer.invoke(IPC.syncedPlaces, syncedId),
   },
