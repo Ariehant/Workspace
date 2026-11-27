@@ -76,3 +76,12 @@ nsis:
   oneClick: true
   perMachine: false
   shortcutName: Workspace Calendar
+
+# Where the AppImage and the Windows installer look for updates (electron-updater): the
+# `updates` release, which the Release workflow fills with each release's calendar*.yml (and
+# calendar-rc*.yml for release candidates; src/main/update-channel.ts). Nothing is uploaded from
+# `pnpm package`.
+publish:
+  provider: generic
+  url: https://github.com/Ariehant/Workspace/releases/download/updates/
+  channel: calendar

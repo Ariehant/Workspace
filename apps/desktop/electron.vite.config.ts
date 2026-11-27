@@ -31,8 +31,20 @@ const csp = (): Plugin => ({
   ],
 });
 
+/**
+ * Workspace's own Google client and Picker key (docs/google-oauth.md), from the build's
+ * environment (the GOOGLE_* secrets in CI's package jobs). Empty without them: people then set up
+ * their own in Settings → Connections.
+ */
+const googleClient = Object.fromEntries(
+  ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_API_KEY', 'GOOGLE_PROJECT_NUMBER'].map(
+    (name) => [`__${name}__`, JSON.stringify(process.env[name] ?? '')],
+  ),
+);
+
 export default defineConfig({
   main: {
+    define: googleClient,
     build: {
       rollupOptions: {
         external: [

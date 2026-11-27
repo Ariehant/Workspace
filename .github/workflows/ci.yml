@@ -163,6 +163,12 @@ jobs:
     name: Package and install on Ubuntu 24.04
     needs: check
     runs-on: ubuntu-24.04
+    env:
+      # The apps' own Google client (docs/google-oauth.md); empty without the secrets.
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_PROJECT_NUMBER: ${{ secrets.GOOGLE_PROJECT_NUMBER }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -185,7 +191,7 @@ jobs:
           chmod +x apps/desktop/dist/*.AppImage
           xvfb-run -a apps/desktop/dist/*.AppImage --no-sandbox --smoke-test
       - name: The AppImage updates itself (this version to the next, from a local feed)
-        run: bash scripts/test-appimage-update.sh
+        run: bash scripts/test-appimage-update.sh desktop
       - uses: actions/upload-artifact@v4
         with:
           name: linux-packages
@@ -198,6 +204,12 @@ jobs:
     name: Package the calendar (Linux)
     needs: check
     runs-on: ubuntu-24.04
+    env:
+      # The apps' own Google client (docs/google-oauth.md); empty without the secrets.
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_PROJECT_NUMBER: ${{ secrets.GOOGLE_PROJECT_NUMBER }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -219,6 +231,8 @@ jobs:
         run: |
           chmod +x apps/calendar/dist/*.AppImage
           xvfb-run -a apps/calendar/dist/*.AppImage --no-sandbox --smoke-test
+      - name: The AppImage updates itself (this version to the next, from a local feed)
+        run: bash scripts/test-appimage-update.sh calendar
       - uses: actions/upload-artifact@v4
         with:
           name: calendar-linux-packages
@@ -231,6 +245,12 @@ jobs:
     name: Package the calendar (Windows)
     needs: check
     runs-on: windows-latest
+    env:
+      # The apps' own Google client (docs/google-oauth.md); empty without the secrets.
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_PROJECT_NUMBER: ${{ secrets.GOOGLE_PROJECT_NUMBER }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -252,11 +272,20 @@ jobs:
           name: calendar-windows-installer
           path: apps/calendar/dist/*.exe
           retention-days: 14
+      - name: The installed app updates itself (this version to the next, from a local feed)
+        shell: pwsh
+        run: ./scripts/test-windows-update.ps1 -App calendar
 
   package-windows:
     name: Package Workspace (Windows)
     needs: check
     runs-on: windows-latest
+    env:
+      # The apps' own Google client (docs/google-oauth.md); empty without the secrets.
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_PROJECT_NUMBER: ${{ secrets.GOOGLE_PROJECT_NUMBER }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -283,6 +312,9 @@ jobs:
           name: windows-installer
           path: apps/desktop/dist/*.exe
           retention-days: 14
+      - name: The installed app updates itself (this version to the next, from a local feed)
+        shell: pwsh
+        run: ./scripts/test-windows-update.ps1 -App desktop
 
   server:
     name: Server image and Compose stack

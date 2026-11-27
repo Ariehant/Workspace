@@ -1,6 +1,6 @@
 {
   "name": "@workspace/web",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "description": "The web app: the shared UI on the sync server",
   "type": "module",

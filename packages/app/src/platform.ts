@@ -84,6 +84,8 @@ export interface Platform {
   google?: {
     state(): Promise<GoogleState>;
     configure(config: GoogleClientConfig): Promise<{ ok: true } | { error: string }>;
+    /** Go back to the app's own client (a build that has one). */
+    useBuiltIn?(): Promise<{ ok: true } | { error: string }>;
     /** Sign in through the browser. */
     connect(): Promise<{ ok: { email: string | null } } | { error: string }>;
     disconnect(): Promise<void>;

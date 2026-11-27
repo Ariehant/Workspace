@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PgStore } from '@workspace/storage-remote';
@@ -27,7 +27,11 @@ describe('server', () => {
   it('answers health and readiness', async () => {
     const app = buildServer({ config: config(), store, files: new FsStorage(dir) });
     const health = await app.inject({ method: 'GET', url: '/api/health' });
-    expect(health.json()).toEqual({ ok: true, version: '0.1.0' });
+    // The app's version, as its package.json has it (a release sets it from its tag).
+    const { version } = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { version: string };
+    expect(health.json()).toEqual({ ok: true, version });
     const ready = await app.inject({ method: 'GET', url: '/api/ready' });
     expect(ready.statusCode).toBe(200);
     expect(ready.json()).toEqual({ ok: true, checks: { database: 'ok', files: 'ok' } });

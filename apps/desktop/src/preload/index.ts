@@ -90,6 +90,7 @@ const api = {
     state: (): Promise<GoogleState> => ipcRenderer.invoke(IPC.googleState),
     configure: (config: GoogleClientConfig): Promise<Result> =>
       ipcRenderer.invoke(IPC.googleConfigure, config),
+    useBuiltIn: (): Promise<Result> => ipcRenderer.invoke(IPC.googleUseBuiltIn),
     connect: (): Promise<Result<{ email: string | null }>> => ipcRenderer.invoke(IPC.googleConnect),
     disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.googleDisconnect),
     onChange: (listener: () => void): Unsubscribe => on(IPC.googleChanged, listener),

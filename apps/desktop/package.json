@@ -1,7 +1,7 @@
 {
   "name": "@workspace/desktop",
   "productName": "Workspace",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "description": "Offline-first workspace for notes, docs and databases",
   "license": "AGPL-3.0-or-later",
@@ -25,7 +25,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "package": "electron-vite build && electron-builder --linux --publish never",
-    "package:win": "electron-vite build && electron-builder --win --publish never"
+    "package:win": "electron-vite build && electron-builder --win --publish never -c.extraMetadata.name=workspace-app"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

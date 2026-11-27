@@ -1,10 +1,13 @@
 name: Release
 
-# A version tag (v1.2.3, or v1.2.3-rc.1 for a pre-release) builds every package, installs
-# each one in a clean system to smoke-test it, then publishes a GitHub release and the apt
-# repository. Signing needs the GPG_PRIVATE_KEY secret (and GPG_PASSPHRASE if the key has
-# one); the Snap Store upload needs SNAPCRAFT_STORE_CREDENTIALS. Without them, those steps
-# are skipped and the release says so. See CONTRIBUTING.md, "Making a release".
+# A version tag (v1.2.3, or v1.2.3-rc.1 for a pre-release) builds every package of Workspace and
+# Workspace Calendar for Linux and Windows, installs each one in a clean system to smoke-test it,
+# checks that the AppImages and the Windows installers update themselves, then publishes a
+# GitHub release, the update feed (the `updates` release the apps read) and the apt repository.
+# Signing needs the GPG_PRIVATE_KEY secret (and GPG_PASSPHRASE if the key has one); the Snap
+# Store upload needs SNAPCRAFT_STORE_CREDENTIALS; the apps' own Google client needs the GOOGLE_*
+# secrets (docs/google-oauth.md). Without them, those steps are skipped and the release says so.
+# See CONTRIBUTING.md, "Making a release".
 
 on:
   push:
@@ -23,8 +26,13 @@ env:
 
 jobs:
   build:
-    name: Build the packages
+    name: Build the Linux packages
     runs-on: ubuntu-24.04
+    env:
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_PROJECT_NUMBER: ${{ secrets.GOOGLE_PROJECT_NUMBER }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -45,61 +53,120 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q flatpak flatpak-builder
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-      - run: pnpm --filter @workspace/desktop build
-      - name: .deb, AppImage, Snap and Flatpak
-        working-directory: apps/desktop
-        run: npx electron-builder --linux deb AppImage snap flatpak --publish never
-      - name: The AppImage updates itself (from this version to the next)
-        run: bash scripts/test-appimage-update.sh
+      - name: 'Workspace: .deb, AppImage, Snap and Flatpak'
+        run: |
+          pnpm --filter @workspace/desktop build
+          cd apps/desktop && npx electron-builder --linux deb AppImage snap flatpak --publish never
+      - name: 'Workspace Calendar: .deb and AppImage'
+        run: pnpm --filter @workspace/calendar package:linux
+      - name: The AppImages update themselves (from this version to the next)
+        run: |
+          bash scripts/test-appimage-update.sh desktop
+          bash scripts/test-appimage-update.sh calendar
+      - name: Collect the packages and their update files
+        run: |
+          mkdir packages
+          cp apps/desktop/dist/*.deb apps/desktop/dist/*.AppImage apps/desktop/dist/*.snap \
+            apps/desktop/dist/*.flatpak apps/desktop/dist/latest-linux.yml packages/
+          cp apps/calendar/dist/*.deb apps/calendar/dist/*.AppImage \
+            apps/calendar/dist/calendar-linux.yml packages/
+          ls -l packages
       - uses: actions/upload-artifact@v4
         with:
-          name: packages
-          path: |
-            apps/desktop/dist/*.deb
-            apps/desktop/dist/*.AppImage
-            apps/desktop/dist/*.snap
-            apps/desktop/dist/*.flatpak
-            apps/desktop/dist/latest-linux.yml
+          name: linux-packages
+          path: packages/*
           if-no-files-found: error
 
+  build-windows:
+    name: Build the Windows installers
+    runs-on: windows-latest
+    env:
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_PROJECT_NUMBER: ${{ secrets.GOOGLE_PROJECT_NUMBER }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Version from the tag
+        shell: bash
+        run: node scripts/version.mjs set "$TAG"
+      - name: 'Workspace and Workspace Calendar: NSIS installers'
+        run: |
+          pnpm --filter @workspace/desktop package:win
+          pnpm --filter @workspace/calendar package:win
+      - name: Collect the installers and their update files
+        shell: bash
+        run: |
+          mkdir packages
+          cp apps/desktop/dist/*.exe apps/desktop/dist/*.exe.blockmap apps/desktop/dist/latest.yml packages/
+          cp apps/calendar/dist/*.exe apps/calendar/dist/*.exe.blockmap apps/calendar/dist/calendar.yml packages/
+          ls -l packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: packages/*
+          if-no-files-found: error
+      # After the upload: the tests build other versions into folders of their own.
+      - name: The installed apps update themselves (from this version to the next)
+        shell: pwsh
+        run: |
+          ./scripts/test-windows-update.ps1 -App desktop
+          ./scripts/test-windows-update.ps1 -App calendar
+
   install:
-    name: Install and smoke-test (${{ matrix.package }} on ${{ matrix.system }})
+    name: Install and smoke-test (${{ matrix.app }} ${{ matrix.package }} on ${{ matrix.system }})
     needs: build
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { package: deb, system: 'ubuntu:24.04' }
-          - { package: deb, system: 'ubuntu:26.04' }
-          - { package: AppImage, system: 'ubuntu:24.04' }
-          - { package: snap, system: runner }
-          - { package: flatpak, system: runner }
+          - { app: workspace, package: deb, system: 'ubuntu:24.04' }
+          - { app: workspace, package: deb, system: 'ubuntu:26.04' }
+          - { app: workspace, package: AppImage, system: 'ubuntu:24.04' }
+          - { app: workspace, package: snap, system: runner }
+          - { app: workspace, package: flatpak, system: runner }
+          - { app: calendar, package: deb, system: 'ubuntu:24.04' }
+          - { app: calendar, package: deb, system: 'ubuntu:26.04' }
+          - { app: calendar, package: AppImage, system: 'ubuntu:24.04' }
+    env:
+      # Each app's package names and command.
+      DEB: ${{ matrix.app == 'calendar' && 'workspace-calendar_*.deb' || 'workspace-app_*.deb' }}
+      APPIMAGE: ${{ matrix.app == 'calendar' && 'Workspace-Calendar-*.AppImage' || 'Workspace-[0-9]*.AppImage' }}
+      BIN: ${{ matrix.app == 'calendar' && 'workspace-calendar' || 'workspace-app' }}
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: packages
+          name: linux-packages
           path: packages
       - name: The .deb in a clean container
         if: matrix.package == 'deb'
         run: |
-          docker run --rm -v "$PWD/packages:/pkg:ro" "${{ matrix.system }}" bash -c '
+          docker run --rm -e DEB -e BIN -v "$PWD/packages:/pkg:ro" "${{ matrix.system }}" bash -c '
             set -e
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y -qq /pkg/*.deb xvfb xauth >/dev/null
+            apt-get install -y -qq /pkg/$DEB xvfb xauth >/dev/null
             useradd -m tester
-            su tester -c "xvfb-run -a workspace-app --no-sandbox --smoke-test"'
+            su tester -c "xvfb-run -a $BIN --no-sandbox --smoke-test"'
       - name: The AppImage in a clean container
         if: matrix.package == 'AppImage'
         run: |
-          docker run --rm -v "$PWD/packages:/pkg:ro" "${{ matrix.system }}" bash -c '
+          docker run --rm -e APPIMAGE -v "$PWD/packages:/pkg:ro" "${{ matrix.system }}" bash -c '
             set -e
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
             apt-get install -y -qq xvfb xauth libgtk-3-0t64 libnss3 libasound2t64 libgbm1 >/dev/null
-            cp /pkg/*.AppImage /tmp/workspace.AppImage && chmod +x /tmp/workspace.AppImage
-            APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a /tmp/workspace.AppImage --no-sandbox --smoke-test'
+            cp /pkg/$APPIMAGE /tmp/app.AppImage && chmod +x /tmp/app.AppImage
+            APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a /tmp/app.AppImage --no-sandbox --smoke-test'
       - name: The Snap, installed on the runner
         if: matrix.package == 'snap'
         run: |
@@ -114,9 +181,37 @@ jobs:
           flatpak install --user -y --noninteractive packages/*.flatpak
           xvfb-run -a flatpak run io.github.ariehant.workspace --smoke-test
 
+  install-windows:
+    name: Install and smoke-test (${{ matrix.app }} on Windows)
+    needs: build-windows
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { app: workspace, setup: 'Workspace-Setup-*.exe', exe: workspace-app.exe }
+          - { app: calendar, setup: 'Workspace-Calendar-Setup-*.exe', exe: workspace-calendar.exe }
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-packages
+          path: packages
+      - name: Install silently, then start the installed app
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem "packages/${{ matrix.setup }}" | Select-Object -First 1
+          $install = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "The installer failed (exit code $($install.ExitCode))" }
+          $exe = Get-ChildItem -Recurse -Filter '${{ matrix.exe }}' "$env:LOCALAPPDATA\Programs" | Select-Object -First 1
+          if (-not $exe) { throw "${{ matrix.exe }} wasn't installed" }
+          Write-Host "Installed: $($exe.FullName), version $($exe.VersionInfo.ProductVersion)"
+          $env:WORKSPACE_DATA_DIR = Join-Path $env:RUNNER_TEMP 'smoke'
+          $app = Start-Process -FilePath $exe.FullName -ArgumentList '--smoke-test' -Wait -PassThru
+          if ($app.ExitCode -ne 0) { throw "The smoke test failed (exit code $($app.ExitCode))" }
+
   publish:
-    name: Publish the release and the apt repository
-    needs: install
+    name: Publish the release, the update feed and the apt repository
+    needs: [install, install-windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -126,8 +221,15 @@ jobs:
           ref: ${{ env.TAG }}
       - uses: actions/download-artifact@v4
         with:
-          name: packages
+          name: linux-packages
           path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-packages
+          path: packages
+      # The feed files go to the `updates` release, not this one.
+      - name: Set the update files aside
+        run: mkdir feed-in && mv packages/*.yml feed-in/ && ls feed-in
       - name: Import the signing key
         id: key
         env:
@@ -151,10 +253,10 @@ jobs:
       - name: Checksums and signatures
         working-directory: packages
         run: |
-          sha256sum *.deb *.AppImage *.snap *.flatpak > SHA256SUMS
+          sha256sum *.deb *.AppImage *.snap *.flatpak *.exe > SHA256SUMS
           if [ -n "${{ steps.key.outputs.id }}" ]; then
             gpg --batch --yes --default-key "${{ steps.key.outputs.id }}" -abs -o SHA256SUMS.asc SHA256SUMS
-            for f in *.deb *.AppImage; do
+            for f in *.deb *.AppImage *.exe; do
               gpg --batch --yes --default-key "${{ steps.key.outputs.id }}" -abs -o "$f.asc" "$f"
             done
           fi
@@ -170,6 +272,19 @@ jobs:
           if [ -f "$notes" ]; then notes_arg=(--notes-file "$notes"); else notes_arg=(--generate-notes); fi
           gh release create "$TAG" packages/* --title "Workspace ${TAG#v}" "${notes_arg[@]}" \
             --verify-tag $prerelease
+      # The apps look for updates in the `updates` release (a pre-release, so it's never shown as
+      # the latest release): its feed files point at this release's packages.
+      - name: The update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/update-feed.mjs "$TAG" feed-in feed
+          if ! gh release view updates > /dev/null 2>&1; then
+            gh release create updates --target "$(git rev-parse HEAD)" --prerelease \
+              --title "Update feed" \
+              --notes "Where Workspace and Workspace Calendar look for updates. Download the apps from a versioned release, not from here."
+          fi
+          gh release upload updates feed/*.yml --clobber
       - name: The apt repository (GitHub Pages, gh-pages branch)
         if: ${{ !contains(env.TAG, '-') }}
         env:

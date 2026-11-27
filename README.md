@@ -130,15 +130,16 @@ Workspace runs on **Windows 10 and 11** and on **Ubuntu 24.04 and later** (x86-6
 
 #### Windows
 
-1. Open the [latest build](https://github.com/Ariehant/Workspace/releases/tag/latest-build) and,
+1. Open the newest [release](https://github.com/Ariehant/Workspace/releases) (or the
+   [latest build](https://github.com/Ariehant/Workspace/releases/tag/latest-build) of `main`) and,
    under **Assets**, download `Workspace-Setup-<version>.exe`.
 2. Run it. It installs for your user (no administrator rights needed) and adds **Workspace** to
    the Start menu.
 3. The installer isn't signed yet, so SmartScreen may say "Windows protected your PC": choose
    **More info**, then **Run anyway**.
 
-Your workspace is kept in `%APPDATA%\workspace-app`. To update, install a newer build the same
-way; your data stays. [Workspace Calendar](docs/calendar-app/README.md) has its own installer
+Your workspace is kept in `%APPDATA%\workspace-app`. The app updates itself: a new version
+downloads in the background, and **Restart to update** installs it; your data stays. [Workspace Calendar](docs/calendar-app/README.md) has its own installer
 in the same place, `Workspace-Calendar-Setup-<version>.exe`.
 
 #### Ubuntu

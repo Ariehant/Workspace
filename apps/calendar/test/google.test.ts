@@ -381,6 +381,58 @@ describe('calendars and events', () => {
   });
 });
 
+describe('which Google client signs in', () => {
+  const builtIn = { clientId: 'app.apps.googleusercontent.com', clientSecret: 'app-secret' };
+  const serviceWith = (options: { env?: NodeJS.ProcessEnv; builtIn?: typeof builtIn | null }) =>
+    new CalendarService({
+      cache: new Cache(':memory:'),
+      seal: (t) => t,
+      unseal: (s) => s,
+      secureStorage: () => true,
+      env: options.env ?? {},
+      builtInGoogle: options.builtIn ?? null,
+      zone: () => ZONE,
+    });
+
+  it("uses the app's built-in client, then the person's own, and can go back", () => {
+    const service = serviceWith({ builtIn });
+    expect(service.googleSetup()).toEqual({
+      configured: true,
+      source: 'built-in',
+      builtInAvailable: true,
+      clientId: '',
+      hasSecret: false,
+    });
+    service.setGoogleClient('mine.apps.googleusercontent.com', 'mine-secret');
+    expect(service.googleSetup()).toMatchObject({
+      source: 'own',
+      clientId: 'mine.apps.googleusercontent.com',
+      hasSecret: true,
+    });
+    service.useBuiltInGoogleClient();
+    expect(service.googleSetup()).toMatchObject({ source: 'built-in', clientId: '' });
+  });
+
+  it("needs the person's own client in a build without one", () => {
+    const service = serviceWith({});
+    expect(service.googleSetup()).toMatchObject({
+      configured: false,
+      source: null,
+      builtInAvailable: false,
+    });
+    expect(() => service.useBuiltInGoogleClient()).toThrow(/no Google client of its own/);
+  });
+
+  it("lets the environment's client (a test run) win over both", () => {
+    const service = serviceWith({
+      builtIn,
+      env: { CALENDAR_GOOGLE_CLIENT_ID: 'test-client', CALENDAR_GOOGLE_CLIENT_SECRET: 's' },
+    });
+    expect(service.googleSetup()).toMatchObject({ configured: true, source: 'environment' });
+    expect(() => service.setGoogleClient('mine', 'x')).toThrow(/brings its own/);
+  });
+});
+
 describe('the service', () => {
   it('signs in, adds the chosen calendars with their colours, syncs, and signs in again', async () => {
     fake.addCalendar({
@@ -420,7 +472,7 @@ describe('the service', () => {
       zone: () => ZONE,
       clientOptions: { sleep: async () => {} },
     });
-    expect(service.state().google).toMatchObject({ configured: true, fromEnvironment: true });
+    expect(service.state().google).toMatchObject({ configured: true, source: 'environment' });
 
     const connect = await service.googleSignIn();
     expect(connect.email).toBe('ada@lab.io');

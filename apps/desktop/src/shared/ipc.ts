@@ -46,6 +46,7 @@ export const IPC = {
   linkedFolderForget: 'linked:folder-forget',
   googleState: 'google:state',
   googleConfigure: 'google:configure',
+  googleUseBuiltIn: 'google:use-built-in',
   googleConnect: 'google:connect',
   googleDisconnect: 'google:disconnect',
   googleChanged: 'google:changed',

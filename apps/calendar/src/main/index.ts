@@ -19,6 +19,7 @@ import { Scheduler } from './scheduler';
 import { seal, secureStorage, unseal } from './secrets';
 import { CalendarService } from './service';
 import { CalendarTray } from './tray';
+import { runUpdateCheck, Updates } from './updates';
 
 const SYNC_INTERVAL_MS = Number(process.env.CALENDAR_SYNC_INTERVAL_MS) || 60_000;
 /** Only in the tray (the window closed), sync less often. */
@@ -26,7 +27,15 @@ const TRAY_SYNC_INTERVAL_MS = Math.max(SYNC_INTERVAL_MS, 5 * 60_000);
 const E2E = !!process.env.CALENDAR_E2E;
 
 /** `--smoke-test`: start, open a throwaway cache and the window, then quit (packaging checks). */
+// `--print-version`: print the version and exit (install and update checks).
+if (process.argv.includes('--print-version')) {
+  process.stdout.write(`${app.getVersion()}\n`);
+  process.exit(0);
+}
+
 const smokeTest = process.argv.includes('--smoke-test');
+/** `--update-check`: look for an update, install it if there's one, and exit (release tests). */
+const updateCheck = process.argv.includes('--update-check');
 /** `--hidden`: started at login, in the tray only. */
 const startHidden = process.argv.includes(HIDDEN_FLAG);
 
@@ -60,7 +69,7 @@ function readSettingEarly(key: keyof Settings): unknown {
   }
 }
 
-if (!smokeTest && !app.requestSingleInstanceLock()) {
+if (!smokeTest && !updateCheck && !app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
 }
@@ -107,7 +116,9 @@ function createWindow(show = true) {
   return window;
 }
 
-if (smokeTest) {
+if (updateCheck) {
+  void app.whenReady().then(runUpdateCheck);
+} else if (smokeTest) {
   void app.whenReady().then(async () => {
     // The window's start, as a real one: the cache, the service and its IPC.
     const cache = new Cache(join(dataDir, 'calendar.db'));
@@ -237,12 +248,25 @@ function main() {
   };
   const notifier = new Notifier({ cache, show });
 
-  // The tray (HANDOFF.md 1): next event and today's list.
+  // Updates of the calendar itself (the AppImage and the Windows installer).
   let tray: CalendarTray | null = null;
+  const updates = new Updates({
+    auto: () => service.settings().autoUpdate,
+    log,
+    onChange: () => tray?.update(),
+    quitAndInstall: () => {
+      quitting = true;
+      Updates.quitAndInstall();
+    },
+  });
+
+  // The tray (HANDOFF.md 1): next event and today's list.
   try {
     tray = new CalendarTray({
       icon: trayIcon,
       events: () => service.events(today(), addDays(today(), 1)),
+      update: () => (updates.current.status === 'ready' ? updates.current.version : null),
+      onInstallUpdate: () => updates.install(),
       onOpen: () => showWindow(),
       onOpenEvent: (eventId) => showWindow({ eventId, fromNotification: false }),
       onQuit: () => app.quit(),
@@ -303,6 +327,7 @@ function main() {
   app.on('will-quit', () => {
     quitStep('will-quit');
     clearInterval(trayTimer);
+    updates.stop();
     scheduler.stop();
     notifier.stop();
     service.stop();

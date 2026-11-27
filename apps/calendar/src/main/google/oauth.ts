@@ -4,8 +4,10 @@
  * with PKCE). The refresh token is then kept sealed by the caller (secrets.ts); access tokens
  * live in memory and are refreshed shortly before they expire, or after a `401`.
  *
- * The OAuth client is the owner's own Google Cloud project's ("Desktop app" type): set in
- * Settings, or by environment. Endpoints can be moved by environment for tests (a fake Google).
+ * The OAuth client ("Desktop app" type) is, first to last: one given by environment (tests), the
+ * person's own (Settings), or the app's own, built in from the GOOGLE_CLIENT_ID and
+ * GOOGLE_CLIENT_SECRET secrets (docs/google-oauth.md). Endpoints can be moved by environment for
+ * tests (a fake Google).
  *
  * No Electron here, so tests drive it with a fake browser.
  */
@@ -44,6 +46,17 @@ export function clientFromEnvironment(
   return clientId
     ? { clientId, clientSecret: env.CALENDAR_GOOGLE_CLIENT_SECRET?.trim() ?? '' }
     : null;
+}
+
+/**
+ * The app's own client, built in (empty in builds without the secrets). A desktop client's secret
+ * isn't secret in an installed app (Google says so); sign-in uses PKCE.
+ */
+export function builtInClient(): GoogleClientConfig | null {
+  const clientId = typeof __GOOGLE_CLIENT_ID__ === 'string' ? __GOOGLE_CLIENT_ID__.trim() : '';
+  const clientSecret =
+    typeof __GOOGLE_CLIENT_SECRET__ === 'string' ? __GOOGLE_CLIENT_SECRET__.trim() : '';
+  return clientId ? { clientId, clientSecret } : null;
 }
 
 /** Who the person is, their calendars, and their events (read and, from v1.1 B, written). */
