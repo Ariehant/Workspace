@@ -68,8 +68,11 @@ Set `PERF_RESULTS=<file>` to record the results as JSON, and compare two runs wi
 
 ## Making a release
 
-1. Pick the version (`1.2.3`, or `1.2.3-rc.1` for a release candidate) and tag the commit:
-   `git tag v1.2.3 && git push origin v1.2.3`.
+1. Pick the version (`1.2.3`, or `1.2.3-rc.1` for a release candidate), set it on `main`
+   (`node scripts/version.mjs set 1.2.3`, in a pull request), then either:
+   - **on GitHub:** Actions → Release → **Run workflow** on `main`, with `v1.2.3`. The workflow
+     checks that `main`'s apps are at that version and makes the tag on `main`'s latest commit; or
+   - **from a computer:** `git tag v1.2.3 && git push origin v1.2.3`.
 2. The [release workflow](.github/workflows/release.yml) sets the version in every app from the
    tag (`node scripts/version.mjs set`), then:
    - builds Workspace (`.deb`, AppImage, Snap, Flatpak) and Workspace Calendar (`.deb`,
