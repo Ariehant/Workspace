@@ -123,6 +123,10 @@ export interface Platform {
   syncedPlaces(syncedId: string): Promise<number>;
   /** The next reminders, soonest first (Home's Upcoming; hosts that keep them). */
   upcoming?(): Promise<UpcomingReminder[]>;
+  /** Database rows dated from `from` to `to` (wall-clock times), soonest first. */
+  upcomingEvents?(from: string, to: string): Promise<UpcomingEvent[]>;
+  /** The online check of shared pages: who of the people with access is there. */
+  onlineCheck?: OnlineCheckPlatform;
   /** Page history: saved versions of a doc, newest first. */
   listVersions(docId: string): Promise<DocVersionInfo[]>;
   /** The saved Yjs state of a version. */
@@ -425,6 +429,36 @@ export type ExportStatus =
   | { state: 'done'; path: string }
   | { state: 'cancelled' }
   | { state: 'failed'; error: string };
+
+/** An online check made (its nonce), or not: offline, or over the limits for a while. */
+export type PingResult =
+  { nonce: string } | { error: 'offline' } | { error: 'limited'; retryInMs: number };
+
+/** Asking who's there for a doc, through the server (hosts that sync). */
+export interface OnlineCheckPlatform {
+  /** Ask: the check's nonce, or why not (not connected, or asked too often for now). */
+  ping(docId: string, manual: boolean): Promise<PingResult>;
+  /** Someone answered a check (its nonce). */
+  onAcked(listener: (nonce: string, userId: string, name: string) => void): () => void;
+  /** Someone asked who's there (this device answered already). */
+  onPinged(
+    listener: (ping: { docId: string; fromId: string; fromName: string; manual: boolean }) => void,
+  ): () => void;
+}
+
+/** A database row's date in a range (Meetings' upcoming events). */
+export interface UpcomingEvent {
+  rowId: string;
+  title: string;
+  icon: string | null;
+  databaseId: string;
+  databaseTitle: string;
+  propertyId: string;
+  /** Wall-clock times: `YYYY-MM-DD` (a day) or `YYYY-MM-DDTHH:MM`. */
+  start: string;
+  end: string;
+  allDay: boolean;
+}
 
 /** A reminder still to come: an `@remind` in a page, or on a date property of a row. */
 export interface UpcomingReminder {

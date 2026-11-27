@@ -13,16 +13,28 @@ import {
 } from '@workspace/core';
 import { PageIcon, type PageRef } from '@workspace/editor';
 import { IconButton } from '@workspace/ui';
-import { ArrowLeft, ArrowRight, Bell, ChevronsRight, Clock, History, House } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  CalendarDays,
+  ChevronsRight,
+  Clock,
+  History,
+  House,
+} from 'lucide-react';
 import { useEffect, useReducer, useState, type ReactNode } from 'react';
 import { timeAgo } from './comments';
 import { useApp } from './context';
 import type { ChromeProps } from './page-view';
+import { isoDay } from './meetings';
+import { dayHeading, eventTime, useUpcomingEvents } from './meetings-view';
 import type { UpcomingReminder } from './platform';
 
 /** How many of each list Home shows. */
 const RECENT_CARDS = 8;
 const EDITED_ROWS = 8;
+const HOME_EVENTS = 3;
 
 /** "Good morning" before noon, "Good afternoon" until six, then "Good evening". */
 export function greeting(date: Date): string {
@@ -82,6 +94,7 @@ export function Home({
   const [version, bump] = useReducer((n: number) => n + 1, 0);
   useEffect(() => pages.subscribe(bump), [pages]);
   const [upcoming, setUpcoming] = useState<UpcomingReminder[] | null>(null);
+  const events = useUpcomingEvents(HOME_EVENTS);
   useEffect(() => {
     if (!platform.upcoming) return;
     let live = true;
@@ -93,6 +106,10 @@ export function Home({
   }, [platform, version]);
 
   const now = new Date();
+  const today = isoDay(now);
+  /** The day an event is listed under: the later of its start and today. */
+  const shownOn = (event: { start: string }) =>
+    event.start.slice(0, 10) < today ? today : event.start.slice(0, 10);
   const visited = recent
     .map((id) => pages.get(id))
     .filter((p): p is PageRef => p !== null && !p.inTrash)
@@ -171,6 +188,36 @@ export function Home({
               </ul>
             )}
           </Section>
+
+          {platform.upcomingEvents && (
+            <Section title="Upcoming events" icon={<CalendarDays size={14} />} testId="home-events">
+              {events?.length === 0 && (
+                <p className="text-sm text-faint">No upcoming events in the next two weeks.</p>
+              )}
+              {events && events.length > 0 && (
+                <ul className="flex flex-col">
+                  {events.map((event) => (
+                    <li key={`${event.rowId}/${event.propertyId}`}>
+                      <button
+                        type="button"
+                        onClick={() => onOpen(event.rowId, null)}
+                        data-testid="home-event"
+                        className="flex h-9 w-full items-center gap-3 rounded-md px-2 text-left text-sm hover:bg-hover"
+                      >
+                        <span className="w-36 shrink-0 text-muted tabular-nums">
+                          {dayHeading(shownOn(event), now)} {eventTime(event, shownOn(event))}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{event.title || 'Untitled'}</span>
+                        <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">
+                          {event.databaseTitle}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          )}
 
           {platform.upcoming && (
             <Section title="Upcoming" icon={<Bell size={14} />} testId="home-upcoming">

@@ -22,6 +22,8 @@ export interface PendingInvite {
   role: InviteRole;
   createdAt: string;
   expiresAt: string;
+  /** Sent from a page's Share dialog: the access to it that accepting gives. */
+  page?: { scopeId: string; role: ScopeRole } | null;
 }
 
 export type InviteRole = Exclude<WorkspaceRole, 'owner'>;
@@ -149,9 +151,22 @@ export function teamApi(team: TeamPlatform) {
       r<{ ok: true }>('PATCH', `members/${userId}`, { role }),
     /** Remove someone, or leave (your own id). */
     remove: (userId: string) => r<{ ok: true }>('DELETE', `members/${userId}`),
-    invites: () => r<{ invites: PendingInvite[] }>('GET', 'invites'),
-    invite: (emails: string[], role: InviteRole) =>
-      r<{ invites: CreatedInvite[]; skipped: string[] }>('POST', 'invites', { emails, role }),
+    /** Pending invites: all (owners and admins), or a shared page's (its sharers). */
+    invites: (scopeId?: string) =>
+      r<{ invites: PendingInvite[] }>(
+        'GET',
+        scopeId ? `invites?scopeId=${encodeURIComponent(scopeId)}` : 'invites',
+      ),
+    /**
+     * Invite by email. With `page` (a shared page's scope, and a role in it): people already
+     * in the workspace get the page at once (`added`), others an invite that gives it.
+     */
+    invite: (emails: string[], role: InviteRole, page?: { scopeId: string; role: ScopeRole }) =>
+      r<{ invites: CreatedInvite[]; skipped: string[]; added?: string[] }>('POST', 'invites', {
+        emails,
+        role,
+        ...(page ? { page } : {}),
+      }),
     revokeInvite: (id: string) => r<{ ok: true }>('DELETE', `invites/${id}`),
     groups: () => r<{ groups: GroupInfo[] }>('GET', 'groups'),
     createGroup: (name: string) => r<{ group: GroupInfo }>('POST', 'groups', { name }),
@@ -180,6 +195,12 @@ export function teamApi(team: TeamPlatform) {
     ) => r<{ ok: true }>('PATCH', `scopes/${id}`, change),
     setAccess: (id: string, principal: string, role: ScopeRole | null) =>
       r<{ ok: true }>('PUT', `scopes/${id}/access`, { principal, role }),
+    /** Everyone who can see a scope's pages (for the online check). */
+    scopePeople: (id: string) =>
+      r<{ people: { id: string; name: string; avatar: string | null }[] }>(
+        'GET',
+        `scopes/${id}/people`,
+      ),
     joinTeamspace: (id: string) => r<{ ok: true }>('POST', `scopes/${id}/join`),
     leaveTeamspace: (id: string) => r<{ ok: true }>('POST', `scopes/${id}/leave`),
     /** Make a page its own scope (to share it), from scope `from` where it is now. */

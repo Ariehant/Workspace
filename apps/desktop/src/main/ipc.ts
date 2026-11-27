@@ -121,6 +121,14 @@ export function registerIpc(
   );
   // Home's Upcoming: the next reminders, in pages and on date properties.
   ipcMain.handle(IPC.remindersUpcoming, () => store.upcomingReminders(Date.now(), 20));
+  // Meetings' upcoming events: database rows dated in a range (wall-clock times).
+  ipcMain.handle(IPC.eventsUpcoming, (_event, from: unknown, to: unknown) => {
+    const wall = (v: unknown): v is string =>
+      typeof v === 'string' && /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(v);
+    if (!wall(from) || !wall(to)) return [];
+    manager.indexRowDatesOnce();
+    return store.upcomingEvents(from, to, 200);
+  });
   ipcMain.handle(IPC.syncedPlaces, (_event, id: unknown) =>
     isDocId(id) ? store.syncedPlaces(id) : 0,
   );

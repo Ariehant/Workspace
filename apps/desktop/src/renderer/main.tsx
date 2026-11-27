@@ -81,6 +81,12 @@ const platform: Platform = {
   },
   backlinks: (id) => api.links.backlinks(id),
   upcoming: () => api.links.upcoming(),
+  upcomingEvents: (from, to) => api.links.events(from, to),
+  onlineCheck: {
+    ping: (docId, manual) => api.presence.ping(docId, manual),
+    onAcked: (listener) => api.presence.onAcked(listener),
+    onPinged: (listener) => api.presence.onPinged(listener),
+  },
   syncedPlaces: (id) => api.links.syncedPlaces(id),
   listVersions: (docId) => api.history.list(docId),
   getVersion: (id) => api.history.get(id),

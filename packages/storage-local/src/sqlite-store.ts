@@ -149,6 +149,21 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE pages ADD COLUMN tree_id TEXT;
   ALTER TABLE pages ADD COLUMN created_by TEXT;
   `,
+  // 9: the dates on database rows, for Meetings' upcoming events. Wall-clock times
+  // (YYYY-MM-DD or YYYY-MM-DDTHH:MM), which sort as text.
+  `
+  CREATE TABLE row_dates (
+    row_id TEXT NOT NULL,
+    database_id TEXT NOT NULL,
+    property_id TEXT NOT NULL,
+    start_at TEXT NOT NULL,
+    end_at TEXT NOT NULL,
+    all_day INTEGER NOT NULL,
+    PRIMARY KEY (row_id, property_id)
+  );
+  CREATE INDEX row_dates_end ON row_dates (end_at);
+  CREATE INDEX row_dates_database ON row_dates (database_id);
+  `,
 ];
 
 /** Settings that belong to this device's sync (never exported to a backup). */
@@ -245,6 +260,30 @@ export interface Reminder {
   text: string;
 }
 
+/** A database row's date in a time range (Meetings' upcoming events). */
+export interface UpcomingEvent {
+  rowId: string;
+  title: string;
+  icon: string | null;
+  databaseId: string;
+  databaseTitle: string;
+  /** The date property's id. */
+  propertyId: string;
+  /** Wall-clock times: `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`. */
+  start: string;
+  end: string;
+  allDay: boolean;
+}
+
+/** A row's date as the index keeps it (see `readRowDates`). */
+export interface RowDateEntry {
+  rowId: string;
+  propertyId: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+}
+
 export interface SearchResult {
   id: string;
   title: string;
@@ -256,6 +295,9 @@ export interface SearchResult {
   createdAt: number;
   updatedAt: number;
 }
+
+/** Set once every database's row dates were indexed (migration 9 starts empty). */
+const ROW_DATES_INDEXED = 'index.rowDates';
 
 /** Block id prefix of reminders set on date properties (not in page content). */
 const PROPERTY_REMINDER = 'prop:';
@@ -702,6 +744,7 @@ export class SqliteStore {
     this.stmt('DELETE FROM pages WHERE id = ?').run(id);
     if (rowid !== null) this.stmt('DELETE FROM page_fts WHERE rowid = ?').run(rowid);
     this.stmt('DELETE FROM links WHERE source_id = ?').run(id);
+    this.stmt('DELETE FROM row_dates WHERE row_id = ?').run(id);
   }
 
   // --- Links (backlinks) ------------------------------------------------------
@@ -1064,6 +1107,87 @@ export class SqliteStore {
         );
       }
     });
+  }
+
+  // --- Row dates (Meetings) ------------------------------------------------
+
+  /** Replace the dates of a database's rows. */
+  replaceRowDates(databaseId: string, dates: readonly RowDateEntry[]): void {
+    this.transaction(() => {
+      this.stmt('DELETE FROM row_dates WHERE database_id = ?').run(databaseId);
+      this.insertRowDates(databaseId, dates);
+    });
+  }
+
+  /** Replace the dates of some rows (`rowIds`) of a database; other rows' are kept. */
+  updateRowDates(
+    databaseId: string,
+    rowIds: readonly string[],
+    dates: readonly RowDateEntry[],
+  ): void {
+    if (rowIds.length === 0) return;
+    this.transaction(() => {
+      const remove = this.stmt('DELETE FROM row_dates WHERE row_id = ?');
+      for (const rowId of rowIds) remove.run(rowId);
+      this.insertRowDates(databaseId, dates);
+    });
+  }
+
+  private insertRowDates(databaseId: string, dates: readonly RowDateEntry[]): void {
+    const insert = this.stmt(
+      `INSERT OR REPLACE INTO row_dates
+         (row_id, database_id, property_id, start_at, end_at, all_day) VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    for (const d of dates) {
+      insert.run(d.rowId, databaseId, d.propertyId, d.start, d.end, d.allDay ? 1 : 0);
+    }
+  }
+
+  /** Whether any database's dates were indexed (else they need a first pass). */
+  hasRowDatesIndex(): boolean {
+    return this.getSetting<boolean>(ROW_DATES_INDEXED) === true;
+  }
+
+  markRowDatesIndexed(): void {
+    this.setSetting(ROW_DATES_INDEXED, true);
+  }
+
+  /**
+   * Rows with a date that ends at or after `from` and starts before `to` (wall-clock times),
+   * soonest first, leaving out trashed rows and rows of trashed databases.
+   */
+  upcomingEvents(from: string, to: string, limit: number): UpcomingEvent[] {
+    const rows = this.stmt(
+      `SELECT d.row_id, d.database_id, d.property_id, d.start_at, d.end_at, d.all_day,
+              r.title, r.icon, db.title AS database_title
+         FROM row_dates d
+         JOIN pages r ON r.id = d.row_id
+         JOIN pages db ON db.id = d.database_id
+        WHERE d.end_at >= ? AND d.start_at < ? AND r.in_trash = 0 AND db.in_trash = 0
+        ORDER BY d.start_at, r.title
+        LIMIT ?`,
+    ).all(from, to, limit) as {
+      row_id: string;
+      database_id: string;
+      property_id: string;
+      start_at: string;
+      end_at: string;
+      all_day: number;
+      title: string;
+      icon: string | null;
+      database_title: string;
+    }[];
+    return rows.map((r) => ({
+      rowId: r.row_id,
+      title: r.title,
+      icon: r.icon,
+      databaseId: r.database_id,
+      databaseTitle: r.database_title,
+      propertyId: r.property_id,
+      start: r.start_at,
+      end: r.end_at,
+      allDay: r.all_day === 1,
+    }));
   }
 
   /** Unfired reminders due by `now`, on pages that are not in the trash. */

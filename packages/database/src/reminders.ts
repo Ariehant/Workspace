@@ -89,3 +89,39 @@ export function readDateReminders(
       }),
     );
 }
+
+/** A date a row has, for lists of what's coming up (Meetings, Home). */
+export interface RowDate {
+  rowId: string;
+  propertyId: string;
+  /** Wall-clock times, `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM` (they sort as text). */
+  start: string;
+  /** The last moment: the end, or the start; for a day, `YYYY-MM-DDT23:59` of its last day. */
+  end: string;
+  allDay: boolean;
+}
+
+/** Every date property's value on live rows (not trashed, not templates). */
+export function readRowDates(snapshot: DatabaseSnapshot): RowDate[] {
+  const dates = snapshot.properties.filter((p) => p.type === 'date');
+  if (dates.length === 0) return [];
+  return snapshot.rows
+    .filter((row) => row.trashedAt === null && !row.isTemplate)
+    .flatMap((row) =>
+      dates.flatMap((property) => {
+        const value = row.values[property.id];
+        if (!isDateValue(value) || !value.start) return [];
+        const allDay = !value.start.includes('T');
+        const last = value.end && value.end >= value.start ? value.end : value.start;
+        return [
+          {
+            rowId: row.id,
+            propertyId: property.id,
+            start: value.start,
+            end: allDay ? `${last.slice(0, 10)}T23:59` : last,
+            allDay,
+          },
+        ];
+      }),
+    );
+}

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { UpcomingEvent } from '@workspace/storage-local';
 import type {
   DriveFileRef,
   DriveFileStatus,
@@ -53,6 +54,22 @@ const api = {
     onUpdate: (listener: (docId: string, update: Uint8Array) => void): Unsubscribe =>
       on(IPC.presenceUpdate, listener),
     onRejoin: (listener: () => void): Unsubscribe => on(IPC.presenceRejoin, listener),
+    ping: (
+      docId: string,
+      manual: boolean,
+    ): Promise<
+      { nonce: string } | { error: 'offline' } | { error: 'limited'; retryInMs: number }
+    > => ipcRenderer.invoke(IPC.presencePing, docId, manual),
+    onAcked: (listener: (nonce: string, userId: string, name: string) => void): Unsubscribe =>
+      on(IPC.presenceAcked, listener),
+    onPinged: (
+      listener: (ping: {
+        docId: string;
+        fromId: string;
+        fromName: string;
+        manual: boolean;
+      }) => void,
+    ): Unsubscribe => on(IPC.presencePinged, listener),
   },
   notifications: {
     on: (listener: (n: unknown) => void): Unsubscribe => on(IPC.notification, listener),
@@ -133,6 +150,8 @@ const api = {
         pageTitle: string;
       }[]
     > => ipcRenderer.invoke(IPC.remindersUpcoming),
+    events: (from: string, to: string): Promise<UpcomingEvent[]> =>
+      ipcRenderer.invoke(IPC.eventsUpcoming, from, to),
     syncedPlaces: (syncedId: string): Promise<number> =>
       ipcRenderer.invoke(IPC.syncedPlaces, syncedId),
   },

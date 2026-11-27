@@ -12,6 +12,11 @@ export const IPC = {
   presenceUpdate: 'presence:update',
   /** main -> renderer: sync reconnected; announce again. */
   presenceRejoin: 'presence:rejoin',
+  /** renderer -> main: ask who's there for a doc (the online check). */
+  presencePing: 'presence:ping',
+  /** main -> renderer: someone answered; someone asked. */
+  presenceAcked: 'presence:acked',
+  presencePinged: 'presence:pinged',
   /** main -> renderer: a notification from the server. */
   notification: 'notification:new',
   /** main -> renderer: a system notification was clicked (open what it's about). */
@@ -55,6 +60,7 @@ export const IPC = {
   driveOpen: 'drive:open',
   backlinks: 'links:backlinks',
   remindersUpcoming: 'reminders:upcoming',
+  eventsUpcoming: 'events:upcoming',
   syncedPlaces: 'links:synced',
   historyList: 'history:list',
   historyGet: 'history:get',

@@ -60,6 +60,8 @@ import {
 } from './settings/settings-window';
 import { Home } from './home';
 import { PeopleView } from './people-view';
+import { MeetingsView } from './meetings-view';
+import { newMeetingNote } from './meetings';
 import { NoAccess } from './no-access';
 import { PageDirectory } from './pages';
 import { useForest } from './forest';
@@ -67,6 +69,7 @@ import { PresenceHub, usePageViewers } from './presence';
 import { moveAcrossScopes, scopeOfDoc } from './scope-actions';
 import { buildSections } from './sections';
 import { ShareDialog } from './share-dialog';
+import { PingToasts } from './online-check-ui';
 import {
   BrowseTeamspacesDialog,
   NewTeamspaceDialog,
@@ -78,6 +81,7 @@ import { can, type AppCommand, type Platform } from './platform';
 import { QuickFind } from './quick-find';
 import { ButtonEditorHost } from './buttons/button-dialog';
 import { SIDEBAR_WIDTH, Sidebar } from './sidebar';
+import { SidebarFrame } from './sidebar-frame';
 import { MoveDialog, type OtherWorkspaces } from './move-dialog';
 import { duplicatePage } from './page-actions';
 import { SyncDialog, useSyncInfo } from './sync-settings';
@@ -321,7 +325,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(initial.sidebarWidth);
   const [finding, setFinding] = useState(false);
   // Home and People are shown over the tab's page (they aren't pages in the history).
-  const [screen, setScreen] = useState<'home' | 'people' | null>(null);
+  const [screen, setScreen] = useState<'home' | 'people' | 'meetings' | null>(null);
   const [templates, setTemplates] = useState(false);
   // The export dialog: for a page, or (null) the whole workspace.
   const [exporting, setExporting] = useState<PageId | null | undefined>(undefined);
@@ -919,6 +923,21 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
       <Home chrome={screenChrome} recent={recent} onOpen={showPage} />
     ) : screen === 'people' ? (
       <PeopleView chrome={screenChrome} onOpen={(id) => showPage(id, null)} />
+    ) : screen === 'meetings' ? (
+      <MeetingsView
+        chrome={screenChrome}
+        onOpen={(id) => showPage(id, null)}
+        onNewNote={async () => {
+          const { databaseId, rowId } = await newMeetingNote({
+            client,
+            workspace,
+            platform,
+            userId: user.id,
+          });
+          await databases.load(databaseId);
+          showPage(rowId, null);
+        }}
+      />
     ) : missing ? (
       <NoAccess
         key={`${missing}:${missingPage?.n}`}
@@ -959,107 +978,120 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
 
   return (
     <NavigationContext.Provider value={navigation}>
-      <div className="flex h-full">
-        {sidebarOpen && (
-          <Sidebar
-            workspace={workspace}
-            sections={sections}
-            canEdit={(id) => roleAllows(pages.role(id), 'edit')}
-            viewers={viewers}
-            icons={teamspaceIcons}
-            favorites={favorites}
-            width={sidebarWidth}
-            currentPageId={screen ? null : currentPageId}
-            expanded={expanded}
-            theme={theme}
-            onSelect={navigate}
-            onToggle={toggle}
-            onCreate={create}
-            onTrash={trash}
-            onDuplicate={duplicate}
-            onMove={setMoving}
-            onDrop={drop}
-            onToggleFavorite={toggleFavorite}
-            onSearch={() => setFinding(true)}
-            onHome={() => {
-              setPeek(null);
-              setMissing(null);
-              setScreen('home');
-            }}
-            homeActive={screen === 'home'}
-            onPeople={() => {
-              setPeek(null);
-              setMissing(null);
-              setScreen('people');
-            }}
-            peopleActive={screen === 'people'}
-            onTemplates={() => setTemplates(true)}
-            onImport={() =>
-              void platform
-                .startImport(workspace.primary?.info.id)
-                .catch((error: unknown) => console.error('Import failed', error))
-            }
-            onExportAll={() => setExporting(null)}
-            onBackup={() =>
-              void platform
-                .startExport({ format: 'backup' })
-                .catch((error: unknown) => console.error('Backup failed', error))
-            }
-            onRestore={() =>
-              void platform
-                .restoreBackup()
-                .catch((error: unknown) => window.alert(`Restore failed: ${String(error)}`))
-            }
-            onResize={setSidebarWidth}
-            fileUrl={platform.fileUrl}
-            onThemeChange={changeTheme}
-            onSettings={() => setSettings('appearance')}
-            onRegion={() => setSettings('region')}
-            onEmoji={() => setSettings('emoji')}
-            onAbout={platform.about ? () => setSettings('about') : undefined}
-            onShortcuts={() => setSettings('shortcuts')}
-            updateReady={
-              updates?.status === 'ready' && updates.version
-                ? { version: updates.version, onRestart: () => platform.about?.updates?.install() }
-                : undefined
-            }
-            zoom={platform.zoom}
-            onCollapse={() => setSidebarOpen(false)}
-            sync={syncInfo}
-            onSync={() => setSettings('sync')}
-            can={{
-              export: can(platform, 'export'),
-              import: can(platform, 'import'),
-              backup: can(platform, 'backup'),
-            }}
-            account={platform.account}
-            inbox={
-              inbox
-                ? (className) => (
-                    <InboxButton inbox={inbox} className={className} onOpen={openNotification} />
-                  )
-                : undefined
-            }
-            team={
-              team
-                ? {
-                    onMembers: () => setSettings('members'),
-                    onProfile: () => setSettings('account'),
-                  }
-                : undefined
-            }
-            teamspaces={
-              team && scoped
-                ? {
-                    onNew: () => setTeamspaceDialog({ kind: 'new' }),
-                    onBrowse: () => setSettings('teamspaces'),
-                    onSettings: (scopeId) => setTeamspaceDialog({ kind: 'settings', scopeId }),
-                    onLeave: leaveTeamspace,
-                  }
-                : undefined
-            }
-          />
-        )}
+      <div className="relative flex h-full">
+        <SidebarFrame open={sidebarOpen} width={sidebarWidth}>
+          {(mode) => (
+            <Sidebar
+              peek={mode === 'peek'}
+              onPin={() => setSidebarOpen(true)}
+              workspace={workspace}
+              sections={sections}
+              canEdit={(id) => roleAllows(pages.role(id), 'edit')}
+              viewers={viewers}
+              icons={teamspaceIcons}
+              favorites={favorites}
+              width={sidebarWidth}
+              currentPageId={screen ? null : currentPageId}
+              expanded={expanded}
+              theme={theme}
+              onSelect={navigate}
+              onToggle={toggle}
+              onCreate={create}
+              onTrash={trash}
+              onDuplicate={duplicate}
+              onMove={setMoving}
+              onDrop={drop}
+              onToggleFavorite={toggleFavorite}
+              onSearch={() => setFinding(true)}
+              onHome={() => {
+                setPeek(null);
+                setMissing(null);
+                setScreen('home');
+              }}
+              homeActive={screen === 'home'}
+              onPeople={() => {
+                setPeek(null);
+                setMissing(null);
+                setScreen('people');
+              }}
+              peopleActive={screen === 'people'}
+              onMeetings={() => {
+                setPeek(null);
+                setMissing(null);
+                setScreen('meetings');
+              }}
+              meetingsActive={screen === 'meetings'}
+              onTemplates={() => setTemplates(true)}
+              onImport={() =>
+                void platform
+                  .startImport(workspace.primary?.info.id)
+                  .catch((error: unknown) => console.error('Import failed', error))
+              }
+              onExportAll={() => setExporting(null)}
+              onBackup={() =>
+                void platform
+                  .startExport({ format: 'backup' })
+                  .catch((error: unknown) => console.error('Backup failed', error))
+              }
+              onRestore={() =>
+                void platform
+                  .restoreBackup()
+                  .catch((error: unknown) => window.alert(`Restore failed: ${String(error)}`))
+              }
+              onResize={setSidebarWidth}
+              fileUrl={platform.fileUrl}
+              onThemeChange={changeTheme}
+              onSettings={() => setSettings('appearance')}
+              onRegion={() => setSettings('region')}
+              onEmoji={() => setSettings('emoji')}
+              onAbout={platform.about ? () => setSettings('about') : undefined}
+              onShortcuts={() => setSettings('shortcuts')}
+              updateReady={
+                updates?.status === 'ready' && updates.version
+                  ? {
+                      version: updates.version,
+                      onRestart: () => platform.about?.updates?.install(),
+                    }
+                  : undefined
+              }
+              zoom={platform.zoom}
+              onCollapse={() => setSidebarOpen(false)}
+              sync={syncInfo}
+              onSync={() => setSettings('sync')}
+              can={{
+                export: can(platform, 'export'),
+                import: can(platform, 'import'),
+                backup: can(platform, 'backup'),
+              }}
+              account={platform.account}
+              inbox={
+                inbox
+                  ? (className) => (
+                      <InboxButton inbox={inbox} className={className} onOpen={openNotification} />
+                    )
+                  : undefined
+              }
+              team={
+                team
+                  ? {
+                      onMembers: () => setSettings('members'),
+                      onProfile: () => setSettings('account'),
+                    }
+                  : undefined
+              }
+              teamspaces={
+                team && scoped
+                  ? {
+                      onNew: () => setTeamspaceDialog({ kind: 'new' }),
+                      onBrowse: () => setSettings('teamspaces'),
+                      onSettings: (scopeId) => setTeamspaceDialog({ kind: 'settings', scopeId }),
+                      onLeave: leaveTeamspace,
+                    }
+                  : undefined
+              }
+            />
+          )}
+        </SidebarFrame>
         {settings && (
           <SettingsWindow
             panels={settingsPanels}
@@ -1068,6 +1100,7 @@ function Shell({ platform, client, workspace, initial }: ShellProps) {
             onClose={() => setSettings(null)}
           />
         )}
+        <PingToasts onOpen={(id) => showPage(id, null)} />
         {team && sharing && (
           <ShareDialog
             team={team}

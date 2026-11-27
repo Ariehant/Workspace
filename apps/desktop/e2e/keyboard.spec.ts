@@ -212,17 +212,19 @@ test('share a page with the keyboard only', async () => {
       invite: invites[0]!.link.split('/invite/')[1],
     });
 
-    // Share the page with Bob: the person, the role, Invite.
+    // Share the page with Bob: type, pick the suggestion, the role, Invite.
     await expect(A.getByTestId('sync-indicator')).toHaveText('Synced', { timeout: 20_000 });
     const share = A.getByRole('button', { name: 'Share', exact: true });
     await tabTo(A, share, { back: true });
     await A.keyboard.press('Enter');
     const shareDialog = A.getByTestId('share-dialog');
-    const person = shareDialog.getByLabel('Person or group');
-    await expect(person.locator('option', { hasText: 'Bob' })).toHaveCount(1);
+    const person = shareDialog.getByLabel('Email or group');
     await tabTo(A, person);
+    await A.keyboard.type('bo');
+    await expect(shareDialog.getByTestId('share-suggestion')).toHaveText(['Bob (bob@lab.io)']);
     await A.keyboard.press('ArrowDown');
-    await expect(person).not.toHaveValue('');
+    await A.keyboard.press('Enter');
+    await expect(person).toHaveValue('bob@lab.io, ');
     await A.keyboard.press('Tab');
     await expect(shareDialog.getByLabel('Role')).toBeFocused();
     await A.keyboard.press('Tab');

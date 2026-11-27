@@ -94,3 +94,52 @@ test('people: you, the pages you made, and opening one', async ({ launch }) => {
   await expect(people).toBeHidden();
   await expect(window.getByLabel('Page title')).toHaveValue('Wrist joint');
 });
+
+test('meetings: a new meeting note is a dated row of a Meetings database, listed as upcoming', async ({
+  launch,
+}) => {
+  const { window } = await launch();
+  const sidebar = window.getByRole('navigation', { name: 'Sidebar' });
+  await sidebar.getByRole('button', { name: 'Meetings' }).click();
+  const meetings = window.getByTestId('meetings');
+  await expect(meetings).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Meetings' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(meetings.getByText('No upcoming events in the next two weeks.')).toBeVisible();
+
+  // The note opens as a row page, with the meeting template.
+  await meetings.getByRole('button', { name: 'New meeting note' }).click();
+  await expect(window.getByLabel('Page title')).toHaveValue('Meeting notes');
+  await expect(editor(window)).toContainText('Agenda');
+  await expect(editor(window)).toContainText('Action items');
+  // The Meetings database is in the sidebar.
+  await expect(
+    window.getByRole('tree', { name: 'Pages' }).getByTestId('sidebar-row').filter({
+      hasText: 'Meetings',
+    }),
+  ).toBeVisible();
+
+  // Back in Meetings, it's coming up (within the next half hour).
+  await sidebar.getByRole('button', { name: 'Meetings' }).click();
+  const event = meetings.getByTestId('meetings-event').filter({ hasText: 'Meeting notes' });
+  await expect(event).toBeVisible({ timeout: 15_000 });
+  await expect(event).toContainText('Meetings');
+  await expect(meetings.getByTestId('meetings-day').first()).toHaveText(/Today|Tomorrow/);
+
+  // A second note makes a second row in the same database; Home lists them too.
+  await meetings.getByRole('button', { name: 'New meeting note' }).click();
+  await expect(window.getByLabel('Page title')).toHaveValue('Meeting notes');
+  await sidebar.getByRole('button', { name: 'Home' }).click();
+  await expect(window.getByTestId('home-event')).toHaveCount(2, { timeout: 15_000 });
+  await expect(
+    window.getByRole('tree', { name: 'Pages' }).getByTestId('sidebar-row').filter({
+      hasText: 'Meetings',
+    }),
+  ).toHaveCount(1);
+
+  // Opening one from Home opens its page.
+  await window.getByTestId('home-event').first().click();
+  await expect(window.getByLabel('Page title')).toHaveValue('Meeting notes');
+});

@@ -21,6 +21,7 @@ import {
   hasRow,
   isDatabaseDoc,
   readDateReminders,
+  readRowDates,
   relationIds,
   rowPropertiesText,
   touchRow,
@@ -483,6 +484,24 @@ export class DocManager {
     for (const docId of later) indexOne(docId, false);
   }
 
+  /**
+   * Index the dates of every stored database's rows, once (the index starts empty when a
+   * workspace from before Meetings is opened).
+   */
+  indexRowDatesOnce(): void {
+    if (this.store.hasRowDatesIndex()) return;
+    for (const docId of this.store.listDocIds()) {
+      if (isTreeDocId(docId)) continue;
+      const open = this.docs.has(docId);
+      const doc = open ? this.docs.get(docId)!.doc : this.load(docId);
+      if (isDatabaseDoc(doc)) {
+        this.store.replaceRowDates(docId, readRowDates(this.databaseHandle(docId, doc).snapshot()));
+      }
+      if (!open) this.unloadIfUnused(docId);
+    }
+    this.store.markRowDatesIndexed();
+  }
+
   /** Write any debounced index updates now. Call before quitting. */
   flush(docId?: string): void {
     const ids = docId === undefined ? [...this.pending.keys()] : [docId];
@@ -770,6 +789,16 @@ export class DocManager {
       );
     }
     if (links.size > 0) this.store.replaceLinksOf('relation', links);
+
+    if (all) {
+      this.store.replaceRowDates(databaseId, readRowDates(db));
+    } else if (changedRows.length > 0 || gone.length > 0) {
+      this.store.updateRowDates(
+        databaseId,
+        [...changedRows.map((row) => row.id), ...gone],
+        readRowDates({ ...db, rows: changedRows }),
+      );
+    }
 
     if (all) {
       this.store.replacePropertyReminders(databaseId, readDateReminders(db));

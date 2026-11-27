@@ -336,6 +336,12 @@ export class SyncClient {
       case 'awareness':
         this.presence.receive(message.docId, message.update);
         return;
+      case 'pinged':
+        this.presence.pinged(message);
+        return;
+      case 'acked':
+        this.presence.acked(message.nonce, message.userId, message.name);
+        return;
       case 'notify':
         this.o.onNotify?.(message.payload);
         return;

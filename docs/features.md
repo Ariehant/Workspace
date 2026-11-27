@@ -138,10 +138,17 @@ Database" on an empty page).
 
 - **Home** (sidebar → Home): the pages you visited last, the reminders coming up (`@remind` in
   pages and on dates; in the desktop app) and the pages edited last.
+- **Meetings** (sidebar → Meetings): upcoming events for the next 14 days, from the date
+  properties of every database (the same rows Workspace Calendar shows), grouped by day; Home
+  shows the next three. **New meeting note** adds a row, dated at the next half hour, with an
+  Agenda, Notes and Action items template, to a 📅 Meetings database (Date, Attendees, Type,
+  and a calendar view), made the first time.
 - **People** (sidebar → People): everyone in the workspace, with email and role on a server
   (guests see names only) and its groups. Select someone to see the pages they made.
 - **Sidebar:** a page tree with drag and drop to reorder or nest, favorites and a resizable
-  width. On a server workspace: sections for teamspaces, pages shared with you and your private
+  width. Close it with the button at its top left or `Ctrl+\`; while it's closed, hold the
+  mouse at the window's left edge to peek at it over the page, and pin it open from there. It
+  slides open and closed (not with reduced motion). On a server workspace: sections for teamspaces, pages shared with you and your private
   pages.
 - **Quick find** (`Ctrl+K` / `Ctrl+P`) over titles and content, with recent pages;
   `Ctrl+Enter` opens the result in a new window. Filters narrow it: titles only, a section
@@ -214,6 +221,20 @@ These need the [self-hosted server](self-hosting.md).
 
 - **Members:** invite people by email (a link to send, or an email when the server has SMTP) as
   admins, members or guests; groups; names and pictures.
+- **Share by email:** in a page's Share dialog, type emails, people or groups (separated by
+  commas, with suggestions as you type). People already in the workspace get the page at once
+  (and are told); anyone else gets an email invite at once (or a link to copy, without SMTP)
+  that makes them a guest with the role you chose on that page. Anyone with full access to the
+  page can do it, not only owners and admins. Pending invites show in the dialog, with Revoke;
+  accepting one invite gives every page shared with that address. Each computer keeps its own
+  copy of the page; the server passes changes between them.
+- **Who's online:** a shared page's header shows "2 online · 1 offline" for the people with
+  access. After sharing, or on opening the page, this computer asks the others' computers 3
+  times a minute for 5 minutes; their apps answer by themselves while running and connected
+  (the page needn't be open). Then **Ping** asks again by hand, like in a video call: the
+  others see "Ada is checking if you're here, on Plans", with Open. Online means an answer
+  within 5 s (or the page open now); everyone else with access is offline. It doesn't ask while
+  this computer is offline from the server, and says so. At most one check per 10 s.
 - **Sharing:** teamspaces and per-page sharing with full access, can edit, can edit content
   (database rows only), can create pages (a database: add pages and edit only one's own), can
   comment and can view, inherited down the page tree. The server enforces it on every write.

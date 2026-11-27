@@ -230,3 +230,70 @@ describe('date property reminders', () => {
     store.close();
   });
 });
+
+describe('row dates (Meetings)', () => {
+  it('lists rows with a date in a range, soonest first, following edits and the trash', () => {
+    const { store, manager, db, dbId } = setup();
+    const when = addProperty(db, { name: 'When', type: 'date' });
+    const standup = addRow(db, {
+      actor: null,
+      title: 'Standup',
+      values: { [when]: { start: '2026-12-01T09:30' } },
+    });
+    const trip = addRow(db, {
+      actor: null,
+      title: 'Trip',
+      values: { [when]: { start: '2026-11-30', end: '2026-12-02' } },
+    });
+    addRow(db, { actor: null, title: 'Later', values: { [when]: { start: '2026-12-20' } } });
+    addRow(db, { actor: null, title: 'Undated', values: {} });
+    manager.flush();
+
+    const titles = (from: string, to: string) =>
+      store.upcomingEvents(from, to, 50).map((e) => e.title);
+    // A trip that started before the range and goes on into it is listed.
+    expect(titles('2026-12-01', '2026-12-08')).toEqual(['Trip', 'Standup']);
+    expect(store.upcomingEvents('2026-12-01', '2026-12-08', 50)[1]).toMatchObject({
+      rowId: standup,
+      databaseId: dbId,
+      databaseTitle: 'Parts',
+      propertyId: when,
+      start: '2026-12-01T09:30',
+      allDay: false,
+    });
+    expect(titles('2026-12-03', '2026-12-08')).toEqual([]);
+
+    // Moved, then trashed.
+    setCell(db, standup, when, { start: '2026-12-05T10:00' }, null);
+    manager.flush();
+    expect(titles('2026-12-01', '2026-12-08')).toEqual(['Trip', 'Standup']);
+    expect(titles('2026-12-03', '2026-12-08')).toEqual(['Standup']);
+    trashRow(db, trip);
+    manager.flush();
+    expect(titles('2026-12-01', '2026-12-08')).toEqual(['Standup']);
+    manager.close();
+    store.close();
+  });
+
+  it('indexes the dates of databases indexed before (a first pass, once)', () => {
+    const { store, manager, db } = setup();
+    const when = addProperty(db, { name: 'When', type: 'date' });
+    addRow(db, { actor: null, title: 'Review', values: { [when]: { start: '2026-12-01' } } });
+    manager.flush();
+    manager.close();
+    // As a workspace from before Meetings: the dates' index is empty.
+    store.db.exec('DELETE FROM row_dates');
+    store.close();
+
+    const reopened = new SqliteStore(dbPath);
+    const again = new DocManager(reopened);
+    expect(reopened.upcomingEvents('2026-12-01', '2026-12-02', 10)).toEqual([]);
+    again.indexRowDatesOnce();
+    expect(reopened.upcomingEvents('2026-12-01', '2026-12-02', 10).map((e) => e.title)).toEqual([
+      'Review',
+    ]);
+    expect(reopened.hasRowDatesIndex()).toBe(true);
+    again.close();
+    reopened.close();
+  });
+});

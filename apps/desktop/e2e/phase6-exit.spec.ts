@@ -334,7 +334,7 @@ test('Bob, who may edit content, adds an order but can’t change the database',
 
   await A.getByRole('button', { name: 'Share', exact: true }).click();
   const share = A.getByTestId('share-dialog');
-  await share.getByLabel('Person or group').selectOption({ label: 'Bob (bob@lab.io)' });
+  await share.getByLabel('Email or group').fill('bob@lab.io');
   await share.getByLabel('Role').selectOption('content');
   await share.getByRole('button', { name: 'Invite' }).click();
   await expect(share.getByLabel('Access for Bob')).toHaveValue('content', { timeout: 10_000 });

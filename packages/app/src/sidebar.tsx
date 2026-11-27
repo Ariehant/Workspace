@@ -28,7 +28,9 @@ import {
   ArrowLeftRight,
   LogOut,
   ChevronRight,
+  CalendarDays,
   ChevronsLeft,
+  ChevronsRight,
   CircleArrowUp,
   CircleUser,
   Copy,
@@ -107,6 +109,9 @@ export interface SidebarProps {
   onBackup(): void;
   onRestore(): void;
   onResize(width: number): void;
+  /** Shown over the page while closed (the mouse on the window's edge); onPin keeps it open. */
+  peek?: boolean;
+  onPin?(): void;
   fileUrl(id: string): string;
   onThemeChange(theme: ThemePreference): void;
   /** Open Settings (Ctrl+,). */
@@ -153,6 +158,9 @@ export interface SidebarProps {
   homeActive?: boolean;
   /** Show People (everyone in the workspace, and their pages). */
   onPeople?(): void;
+  /** Meetings: upcoming events and meeting notes. */
+  onMeetings?(): void;
+  meetingsActive?: boolean;
   /** People is shown. */
   peopleActive?: boolean;
 }
@@ -184,6 +192,15 @@ export function Sidebar(props: SidebarProps) {
       className="relative flex h-full shrink-0 flex-col border-r border-line bg-sidebar select-none"
     >
       <div className="group flex h-11 items-center gap-2 px-3">
+        {props.peek ? (
+          <IconButton label="Keep sidebar open (Ctrl+\)" size="sm" onClick={props.onPin}>
+            <ChevronsRight size={16} />
+          </IconButton>
+        ) : (
+          <IconButton label="Close sidebar (Ctrl+\)" size="sm" onClick={onCollapse}>
+            <ChevronsLeft size={16} />
+          </IconButton>
+        )}
         <Menu>
           <MenuTrigger asChild>
             <button
@@ -273,14 +290,6 @@ export function Sidebar(props: SidebarProps) {
             )}
           </MenuContent>
         </Menu>
-        <IconButton
-          label="Close sidebar (Ctrl+\)"
-          size="sm"
-          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
-          onClick={onCollapse}
-        >
-          <ChevronsLeft size={16} />
-        </IconButton>
       </div>
 
       <button type="button" onClick={onSearch} className={navButton}>
@@ -297,6 +306,17 @@ export function Sidebar(props: SidebarProps) {
         >
           <House size={16} />
           Home
+        </button>
+      )}
+      {props.onMeetings && (
+        <button
+          type="button"
+          onClick={props.onMeetings}
+          aria-current={props.meetingsActive ? 'page' : undefined}
+          className={cn(navButton, props.meetingsActive && 'bg-active text-fg')}
+        >
+          <CalendarDays size={16} />
+          Meetings
         </button>
       )}
       {props.onPeople && (

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { hashSecret, normalizeEmail } from './accounts';
 import type { MemberRole } from './store';
+import type { ScopeRole } from './scopes';
 
 /** Someone in a workspace, as its members list shows them. */
 export interface Member {
@@ -25,6 +26,8 @@ export interface WorkspaceInvite {
   invitedBy: string | null;
   createdAt: Date;
   expiresAt: Date;
+  /** Sent from a page's Share dialog: the access to that page that accepting it grants. */
+  page: { scopeId: string; role: ScopeRole } | null;
 }
 
 export type InviteStatus = 'valid' | 'expired' | 'accepted' | 'revoked';
@@ -63,6 +66,8 @@ type InviteRow = {
   invited_by: string | null;
   created_at: Date;
   expires_at: Date;
+  page_scope_id: string | null;
+  page_role: ScopeRole | null;
 };
 const toInvite = (r: InviteRow): WorkspaceInvite => ({
   id: r.id,
@@ -72,6 +77,7 @@ const toInvite = (r: InviteRow): WorkspaceInvite => ({
   invitedBy: r.invited_by,
   createdAt: r.created_at,
   expiresAt: r.expires_at,
+  page: r.page_scope_id && r.page_role ? { scopeId: r.page_scope_id, role: r.page_role } : null,
 });
 
 /** Workspace members, their invites and groups. */
@@ -190,17 +196,22 @@ export class Teams {
     token: string;
     invitedBy: string | null;
     ttlMs: number;
+    /** The page access accepting it grants (an invite from a page's Share dialog). */
+    page?: { scopeId: string; role: ScopeRole } | null;
   }): Promise<WorkspaceInvite> {
     const email = normalizeEmail(input.email);
-    // A new invite to the same address replaces the pending one (its link stops working).
+    // A new invite to the same address replaces the pending one (its link stops working):
+    // the workspace invite, or the one to the same page (invites to other pages stay).
     await this.pool.query(
       `UPDATE workspace_invites SET revoked_at = now()
-       WHERE workspace_id = $1 AND email = $2 AND accepted_at IS NULL AND revoked_at IS NULL`,
-      [input.workspaceId, email],
+       WHERE workspace_id = $1 AND email = $2 AND accepted_at IS NULL AND revoked_at IS NULL
+         AND page_scope_id IS NOT DISTINCT FROM $3`,
+      [input.workspaceId, email, input.page?.scopeId ?? null],
     );
     const { rows } = await this.pool.query<InviteRow>(
-      `INSERT INTO workspace_invites (id, workspace_id, email, role, token_hash, invited_by, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, now() + ($7::bigint * interval '1 millisecond'))
+      `INSERT INTO workspace_invites
+         (id, workspace_id, email, role, token_hash, invited_by, expires_at, page_scope_id, page_role)
+       VALUES ($1, $2, $3, $4, $5, $6, now() + ($7::bigint * interval '1 millisecond'), $8, $9)
        RETURNING *`,
       [
         randomUUID(),
@@ -210,6 +221,8 @@ export class Teams {
         hashSecret(input.token),
         input.invitedBy,
         input.ttlMs,
+        input.page?.scopeId ?? null,
+        input.page?.role ?? null,
       ],
     );
     return toInvite(rows[0]!);
@@ -224,6 +237,17 @@ export class Teams {
       [workspaceId],
     );
     return rows.map(toInvite);
+  }
+
+  /** A pending invite, by id. */
+  async pendingInvite(workspaceId: string, inviteId: string): Promise<WorkspaceInvite | null> {
+    const { rows } = await this.pool.query<InviteRow>(
+      `SELECT * FROM workspace_invites
+       WHERE workspace_id = $1 AND id = $2
+         AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()`,
+      [workspaceId, inviteId],
+    );
+    return rows[0] ? toInvite(rows[0]) : null;
   }
 
   async revokeInvite(workspaceId: string, inviteId: string): Promise<boolean> {
@@ -323,9 +347,27 @@ export class Teams {
       } else {
         role = current;
       }
+      // The pages shared with this address (this invite's, and other pages' still pending):
+      // their access, as their sharers chose. Accepting one accepts them all.
+      const { rows: others } = await client.query<InviteRow>(
+        `SELECT * FROM workspace_invites
+         WHERE workspace_id = $1 AND email = $2 AND id <> $3 AND page_scope_id IS NOT NULL
+           AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
+         FOR UPDATE`,
+        [invite.workspace_id, invite.email, invite.id],
+      );
+      for (const shared of [invite, ...others]) {
+        if (shared.page_scope_id && shared.page_role) {
+          await client.query(
+            `INSERT INTO scope_access (scope_id, principal, role) VALUES ($1, $2, $3)
+             ON CONFLICT (scope_id, principal) DO UPDATE SET role = excluded.role`,
+            [shared.page_scope_id, `user:${user.id}`, shared.page_role],
+          );
+        }
+      }
       await client.query(
-        'UPDATE workspace_invites SET accepted_by = $2, accepted_at = now() WHERE id = $1',
-        [invite.id, user.id],
+        'UPDATE workspace_invites SET accepted_by = $2, accepted_at = now() WHERE id = ANY($1)',
+        [[invite.id, ...others.map((o) => o.id)], user.id],
       );
       await client.query('COMMIT');
       return { ok: true, workspaceId: invite.workspace_id, role };

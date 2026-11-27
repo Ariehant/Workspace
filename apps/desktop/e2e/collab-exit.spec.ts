@@ -299,7 +299,7 @@ test('a page shared with the guest to comment: he comments and suggests, the own
   await addPage(A, 'Robotics lab', 'Spec sheet', 'Payload 5 kg.');
   await A.getByRole('button', { name: 'Share', exact: true }).click();
   const share = A.getByTestId('share-dialog');
-  await share.getByLabel('Person or group').selectOption({ label: 'Gus (gus@lab.io) · guest' });
+  await share.getByLabel('Email or group').fill('gus@lab.io');
   await share.getByLabel('Role').selectOption('comment');
   await share.getByRole('button', { name: 'Invite' }).click();
   await expect(share.getByTestId('access-row').filter({ hasText: 'Gus' })).toHaveCount(1, {
